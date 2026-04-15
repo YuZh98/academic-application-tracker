@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Database (binary — doesn't diff; sensitive personal data)
+# Track schema in database.py; track human-readable exports in exports/
+postdoc.db
+
+# Environment & secrets
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
