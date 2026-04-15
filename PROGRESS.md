@@ -1,4 +1,5 @@
 # Application Progress
+> **Status:** Hand-maintained seed file. Once the Streamlit app (Phase 6) is complete, `exports/PROGRESS.md` becomes the live version. This file is the original reference.
 
 > Cross-referenced with `OPPORTUNITIES.md` by **ID** (`P001`, `P002`, …).
 > Keep one row per position. Update in place as status changes.

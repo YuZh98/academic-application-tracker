@@ -1,4 +1,5 @@
 # Postdoc Opportunities
+> **Status:** Hand-maintained seed file. Once the Streamlit app (Phase 6) is complete, `exports/OPPORTUNITIES.md` becomes the live version. This file is the original reference.
 
 > **Index key format:** `P001`, `P002`, … — used across all three tables to link records.
 > **Status tags:** `[OPEN]` `[CLOSED]` `[APPLIED]` `[INTERVIEW]` `[OFFER]` `[REJECTED]` `[DECLINED]`

@@ -1,4 +1,5 @@
 # Recommender Log
+> **Status:** Hand-maintained seed file. Once the Streamlit app (Phase 6) is complete, `exports/RECOMMENDERS.md` becomes the live version. This file is the original reference.
 
 > One row per (position × recommender) pair. The same person appears multiple times if they write letters for multiple positions.
 > Cross-referenced to `OPPORTUNITIES.md` by **Position ID** and to `PROGRESS.md` Table C.

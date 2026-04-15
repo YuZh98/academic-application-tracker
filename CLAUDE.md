@@ -55,6 +55,7 @@ streamlit run app.py
 ### Design documents (human-maintained, committed)
 | File | Role |
 |------|------|
+| `DESIGN.md` | Master technical specification — architecture, schema, UI wireframes, data flow |
 | `GUIDELINES.md` | Coding conventions for all sessions |
 | `roadmap.md` | Phases, status, backlog, future plans |
 | `OPPORTUNITIES.md` | Original hand-maintained table (superseded by DB once app is built) |
