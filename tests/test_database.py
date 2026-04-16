@@ -621,6 +621,60 @@ class TestComputeMaterialsReadiness:
         assert result["pending"] == 1
 
 
+# ── Edge cases for empty fields dicts (F2 / F3 fixes) ────────────────────────
+
+class TestEmptyFieldsGuards:
+
+    def test_update_position_empty_fields_is_noop(self, db):
+        """update_position({}) must return without error rather than emitting
+        'UPDATE ... SET  WHERE id=?' which is invalid SQL (F2)."""
+        pos_id = database.add_position(make_position())
+        database.update_position(pos_id, {})
+        pos = database.get_position(pos_id)
+        assert pos["position_name"] == "BioStats Postdoc"   # unchanged
+
+    def test_update_recommender_empty_fields_is_noop(self, db):
+        """update_recommender({}) must return without error (F2)."""
+        pos_id = database.add_position(make_position())
+        rec_id = database.add_recommender(pos_id, {"recommender_name": "Dr. Smith"})
+        database.update_recommender(rec_id, {})
+        recs = database.get_recommenders(pos_id)
+        assert recs.iloc[0]["recommender_name"] == "Dr. Smith"   # unchanged
+
+    def test_upsert_application_empty_fields_is_noop(self, db):
+        """upsert_application({}) must return without error (F3)."""
+        pos_id = database.add_position(make_position())
+        database.upsert_application(pos_id, {})
+        app = database.get_application(pos_id)
+        assert app["result"] == "Pending"   # unchanged default
+
+
+# ── TERMINAL_STATUSES used by get_upcoming_deadlines (F5 fix) ────────────────
+
+class TestTerminalStatusesConfig:
+
+    def test_all_terminal_statuses_excluded_from_deadlines(self, db):
+        """Every status in config.TERMINAL_STATUSES must be filtered out by
+        get_upcoming_deadlines — the query now reads from config, not hardcoded
+        strings, so adding a new terminal status to config automatically takes
+        effect here (F5)."""
+        for status in config.TERMINAL_STATUSES:
+            pos_id = database.add_position(make_position({
+                "position_name": f"pos_{status}",
+                "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+            }))
+            database.update_position(pos_id, {"status": status})
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 0, (
+            f"Expected 0 rows; terminal statuses leaked into results: "
+            f"{df['status'].tolist()}"
+        )
+
+    def test_terminal_statuses_are_subset_of_status_values(self):
+        """Guard: TERMINAL_STATUSES must all be valid STATUS_VALUES entries."""
+        assert set(config.TERMINAL_STATUSES) <= set(config.STATUS_VALUES)
+
+
 # ── _connect rollback on exception ───────────────────────────────────────────
 
 class TestConnectContextManager:

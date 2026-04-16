@@ -10,7 +10,7 @@
 from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Generator
+from typing import Any, Generator
 import sqlite3
 import pandas as pd
 
@@ -27,8 +27,8 @@ def _connect() -> Generator[sqlite3.Connection, None, None]:
     Commits on clean exit; rolls back and re-raises on exception."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
     try:
+        conn.execute("PRAGMA foreign_keys = ON")
         yield conn
         conn.commit()
     except Exception:
@@ -140,7 +140,7 @@ def init_db() -> None:
 
 # ── Positions ─────────────────────────────────────────────────────────────────
 
-def add_position(fields: dict) -> int:
+def add_position(fields: dict[str, Any]) -> int:
     """Insert a new position row and its blank applications row.
     Returns the new position id. Calls exports.write_all()."""
     cols = ", ".join(fields.keys())
@@ -183,8 +183,10 @@ def get_position(position_id: int) -> dict:
     return dict(row)
 
 
-def update_position(position_id: int, fields: dict) -> None:
+def update_position(position_id: int, fields: dict[str, Any]) -> None:
     """Update provided fields on an existing position. Calls exports.write_all()."""
+    if not fields:
+        return
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     vals = list(fields.values()) + [position_id]
 
@@ -224,10 +226,12 @@ def get_application(position_id: int) -> dict:
     return dict(row)
 
 
-def upsert_application(position_id: int, fields: dict) -> None:
+def upsert_application(position_id: int, fields: dict[str, Any]) -> None:
     """INSERT or UPDATE the application row for a position.
     applications.position_id is the primary key — ON CONFLICT handles the upsert.
     Calls exports.write_all()."""
+    if not fields:
+        return
     cols = ", ".join(["position_id"] + list(fields.keys()))
     placeholders = ", ".join(["?"] * (1 + len(fields)))
     set_clause = ", ".join(f"{k} = excluded.{k}" for k in fields)
@@ -246,7 +250,7 @@ def upsert_application(position_id: int, fields: dict) -> None:
 
 # ── Recommenders ──────────────────────────────────────────────────────────────
 
-def add_recommender(position_id: int, fields: dict) -> int:
+def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
     """Insert a new recommender row. Returns new id. Calls exports.write_all()."""
     cols = ", ".join(["position_id"] + list(fields.keys()))
     placeholders = ", ".join(["?"] * (1 + len(fields)))
@@ -288,8 +292,10 @@ def get_all_recommenders() -> pd.DataFrame:
     return df
 
 
-def update_recommender(rec_id: int, fields: dict) -> None:
+def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
     """Update provided fields on a recommender row. Calls exports.write_all()."""
+    if not fields:
+        return
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     vals = list(fields.values()) + [rec_id]
 
@@ -327,21 +333,23 @@ def count_by_status() -> dict[str, int]:
 
 def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
     """Return open positions with deadline_date within the next `days` days,
-    ordered by deadline_date ASC. Excludes CLOSED, REJECTED, DECLINED."""
-    today  = date.today().isoformat()
-    cutoff = (date.today() + timedelta(days=days)).isoformat()
+    ordered by deadline_date ASC. Excludes config.TERMINAL_STATUSES."""
+    today    = date.today().isoformat()
+    cutoff   = (date.today() + timedelta(days=days)).isoformat()
+    terminal = tuple(config.TERMINAL_STATUSES)
+    not_in   = ", ".join("?" * len(terminal))
 
     with _connect() as conn:
         df = pd.read_sql_query(
-            """SELECT id, position_name, institute, deadline_date, status, priority
+            f"""SELECT id, position_name, institute, deadline_date, status, priority
                FROM positions
                WHERE deadline_date IS NOT NULL
                  AND deadline_date >= ?
                  AND deadline_date <= ?
-                 AND status NOT IN (?, ?, ?)
+                 AND status NOT IN ({not_in})
                ORDER BY deadline_date ASC""",
             conn,
-            params=(today, cutoff, "[CLOSED]", "[REJECTED]", "[DECLINED]"),
+            params=(today, cutoff, *terminal),
         )
     return df
 

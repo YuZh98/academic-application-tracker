@@ -42,11 +42,20 @@ STATUS_COLORS: dict[str, str] = {
     "[DECLINED]":  "gray",
 }
 
+# Terminal statuses — positions in these states are done and excluded from
+# actionable views (upcoming deadlines, materials readiness, etc.).
+# database.py reads this list; never hardcode these strings outside config.py.
+TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
+
 # Guard: STATUS_COLORS must have exactly one entry per STATUS_VALUES item.
 # Catches drift at import time rather than as a KeyError deep in page code.
 assert set(STATUS_VALUES) == set(STATUS_COLORS), (
     "STATUS_COLORS must have exactly one entry per STATUS_VALUES item. "
     f"Missing from STATUS_COLORS: {set(STATUS_VALUES) - set(STATUS_COLORS)}"
+)
+assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
+    "TERMINAL_STATUSES must only contain values defined in STATUS_VALUES. "
+    f"Unknown: {set(TERMINAL_STATUSES) - set(STATUS_VALUES)}"
 )
 
 # ── Controlled vocabularies ───────────────────────────────────────────────────
