@@ -15,8 +15,9 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Markdown data files | Created and committed |
 | Git repository | Initialized |
 | Virtual environment | ✅ Created (.venv/) |
-| Python app | Not yet written |
-| SQLite database | Not yet created |
+| Data layer | ✅ database.py + exports.py stub |
+| SQLite database | ✅ postdoc.db initialized |
+| Python app | Not yet written (Phase 3+) |
 
 ---
 
@@ -36,15 +37,15 @@ A local, personal postdoc application tracker that answers one question clearly:
 
 ---
 
-### Phase 2 — Data Layer
+### Phase 2 — Data Layer ✅
 **Goal:** SQLite schema live; data readable and writable from Python.
 
 | Task | Status |
 |------|--------|
-| Write `database.py` with `init_db()` and all CRUD functions | Pending |
-| Write `exports.py` stub (called after every write) | Pending |
-| Create and initialise `postdoc.db` | Pending |
-| Verify queries return correct DataFrames in isolation | Pending |
+| Write `database.py` with `init_db()` and all CRUD functions | ✅ Done (2026-04-16) |
+| Write `exports.py` stub (called after every write) | ✅ Done (2026-04-16) |
+| Create and initialise `postdoc.db` | ✅ Done (2026-04-16) |
+| Verify queries return correct DataFrames in isolation | ✅ 88/88 checks passed |
 
 **Commit message:** `feat: add database.py — SQLite schema and CRUD`
 

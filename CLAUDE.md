@@ -10,10 +10,10 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Pre-implementation — design complete, ready to build.
-**Git:** Initialized. Markdown files committed. App code not yet written.
-**Database:** `postdoc.db` planned but not yet created.
-**App:** Streamlit app planned but not yet written.
+**Phase:** Phase 2 complete — data layer live. Ready for Phase 3 (Opportunities page).
+**Git:** Initialized. Phase 1 (config.py) and Phase 2 (database.py, exports.py) committed.
+**Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
+**App:** Streamlit app not yet written (Phase 3+).
 
 ---
 
@@ -32,13 +32,13 @@ streamlit run app.py
 
 ## Key Files
 
-### Source code (planned — not yet written)
+### Source code
 | File | Role |
 |------|------|
-| `config.py` | ALL constants: status values, priority options, document types, thresholds |
-| `database.py` | All SQLite reads/writes; no Streamlit imports |
-| `exports.py` | Regenerates markdown files; called by database.py after every write |
-| `app.py` | Dashboard home page |
+| `config.py` | ALL constants: status values, priority options, document types, thresholds ✅ |
+| `database.py` | All SQLite reads/writes; no Streamlit imports ✅ |
+| `exports.py` | Regenerates markdown files; stub until Phase 6 ✅ |
+| `app.py` | Dashboard home page (Phase 4) |
 | `pages/1_Opportunities.py` | Position table + quick-add + full edit |
 | `pages/2_Applications.py` | Progress tracking + status updates |
 | `pages/3_Recommenders.py` | Recommender log + pending alerts |

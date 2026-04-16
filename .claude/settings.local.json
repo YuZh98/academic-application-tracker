@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m venv .venv)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git -C /Users/zhengyu/Desktop/Claude/Project/Postdoc show --stat HEAD)",
+      "Bash(git -C /Users/zhengyu/Desktop/Claude/Project/Postdoc diff HEAD~1 HEAD -- config.py requirements.txt)"
+    ]
+  }
+}
