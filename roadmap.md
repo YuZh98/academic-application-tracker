@@ -14,7 +14,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Design | Complete |
 | Markdown data files | Created and committed |
 | Git repository | Initialized |
-| Virtual environment | Not yet created |
+| Virtual environment | ✅ Created (.venv/) |
 | Python app | Not yet written |
 | SQLite database | Not yet created |
 
@@ -22,16 +22,17 @@ A local, personal postdoc application tracker that answers one question clearly:
 
 ## Implementation Phases
 
-### Phase 1 — Environment & Configuration
+### Phase 1 — Environment & Configuration ✅
 **Goal:** Clean, reproducible Python environment. All constants in one place.
 
 | Task | Status |
 |------|--------|
-| Create `.venv` and install packages | Pending |
-| Generate `requirements.txt` with pinned versions | Pending |
-| Write `config.py` with all constants | Pending |
+| Create `.venv` and install packages | ✅ Done (2026-04-15) |
+| Generate `requirements.txt` with pinned versions | ✅ Done (2026-04-15) |
+| Write `config.py` with all constants | ✅ Done (2026-04-15) |
 
-**Commit message:** `chore: set up venv and config.py`
+**Installed versions:** `streamlit==1.56.0`, `plotly==6.7.0`, `pandas==3.0.2`
+**Commit:** `chore: set up venv and config.py`
 
 ---
 
