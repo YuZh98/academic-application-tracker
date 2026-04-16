@@ -18,6 +18,7 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-16 — Phase 2 code review + 5 fixes applied; 105 tests, 100% coverage
 - [x] 2026-04-16 — Phase 2: database.py (CRUD + dashboard queries) + exports.py stub + postdoc.db
 - [x] 2026-04-15 — Design postdoc tracker system architecture
 - [x] 2026-04-15 — Create markdown tracking files (OPPORTUNITIES, PROGRESS, RECOMMENDERS)

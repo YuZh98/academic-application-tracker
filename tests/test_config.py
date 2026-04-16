@@ -126,6 +126,20 @@ def test_vocabulary_lists_are_non_empty(name, lst):
     assert len(lst) > 0, f"{name} must not be empty"
 
 
+# ── TERMINAL_STATUSES ────────────────────────────────────────────────────────
+
+def test_terminal_statuses_are_subset_of_status_values():
+    """Every terminal status must be a known STATUS_VALUES entry."""
+    assert set(config.TERMINAL_STATUSES) <= set(config.STATUS_VALUES), (
+        f"Unknown terminal statuses: "
+        f"{set(config.TERMINAL_STATUSES) - set(config.STATUS_VALUES)}"
+    )
+
+
+def test_terminal_statuses_non_empty():
+    assert len(config.TERMINAL_STATUSES) > 0
+
+
 # ── Module-level assertion guard is live ─────────────────────────────────────
 
 def test_status_guard_fires_on_drift(monkeypatch):
