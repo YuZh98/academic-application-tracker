@@ -10,10 +10,10 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 0 complete — app launches; Opportunities skeleton in place. Working on Tier 1 (quick-add form).
-**Git:** Initialized. Phases 1–2 committed. Phase 3 Tier 0 work uncommitted.
+**Phase:** Phase 3 Tier 1 complete — quick-add form + empty state live; 121 tests passing. Working on Tier 2 (filter bar).
+**Git:** Initialized. Phases 1–3 Tier 1 committed.
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
-**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` skeleton exists.
+**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + empty state (Tier 1 done).
 
 **To run:**
 ```
@@ -39,7 +39,7 @@ Markdown files in `exports/` are auto-generated backups, not the source of truth
 | `database.py` | All SQLite reads/writes; no Streamlit imports ✅ |
 | `exports.py` | Regenerates markdown files; stub until Phase 6 ✅ |
 | `app.py` | Dashboard home page stub ✅ (Phase 4 = full dashboard) |
-| `pages/1_Opportunities.py` | Opportunities skeleton ✅ — Tiers 1–5 pending |
+| `pages/1_Opportunities.py` | Quick-add form + empty state ✅ (Tier 1) — Tiers 2–5 pending |
 | `pages/2_Applications.py` | Progress tracking + status updates |
 | `pages/3_Recommenders.py` | Recommender log + pending alerts |
 | `pages/4_Export.py` | Manual export trigger + file download |

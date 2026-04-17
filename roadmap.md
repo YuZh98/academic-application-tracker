@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 Tier 0 complete — stubs live; Tier 1 next |
+| Python app | 🔄 Phase 3 Tier 1 complete — quick-add + empty state live; Tier 2 next |
 
 ---
 
@@ -58,7 +58,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 |------|--------|
 | Stub `app.py` so Streamlit doesn't error on launch | ✅ Done (2026-04-17) |
 | `pages/1_Opportunities.py` skeleton with section markers | ✅ Done (2026-04-17) |
-| Quick-add form (6 fields, saves immediately) | Pending (Tier 1) |
+| Quick-add form (6 fields, saves immediately) | ✅ Done (2026-04-17) |
 | Filterable positions table (status, priority, field) | Pending (Tiers 2–3) |
 | Row-click inline edit with tabbed form (Overview / Requirements / Materials / Notes) | Pending (Tier 4) |
 | State-driven Materials tab (shows only required docs) | Pending (Tier 4) |
@@ -118,7 +118,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Task | Status |
 |------|--------|
 | Deadline urgency colors (red ≤ 7 days, yellow ≤ 14 days) | Pending |
-| Empty states ("No positions yet — use Quick Add above") | Pending |
+| Empty states ("No positions yet — use Quick Add above") | ✅ Done (2026-04-17) |
 | Search bar on Opportunities table | Pending |
 | Confirm dialog before delete | Pending |
 | Responsive layout check | Pending |
