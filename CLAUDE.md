@@ -10,10 +10,16 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 2 complete — data layer live. Ready for Phase 3 (Opportunities page).
-**Git:** Initialized. Phase 1 (config.py) and Phase 2 (database.py, exports.py) committed.
+**Phase:** Phase 3 Tier 0 complete — app launches; Opportunities skeleton in place. Working on Tier 1 (quick-add form).
+**Git:** Initialized. Phases 1–2 committed. Phase 3 Tier 0 work uncommitted.
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
-**App:** Streamlit app not yet written (Phase 3+).
+**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` skeleton exists.
+
+**To run:**
+```
+source .venv/bin/activate
+streamlit run app.py
+```
 
 ---
 
@@ -21,12 +27,6 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 A local, single-user Streamlit web app backed by SQLite.
 Three layers: `postdoc.db` (data) → `database.py` (logic) → Streamlit pages (UI).
 Markdown files in `exports/` are auto-generated backups, not the source of truth.
-
-**To run (once built):**
-```
-source .venv/bin/activate
-streamlit run app.py
-```
 
 ---
 
@@ -38,8 +38,8 @@ streamlit run app.py
 | `config.py` | ALL constants: status values, priority options, document types, thresholds ✅ |
 | `database.py` | All SQLite reads/writes; no Streamlit imports ✅ |
 | `exports.py` | Regenerates markdown files; stub until Phase 6 ✅ |
-| `app.py` | Dashboard home page (Phase 4) |
-| `pages/1_Opportunities.py` | Position table + quick-add + full edit |
+| `app.py` | Dashboard home page stub ✅ (Phase 4 = full dashboard) |
+| `pages/1_Opportunities.py` | Opportunities skeleton ✅ — Tiers 1–5 pending |
 | `pages/2_Applications.py` | Progress tracking + status updates |
 | `pages/3_Recommenders.py` | Recommender log + pending alerts |
 | `pages/4_Export.py` | Manual export trigger + file download |
