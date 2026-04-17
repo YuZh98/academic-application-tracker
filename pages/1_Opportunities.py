@@ -1,7 +1,7 @@
 # pages/1_Opportunities.py
 # Opportunities page — position table, quick-add form, inline full edit.
-# Phase 3 Tier 0 skeleton: section markers only.
-# Tiers 1–5 will fill each section in order.
+# Phase 3 Tier 1: quick-add form + empty state.
+# Tiers 2–5 will add: filter bar, table, row edit, save/delete.
 
 import streamlit as st
 import database
@@ -12,20 +12,37 @@ database.init_db()
 st.title("Opportunities")
 
 # ── TIER 1: Quick-add expander ────────────────────────────────────────────────
-# with st.expander("Quick Add", expanded=False):
-#   Fields driven by config.QUICK_ADD_FIELDS:
-#     position_name (text_input)
-#     institute     (text_input)
-#     field         (text_input)
-#     deadline_date (date_input, value=None)
-#     priority      (selectbox, options=config.PRIORITY_VALUES)
-#     link          (text_input)
-#   with st.form(key="quick_add_form"):
-#     ... inputs ...
-#     submitted = st.form_submit_button("+ Add Position")
-#     if submitted:
-#         database.add_position(fields)
-#         st.rerun()
+with st.expander("Quick Add", expanded=False):
+    with st.form(key="quick_add_form"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            position_name = st.text_input("Position Name *", key="qa_position_name")
+            deadline_date = st.date_input("Deadline", value=None, key="qa_deadline_date")
+        with col2:
+            institute = st.text_input("Institute", key="qa_institute")
+            priority = st.selectbox("Priority", config.PRIORITY_VALUES, key="qa_priority")
+        with col3:
+            field = st.text_input("Field", key="qa_field")
+            link = st.text_input("Link (URL)", key="qa_link")
+
+        submitted = st.form_submit_button("+ Add Position")
+
+    if submitted:
+        if not position_name:
+            st.error("Position Name is required.")
+        else:
+            fields: dict = {
+                "position_name": position_name,
+                "institute":     institute,
+                "field":         field,
+                "priority":      priority,
+                "link":          link,
+            }
+            if deadline_date is not None:
+                fields["deadline_date"] = deadline_date.isoformat()
+            database.add_position(fields)
+            st.success(f'Added "{position_name}" to your list.')
+            st.rerun()
 
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
 # col_status, col_priority, col_field = st.columns([2, 2, 3])
@@ -37,10 +54,13 @@ st.title("Opportunities")
 #     field_filter = st.text_input("Field", placeholder="Filter by field…")
 
 # ── TIER 3: Positions table ───────────────────────────────────────────────────
-# df = database.get_all_positions()
-# Apply status_filter / priority_filter / field_filter to df
-# st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
-# — deadline cell colored red if ≤ config.DEADLINE_URGENT_DAYS days away
+df = database.get_all_positions()
+
+if df.empty:
+    st.info("No positions yet — use Quick Add above to get started.")
+else:
+    # Full table display (Tier 3) and row-click edit (Tiers 4–5) come next.
+    st.caption(f"{len(df)} position(s) tracked.")
 
 # ── TIER 4: Row-click inline expansion ───────────────────────────────────────
 # selected_id stored in st.session_state["selected_position_id"]
@@ -67,5 +87,3 @@ st.title("Opportunities")
 #         else:
 #             st.session_state["confirm_delete"] = True
 #             st.warning("Click Delete again to confirm.")
-
-st.caption("Phase 3 Tier 0 scaffold — feature tiers coming next.")
