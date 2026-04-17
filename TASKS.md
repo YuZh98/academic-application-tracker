@@ -1,7 +1,7 @@
 # Tasks
 
 ## In Progress
-- [ ] Phase 3 Tier 1: quick-add form (6 fields → `database.add_position()`)
+- [ ] Phase 3 Tier 2: filter bar (status, priority, field text-filter)
 
 ## Backlog
 
@@ -18,6 +18,7 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-17 — Phase 3 Tier 1: quick-add form (6 fields) + empty state; 16 AppTest tests written + passing (121 total)
 - [x] 2026-04-17 — Phase 3 Tier 0: stub app.py + pages/1_Opportunities.py skeleton; Streamlit APIs verified
 - [x] 2026-04-16 — Phase 2 code review + 5 fixes applied; 105 tests, 100% coverage
 - [x] 2026-04-16 — Phase 2: database.py (CRUD + dashboard queries) + exports.py stub + postdoc.db
@@ -30,4 +31,4 @@
 
 ---
 
-_Updated: 2026-04-17_
+_Updated: 2026-04-17 (Tier 1 complete)_
