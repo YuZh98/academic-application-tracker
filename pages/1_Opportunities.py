@@ -3,6 +3,8 @@
 # Phase 3 Tier 1: quick-add form + empty state.
 # Tiers 2–5 will add: filter bar, table, row edit, save/delete.
 
+from typing import Any
+
 import streamlit as st
 import database
 import config
@@ -25,24 +27,39 @@ with st.expander("Quick Add", expanded=False):
             field = st.text_input("Field", key="qa_field")
             link = st.text_input("Link (URL)", key="qa_link")
 
-        submitted = st.form_submit_button("+ Add Position")
+        submitted = st.form_submit_button("+ Add Position", key="qa_submit")
 
-    if submitted:
-        if not position_name:
-            st.error("Position Name is required.")
-        else:
-            fields: dict = {
-                "position_name": position_name,
-                "institute":     institute,
-                "field":         field,
-                "priority":      priority,
-                "link":          link,
-            }
-            if deadline_date is not None:
-                fields["deadline_date"] = deadline_date.isoformat()
+# F4: submit handler outside the expander so error/success render in the main
+# content area and remain visible even if the expander is collapsed.
+if submitted:
+    # F3: strip all text inputs before validation and storage so whitespace-only
+    # values (e.g., "   ") do not bypass the required-field check.
+    position_name = position_name.strip()
+    institute     = institute.strip()
+    field         = field.strip()
+    link          = link.strip()
+
+    if not position_name:
+        st.error("Position Name is required.")
+    else:
+        fields: dict[str, Any] = {      # F5: dict[str, Any] per project standard
+            "position_name": position_name,
+            "institute":     institute,
+            "field":         field,
+            "priority":      priority,
+            "link":          link,
+        }
+        if deadline_date is not None:
+            fields["deadline_date"] = deadline_date.isoformat()
+        # F1: wrap database write per GUIDELINES.md §8 — show a clear message on
+        # failure rather than exposing a raw traceback to the user.
+        try:
             database.add_position(fields)
-            st.success(f'Added "{position_name}" to your list.')
+            st.toast(f'Added "{position_name}" to your list.')
             st.rerun()
+        except Exception as e:
+            st.error(f"Could not save position: {e}")
+            raise
 
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
 # col_status, col_priority, col_field = st.columns([2, 2, 3])
