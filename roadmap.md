@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | Not yet written (Phase 3+) |
+| Python app | 🔄 Phase 3 Tier 0 complete — stubs live; Tier 1 next |
 
 ---
 
@@ -56,12 +56,13 @@ A local, personal postdoc application tracker that answers one question clearly:
 
 | Task | Status |
 |------|--------|
-| Write `pages/1_Opportunities.py` | Pending |
-| Quick-add form (6 fields, saves immediately) | Pending |
-| Filterable positions table (status, priority, field) | Pending |
-| Row-click inline edit with tabbed form (Overview / Requirements / Materials / Notes) | Pending |
-| State-driven Materials tab (shows only required docs) | Pending |
-| Stub `app.py` so Streamlit doesn't error on launch | Pending |
+| Stub `app.py` so Streamlit doesn't error on launch | ✅ Done (2026-04-17) |
+| `pages/1_Opportunities.py` skeleton with section markers | ✅ Done (2026-04-17) |
+| Quick-add form (6 fields, saves immediately) | Pending (Tier 1) |
+| Filterable positions table (status, priority, field) | Pending (Tiers 2–3) |
+| Row-click inline edit with tabbed form (Overview / Requirements / Materials / Notes) | Pending (Tier 4) |
+| State-driven Materials tab (shows only required docs) | Pending (Tier 4) |
+| Save / Delete with confirm dialog | Pending (Tier 5) |
 
 **Commit message:** `feat: add Opportunities page with quick-add and full edit`
 
