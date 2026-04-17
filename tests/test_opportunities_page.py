@@ -16,8 +16,10 @@ from streamlit.testing.v1 import AppTest
 
 PAGE = "pages/1_Opportunities.py"
 
-# Auto-generated key for st.form_submit_button inside st.form("quick_add_form")
-SUBMIT_KEY = "FormSubmitter:quick_add_form-+ Add Position"
+# F2: use the explicit key passed to st.form_submit_button() rather than
+# relying on Streamlit's internal auto-generated "FormSubmitter:{form}-{label}"
+# format, which is undocumented and could change between library versions.
+SUBMIT_KEY = "qa_submit"
 
 
 def _run_page() -> AppTest:
@@ -109,6 +111,20 @@ class TestQuickAddFormBehaviour:
             "No row should be inserted when position_name is empty"
         )
 
+    def test_submit_with_whitespace_only_name_shows_error(self, db):
+        """Whitespace-only position_name must be treated as empty (F3 fix).
+
+        Before the fix, `not "   "` evaluates to False so the insert ran.
+        After stripping, `not "   ".strip()` is True and the error fires."""
+        at = _run_page()
+        at.text_input(key="qa_position_name").input("   ")
+        at.button(key=SUBMIT_KEY).click()
+        at.run()
+        assert at.error, "Expected st.error for whitespace-only position_name"
+        assert database.get_all_positions().empty, (
+            "No row should be inserted for whitespace-only position_name"
+        )
+
     def test_submit_with_position_name_only_adds_position(self, db):
         """Minimal valid submission (position_name only) must create one DB row."""
         at = _run_page()
@@ -149,7 +165,7 @@ class TestQuickAddFormBehaviour:
         at.text_input(key="qa_position_name").input("Harvard Postdoc")
         at.button(key=SUBMIT_KEY).click()
         at.run()
-        assert at.success, "Expected st.success after a valid quick-add submission"
+        assert at.toast, "Expected st.toast after a valid quick-add submission"
 
     def test_new_position_has_open_status(self, db):
         """Positions added via quick-add must default to STATUS_VALUES[0] ('[OPEN]')."""
