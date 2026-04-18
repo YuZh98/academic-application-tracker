@@ -59,8 +59,8 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Stub `app.py` so Streamlit doesn't error on launch | ✅ Done (2026-04-17) |
 | `pages/1_Opportunities.py` skeleton with section markers | ✅ Done (2026-04-17) |
 | Quick-add form (6 fields, saves immediately) | ✅ Done (2026-04-17) |
-| Filter bar (status, priority, field) | ✅ Done (2026-04-18) |
-| Positions table display (st.dataframe + deadline urgency) | ✅ Done (2026-04-18) |
+| Filter bar (status, priority, field) | ✅ Done (2026-04-18) — reviewed |
+| Positions table display (st.dataframe + deadline urgency) | ✅ Done (2026-04-18) — reviewed |
 | Row-click inline edit with tabbed form (Overview / Requirements / Materials / Notes) | Pending (Tier 4) |
 | State-driven Materials tab (shows only required docs) | Pending (Tier 4) |
 | Save / Delete with confirm dialog | Pending (Tier 5) |
