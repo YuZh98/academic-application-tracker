@@ -62,22 +62,43 @@ if submitted:
             raise
 
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
-# col_status, col_priority, col_field = st.columns([2, 2, 3])
-# with col_status:
-#     status_filter = st.selectbox("Status", ["All"] + config.STATUS_VALUES, index=0)
-# with col_priority:
-#     priority_filter = st.selectbox("Priority", ["All"] + config.PRIORITY_VALUES, index=0)
-# with col_field:
-#     field_filter = st.text_input("Field", placeholder="Filter by field…")
+col_status, col_priority, col_field = st.columns([2, 2, 3])
+with col_status:
+    status_filter = st.selectbox(
+        "Status", ["All"] + config.STATUS_VALUES, index=0, key="filter_status"
+    )
+with col_priority:
+    priority_filter = st.selectbox(
+        "Priority", ["All"] + config.PRIORITY_VALUES, index=0, key="filter_priority"
+    )
+with col_field:
+    field_filter = st.text_input(
+        "Field", placeholder="Filter by field…", key="filter_field"
+    )
 
 # ── TIER 3: Positions table ───────────────────────────────────────────────────
 df = database.get_all_positions()
 
+# T2-B: apply filters sequentially; each active filter narrows df_filtered further.
+df_filtered = df
+if status_filter != "All":
+    df_filtered = df_filtered[df_filtered["status"] == status_filter]
+if priority_filter != "All":
+    df_filtered = df_filtered[df_filtered["priority"] == priority_filter]
+if field_filter.strip():
+    df_filtered = df_filtered[
+        df_filtered["field"].str.contains(
+            field_filter.strip(), case=False, na=False
+        )
+    ]
+
 if df.empty:
     st.info("No positions yet — use Quick Add above to get started.")
+elif df_filtered.empty:
+    st.info("No positions match the current filters.")
 else:
     # Full table display (Tier 3) and row-click edit (Tiers 4–5) come next.
-    st.caption(f"{len(df)} position(s) tracked.")
+    st.caption(f"{len(df_filtered)} position(s) tracked.")
 
 # ── TIER 4: Row-click inline expansion ───────────────────────────────────────
 # selected_id stored in st.session_state["selected_position_id"]
