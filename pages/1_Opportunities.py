@@ -20,7 +20,7 @@ def _deadline_urgency(date_str: str | None) -> str:
         return ""
     try:
         days = (datetime.date.fromisoformat(date_str) - datetime.date.today()).days
-    except ValueError:
+    except (ValueError, TypeError):
         return ""
     if days <= config.DEADLINE_URGENT_DAYS:
         return "urgent"
@@ -105,9 +105,11 @@ if status_filter != "All":
 if priority_filter != "All":
     df_filtered = df_filtered[df_filtered["priority"] == priority_filter]
 if field_filter.strip():
+    # F1: regex=False treats the search term as a literal string, not a regex
+    # pattern. Without it, "C++" raises re.error and crashes the page.
     df_filtered = df_filtered[
         df_filtered["field"].str.contains(
-            field_filter.strip(), case=False, na=False
+            field_filter.strip(), case=False, na=False, regex=False
         )
     ]
 
