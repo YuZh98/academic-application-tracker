@@ -10,10 +10,10 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 2 complete — filter bar (status, priority, field) live; 135 tests passing. Working on Tier 3 (positions table).
-**Git:** Initialized. Phases 1–3 Tier 2 committed.
+**Phase:** Phase 3 Tier 3 complete — positions table with urgency flag live; 143 tests passing. Working on Tier 4 (row-click inline edit).
+**Git:** Initialized. Phases 1–3 Tier 3 committed.
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
-**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar (Tiers 1–2 done).
+**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table (Tiers 1–3 done).
 
 **To run:**
 ```

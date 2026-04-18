@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 Tier 2 complete — filter bar live; Tier 3 next |
+| Python app | 🔄 Phase 3 Tier 3 complete — positions table live; Tier 4 next |
 
 ---
 
@@ -60,7 +60,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | `pages/1_Opportunities.py` skeleton with section markers | ✅ Done (2026-04-17) |
 | Quick-add form (6 fields, saves immediately) | ✅ Done (2026-04-17) |
 | Filter bar (status, priority, field) | ✅ Done (2026-04-18) |
-| Positions table display | Pending (Tier 3) |
+| Positions table display (st.dataframe + deadline urgency) | ✅ Done (2026-04-18) |
 | Row-click inline edit with tabbed form (Overview / Requirements / Materials / Notes) | Pending (Tier 4) |
 | State-driven Materials tab (shows only required docs) | Pending (Tier 4) |
 | Save / Delete with confirm dialog | Pending (Tier 5) |
