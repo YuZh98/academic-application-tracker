@@ -292,6 +292,59 @@ class TestPositionsTable:
             f"Expected '' when no deadline, got '{row['deadline_urgency'].iloc[0]}'"
         )
 
+    def test_urgency_at_urgent_threshold_boundary(self, db):
+        """Deadline exactly DEADLINE_URGENT_DAYS away must produce 'urgent' (F3: ≤ boundary).
+
+        Tests the boundary of `days <= DEADLINE_URGENT_DAYS` — a `<` operator
+        would incorrectly return 'alert' for this case."""
+        deadline = (
+            datetime.date.today()
+            + datetime.timedelta(days=config.DEADLINE_URGENT_DAYS)
+        ).isoformat()
+        database.add_position({"position_name": "At Urgent Boundary", "deadline_date": deadline})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "At Urgent Boundary"]
+        assert row["deadline_urgency"].iloc[0] == "urgent", (
+            f"Expected 'urgent' at boundary days={config.DEADLINE_URGENT_DAYS}, "
+            f"got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
+    def test_urgency_at_alert_threshold_boundary(self, db):
+        """Deadline exactly DEADLINE_ALERT_DAYS away must produce 'alert' (F3: ≤ boundary).
+
+        Tests the boundary of `days <= DEADLINE_ALERT_DAYS` — a `<` operator
+        would incorrectly return '' for this case."""
+        deadline = (
+            datetime.date.today()
+            + datetime.timedelta(days=config.DEADLINE_ALERT_DAYS)
+        ).isoformat()
+        database.add_position({"position_name": "At Alert Boundary", "deadline_date": deadline})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "At Alert Boundary"]
+        assert row["deadline_urgency"].iloc[0] == "alert", (
+            f"Expected 'alert' at boundary days={config.DEADLINE_ALERT_DAYS}, "
+            f"got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
+    def test_past_deadline_flagged_as_urgent(self, db):
+        """A deadline that has already passed (days < 0) must produce 'urgent' (F4).
+
+        days < 0 satisfies `days <= DEADLINE_URGENT_DAYS`, so past deadlines are
+        surfaced as urgent — the user must either apply or close them."""
+        deadline = (
+            datetime.date.today() - datetime.timedelta(days=5)
+        ).isoformat()
+        database.add_position({"position_name": "Expired", "deadline_date": deadline})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "Expired"]
+        assert row["deadline_urgency"].iloc[0] == "urgent", (
+            f"Expected 'urgent' for past deadline {deadline}, "
+            f"got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
 
 # ── Filter bar structure ──────────────────────────────────────────────────────
 
@@ -434,4 +487,22 @@ class TestFilterBarBehaviour:
         assert not at.exception
         assert any("No positions yet" in el.value for el in at.info), (
             f"Expected 'No positions yet' when DB is empty; got: {[el.value for el in at.info]}"
+        )
+
+    def test_filter_by_field_with_special_characters(self, db):
+        """Field filter must treat the search term as a literal string, not a regex (F5).
+
+        'C++' contains regex metacharacters ('+' = one-or-more quantifier) that would
+        raise re.error with str.contains(regex=True). With regex=False, it must match
+        'C++ Programming' correctly and return exactly 1 position."""
+        database.add_position({"position_name": "C++ Postdoc",    "field": "C++ Programming"})
+        database.add_position({"position_name": "Python Postdoc", "field": "Python"})
+        at = _run_page()
+        at.text_input(key="filter_field").input("C++")
+        at.run()
+        assert not at.exception, f"Field filter raised an exception: {at.exception}"
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected 'C++ Programming' to match literal 'C++' filter; "
+            f"got: {at.caption[0].value!r}"
         )
