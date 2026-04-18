@@ -1,7 +1,7 @@
 # Tasks
 
 ## In Progress
-- [ ] Phase 3 Tier 3: positions table (st.dataframe with column config, deadline urgency)
+- [ ] Phase 3 Tier 4: row-click inline edit (session state + 3 tabs: Overview, Requirements, Materials)
 
 ## Backlog
 
@@ -18,6 +18,7 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-18 — Phase 3 Tier 3: positions table (st.dataframe + deadline urgency flag); 8 AppTest tests; 143 total passing
 - [x] 2026-04-18 — Phase 3 Tier 2: filter bar (status, priority, field); 13 AppTest tests; 135 total passing
 - [x] 2026-04-17 — Phase 3 Tier 1: quick-add form (6 fields) + empty state; 16 AppTest tests written + passing (121 total)
 - [x] 2026-04-17 — Phase 3 Tier 1 code review (F1–F5): try/except, strip(), explicit keys, expander scope, dict[str,Any], st.toast fix; 122 tests passing
@@ -33,4 +34,4 @@
 
 ---
 
-_Updated: 2026-04-18 (Tier 2 complete; Tier 3 next)_
+_Updated: 2026-04-18 (Tier 3 complete; Tier 4 next)_
