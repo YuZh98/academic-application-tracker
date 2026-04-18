@@ -193,3 +193,147 @@ class TestQuickAddFormBehaviour:
         assert len(df) == 2, f"Expected 2 rows after two submissions, got {len(df)}"
         names = set(df["position_name"].tolist())
         assert names == {"Position A", "Position B"}
+
+
+# ── Filter bar structure ──────────────────────────────────────────────────────
+
+class TestFilterBarStructure:
+    """All three filter widgets must be present with correct keys and options."""
+
+    def test_has_status_selectbox(self, db):
+        at = _run_page()
+        at.selectbox(key="filter_status")  # raises KeyError if absent
+
+    def test_has_priority_selectbox(self, db):
+        at = _run_page()
+        at.selectbox(key="filter_priority")
+
+    def test_has_field_text_input(self, db):
+        at = _run_page()
+        at.text_input(key="filter_field")
+
+    def test_status_options_match_config(self, db):
+        """Status filter must offer 'All' plus every value from config.STATUS_VALUES."""
+        at = _run_page()
+        actual = list(at.selectbox(key="filter_status").options)
+        expected = ["All"] + config.STATUS_VALUES
+        assert actual == expected, (
+            f"Status filter options mismatch.\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {actual}"
+        )
+
+    def test_priority_options_match_config(self, db):
+        """Priority filter must offer 'All' plus every value from config.PRIORITY_VALUES."""
+        at = _run_page()
+        actual = list(at.selectbox(key="filter_priority").options)
+        expected = ["All"] + config.PRIORITY_VALUES
+        assert actual == expected, (
+            f"Priority filter options mismatch.\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {actual}"
+        )
+
+
+# ── Filter bar behaviour ──────────────────────────────────────────────────────
+
+class TestFilterBarBehaviour:
+
+    def test_default_shows_all_positions(self, db):
+        """With default filters (All/All/''), every position in the DB is counted."""
+        database.add_position({"position_name": "Position A"})
+        database.add_position({"position_name": "Position B"})
+        at = _run_page()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "2 position(s)" in at.caption[0].value, (
+            f"Expected '2 position(s)' in caption, got: {at.caption[0].value!r}"
+        )
+
+    def test_filter_by_status_narrows_results(self, db):
+        """Selecting a specific status must hide positions with other statuses."""
+        database.add_position({"position_name": "Open One"})                          # status defaults to [OPEN]
+        database.add_position({"position_name": "Applied One", "status": "[APPLIED]"})
+        at = _run_page()
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected '1 position(s)' after status filter, got: {at.caption[0].value!r}"
+        )
+
+    def test_filter_by_status_no_match_shows_info(self, db):
+        """When the status filter matches no rows, a specific info message must appear."""
+        database.add_position({"position_name": "Open One"})  # [OPEN] by default
+        at = _run_page()
+        at.selectbox(key="filter_status").select("[APPLIED]")
+        at.run()
+        assert not at.exception
+        assert any("No positions match" in el.value for el in at.info), (
+            f"Expected 'No positions match' info; got: {[el.value for el in at.info]}"
+        )
+
+    def test_filter_by_priority_narrows_results(self, db):
+        """Selecting a specific priority must hide positions with other priorities."""
+        database.add_position({"position_name": "High Prio", "priority": "High"})
+        database.add_position({"position_name": "Med Prio",  "priority": "Med"})
+        at = _run_page()
+        at.selectbox(key="filter_priority").select("High")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected '1 position(s)' after priority filter, got: {at.caption[0].value!r}"
+        )
+
+    def test_filter_by_field_substring_match(self, db):
+        """Field text filter must match positions whose field contains the search term."""
+        database.add_position({"position_name": "ML Postdoc",    "field": "Machine Learning"})
+        database.add_position({"position_name": "Stats Postdoc", "field": "Statistics"})
+        at = _run_page()
+        at.text_input(key="filter_field").input("Machine")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected '1 position(s)' after field filter, got: {at.caption[0].value!r}"
+        )
+
+    def test_filter_by_field_is_case_insensitive(self, db):
+        """Field filter must match regardless of letter case."""
+        database.add_position({"position_name": "ML Postdoc", "field": "Machine Learning"})
+        at = _run_page()
+        at.text_input(key="filter_field").input("MACHINE")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            "Expected case-insensitive field filter to match 'Machine Learning'"
+        )
+
+    def test_combined_status_and_priority_narrows_results(self, db):
+        """Both status and priority filters apply simultaneously (AND logic)."""
+        database.add_position({"position_name": "A", "priority": "High"})                          # [OPEN] + High
+        database.add_position({"position_name": "B", "priority": "Med"})                           # [OPEN] + Med
+        database.add_position({"position_name": "C", "priority": "High", "status": "[APPLIED]"})   # [APPLIED] + High
+        at = _run_page()
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_priority").select("High")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected only position A after combined filter, got: {at.caption[0].value!r}"
+        )
+
+    def test_db_empty_with_filter_shows_original_empty_message(self, db):
+        """When the DB has no rows at all, the 'No positions yet' message must appear
+        even if a filter is active — not the 'No positions match' filter message."""
+        at = _run_page()
+        at.selectbox(key="filter_status").select(config.STATUS_VALUES[0])
+        at.run()
+        assert not at.exception
+        assert any("No positions yet" in el.value for el in at.info), (
+            f"Expected 'No positions yet' when DB is empty; got: {[el.value for el in at.info]}"
+        )
