@@ -195,6 +195,104 @@ class TestQuickAddFormBehaviour:
         assert names == {"Position A", "Position B"}
 
 
+# ── Positions table ───────────────────────────────────────────────────────────
+
+class TestPositionsTable:
+
+    def test_no_table_when_no_positions(self, db):
+        """st.dataframe must not appear when the DB is empty."""
+        at = _run_page()
+        assert not at.dataframe, "Expected no dataframe element when DB is empty"
+
+    def test_table_appears_with_positions(self, db):
+        """st.dataframe must appear exactly once when positions exist."""
+        database.add_position({"position_name": "Stanford Postdoc"})
+        at = _run_page()
+        assert len(at.dataframe) == 1, (
+            f"Expected exactly one dataframe element, got {len(at.dataframe)}"
+        )
+
+    def test_table_row_count_matches_filtered_count(self, db):
+        """Row count in the dataframe must match the filter-narrowed position count."""
+        database.add_position({"position_name": "A"})                          # [OPEN] by default
+        database.add_position({"position_name": "B"})                          # [OPEN] by default
+        database.add_position({"position_name": "C", "status": "[APPLIED]"})
+        at = _run_page()
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.run()
+        assert not at.exception
+        assert len(at.dataframe) == 1
+        assert len(at.dataframe[0].value) == 2, (
+            f"Expected 2 rows after status=[OPEN] filter, got {len(at.dataframe[0].value)}"
+        )
+
+    def test_table_has_required_columns(self, db):
+        """The captured dataframe must contain all required display columns."""
+        database.add_position({"position_name": "Test"})
+        at = _run_page()
+        cols = set(at.dataframe[0].value.columns)
+        required = {"position_name", "institute", "priority", "status",
+                    "deadline_date", "deadline_urgency"}
+        missing = required - cols
+        assert not missing, f"Columns missing from table: {missing}"
+
+    def test_urgent_deadline_flagged_as_urgent(self, db):
+        """Deadline within DEADLINE_URGENT_DAYS must produce deadline_urgency='urgent'."""
+        deadline = (
+            datetime.date.today()
+            + datetime.timedelta(days=config.DEADLINE_URGENT_DAYS - 1)
+        ).isoformat()
+        database.add_position({"position_name": "Urgent", "deadline_date": deadline})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "Urgent"]
+        assert row["deadline_urgency"].iloc[0] == "urgent", (
+            f"Expected 'urgent' for deadline {deadline}, "
+            f"got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
+    def test_alert_deadline_flagged_as_alert(self, db):
+        """Deadline > DEADLINE_URGENT_DAYS but ≤ DEADLINE_ALERT_DAYS must produce
+        deadline_urgency='alert'."""
+        deadline = (
+            datetime.date.today()
+            + datetime.timedelta(days=config.DEADLINE_URGENT_DAYS + 1)
+        ).isoformat()
+        database.add_position({"position_name": "Alert", "deadline_date": deadline})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "Alert"]
+        assert row["deadline_urgency"].iloc[0] == "alert", (
+            f"Expected 'alert' for deadline {deadline}, "
+            f"got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
+    def test_normal_deadline_not_flagged(self, db):
+        """Deadline beyond DEADLINE_ALERT_DAYS must produce deadline_urgency=''."""
+        deadline = (
+            datetime.date.today()
+            + datetime.timedelta(days=config.DEADLINE_ALERT_DAYS + 10)
+        ).isoformat()
+        database.add_position({"position_name": "Normal", "deadline_date": deadline})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "Normal"]
+        assert row["deadline_urgency"].iloc[0] == "", (
+            f"Expected '' for deadline {deadline}, "
+            f"got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
+    def test_no_deadline_not_flagged(self, db):
+        """A position without a deadline_date must produce deadline_urgency=''."""
+        database.add_position({"position_name": "No Deadline"})   # no deadline_date supplied
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "No Deadline"]
+        assert row["deadline_urgency"].iloc[0] == "", (
+            f"Expected '' when no deadline, got '{row['deadline_urgency'].iloc[0]}'"
+        )
+
+
 # ── Filter bar structure ──────────────────────────────────────────────────────
 
 class TestFilterBarStructure:
