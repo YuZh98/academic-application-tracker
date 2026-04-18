@@ -3,11 +3,30 @@
 # Phase 3 Tier 1: quick-add form + empty state.
 # Tiers 2–5 will add: filter bar, table, row edit, save/delete.
 
+import datetime
 from typing import Any
 
 import streamlit as st
 import database
 import config
+
+
+def _deadline_urgency(date_str: str | None) -> str:
+    """Return 'urgent', 'alert', or '' based on days until the deadline.
+
+    Thresholds come from config so changing DEADLINE_URGENT_DAYS /
+    DEADLINE_ALERT_DAYS in one place updates both the flag and the dashboard."""
+    if not date_str:
+        return ""
+    try:
+        days = (datetime.date.fromisoformat(date_str) - datetime.date.today()).days
+    except ValueError:
+        return ""
+    if days <= config.DEADLINE_URGENT_DAYS:
+        return "urgent"
+    if days <= config.DEADLINE_ALERT_DAYS:
+        return "alert"
+    return ""
 
 database.init_db()
 
@@ -97,8 +116,32 @@ if df.empty:
 elif df_filtered.empty:
     st.info("No positions match the current filters.")
 else:
-    # Full table display (Tier 3) and row-click edit (Tiers 4–5) come next.
     st.caption(f"{len(df_filtered)} position(s) tracked.")
+
+    # T3-A / T3-B: build display DataFrame with urgency flag, then render table.
+    df_display = df_filtered.copy()
+    df_display["deadline_urgency"] = df_display["deadline_date"].apply(
+        _deadline_urgency
+    )
+
+    display_cols = [
+        "position_name", "institute", "priority", "status",
+        "deadline_date", "deadline_urgency",
+    ]
+    st.dataframe(
+        df_display,
+        use_container_width=True,
+        hide_index=True,
+        column_order=display_cols,
+        column_config={
+            "position_name":    st.column_config.TextColumn("Position",  width="large"),
+            "institute":        st.column_config.TextColumn("Institute", width="medium"),
+            "priority":         st.column_config.TextColumn("Priority",  width="small"),
+            "status":           st.column_config.TextColumn("Status",    width="medium"),
+            "deadline_date":    st.column_config.TextColumn("Due",       width="small"),
+            "deadline_urgency": st.column_config.TextColumn("Urgency",   width="small"),
+        },
+    )
 
 # ── TIER 4: Row-click inline expansion ───────────────────────────────────────
 # selected_id stored in st.session_state["selected_position_id"]
