@@ -179,11 +179,45 @@ if "selected_position_id" in st.session_state:
     if not selected_row.empty:
         r = selected_row.iloc[0]
         st.subheader(f"{r['position_name']} · {r['status']}")
+
+        # T4-C: widget-value trap — once session_state[key] is set, Streamlit
+        # ignores the `value=` argument on later reruns, so the form would
+        # "stick" on the first selected row. Pre-seed widget state whenever
+        # the selection changes, tracked via the internal _edit_form_sid
+        # sentinel. Stored values match widget types: str for text, date|None
+        # for date_input, config-vocabulary strings for the selectboxes.
+        if st.session_state.get("_edit_form_sid") != sid:
+            st.session_state["edit_position_name"] = r["position_name"] or ""
+            st.session_state["edit_institute"]     = r["institute"] or ""
+            st.session_state["edit_field"]         = r["field"] or ""
+            st.session_state["edit_priority"]      = r["priority"]
+            st.session_state["edit_status"]        = r["status"]
+            st.session_state["edit_deadline_date"] = (
+                datetime.date.fromisoformat(r["deadline_date"])
+                if r["deadline_date"] else None
+            )
+            st.session_state["edit_link"]          = r["link"] or ""
+            st.session_state["_edit_form_sid"]     = sid
+
         # config.EDIT_PANEL_TABS is the single source for label + order.
         # Unpacking by index keeps T4-C–F wiring readable even if tabs grow.
         tabs = st.tabs(config.EDIT_PANEL_TABS)
         with tabs[0]:   # Overview — T4-C
-            pass
+            # st.form batches edits so nothing writes on keystroke; the real
+            # Save action arrives in T5. The submit button is required by
+            # st.form but kept disabled to make the "read-only for now"
+            # contract explicit in the UI.
+            with st.form("edit_overview"):
+                st.text_input("Position Name", key="edit_position_name")
+                st.text_input("Institute",     key="edit_institute")
+                st.text_input("Field",         key="edit_field")
+                st.selectbox("Priority", config.PRIORITY_VALUES,
+                             key="edit_priority")
+                st.selectbox("Status",   config.STATUS_VALUES,
+                             key="edit_status")
+                st.date_input("Deadline",      key="edit_deadline_date")
+                st.text_input("Link",          key="edit_link")
+                st.form_submit_button("Save Changes", disabled=True)
         with tabs[1]:   # Requirements — T4-D
             pass
         with tabs[2]:   # Materials — T4-E
