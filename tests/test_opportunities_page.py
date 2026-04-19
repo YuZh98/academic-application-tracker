@@ -716,3 +716,158 @@ class TestEditPanelShell:
         assert "[APPLIED]" in text, (
             f"Subheader missing status: {text!r}"
         )
+
+
+# ── Overview tab widgets (T4-C) ───────────────────────────────────────────────
+# The Overview tab holds editable widgets pre-filled from the selected row.
+# Widgets live inside st.form("edit_overview") so edits don't save on keystroke
+# — T5 adds the real save action; a disabled submit button is the placeholder.
+#
+# Widget key contract (page ↔ tests): keep these prefixed with "edit_" so they
+# never collide with the quick-add "qa_*" keys.
+
+EDIT_KEYS = {
+    "position_name": "edit_position_name",
+    "institute":     "edit_institute",
+    "field":         "edit_field",
+    "priority":      "edit_priority",
+    "status":        "edit_status",
+    "deadline_date": "edit_deadline_date",
+    "link":          "edit_link",
+}
+
+
+class TestOverviewTabWidgets:
+
+    def test_no_overview_widgets_without_selection(self, db):
+        """None of the edit_* widgets must render before a row is selected."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        for k in EDIT_KEYS.values():
+            assert k not in at.session_state, (
+                f"Widget {k!r} should not exist before a row is selected"
+            )
+
+    def test_all_seven_widgets_present_when_selected(self, db):
+        """All seven Overview widgets must render with the correct keys."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Text inputs
+        text_keys = [at.text_input(key=EDIT_KEYS[f]) for f in
+                     ("position_name", "institute", "field", "link")]
+        assert all(w is not None for w in text_keys), (
+            "Expected 4 text_input widgets (position_name, institute, field, link)"
+        )
+        # Selectboxes
+        assert at.selectbox(key=EDIT_KEYS["priority"]) is not None
+        assert at.selectbox(key=EDIT_KEYS["status"]) is not None
+        # Date input
+        assert at.date_input(key=EDIT_KEYS["deadline_date"]) is not None
+
+    def test_widget_values_match_selected_row(self, db):
+        """Each widget must pre-fill from the selected row's DB values."""
+        database.add_position({
+            "position_name": "Stanford BioStats",
+            "institute":     "Stanford",
+            "field":         "Biostatistics",
+            "priority":      "High",
+            "status":        "[APPLIED]",
+            "deadline_date": "2026-12-01",
+            "link":          "https://example.org/apply",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
+        assert at.text_input(key=EDIT_KEYS["institute"]).value     == "Stanford"
+        assert at.text_input(key=EDIT_KEYS["field"]).value         == "Biostatistics"
+        assert at.selectbox(key=EDIT_KEYS["priority"]).value       == "High"
+        assert at.selectbox(key=EDIT_KEYS["status"]).value         == "[APPLIED]"
+        assert at.date_input(key=EDIT_KEYS["deadline_date"]).value == datetime.date(2026, 12, 1)
+        assert at.text_input(key=EDIT_KEYS["link"]).value          == "https://example.org/apply"
+
+    def test_status_selectbox_options_match_config(self, db):
+        """Status selectbox must expose exactly config.STATUS_VALUES, same order."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        assert options == config.STATUS_VALUES, (
+            f"Status options must match config.STATUS_VALUES.\n"
+            f"  Expected: {config.STATUS_VALUES}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_priority_selectbox_options_match_config(self, db):
+        """Priority selectbox must expose exactly config.PRIORITY_VALUES, same order."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["priority"]).options)
+        assert options == config.PRIORITY_VALUES, (
+            f"Priority options must match config.PRIORITY_VALUES.\n"
+            f"  Expected: {config.PRIORITY_VALUES}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_filter_preserves_selection_when_row_still_visible(self, db):
+        """Typing into the field filter must not dismiss the edit panel as long
+        as the selected row is still in df_filtered."""
+        database.add_position({"position_name": "Alpha", "field": "Biostatistics"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        pid = at.session_state["selected_position_id"]
+        # Narrow the filter to something that still matches 'Biostatistics'.
+        at.text_input(key="filter_field").set_value("Bio")
+        at.run()
+        assert at.session_state.get("selected_position_id") == pid, (
+            "Filter that still matches the selected row must preserve the selection"
+        )
+        # Edit panel must still be rendered.
+        assert at.text_input(key=EDIT_KEYS["position_name"]) is not None
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Alpha"
+
+    def test_widgets_handle_null_fields(self, db):
+        """A row with NULL optional fields must not crash the form — empty
+        strings for text, None for the date."""
+        database.add_position({"position_name": "Alpha"})   # everything else default/NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page crashed on row with NULLs: {at.exception}"
+        assert at.text_input(key=EDIT_KEYS["institute"]).value == ""
+        assert at.text_input(key=EDIT_KEYS["field"]).value     == ""
+        assert at.text_input(key=EDIT_KEYS["link"]).value      == ""
+        assert at.date_input(key=EDIT_KEYS["deadline_date"]).value is None
+
+    def test_widgets_update_on_selection_change(self, db):
+        """Selecting a different row must re-seed the widgets with that row's
+        values. This is the widget-value trap: if session_state already holds a
+        value for the key, Streamlit ignores `value=` on re-render, so the form
+        would 'stick' on the first row. The page must pre-seed on selection
+        change (tracked via an internal sentinel)."""
+        # Insert in a known order — get_all_positions orders by updated_at DESC,
+        # so the most-recently-added row lands at index 0.
+        database.add_position({"position_name": "Alpha", "institute": "A-Inst"})
+        database.add_position({"position_name": "Beta",  "institute": "B-Inst"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first_name = at.text_input(key=EDIT_KEYS["position_name"]).value
+        first_inst = at.text_input(key=EDIT_KEYS["institute"]).value
+        # Select the other row.
+        _select_row(at, 1)
+        second_name = at.text_input(key=EDIT_KEYS["position_name"]).value
+        second_inst = at.text_input(key=EDIT_KEYS["institute"]).value
+        assert {first_name, second_name} == {"Alpha", "Beta"}, (
+            f"Selection change must switch widget values; got {first_name!r} → {second_name!r}"
+        )
+        assert {first_inst, second_inst} == {"A-Inst", "B-Inst"}
+        assert first_name != second_name, (
+            "Widget did not update on selection change — classic value= trap"
+        )
