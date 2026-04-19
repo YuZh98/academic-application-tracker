@@ -635,3 +635,84 @@ class TestRowSelection:
         assert modes == ["SINGLE_ROW"], (
             f"Expected selection_mode == ['SINGLE_ROW'], got {modes!r}"
         )
+
+
+# ── Edit-panel shell (T4-B) ───────────────────────────────────────────────────
+# When a row is selected, the page renders a subheader + st.tabs(...) below
+# the table. The tabs are empty in T4-B — T4-C–F fill the bodies.
+
+class TestEditPanelShell:
+
+    def test_no_tabs_when_no_selection(self, db):
+        """Tabs must not render unless a row is selected."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert len(at.tabs) == 0, (
+            f"Expected 0 tabs without selection, got {len(at.tabs)}"
+        )
+
+    def test_no_subheader_when_no_selection(self, db):
+        """Subheader (position_name · status) must not render without selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert len(at.subheader) == 0, (
+            f"Expected 0 subheaders without selection, got {len(at.subheader)}"
+        )
+
+    def test_four_tabs_appear_when_row_selected(self, db):
+        """Selecting a row must render exactly 4 tabs (Overview / Req / Mat / Notes)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised after selection: {at.exception}"
+        assert len(at.tabs) == 4, (
+            f"Expected 4 tabs after selection, got {len(at.tabs)}"
+        )
+
+    def test_tab_labels_match_config(self, db):
+        """Tab labels must come from config.EDIT_PANEL_TABS (proves config-drive)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        labels = [t.label for t in at.tabs]
+        assert labels == config.EDIT_PANEL_TABS, (
+            f"Tab labels must match config.EDIT_PANEL_TABS.\n"
+            f"  Expected: {config.EDIT_PANEL_TABS}\n"
+            f"  Got:      {labels}"
+        )
+
+    def test_tabs_disappear_when_deselected(self, db):
+        """Deselecting the row must unrender the edit panel (tabs + subheader)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert len(at.tabs) == 4   # precondition
+        _deselect_row(at)
+        assert len(at.tabs) == 0, (
+            "Deselection should unrender tabs"
+        )
+        assert len(at.subheader) == 0, (
+            "Deselection should unrender the subheader"
+        )
+
+    def test_subheader_shows_position_name_and_status(self, db):
+        """The subheader must confirm what's being edited — position name + status."""
+        database.add_position(
+            {"position_name": "Stanford BioStats", "status": "[APPLIED]"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert len(at.subheader) == 1, (
+            f"Expected exactly 1 subheader after selection, got {len(at.subheader)}"
+        )
+        text = at.subheader[0].value
+        assert "Stanford BioStats" in text, (
+            f"Subheader missing position name: {text!r}"
+        )
+        assert "[APPLIED]" in text, (
+            f"Subheader missing status: {text!r}"
+        )
