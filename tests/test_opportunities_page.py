@@ -636,6 +636,30 @@ class TestRowSelection:
             f"Expected selection_mode == ['SINGLE_ROW'], got {modes!r}"
         )
 
+    def test_quick_add_clears_selection(self, db):
+        """Regression guard for Tier-4 review F1: Quick-Add's st.rerun() must
+        clear the dataframe selection state, because get_all_positions() orders
+        updated_at DESC — the new row lands at index 0 and every existing row
+        shifts +1, so a surviving selection index would silently re-bind the
+        edit panel to a different position."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state   # precondition
+        # Submit a quick-add for a new position via the real form.
+        at.text_input(key="qa_position_name").set_value("Beta")
+        at.button(key="qa_submit").click()
+        at.run()
+        assert not at.exception, f"Quick-add raised after selection: {at.exception}"
+        assert "selected_position_id" not in at.session_state, (
+            "Quick-Add must clear selected_position_id so the post-rerun "
+            "row-index shift doesn't silently switch the selected position"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "Sentinel must be cleared alongside selected_position_id"
+        )
+
 
 # ── Edit-panel shell (T4-B) ───────────────────────────────────────────────────
 # When a row is selected, the page renders a subheader + st.tabs(...) below
@@ -716,6 +740,31 @@ class TestEditPanelShell:
         assert "[APPLIED]" in text, (
             f"Subheader missing status: {text!r}"
         )
+
+    def test_stale_sid_is_cleared_silently(self, db):
+        """Regression guard for Tier-4 review F3: if selected_position_id
+        points to a row that's no longer in df (deleted elsewhere, external
+        DB edit), both the sid and the _edit_form_sid sentinel must be
+        cleared on the next rerun so state doesn't leak forever."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Inject a sid that doesn't exist in the DB.
+        at.session_state["selected_position_id"] = 99999
+        at.session_state["_edit_form_sid"] = 99999
+        # Also wipe the dataframe widget's own selection so the page doesn't
+        # re-derive selected_position_id from the row-0 click on this rerun.
+        at.session_state[TABLE_KEY] = {"selection": {"rows": [], "columns": []}}
+        at.run()
+        assert not at.exception, f"Page raised on stale sid: {at.exception}"
+        assert "selected_position_id" not in at.session_state, (
+            "Stale sid must be cleared when the row is absent from df"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "Sentinel must be cleared alongside the stale sid"
+        )
+        assert len(at.tabs) == 0, "Edit panel must not render for a stale sid"
 
 
 # ── Overview tab widgets (T4-C) ───────────────────────────────────────────────
@@ -873,4 +922,21 @@ class TestOverviewTabWidgets:
         assert {first_inst, second_inst} == {"A-Inst", "B-Inst"}
         assert first_name != second_name, (
             "Widget did not update on selection change — classic value= trap"
+        )
+
+    def test_null_priority_falls_back_to_first_option(self, db):
+        """Regression guard for Tier-4 review F2: a DB row with priority=NULL
+        must not put None into the selectbox's session_state — today Streamlit
+        tolerates an out-of-options value silently, but the tolerance is
+        undocumented. Coerce to PRIORITY_VALUES[0] so the selectbox always
+        gets a valid option."""
+        database.add_position({"position_name": "Alpha"})   # priority omitted → NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised on NULL priority: {at.exception}"
+        assert at.selectbox(key=EDIT_KEYS["priority"]).value == config.PRIORITY_VALUES[0], (
+            f"NULL priority must coerce to config.PRIORITY_VALUES[0] "
+            f"(= {config.PRIORITY_VALUES[0]!r}); got "
+            f"{at.selectbox(key=EDIT_KEYS['priority']).value!r}"
         )
