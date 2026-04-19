@@ -226,3 +226,53 @@ Same mechanism as F1: the `positions_table` widget's selection state is an index
 ## Verdict
 
 **Approve with fixes** — all findings are fixable inside T4-C's scope and are applied in this review. Re-run `pytest tests/` after fixes; expected count: 167 → 170 (three new regression tests: F1, F2, F3).
+
+---
+
+## Pre-merge Q&A (feature/phase-3-tier4 → main)
+
+Before opening the PR, a junior engineer asked seven questions about the branch's choices and review. Recording them here so the answers live alongside the code they explain.
+
+**PR scope:** 11 commits, +824/−17 lines, 7 files touched (mostly `pages/1_Opportunities.py` + `tests/`).
+
+### Q1. Why 11 commits for one feature? Shouldn't we squash before merge?
+
+**No — keep `--no-ff` with history preserved.** The commits are not noise; they are a teaching artefact. Each tier has a paired `test:` → `feat:` → `chore:` triplet that makes the TDD cycle readable from `git log`: "here are the failing tests, here is the implementation that made them pass, here is the tracking bump." The final `review(...)` commit groups all post-review fixes with their three regression tests. If a later bisect is needed (e.g., "when did the Quick-Add behaviour change?"), tier-level granularity is the right unit. The project's `GUIDELINES.md §9` explicitly rejects both extremes (one giant commit, or wip-every-line) — this branch is the "just right" middle. Merge with `--no-ff` so the tier boundary is preserved on `main`.
+
+### Q2. `pages/1_Opportunities.py` is now 243 lines and mixes five concerns (title, quick-add, filter, table, edit panel). Time to split it?
+
+**Not yet.** Page files are expected to read top-to-bottom as a UI script — that's Streamlit's model. Extracting helpers into `opportunities_helpers.py` now would obscure the one thing that's currently clear: the vertical order of sections matches the visual order on screen. The section-marker comments (`# ── TIER N: ... ────`) serve as navigation. Revisit after T4-D–F and T5 land — if the file crosses ~400 lines **and** any section reaches internal complexity (nested state machines, non-trivial computations), extract *that section* only, not a blanket refactor. The `_deadline_urgency` helper is the right precedent: it stayed inline until it needed a docstring, then lifted.
+
+### Q3. Why `on_select="rerun"` instead of a `selection`-callback API?
+
+Streamlit 1.56's `st.dataframe` supports only `on_select="rerun"` or `"ignore"` — there is no per-row callback hook (that API exists on `st.data_editor`, which is a different widget with edit-in-place semantics we don't want). The rerun model is also a better fit for this app's dataflow: the entire page re-runs on every interaction, which is how filter-narrowing-then-selection works cleanly without explicit state machines. The cost is a full rerun on every click — acceptable for a single-user local app with O(100) rows.
+
+### Q4. Why the `_edit_form_sid` sentinel pattern instead of just passing `value=r["priority"]` to the selectbox?
+
+This was discovered the hard way during T4-C: **once `session_state[key]` has a value, Streamlit ignores the `value=` argument on subsequent reruns.** Using `value=` alone means the form pre-fills correctly on the *first* selection and then "sticks" forever — selecting row B would still show row A's values. The canonical fix is to write the intended values into `session_state[key]` whenever the source data changes, gated by a sentinel that detects the change. `test_widgets_update_on_selection_change` directly guards this regression, because it's the kind of bug a future maintainer would re-introduce by "simplifying" the code.
+
+### Q5. Review finding F2 coerces `None` priority to `PRIORITY_VALUES[0]`. Isn't that hiding a data-quality problem?
+
+It's a defensive coercion, not data repair. The DB column is legitimately nullable (no `DEFAULT` in the schema), and the quick-add form always sets a value — so today all rows have a priority. F2 guards against three future drifts: (1) a new "bulk import" path that leaves the field blank, (2) a sqlite3 CLI edit, (3) a future migration that adds a new priority tier and leaves legacy rows with the removed value. The selectbox still *displays* the fallback, so the user sees a plausibly-wrong value and can correct it. The alternative — crashing the page — is strictly worse for a personal tool. Once T5 ships a save path, we could add a server-side validator that rejects unknown priorities at write time; that's the layer where enforcement belongs, not the display layer.
+
+### Q6. The test file is now 900+ lines with 170 tests, mostly AppTest integration tests. Is this bloat?
+
+**No, but the boundary is worth watching.** AppTest is the right harness for page-level contracts (what renders when, which widget keys exist, how session_state evolves) — these can't be meaningfully unit-tested. The 170-count looks large but the full suite runs in ~2.5 seconds, so there's no developer friction yet. The signal to watch is: if a future change requires rewriting >10 tests for a single widget rename, that's a test-coupling smell and those tests should be compressed into a parametrized one. For now, explicit tests per behaviour (one `test_selection_mode_is_single_row`, one `test_four_tabs_appear_when_row_selected`, etc.) read better in `pytest -v` output than a clever table.
+
+### Q7. `config.EDIT_PANEL_TABS` is a list, but the page indexes into `tabs[0]..tabs[3]` by position. What happens if someone adds a 5th tab via config?
+
+Streamlit would render 5 tabs, but only the first 4 would have bodies — the 5th would appear empty. This is a known coupling: **config controls labels; page controls bodies.** The two have to stay in sync. Two reasonable futures: (a) accept the coupling and document it (current choice — cheap, obvious at read time), (b) move to a dict-of-callables in `config` so the page can dispatch by label. Option (b) violates the "config.py is constants only, no functions" rule from `GUIDELINES.md §2`. For a 4-tab UI this won't change often, so (a) is fine. If a 5th tab ever appears, the reviewer should force a compile-time error by asserting `len(config.EDIT_PANEL_TABS) == 4` at the top of the page — a better guard than silent empty tabs.
+
+### Q8. Merge strategy — `--no-ff`, `--squash`, or rebase?
+
+**`--no-ff`.** Rationale per `GUIDELINES.md §9`:
+- `--squash` would collapse the TDD triplets and hide the review→fix narrative — exactly what we want to preserve for a learning project.
+- Rebase-onto-main would linearise history and drop the tier-boundary signal (the merge commit is the marker that "this is one shipped feature").
+- `--no-ff` creates one merge commit that summarises "Phase 3 Tier 4 A/B/C complete", with all 11 commits reachable through it.
+
+Command: `git checkout main && git merge feature/phase-3-tier4 --no-ff -m "Merge Phase 3 Tier 4 A/B/C: row selection, edit-panel shell, Overview tab"` followed by `git tag v1-phase-3-tier4-abc` to mark the checkpoint.
+
+---
+
+**Final verdict after Q&A:** ready to merge. Branch is green (170/170 tests pass), history is clean, all review findings are addressed with regression guards, and no TODO/FIXME/print/debug residue remains in the diff.
+
