@@ -21,6 +21,30 @@ PAGE = "pages/1_Opportunities.py"
 # format, which is undocumented and could change between library versions.
 SUBMIT_KEY = "qa_submit"
 
+# T4-A: key passed to st.dataframe() so tests can drive row selection by
+# injecting into session_state (AppTest exposes no click-a-row API).
+TABLE_KEY = "positions_table"
+
+
+def _select_row(at: AppTest, row_index: int) -> None:
+    """Simulate a single-row selection on the positions table.
+
+    AppTest's Dataframe element has no select() method, so we write the
+    selection state directly to session_state and rerun. Shape matches what
+    Streamlit 1.56 writes for on_select='rerun' + selection_mode='single-row'."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [row_index], "columns": []}
+    }
+    at.run()
+
+
+def _deselect_row(at: AppTest) -> None:
+    """Simulate deselecting all rows on the positions table."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [], "columns": []}
+    }
+    at.run()
+
 
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Opportunities page.
@@ -505,4 +529,102 @@ class TestFilterBarBehaviour:
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected 'C++ Programming' to match literal 'C++' filter; "
             f"got: {at.caption[0].value!r}"
+        )
+
+
+# ── Row selection (T4-A) ──────────────────────────────────────────────────────
+# The positions table uses st.dataframe(on_select='rerun', selection_mode='single-row').
+# When a row is selected, the row's DB id must land in session_state as
+# 'selected_position_id'. T4-B (tabs) and T4-C–F (edit fields) will read that key.
+
+class TestRowSelection:
+
+    def test_no_selection_in_session_state_initially(self, db):
+        """With no user interaction, 'selected_position_id' must not be in session_state."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert "selected_position_id" not in at.session_state, (
+            "selected_position_id should be absent until a row is explicitly selected"
+        )
+
+    def test_selecting_row_sets_selected_position_id(self, db):
+        """Injecting a single-row selection must populate selected_position_id with the row's DB id."""
+        pid_alpha = database.add_position({"position_name": "Alpha"})
+        pid_beta  = database.add_position({"position_name": "Beta"})
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        assert not at.exception
+
+        # Find the display-row index of "Beta" so we don't assume ordering.
+        df = at.dataframe[0].value
+        beta_positional = list(df["position_name"]).index("Beta")
+
+        _select_row(at, beta_positional)
+        assert not at.exception, f"Page raised after selection: {at.exception}"
+        assert at.session_state.get("selected_position_id") == pid_beta, (
+            f"Expected selected_position_id={pid_beta} (Beta), "
+            f"got {at.session_state.get('selected_position_id')}"
+        )
+
+    def test_deselecting_clears_selected_position_id(self, db):
+        """Setting rows=[] (deselection) must remove selected_position_id from session_state."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state, (
+            "Precondition failed: row selection did not set selected_position_id"
+        )
+        _deselect_row(at)
+        assert "selected_position_id" not in at.session_state, (
+            "Deselecting a row should remove selected_position_id from session_state"
+        )
+
+    def test_selection_respects_active_filter(self, db):
+        """Row 0 of a filtered view must map to the filtered row's id, not an unfiltered row."""
+        pid_applied = database.add_position(
+            {"position_name": "Applied One", "status": "[APPLIED]"}
+        )
+        pid_open = database.add_position(
+            {"position_name": "Open One", "status": "[OPEN]"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.run()
+        # df_display now has exactly one row: "Open One". Row 0 must map to pid_open.
+        _select_row(at, 0)
+        assert at.session_state.get("selected_position_id") == pid_open, (
+            f"Filtered row 0 should map to pid_open={pid_open}, "
+            f"got {at.session_state.get('selected_position_id')}"
+        )
+
+    def test_filter_to_empty_clears_stale_selection(self, db):
+        """When an active filter hides all rows (or the DB goes empty), any stale
+        selection must be cleared so later tiers (tabs, edit panel) don't render
+        for a position the user can no longer see."""
+        database.add_position({"position_name": "Alpha", "status": "[OPEN]"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state   # precondition
+        # Apply a filter that matches nothing.
+        at.selectbox(key="filter_status").select("[APPLIED]")
+        at.run()
+        assert "selected_position_id" not in at.session_state, (
+            "Stale selected_position_id must be cleared when filter hides all rows"
+        )
+
+    def test_selection_mode_is_single_row(self, db):
+        """Regression guard: multi-row selection would let the user pick N positions
+        but the edit panel can only show one. The widget must be configured for
+        single-row selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        # Streamlit proto enum: 0=MULTI_ROW (default), 1=SINGLE_ROW (enum name SINGLE_ROW)
+        mode = at.dataframe[0].proto.selection_mode
+        # Compare by stringified name to avoid depending on the enum import path.
+        assert "SINGLE_ROW" in str(mode), (
+            f"Expected SINGLE_ROW selection mode, got {mode!r}"
         )
