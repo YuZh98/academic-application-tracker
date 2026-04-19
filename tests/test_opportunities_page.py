@@ -21,6 +21,30 @@ PAGE = "pages/1_Opportunities.py"
 # format, which is undocumented and could change between library versions.
 SUBMIT_KEY = "qa_submit"
 
+# T4-A: key passed to st.dataframe() so tests can drive row selection by
+# injecting into session_state (AppTest exposes no click-a-row API).
+TABLE_KEY = "positions_table"
+
+
+def _select_row(at: AppTest, row_index: int) -> None:
+    """Simulate a single-row selection on the positions table.
+
+    AppTest's Dataframe element has no select() method, so we write the
+    selection state directly to session_state and rerun. Shape matches what
+    Streamlit 1.56 writes for on_select='rerun' + selection_mode='single-row'."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [row_index], "columns": []}
+    }
+    at.run()
+
+
+def _deselect_row(at: AppTest) -> None:
+    """Simulate deselecting all rows on the positions table."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [], "columns": []}
+    }
+    at.run()
+
 
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Opportunities page.
@@ -505,4 +529,414 @@ class TestFilterBarBehaviour:
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected 'C++ Programming' to match literal 'C++' filter; "
             f"got: {at.caption[0].value!r}"
+        )
+
+
+# ── Row selection (T4-A) ──────────────────────────────────────────────────────
+# The positions table uses st.dataframe(on_select='rerun', selection_mode='single-row').
+# When a row is selected, the row's DB id must land in session_state as
+# 'selected_position_id'. T4-B (tabs) and T4-C–F (edit fields) will read that key.
+
+class TestRowSelection:
+
+    def test_no_selection_in_session_state_initially(self, db):
+        """With no user interaction, 'selected_position_id' must not be in session_state."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert "selected_position_id" not in at.session_state, (
+            "selected_position_id should be absent until a row is explicitly selected"
+        )
+
+    def test_selecting_row_sets_selected_position_id(self, db):
+        """Injecting a single-row selection must populate selected_position_id with the row's DB id."""
+        pid_alpha = database.add_position({"position_name": "Alpha"})
+        pid_beta  = database.add_position({"position_name": "Beta"})
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        assert not at.exception
+
+        # Find the display-row index of "Beta" so we don't assume ordering.
+        df = at.dataframe[0].value
+        beta_positional = list(df["position_name"]).index("Beta")
+
+        _select_row(at, beta_positional)
+        assert not at.exception, f"Page raised after selection: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Row selection did not set selected_position_id"
+        )
+        assert at.session_state["selected_position_id"] == pid_beta, (
+            f"Expected selected_position_id={pid_beta} (Beta), "
+            f"got {at.session_state['selected_position_id']}"
+        )
+
+    def test_deselecting_clears_selected_position_id(self, db):
+        """Setting rows=[] (deselection) must remove selected_position_id from session_state."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state, (
+            "Precondition failed: row selection did not set selected_position_id"
+        )
+        _deselect_row(at)
+        assert "selected_position_id" not in at.session_state, (
+            "Deselecting a row should remove selected_position_id from session_state"
+        )
+
+    def test_selection_respects_active_filter(self, db):
+        """Row 0 of a filtered view must map to the filtered row's id, not an unfiltered row."""
+        pid_applied = database.add_position(
+            {"position_name": "Applied One", "status": "[APPLIED]"}
+        )
+        pid_open = database.add_position(
+            {"position_name": "Open One", "status": "[OPEN]"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.run()
+        # df_display now has exactly one row: "Open One". Row 0 must map to pid_open.
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state
+        assert at.session_state["selected_position_id"] == pid_open, (
+            f"Filtered row 0 should map to pid_open={pid_open}, "
+            f"got {at.session_state['selected_position_id']}"
+        )
+
+    def test_filter_to_empty_clears_stale_selection(self, db):
+        """When an active filter hides all rows (or the DB goes empty), any stale
+        selection must be cleared so later tiers (tabs, edit panel) don't render
+        for a position the user can no longer see."""
+        database.add_position({"position_name": "Alpha", "status": "[OPEN]"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state   # precondition
+        # Apply a filter that matches nothing.
+        at.selectbox(key="filter_status").select("[APPLIED]")
+        at.run()
+        assert "selected_position_id" not in at.session_state, (
+            "Stale selected_position_id must be cleared when filter hides all rows"
+        )
+
+    def test_selection_mode_is_single_row(self, db):
+        """Regression guard: multi-row selection would let the user pick N positions
+        but the edit panel can only show one. The widget must be configured for
+        single-row selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        # `selection_mode` is a repeated enum field on the Arrow proto; resolve
+        # the integer values to their enum names via the DESCRIPTOR so the test
+        # fails loudly if Streamlit renumbers the enum in a future release.
+        proto = at.dataframe[0].proto
+        enum_type = proto.DESCRIPTOR.fields_by_name["selection_mode"].enum_type
+        modes = [enum_type.values_by_number[v].name for v in proto.selection_mode]
+        assert modes == ["SINGLE_ROW"], (
+            f"Expected selection_mode == ['SINGLE_ROW'], got {modes!r}"
+        )
+
+    def test_quick_add_clears_selection(self, db):
+        """Regression guard for Tier-4 review F1: Quick-Add's st.rerun() must
+        clear the dataframe selection state, because get_all_positions() orders
+        updated_at DESC — the new row lands at index 0 and every existing row
+        shifts +1, so a surviving selection index would silently re-bind the
+        edit panel to a different position."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state   # precondition
+        # Submit a quick-add for a new position via the real form.
+        at.text_input(key="qa_position_name").set_value("Beta")
+        at.button(key="qa_submit").click()
+        at.run()
+        assert not at.exception, f"Quick-add raised after selection: {at.exception}"
+        assert "selected_position_id" not in at.session_state, (
+            "Quick-Add must clear selected_position_id so the post-rerun "
+            "row-index shift doesn't silently switch the selected position"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "Sentinel must be cleared alongside selected_position_id"
+        )
+
+
+# ── Edit-panel shell (T4-B) ───────────────────────────────────────────────────
+# When a row is selected, the page renders a subheader + st.tabs(...) below
+# the table. The tabs are empty in T4-B — T4-C–F fill the bodies.
+
+class TestEditPanelShell:
+
+    def test_no_tabs_when_no_selection(self, db):
+        """Tabs must not render unless a row is selected."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert len(at.tabs) == 0, (
+            f"Expected 0 tabs without selection, got {len(at.tabs)}"
+        )
+
+    def test_no_subheader_when_no_selection(self, db):
+        """Subheader (position_name · status) must not render without selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert len(at.subheader) == 0, (
+            f"Expected 0 subheaders without selection, got {len(at.subheader)}"
+        )
+
+    def test_four_tabs_appear_when_row_selected(self, db):
+        """Selecting a row must render exactly 4 tabs (Overview / Req / Mat / Notes)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised after selection: {at.exception}"
+        assert len(at.tabs) == 4, (
+            f"Expected 4 tabs after selection, got {len(at.tabs)}"
+        )
+
+    def test_tab_labels_match_config(self, db):
+        """Tab labels must come from config.EDIT_PANEL_TABS (proves config-drive)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        labels = [t.label for t in at.tabs]
+        assert labels == config.EDIT_PANEL_TABS, (
+            f"Tab labels must match config.EDIT_PANEL_TABS.\n"
+            f"  Expected: {config.EDIT_PANEL_TABS}\n"
+            f"  Got:      {labels}"
+        )
+
+    def test_tabs_disappear_when_deselected(self, db):
+        """Deselecting the row must unrender the edit panel (tabs + subheader)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert len(at.tabs) == 4   # precondition
+        _deselect_row(at)
+        assert len(at.tabs) == 0, (
+            "Deselection should unrender tabs"
+        )
+        assert len(at.subheader) == 0, (
+            "Deselection should unrender the subheader"
+        )
+
+    def test_subheader_shows_position_name_and_status(self, db):
+        """The subheader must confirm what's being edited — position name + status."""
+        database.add_position(
+            {"position_name": "Stanford BioStats", "status": "[APPLIED]"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert len(at.subheader) == 1, (
+            f"Expected exactly 1 subheader after selection, got {len(at.subheader)}"
+        )
+        text = at.subheader[0].value
+        assert "Stanford BioStats" in text, (
+            f"Subheader missing position name: {text!r}"
+        )
+        assert "[APPLIED]" in text, (
+            f"Subheader missing status: {text!r}"
+        )
+
+    def test_stale_sid_is_cleared_silently(self, db):
+        """Regression guard for Tier-4 review F3: if selected_position_id
+        points to a row that's no longer in df (deleted elsewhere, external
+        DB edit), both the sid and the _edit_form_sid sentinel must be
+        cleared on the next rerun so state doesn't leak forever."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Inject a sid that doesn't exist in the DB.
+        at.session_state["selected_position_id"] = 99999
+        at.session_state["_edit_form_sid"] = 99999
+        # Also wipe the dataframe widget's own selection so the page doesn't
+        # re-derive selected_position_id from the row-0 click on this rerun.
+        at.session_state[TABLE_KEY] = {"selection": {"rows": [], "columns": []}}
+        at.run()
+        assert not at.exception, f"Page raised on stale sid: {at.exception}"
+        assert "selected_position_id" not in at.session_state, (
+            "Stale sid must be cleared when the row is absent from df"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "Sentinel must be cleared alongside the stale sid"
+        )
+        assert len(at.tabs) == 0, "Edit panel must not render for a stale sid"
+
+
+# ── Overview tab widgets (T4-C) ───────────────────────────────────────────────
+# The Overview tab holds editable widgets pre-filled from the selected row.
+# Widgets live inside st.form("edit_overview") so edits don't save on keystroke
+# — T5 adds the real save action; a disabled submit button is the placeholder.
+#
+# Widget key contract (page ↔ tests): keep these prefixed with "edit_" so they
+# never collide with the quick-add "qa_*" keys.
+
+EDIT_KEYS = {
+    "position_name": "edit_position_name",
+    "institute":     "edit_institute",
+    "field":         "edit_field",
+    "priority":      "edit_priority",
+    "status":        "edit_status",
+    "deadline_date": "edit_deadline_date",
+    "link":          "edit_link",
+}
+
+
+class TestOverviewTabWidgets:
+
+    def test_no_overview_widgets_without_selection(self, db):
+        """None of the edit_* widgets must render before a row is selected."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        for k in EDIT_KEYS.values():
+            assert k not in at.session_state, (
+                f"Widget {k!r} should not exist before a row is selected"
+            )
+
+    def test_all_seven_widgets_present_when_selected(self, db):
+        """All seven Overview widgets must render with the correct keys."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Text inputs
+        text_keys = [at.text_input(key=EDIT_KEYS[f]) for f in
+                     ("position_name", "institute", "field", "link")]
+        assert all(w is not None for w in text_keys), (
+            "Expected 4 text_input widgets (position_name, institute, field, link)"
+        )
+        # Selectboxes
+        assert at.selectbox(key=EDIT_KEYS["priority"]) is not None
+        assert at.selectbox(key=EDIT_KEYS["status"]) is not None
+        # Date input
+        assert at.date_input(key=EDIT_KEYS["deadline_date"]) is not None
+
+    def test_widget_values_match_selected_row(self, db):
+        """Each widget must pre-fill from the selected row's DB values."""
+        database.add_position({
+            "position_name": "Stanford BioStats",
+            "institute":     "Stanford",
+            "field":         "Biostatistics",
+            "priority":      "High",
+            "status":        "[APPLIED]",
+            "deadline_date": "2026-12-01",
+            "link":          "https://example.org/apply",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
+        assert at.text_input(key=EDIT_KEYS["institute"]).value     == "Stanford"
+        assert at.text_input(key=EDIT_KEYS["field"]).value         == "Biostatistics"
+        assert at.selectbox(key=EDIT_KEYS["priority"]).value       == "High"
+        assert at.selectbox(key=EDIT_KEYS["status"]).value         == "[APPLIED]"
+        assert at.date_input(key=EDIT_KEYS["deadline_date"]).value == datetime.date(2026, 12, 1)
+        assert at.text_input(key=EDIT_KEYS["link"]).value          == "https://example.org/apply"
+
+    def test_status_selectbox_options_match_config(self, db):
+        """Status selectbox must expose exactly config.STATUS_VALUES, same order."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        assert options == config.STATUS_VALUES, (
+            f"Status options must match config.STATUS_VALUES.\n"
+            f"  Expected: {config.STATUS_VALUES}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_priority_selectbox_options_match_config(self, db):
+        """Priority selectbox must expose exactly config.PRIORITY_VALUES, same order."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["priority"]).options)
+        assert options == config.PRIORITY_VALUES, (
+            f"Priority options must match config.PRIORITY_VALUES.\n"
+            f"  Expected: {config.PRIORITY_VALUES}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_selection_works_with_active_filter(self, db):
+        """With a field filter already active, selecting a still-visible row
+        must populate the edit panel with that row's values. This exercises
+        the same property as 'filter preserves selection' via a path AppTest
+        can actually drive (injected dataframe selection state does not
+        survive a rerun triggered by a different widget)."""
+        database.add_position({"position_name": "Alpha", "field": "Biostatistics"})
+        database.add_position({"position_name": "Beta",  "field": "Machine Learning"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # Narrow the filter first so df_filtered has exactly one row (Alpha).
+        at.text_input(key="filter_field").input("Bio")
+        at.run()
+        _select_row(at, 0)
+        assert "selected_position_id" in at.session_state, (
+            "Selecting row 0 of the filtered table must set selected_position_id"
+        )
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Alpha", (
+            "Edit panel must load the filtered-and-selected row's values"
+        )
+
+    def test_widgets_handle_null_fields(self, db):
+        """A row with NULL optional fields must not crash the form — empty
+        strings for text, None for the date."""
+        database.add_position({"position_name": "Alpha"})   # everything else default/NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page crashed on row with NULLs: {at.exception}"
+        assert at.text_input(key=EDIT_KEYS["institute"]).value == ""
+        assert at.text_input(key=EDIT_KEYS["field"]).value     == ""
+        assert at.text_input(key=EDIT_KEYS["link"]).value      == ""
+        assert at.date_input(key=EDIT_KEYS["deadline_date"]).value is None
+
+    def test_widgets_update_on_selection_change(self, db):
+        """Selecting a different row must re-seed the widgets with that row's
+        values. This is the widget-value trap: if session_state already holds a
+        value for the key, Streamlit ignores `value=` on re-render, so the form
+        would 'stick' on the first row. The page must pre-seed on selection
+        change (tracked via an internal sentinel)."""
+        # Insert in a known order — get_all_positions orders by updated_at DESC,
+        # so the most-recently-added row lands at index 0.
+        database.add_position({"position_name": "Alpha", "institute": "A-Inst"})
+        database.add_position({"position_name": "Beta",  "institute": "B-Inst"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first_name = at.text_input(key=EDIT_KEYS["position_name"]).value
+        first_inst = at.text_input(key=EDIT_KEYS["institute"]).value
+        # Select the other row.
+        _select_row(at, 1)
+        second_name = at.text_input(key=EDIT_KEYS["position_name"]).value
+        second_inst = at.text_input(key=EDIT_KEYS["institute"]).value
+        assert {first_name, second_name} == {"Alpha", "Beta"}, (
+            f"Selection change must switch widget values; got {first_name!r} → {second_name!r}"
+        )
+        assert {first_inst, second_inst} == {"A-Inst", "B-Inst"}
+        assert first_name != second_name, (
+            "Widget did not update on selection change — classic value= trap"
+        )
+
+    def test_null_priority_falls_back_to_first_option(self, db):
+        """Regression guard for Tier-4 review F2: a DB row with priority=NULL
+        must not put None into the selectbox's session_state — today Streamlit
+        tolerates an out-of-options value silently, but the tolerance is
+        undocumented. Coerce to PRIORITY_VALUES[0] so the selectbox always
+        gets a valid option."""
+        database.add_position({"position_name": "Alpha"})   # priority omitted → NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised on NULL priority: {at.exception}"
+        assert at.selectbox(key=EDIT_KEYS["priority"]).value == config.PRIORITY_VALUES[0], (
+            f"NULL priority must coerce to config.PRIORITY_VALUES[0] "
+            f"(= {config.PRIORITY_VALUES[0]!r}); got "
+            f"{at.selectbox(key=EDIT_KEYS['priority']).value!r}"
         )
