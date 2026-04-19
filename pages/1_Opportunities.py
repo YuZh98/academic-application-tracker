@@ -167,15 +167,29 @@ else:
         # Empty selection, or index out-of-bounds after filter/data change.
         st.session_state.pop("selected_position_id", None)
 
-# ── TIER 4: Row-click inline expansion ───────────────────────────────────────
-# selected_id stored in st.session_state["selected_position_id"]
-# Clicking a row sets selected_id; clicking again collapses.
-# tab_overview, tab_req, tab_mat, tab_notes = st.tabs(
-#     ["Overview", "Requirements", "Materials", "Notes"]
-# )
-# Each tab renders the corresponding edit fields for the selected position.
-# Status dropdown: st.selectbox(options=config.STATUS_VALUES)
-# All date fields: st.date_input(value=None) → stored as .isoformat() if not None
+# ── TIER 4: Edit panel (subheader + tabs shell) ──────────────────────────────
+# Renders only when a row is selected. Uses the unfiltered `df` to look up
+# the selected row so that narrowing the filter does not dismiss an
+# in-progress edit — the user can still see and edit what they picked.
+# Tab bodies are empty here; T4-C–F will fill Overview / Requirements /
+# Materials / Notes respectively.
+if "selected_position_id" in st.session_state:
+    sid = st.session_state["selected_position_id"]
+    selected_row = df[df["id"] == sid]
+    if not selected_row.empty:
+        r = selected_row.iloc[0]
+        st.subheader(f"{r['position_name']} · {r['status']}")
+        # config.EDIT_PANEL_TABS is the single source for label + order.
+        # Unpacking by index keeps T4-C–F wiring readable even if tabs grow.
+        tabs = st.tabs(config.EDIT_PANEL_TABS)
+        with tabs[0]:   # Overview — T4-C
+            pass
+        with tabs[1]:   # Requirements — T4-D
+            pass
+        with tabs[2]:   # Materials — T4-E
+            pass
+        with tabs[3]:   # Notes — T4-F
+            pass
 
 # ── TIER 5: Save / Delete actions ────────────────────────────────────────────
 # col_save, col_delete = st.columns([1, 1])
