@@ -10,8 +10,8 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 4-A done — positions table supports single-row selection; 153 tests passing. Next: T4-B (edit-panel tab shell).
-**Git:** `feature/phase-3-tier4` branch active; T4-A test + feat commits pushed locally.
+**Phase:** Phase 3 T4-A + T4-B done — row selection + edit-panel shell (subheader + 4 empty tabs) live; 159 tests passing. Next: T4-C (Overview tab fields).
+**Git:** `feature/phase-3-tier4` branch active; T4-A + T4-B commits local (not yet pushed).
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
 **App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table (Tiers 1–3 done).
 
@@ -39,7 +39,7 @@ Markdown files in `exports/` are auto-generated backups, not the source of truth
 | `database.py` | All SQLite reads/writes; no Streamlit imports ✅ |
 | `exports.py` | Regenerates markdown files; stub until Phase 6 ✅ |
 | `app.py` | Dashboard home page stub ✅ (Phase 4 = full dashboard) |
-| `pages/1_Opportunities.py` | Quick-add + filter bar + positions table w/ row selection ✅ (T1–T3 + T4-A) — T4-B–T5 pending |
+| `pages/1_Opportunities.py` | Quick-add + filter bar + table + row selection + edit-panel shell ✅ (T1–T3 + T4-A/B) — T4-C–T5 pending |
 | `pages/2_Applications.py` | Progress tracking + status updates |
 | `pages/3_Recommenders.py` | Recommender log + pending alerts |
 | `pages/4_Export.py` | Manual export trigger + file download |

@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 Tier 4-A complete — row selection wired; T4-B (tabs) next |
+| Python app | 🔄 Phase 3 T4-A + T4-B complete — row selection + tab shell; T4-C (Overview fields) next |
 
 ---
 
@@ -62,7 +62,8 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Filter bar (status, priority, field) | ✅ Done (2026-04-18) — reviewed |
 | Positions table display (st.dataframe + deadline urgency) | ✅ Done (2026-04-18) — reviewed |
 | Row selection on positions table (T4-A) | ✅ Done (2026-04-19) |
-| Edit-panel tabs (T4-B) + Overview/Requirements/Materials/Notes fields (T4-C–F) | Pending (Tier 4) |
+| Edit-panel shell — subheader + 4 tabs (T4-B) | ✅ Done (2026-04-19) |
+| Overview / Requirements / Materials / Notes tab bodies (T4-C–F) | Pending (Tier 4) |
 | State-driven Materials tab (shows only required docs) | Pending (Tier 4) |
 | Save / Delete with confirm dialog | Pending (Tier 5) |
 
