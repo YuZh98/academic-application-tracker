@@ -562,9 +562,12 @@ class TestRowSelection:
 
         _select_row(at, beta_positional)
         assert not at.exception, f"Page raised after selection: {at.exception}"
-        assert at.session_state.get("selected_position_id") == pid_beta, (
+        assert "selected_position_id" in at.session_state, (
+            "Row selection did not set selected_position_id"
+        )
+        assert at.session_state["selected_position_id"] == pid_beta, (
             f"Expected selected_position_id={pid_beta} (Beta), "
-            f"got {at.session_state.get('selected_position_id')}"
+            f"got {at.session_state['selected_position_id']}"
         )
 
     def test_deselecting_clears_selected_position_id(self, db):
@@ -595,9 +598,10 @@ class TestRowSelection:
         at.run()
         # df_display now has exactly one row: "Open One". Row 0 must map to pid_open.
         _select_row(at, 0)
-        assert at.session_state.get("selected_position_id") == pid_open, (
+        assert "selected_position_id" in at.session_state
+        assert at.session_state["selected_position_id"] == pid_open, (
             f"Filtered row 0 should map to pid_open={pid_open}, "
-            f"got {at.session_state.get('selected_position_id')}"
+            f"got {at.session_state['selected_position_id']}"
         )
 
     def test_filter_to_empty_clears_stale_selection(self, db):
@@ -622,9 +626,12 @@ class TestRowSelection:
         single-row selection."""
         database.add_position({"position_name": "Alpha"})
         at = _run_page()
-        # Streamlit proto enum: 0=MULTI_ROW (default), 1=SINGLE_ROW (enum name SINGLE_ROW)
-        mode = at.dataframe[0].proto.selection_mode
-        # Compare by stringified name to avoid depending on the enum import path.
-        assert "SINGLE_ROW" in str(mode), (
-            f"Expected SINGLE_ROW selection mode, got {mode!r}"
+        # `selection_mode` is a repeated enum field on the Arrow proto; resolve
+        # the integer values to their enum names via the DESCRIPTOR so the test
+        # fails loudly if Streamlit renumbers the enum in a future release.
+        proto = at.dataframe[0].proto
+        enum_type = proto.DESCRIPTOR.fields_by_name["selection_mode"].enum_type
+        modes = [enum_type.values_by_number[v].name for v in proto.selection_mode]
+        assert modes == ["SINGLE_ROW"], (
+            f"Expected selection_mode == ['SINGLE_ROW'], got {modes!r}"
         )
