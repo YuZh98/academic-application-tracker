@@ -126,6 +126,15 @@ QUICK_ADD_FIELDS: list[str] = [
     "link",            # text input (URL)
 ]
 
+# ── Opportunities edit panel (Tier 4) ─────────────────────────────────────────
+# Tab labels for the inline edit panel below the positions table.
+# Order determines the display order of st.tabs(...); first item is shown by
+# default. Rename or reorder here rather than in pages/1_Opportunities.py.
+#
+# To add a new tab (e.g., "Contacts"): append the label here and extend the
+# page's tab-body dispatch in pages/1_Opportunities.py.
+EDIT_PANEL_TABS: list[str] = ["Overview", "Requirements", "Materials", "Notes"]
+
 # ── Dashboard display thresholds ──────────────────────────────────────────────
 DEADLINE_ALERT_DAYS    = 30   # Show upcoming deadlines within this many days
 DEADLINE_URGENT_DAYS   = 7    # Color a deadline red if it falls within this many days

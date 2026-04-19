@@ -75,6 +75,16 @@ if submitted:
         try:
             database.add_position(fields)
             st.toast(f'Added "{position_name}" to your list.')
+            # F1 (Tier-4 review): get_all_positions() orders updated_at DESC,
+            # so the new row lands at index 0 and every previously-displayed
+            # row shifts +1. The dataframe widget's selection state is an
+            # index into df_display — leaving it intact would silently
+            # re-bind the edit panel to a different position. Clear all
+            # three session keys together to keep the selection/sentinel
+            # invariant aligned in one place.
+            st.session_state.pop("positions_table", None)
+            st.session_state.pop("selected_position_id", None)
+            st.session_state.pop("_edit_form_sid", None)
             st.rerun()
         except Exception as e:
             st.error(f"Could not save position: {e}")
@@ -114,8 +124,17 @@ if field_filter.strip():
     ]
 
 if df.empty:
+    # T4-A: table not rendered → clear any stale selection from a prior rerun
+    # so Tier-4 edit panels do not show for a position the user can't see.
+    # F4 (Tier-4 review): pop the sentinel alongside selected_position_id so
+    # the pair stays in sync — otherwise a later sid that happens to equal
+    # the stale sentinel would skip the pre-seed.
+    st.session_state.pop("selected_position_id", None)
+    st.session_state.pop("_edit_form_sid", None)
     st.info("No positions yet — use Quick Add above to get started.")
 elif df_filtered.empty:
+    st.session_state.pop("selected_position_id", None)   # T4-A: same reason
+    st.session_state.pop("_edit_form_sid", None)         # F4: same pairing
     st.info("No positions match the current filters.")
 else:
     st.caption(f"{len(df_filtered)} position(s) tracked.")
@@ -130,7 +149,11 @@ else:
         "position_name", "institute", "priority", "status",
         "deadline_date", "deadline_urgency",
     ]
-    st.dataframe(
+    # T4-A: enable single-row selection. AppTest drives this by writing to
+    # session_state["positions_table"] directly (no click-a-row API exists),
+    # so the key is part of the page's public test contract — do not rename
+    # without updating TABLE_KEY in tests/test_opportunities_page.py.
+    event = st.dataframe(
         df_display,
         use_container_width=True,
         hide_index=True,
@@ -143,17 +166,116 @@ else:
             "deadline_date":    st.column_config.TextColumn("Due",       width="small"),
             "deadline_urgency": st.column_config.TextColumn("Urgency",   width="small"),
         },
+        key="positions_table",
+        on_select="rerun",
+        selection_mode="single-row",
     )
 
-# ── TIER 4: Row-click inline expansion ───────────────────────────────────────
-# selected_id stored in st.session_state["selected_position_id"]
-# Clicking a row sets selected_id; clicking again collapses.
-# tab_overview, tab_req, tab_mat, tab_notes = st.tabs(
-#     ["Overview", "Requirements", "Materials", "Notes"]
-# )
-# Each tab renders the corresponding edit fields for the selected position.
-# Status dropdown: st.selectbox(options=config.STATUS_VALUES)
-# All date fields: st.date_input(value=None) → stored as .isoformat() if not None
+    # T4-A: map the selected positional row index back to its DB id so later
+    # tiers (tabs, edit fields, Save/Delete) can load the right position.
+    selected_rows = list(event.selection.rows) if event is not None else []
+    if selected_rows and 0 <= selected_rows[0] < len(df_display):
+        st.session_state["selected_position_id"] = int(
+            df_display.iloc[selected_rows[0]]["id"]
+        )
+    else:
+        # Empty selection, or index out-of-bounds after filter/data change.
+        # F4 (Tier-4 review): keep the sentinel paired with the sid.
+        st.session_state.pop("selected_position_id", None)
+        st.session_state.pop("_edit_form_sid", None)
+
+# ── TIER 4: Edit panel (subheader + tabs shell) ──────────────────────────────
+# Renders only when a row is selected. Uses the unfiltered `df` to look up
+# the selected row so that narrowing the filter does not dismiss an
+# in-progress edit — the user can still see and edit what they picked.
+# Tab bodies are empty here; T4-C–F will fill Overview / Requirements /
+# Materials / Notes respectively.
+if "selected_position_id" in st.session_state:
+    sid = st.session_state["selected_position_id"]
+    selected_row = df[df["id"] == sid]
+    if not selected_row.empty:
+        r = selected_row.iloc[0]
+        st.subheader(f"{r['position_name']} · {r['status']}")
+
+        # T4-C: widget-value trap — once session_state[key] is set, Streamlit
+        # ignores the `value=` argument on later reruns, so the form would
+        # "stick" on the first selected row. Pre-seed widget state whenever
+        # the selection changes, tracked via the internal _edit_form_sid
+        # sentinel. Stored values match widget types: str for text, date|None
+        # for date_input, config-vocabulary strings for the selectboxes.
+        if st.session_state.get("_edit_form_sid") != sid:
+            # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
+            # (no DEFAULT in schema) and could theoretically hold an unknown
+            # status value (sqlite CLI, future migration). Coerce both to
+            # in-vocabulary values so the selectboxes never get an
+            # out-of-options session_state value — today Streamlit tolerates
+            # it silently, but the tolerance is undocumented.
+            safe_priority = (
+                r["priority"] if r["priority"] in config.PRIORITY_VALUES
+                else config.PRIORITY_VALUES[0]
+            )
+            safe_status = (
+                r["status"] if r["status"] in config.STATUS_VALUES
+                else config.STATUS_VALUES[0]
+            )
+            # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
+            # one malformed deadline row should render an empty date input,
+            # not crash the whole page.
+            try:
+                safe_deadline = (
+                    datetime.date.fromisoformat(r["deadline_date"])
+                    if r["deadline_date"] else None
+                )
+            except (ValueError, TypeError):
+                safe_deadline = None
+
+            st.session_state["edit_position_name"] = r["position_name"] or ""
+            st.session_state["edit_institute"]     = r["institute"] or ""
+            st.session_state["edit_field"]         = r["field"] or ""
+            st.session_state["edit_priority"]      = safe_priority
+            st.session_state["edit_status"]        = safe_status
+            st.session_state["edit_deadline_date"] = safe_deadline
+            st.session_state["edit_link"]          = r["link"] or ""
+            st.session_state["_edit_form_sid"]     = sid
+
+        # config.EDIT_PANEL_TABS is the single source for label + order.
+        # Unpacking by index keeps T4-C–F wiring readable even if tabs grow.
+        tabs = st.tabs(config.EDIT_PANEL_TABS)
+        with tabs[0]:   # Overview — T4-C
+            # st.form batches edits so nothing writes on keystroke; the real
+            # Save action arrives in T5. The submit button is required by
+            # st.form but kept disabled to make the "read-only for now"
+            # contract explicit in the UI.
+            with st.form("edit_overview"):
+                st.text_input("Position Name", key="edit_position_name")
+                st.text_input("Institute",     key="edit_institute")
+                st.text_input("Field",         key="edit_field")
+                st.selectbox("Priority", config.PRIORITY_VALUES,
+                             key="edit_priority")
+                st.selectbox("Status",   config.STATUS_VALUES,
+                             key="edit_status")
+                st.date_input("Deadline",      key="edit_deadline_date")
+                st.text_input("Link",          key="edit_link")
+                # F6 (Tier-4 review): tooltip makes the disabled state
+                # self-explanatory — no silent dead-end click.
+                st.form_submit_button(
+                    "Save Changes",
+                    disabled=True,
+                    help="Coming in Tier 5 — Save/Delete actions.",
+                )
+        with tabs[1]:   # Requirements — T4-D
+            pass
+        with tabs[2]:   # Materials — T4-E
+            pass
+        with tabs[3]:   # Notes — T4-F
+            pass
+    else:
+        # F3 (Tier-4 review): the selected position vanished from df
+        # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
+        # reruns don't keep re-checking an absent row, and the sentinel
+        # can't alias with a future sid.
+        st.session_state.pop("selected_position_id", None)
+        st.session_state.pop("_edit_form_sid", None)
 
 # ── TIER 5: Save / Delete actions ────────────────────────────────────────────
 # col_save, col_delete = st.columns([1, 1])
