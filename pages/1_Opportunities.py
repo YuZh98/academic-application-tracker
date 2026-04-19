@@ -114,8 +114,12 @@ if field_filter.strip():
     ]
 
 if df.empty:
+    # T4-A: table not rendered → clear any stale selection from a prior rerun
+    # so Tier-4 edit panels do not show for a position the user can't see.
+    st.session_state.pop("selected_position_id", None)
     st.info("No positions yet — use Quick Add above to get started.")
 elif df_filtered.empty:
+    st.session_state.pop("selected_position_id", None)   # T4-A: same reason
     st.info("No positions match the current filters.")
 else:
     st.caption(f"{len(df_filtered)} position(s) tracked.")
@@ -130,7 +134,11 @@ else:
         "position_name", "institute", "priority", "status",
         "deadline_date", "deadline_urgency",
     ]
-    st.dataframe(
+    # T4-A: enable single-row selection. AppTest drives this by writing to
+    # session_state["positions_table"] directly (no click-a-row API exists),
+    # so the key is part of the page's public test contract — do not rename
+    # without updating TABLE_KEY in tests/test_opportunities_page.py.
+    event = st.dataframe(
         df_display,
         use_container_width=True,
         hide_index=True,
@@ -143,7 +151,21 @@ else:
             "deadline_date":    st.column_config.TextColumn("Due",       width="small"),
             "deadline_urgency": st.column_config.TextColumn("Urgency",   width="small"),
         },
+        key="positions_table",
+        on_select="rerun",
+        selection_mode="single-row",
     )
+
+    # T4-A: map the selected positional row index back to its DB id so later
+    # tiers (tabs, edit fields, Save/Delete) can load the right position.
+    selected_rows = list(event.selection.rows) if event is not None else []
+    if selected_rows and 0 <= selected_rows[0] < len(df_display):
+        st.session_state["selected_position_id"] = int(
+            df_display.iloc[selected_rows[0]]["id"]
+        )
+    else:
+        # Empty selection, or index out-of-bounds after filter/data change.
+        st.session_state.pop("selected_position_id", None)
 
 # ── TIER 4: Row-click inline expansion ───────────────────────────────────────
 # selected_id stored in st.session_state["selected_position_id"]
