@@ -3,7 +3,7 @@
 ## In Progress
 - [ ] Phase 3 Tier 4: row-click inline edit
   - [x] T4-A: row-selection on positions table (session_state['selected_position_id'])
-  - [ ] T4-B: edit-panel tabs shell (Overview / Requirements / Materials / Notes)
+  - [x] T4-B: edit-panel shell — subheader + 4 empty tabs driven by config.EDIT_PANEL_TABS
   - [ ] T4-C: Overview tab fields
   - [ ] T4-D: Requirements tab (config-driven checkboxes)
   - [ ] T4-E: Materials tab (state-driven — shows only required docs)
@@ -25,6 +25,7 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-19 — Phase 3 Tier 4-B: edit-panel shell (subheader + st.tabs from config.EDIT_PANEL_TABS); selected row looked up in unfiltered df; 6 AppTest tests; 159 total passing
 - [x] 2026-04-19 — Phase 3 Tier 4-A: single-row selection on positions table via st.dataframe(on_select='rerun'); 6 AppTest tests; 153 total passing
 - [x] 2026-04-19 — Phase 3 Tier 2 & 3 code review (F1–F5): regex=False field filter, TypeError catch in _deadline_urgency, boundary + past-deadline + special-char tests; 147 tests passing
 - [x] 2026-04-18 — Phase 3 Tier 3: positions table (st.dataframe + deadline urgency flag); 8 AppTest tests; 143 total passing
@@ -43,4 +44,4 @@
 
 ---
 
-_Updated: 2026-04-19 (T4-A complete; T4-B next)_
+_Updated: 2026-04-19 (T4-A + T4-B complete; T4-C next)_
