@@ -1259,3 +1259,123 @@ class TestMaterialsTabWidgets:
         assert first != second, (
             "done_cv did not update on selection change — widget-value trap"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T4-F — Notes tab
+# ═══════════════════════════════════════════════════════════════════════════
+# Widget key: "edit_notes" (session_state) on a single st.text_area inside an
+# st.form("edit_notes"). Pre-seeded from positions.notes via the same
+# _edit_form_sid-gated block as the other tabs.
+
+NOTES_KEY = "edit_notes"
+
+
+def _text_area_rendered(at: AppTest, key: str) -> bool:
+    """True iff a text_area with the given key is present on the rendered page.
+
+    Mirrors `_checkbox_rendered`: AppTest raises KeyError when no match
+    exists, so we can't probe with `key in session_state` (pre-seed may have
+    populated the slot even when the widget is not currently drawn)."""
+    try:
+        at.text_area(key=key)
+        return True
+    except KeyError:
+        return False
+
+
+class TestNotesTabWidgets:
+
+    def test_no_text_area_without_selection(self, db):
+        """No Notes text_area may render before a row is selected — the edit
+        panel (and everything in it) is gated by selected_position_id."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert not _text_area_rendered(at, NOTES_KEY), (
+            "edit_notes text_area must not render before row selection"
+        )
+
+    def test_text_area_renders_when_row_selected(self, db):
+        """Baseline positive contract: selecting a row must produce exactly
+        one text_area with key=edit_notes on the page."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _text_area_rendered(at, NOTES_KEY), (
+            "Notes tab must render a text_area keyed edit_notes after selection"
+        )
+        # Tight bound: no other page text_area exists today. If a future tier
+        # adds more, update this count explicitly rather than loosening it.
+        assert len(at.text_area) == 1, (
+            f"Expected 1 text_area on the page, got {len(at.text_area)}"
+        )
+
+    def test_text_area_preseeded_from_db(self, db):
+        """Pre-seed must copy positions.notes into session_state verbatim,
+        so the widget displays the saved notes without the user clicking
+        'edit'."""
+        notes = "Follow up with Prof. Smith after SfN. Ref: lab website."
+        database.add_position({"position_name": "Alpha", "notes": notes})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_area(key=NOTES_KEY).value == notes, (
+            f"Expected edit_notes pre-seeded to {notes!r}, "
+            f"got {at.text_area(key=NOTES_KEY).value!r}"
+        )
+
+    def test_null_notes_coerced_to_empty_string(self, db):
+        """positions.notes is nullable (TEXT without NOT NULL); a NULL value
+        must coerce to '' so st.text_area gets a valid str, never a None
+        that would crash the widget or render literal 'None'."""
+        database.add_position({"position_name": "Alpha"})   # notes omitted → NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_area(key=NOTES_KEY).value == "", (
+            f"NULL notes must coerce to empty string, got "
+            f"{at.text_area(key=NOTES_KEY).value!r}"
+        )
+
+    def test_notes_reseed_on_selection_change(self, db):
+        """Widget-value-trap regression guard: once session_state['edit_notes']
+        is set, Streamlit ignores the `value=` kwarg on later reruns. The
+        _edit_form_sid sentinel must force a re-seed when the user selects a
+        different row — otherwise row B's notes would show row A's text."""
+        database.add_position({"position_name": "Alpha", "notes": "alpha notes"})
+        database.add_position({"position_name": "Beta",  "notes": "beta notes"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first = at.text_area(key=NOTES_KEY).value
+        _select_row(at, 1)
+        second = at.text_area(key=NOTES_KEY).value
+        assert first == "alpha notes", f"Row 0 notes mis-seeded: {first!r}"
+        assert second == "beta notes", (
+            f"Row 1 notes did not re-seed on selection change — "
+            f"widget-value trap. Got {second!r}"
+        )
+
+    def test_save_button_disabled_until_tier5(self, db):
+        """Mirror T4-C/D/E: the submit button must exist (st.form requires it)
+        but stay disabled with the Tier-5 tooltip, so the 'not wired yet'
+        state is self-explanatory. Catches accidental enabling before T5
+        lands `database.update_position`."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Four disabled Save buttons total once Notes ships (Overview,
+        # Requirements, Materials-if-any, Notes). With all req_* = 'N',
+        # Materials renders no form → 3 disabled buttons expected.
+        disabled = [b for b in at.button if getattr(b, "disabled", False)]
+        assert len(disabled) >= 3, (
+            f"Expected at least 3 disabled Save buttons (one per form), "
+            f"got {len(disabled)}"
+        )
+        # The Tier-5 tooltip must appear on every disabled placeholder.
+        for b in disabled:
+            assert "Tier 5" in (b.help or ""), (
+                f"Disabled Save button missing Tier-5 tooltip: help={b.help!r}"
+            )
