@@ -3,7 +3,7 @@
 ## In Progress
 - [ ] Phase 3 Tier 5: Save / Delete with confirm dialog
   - [x] T5-A: Overview Save (update_position + toast + error path + selection survival via _skip_table_reset)
-  - [ ] T5-B: Requirements Save (preserve done_* across req flips Y↔N)
+  - [x] T5-B: Requirements Save (preserve done_* across req flips Y↔N)
   - [ ] T5-C: Materials Save (writes done_* only for req_* == 'Y')
   - [ ] T5-D: Notes Save (empty → "")
   - [ ] T5-E: Delete with st.dialog confirm (Overview tab only; FK cascade)
@@ -30,6 +30,7 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-20 — Phase 3 Tier 5-B: Requirements Save — `st.form_submit_button('Save Changes', key='edit_requirements_submit')` wired to `database.update_position`; payload built from `config.REQUIREMENT_DOCS` comprehension containing ONLY `req_*` keys (critical contract: `done_*` columns untouched, so `done_cv` etc. survive `req_cv` Y→N→Y flips — pinned with `test_save_preserves_done_fields_on_req_flip`); reuses T5-A patterns (`_skip_table_reset` one-shot, `_edit_form_sid` pop-on-save, `st.toast` success, `st.error` on DB failure, no re-raise); `_keep_selection(at, row_index)` test helper reused; 5 new AppTest tests in `TestRequirementsSave`; 203 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 5-A: Overview Save — `st.form_submit_button('Save Changes', key='edit_overview_submit')` wired to `database.update_position`; whitespace-only `position_name` blocked with `st.error`; friendly `st.error` on DB failure (no re-raise, mirrors quick-add F1); `st.toast` on success; `_skip_table_reset` one-shot flag preserves `selected_position_id` across the post-save rerun (st.dataframe resets its event on data-change rerun per T4 behaviour note); `_edit_form_sid` popped on save so widgets re-seed from fresh DB values; tests use new `_keep_selection` helper to re-inject `positions_table` (AppTest doesn't persist widget event state across reruns; browser does); 6 new AppTest tests + 1 renamed disabled-count test; 198 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 4 merged to main (PR #2)
 - [x] 2026-04-20 — Docs: DESIGN.md §11 adds "Adding file attachments to the Materials panel" extension sketch (config keys, attachments table DDL, three new database.py functions, filesystem-not-BLOB rationale, explicit non-goals); roadmap backlog row P2
@@ -56,4 +57,4 @@
 
 ---
 
-_Updated: 2026-04-20 (Tier 4 merged; T5-A done; T5-B next — Requirements Save)_
+_Updated: 2026-04-20 (Tier 4 merged; T5-A + T5-B done; T5-C next — Materials Save)_
