@@ -1001,19 +1001,24 @@ class TestRequirementsTabWidgets:
         assert at.radio(key=_req_key("req_writing_sample")).value == "Optional"
         assert at.radio(key=_req_key("req_teaching_statement")).value == "N"
 
-    def test_radio_options_are_canonical_db_values(self, db):
-        """Every radio must expose exactly config.REQUIREMENT_VALUES as options,
-        in the configured order — this is what keeps session_state canonical
-        so save-time writes can go straight into the TEXT column."""
+    def test_radio_options_display_config_labels_in_order(self, db):
+        """Every radio must expose the three tiers in config order, shown via
+        config.REQUIREMENT_LABELS. AppTest surfaces `.options` as the
+        formatted display strings (not the canonical values), so this is the
+        observable side of the canonical-value contract; the canonical-value
+        half is covered by test_radio_values_match_db."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
+        expected_labels = [config.REQUIREMENT_LABELS[v]
+                           for v in config.REQUIREMENT_VALUES]
         for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
             options = list(at.radio(key=_req_key(req_col)).options)
-            assert options == config.REQUIREMENT_VALUES, (
-                f"Radio {req_col!r} options must match config.REQUIREMENT_VALUES.\n"
-                f"  Expected: {config.REQUIREMENT_VALUES}\n"
+            assert options == expected_labels, (
+                f"Radio {req_col!r} options must match "
+                f"[REQUIREMENT_LABELS[v] for v in REQUIREMENT_VALUES].\n"
+                f"  Expected: {expected_labels}\n"
                 f"  Got:      {options}"
             )
 
@@ -1078,10 +1083,14 @@ class TestRequirementsTabWidgets:
             "not hardcoded. If this fails, the page loops over a local "
             "constant instead of config.REQUIREMENT_DOCS."
         )
-        # The new widget must participate in the same canonical-options
-        # contract as the others.
+        # The new widget must participate in the same options contract as
+        # the others — AppTest surfaces .options as display labels, so the
+        # expected list is REQUIREMENT_LABELS[v] for v in REQUIREMENT_VALUES.
+        expected_labels = [config.REQUIREMENT_LABELS[v]
+                           for v in config.REQUIREMENT_VALUES]
         assert list(at.radio(key=_req_key("req_portfolio")).options) \
-            == config.REQUIREMENT_VALUES
+            == expected_labels
         # And its default value (from the migration's DEFAULT 'N') should
-        # land in session_state as 'N' after the pre-seed coercion.
+        # land in session_state as 'N' after the pre-seed coercion — this
+        # IS the canonical-value half of the contract.
         assert at.radio(key=_req_key("req_portfolio")).value == "N"
