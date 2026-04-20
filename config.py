@@ -103,6 +103,27 @@ RELATIONSHIP_TYPES: list[str] = [
 #   1. Append ("req_portfolio", "done_portfolio", "Portfolio") here.
 #   2. database.init_db() will create the new columns on next run.
 #   3. No other file needs to change.
+# Canonical DB values for the req_* TEXT columns. Order is the display order
+# the Requirements-tab radios use (T4-D) — "Required" first so the common
+# case is the leftmost/default-read option. Per GUIDELINES §6, never hardcode
+# these strings in page files.
+REQUIREMENT_VALUES: list[str] = ["Y", "Optional", "N"]
+
+# UI labels for each canonical value. `st.radio(..., format_func=...)` looks
+# up display text here so session_state keeps the canonical DB value and no
+# save-time translation is needed.
+REQUIREMENT_LABELS: dict[str, str] = {
+    "Y":        "Required",
+    "Optional": "Optional",
+    "N":        "Not needed",
+}
+
+# Guard: one label per canonical value — catches drift at import time.
+assert set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES), (
+    "REQUIREMENT_LABELS must have exactly one entry per REQUIREMENT_VALUES item. "
+    f"Missing: {set(REQUIREMENT_VALUES) - set(REQUIREMENT_LABELS)}"
+)
+
 REQUIREMENT_DOCS: list[tuple[str, str, str]] = [
     ("req_cv",                  "done_cv",                  "CV"),
     ("req_cover_letter",        "done_cover_letter",        "Cover Letter"),
