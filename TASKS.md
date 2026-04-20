@@ -4,8 +4,8 @@
 - [ ] Phase 3 Tier 5: Save / Delete with confirm dialog
   - [x] T5-A: Overview Save (update_position + toast + error path + selection survival via _skip_table_reset)
   - [x] T5-B: Requirements Save (preserve done_* across req flips Y↔N)
-  - [ ] T5-C: Materials Save (writes done_* only for req_* == 'Y')
-  - [ ] T5-D: Notes Save (empty → "")
+  - [x] T5-C: Materials Save (writes done_* only for req_* == 'Y')
+  - [x] T5-D: Notes Save (empty → "")
   - [ ] T5-E: Delete with st.dialog confirm (Overview tab only; FK cascade)
   - [ ] T5-F: pre-merge review + open PR
 
@@ -30,6 +30,8 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-20 — Phase 3 Tier 5-D: Notes Save — `st.form_submit_button('Save Changes', key='edit_notes_submit')` inside `st.form('edit_notes_form')` wired to `database.update_position`; payload `{'notes': <text or ''>}`; empty input is stored as `""` not NULL (pinned by `test_save_empty_stored_as_empty_string`) so round-trips through pre-seed (NULL→"") + no-op save leave DB stable at `""`; reuses all Tier-5 patterns (toast, friendly `st.error` without re-raise, `_edit_form_sid` pop, `_skip_table_reset` one-shot); 5 new AppTest tests in `TestNotesSave`; 213 total passing, 0 deprecation warnings
+- [x] 2026-04-20 — Phase 3 Tier 5-C: Materials Save — `st.form_submit_button('Save Changes', key='edit_materials_submit')` inside `st.form('edit_materials')` wired to `database.update_position`; payload built from a comprehension over the **visible** subset of `config.REQUIREMENT_DOCS` (req_* == 'Y' on live session_state) containing ONLY `done_*` keys cast `int(bool(...))` — hidden `done_*` columns are never written, so prior prepared-doc state survives any `req_*` Y↔N flip (critical contract pinned by `test_save_preserves_done_fields_hidden_by_req_n`, mirrors T5-B from the opposite side); empty-state path unchanged (info hint, no form); reuses all Tier-5 patterns; 5 new AppTest tests in `TestMaterialsSave`; relaxed `test_unwired_save_buttons_still_disabled` count assertion (tooltip check preserved); 208 total passing at T5-C; 213 after T5-D
 - [x] 2026-04-20 — Phase 3 Tier 5-B: Requirements Save — `st.form_submit_button('Save Changes', key='edit_requirements_submit')` wired to `database.update_position`; payload built from `config.REQUIREMENT_DOCS` comprehension containing ONLY `req_*` keys (critical contract: `done_*` columns untouched, so `done_cv` etc. survive `req_cv` Y→N→Y flips — pinned with `test_save_preserves_done_fields_on_req_flip`); reuses T5-A patterns (`_skip_table_reset` one-shot, `_edit_form_sid` pop-on-save, `st.toast` success, `st.error` on DB failure, no re-raise); `_keep_selection(at, row_index)` test helper reused; 5 new AppTest tests in `TestRequirementsSave`; 203 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 5-A: Overview Save — `st.form_submit_button('Save Changes', key='edit_overview_submit')` wired to `database.update_position`; whitespace-only `position_name` blocked with `st.error`; friendly `st.error` on DB failure (no re-raise, mirrors quick-add F1); `st.toast` on success; `_skip_table_reset` one-shot flag preserves `selected_position_id` across the post-save rerun (st.dataframe resets its event on data-change rerun per T4 behaviour note); `_edit_form_sid` popped on save so widgets re-seed from fresh DB values; tests use new `_keep_selection` helper to re-inject `positions_table` (AppTest doesn't persist widget event state across reruns; browser does); 6 new AppTest tests + 1 renamed disabled-count test; 198 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 4 merged to main (PR #2)
@@ -57,4 +59,4 @@
 
 ---
 
-_Updated: 2026-04-20 (Tier 4 merged; T5-A + T5-B done; T5-C next — Materials Save)_
+_Updated: 2026-04-20 (Tier 4 merged; T5-A/B/C/D done — all four tabs' Save wired; T5-E next — Delete with st.dialog)_

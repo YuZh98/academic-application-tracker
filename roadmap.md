@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 Tier 4 merged; Tier 5 T5-A + T5-B complete — Overview & Requirements Save wired via `update_position`. T5-C (Materials Save) next. |
+| Python app | 🔄 Phase 3 Tier 4 merged; Tier 5 T5-A/B/C/D complete — all four edit-panel tabs' Save wired via `update_position`. T5-E (Delete with `st.dialog`) next. |
 
 ---
 
@@ -69,8 +69,8 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Notes tab — text_area (T4-F) | ✅ Done (2026-04-19) |
 | Overview Save — update_position + toast + error + selection survival (T5-A) | ✅ Done (2026-04-20) |
 | Requirements Save (T5-B) | ✅ Done (2026-04-20) |
-| Materials Save (T5-C) | Pending |
-| Notes Save (T5-D) | Pending |
+| Materials Save (T5-C) | ✅ Done (2026-04-20) |
+| Notes Save (T5-D) | ✅ Done (2026-04-20) |
 | Delete with st.dialog confirm (T5-E) | Pending |
 | Tier 5 pre-merge review + PR (T5-F) | Pending |
 
