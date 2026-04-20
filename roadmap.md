@@ -144,6 +144,7 @@ These are accepted design decisions from ADR-001 that are intentionally deferred
 | Application goal setting (target N applications) and progress bar | P2 | Store in a `settings` table; show on dashboard |
 | Source effectiveness chart (which source yields most interviews) | P3 | Derived from existing `source` + `status` fields |
 | Application timeline chart (when applications cluster around deadlines) | P3 | Derived from `applied_date` |
+| File attachments on Materials panel (PDF / Markdown / TeX upload, open, replace, remove) | P2 | New `attachments` table + `attachments/` folder on disk; checkbox auto-flips on upload; FK cascade + `rmtree` on delete. Full design in DESIGN.md §11 "Adding file attachments to the Materials panel". |
 
 ---
 
