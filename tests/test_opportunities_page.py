@@ -1939,10 +1939,14 @@ class TestMaterialsSave:
         at.run()
         _select_row(at, 0)
 
-        # Flip req_research_statement to 'Y' live — this reveals the
-        # done_research_statement checkbox on the next rerun via the
-        # state-driven visibility logic.
-        at.radio(key=_req_key("req_research_statement")).set_value("Y")
+        # Flip req_research_statement to 'Y' live via session_state directly —
+        # the Requirements-tab radio is inside st.form("edit_requirements") so
+        # widget values there do not commit to session_state until that form
+        # is submitted. Writing session_state is how T4-E's
+        # test_toggling_requirement_hides_checkbox drives the same
+        # state-driven visibility.
+        at.session_state[_req_key("req_research_statement")] = "Y"
+        _keep_selection(at, 0)
         at.run()
 
         # Tick the newly-visible checkbox and save.

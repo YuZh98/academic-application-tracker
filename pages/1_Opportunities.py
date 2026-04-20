@@ -404,7 +404,7 @@ if "selected_position_id" in st.session_state:
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Could not save requirements: {exc}")
-        with tabs[2]:   # Materials — T4-E
+        with tabs[2]:   # Materials — T4-E + T5-C
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
             # toggling a radio on the Requirements tab updates this tab on
@@ -424,12 +424,37 @@ if "selected_position_id" in st.session_state:
                 with st.form("edit_materials"):
                     for _req_col, done_col, label in visible:
                         st.checkbox(label, key=f"edit_{done_col}")
-                    # Mirror T4-C/T4-D placeholder submit.
-                    st.form_submit_button(
+                    materials_submitted = st.form_submit_button(
                         "Save Changes",
-                        disabled=True,
-                        help="Coming in Tier 5 — Save/Delete actions.",
+                        key="edit_materials_submit",
                     )
+
+                # T5-C: critical contract — the payload contains done_* keys
+                # ONLY for docs currently visible (req_* == 'Y'). done_* for
+                # hidden docs are never written, so prior prepared-doc state
+                # survives any req_* Y↔N flip — mirrors T5-B's preservation
+                # contract from the opposite side. Cast bool → int so the
+                # positions.done_* INTEGER 0/1 schema domain is honoured
+                # explicitly (SQLite would coerce a bool regardless, but the
+                # explicit cast matches how done_* is read elsewhere).
+                if materials_submitted:
+                    payload: dict[str, Any] = {
+                        done_col: int(
+                            bool(st.session_state.get(f"edit_{done_col}"))
+                        )
+                        for _req_col, done_col, _label in visible
+                    }
+                    try:
+                        database.update_position(sid, payload)
+                        st.toast(f'Saved materials for "{r["position_name"]}".')
+                        st.session_state.pop("_edit_form_sid", None)
+                        # Same one-shot as T5-A / T5-B: preserve selection
+                        # across the post-save rerun despite st.dataframe
+                        # resetting its event on data-change reruns.
+                        st.session_state["_skip_table_reset"] = True
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not save materials: {exc}")
         with tabs[3]:   # Notes — T4-F
             # Single free-form text_area for miscellaneous context (contact
             # details, interview prep hints, follow-up reminders). Pre-seeded
