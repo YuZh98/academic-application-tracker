@@ -236,6 +236,18 @@ if "selected_position_id" in st.session_state:
             st.session_state["edit_status"]        = safe_status
             st.session_state["edit_deadline_date"] = safe_deadline
             st.session_state["edit_link"]          = r["link"] or ""
+
+            # T4-D: pre-seed one session_state slot per req_* column so the
+            # Requirements-tab radios render with the row's current values.
+            # Same F2-style coercion as priority/status: if a column holds
+            # an unknown string (future migration, raw SQL edit) or is
+            # missing from the row (e.g. during a migration-in-progress
+            # test), fall back to 'N' — the schema default.
+            for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+                v = r[req_col] if req_col in r.index else None
+                safe_v = v if v in config.REQUIREMENT_VALUES else "N"
+                st.session_state[f"edit_{req_col}"] = safe_v
+
             st.session_state["_edit_form_sid"]     = sid
 
         # config.EDIT_PANEL_TABS is the single source for label + order.
@@ -264,7 +276,29 @@ if "selected_position_id" in st.session_state:
                     help="Coming in Tier 5 — Save/Delete actions.",
                 )
         with tabs[1]:   # Requirements — T4-D
-            pass
+            # One st.radio per entry in config.REQUIREMENT_DOCS. The options
+            # are the canonical DB values (REQUIREMENT_VALUES) so
+            # session_state holds exactly what will go into the TEXT column
+            # at save time (T5); format_func looks up the friendly UI label
+            # via REQUIREMENT_LABELS. Per GUIDELINES §6 the page never
+            # hardcodes vocabulary — everything comes from config, which is
+            # what makes test_config_driven_new_doc_renders_new_widget green.
+            with st.form("edit_requirements"):
+                for req_col, _done_col, label in config.REQUIREMENT_DOCS:
+                    st.radio(
+                        label,
+                        options=config.REQUIREMENT_VALUES,
+                        format_func=config.REQUIREMENT_LABELS.get,
+                        key=f"edit_{req_col}",
+                        horizontal=True,
+                    )
+                # Mirror T4-C: disabled placeholder button, tooltip makes
+                # the "not wired yet" state explicit. T5 adds the real save.
+                st.form_submit_button(
+                    "Save Changes",
+                    disabled=True,
+                    help="Coming in Tier 5 — Save/Delete actions.",
+                )
         with tabs[2]:   # Materials — T4-E
             pass
         with tabs[3]:   # Notes — T4-F
