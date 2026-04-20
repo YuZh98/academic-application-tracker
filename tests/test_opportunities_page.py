@@ -2517,3 +2517,122 @@ class TestDeleteAction:
     # the assignment or pops the key prematurely. Verified by code
     # inspection; no regression test is possible without bypassing the
     # dialog entry points entirely. Documented in reviews/phase-3-tier5-review.md.
+
+
+# ── Pre-seed NaN coercion (T5-D/E regression) ────────────────────────────────
+
+class TestPreSeedNaNCoercion:
+    """Pin the _safe_str fix for the TypeError-on-second-row bug.
+
+    Reproduction (2026-04-20, user-reported):
+      1. Quick Add three positions with only position_name set.
+      2. Select row 0; click Save on the Overview tab (writes '' into the
+         row's other TEXT columns).
+      3. Select row 1.
+      → st.text_area / st.text_input raise
+         'TypeError: bad argument type for built-in operation'.
+
+    Root cause: database.get_all_positions returns a pandas DataFrame.
+    Once any row in a TEXT column has a real string, pandas upgrades the
+    column dtype to object and hands back float('nan') for the NULL
+    cells on the still-blank rows. The previous pre-seed idiom
+    `r[col] or ""` then mis-fires because NaN is truthy — `nan or ""`
+    evaluates to `nan`, and NaN in session_state blows up Streamlit's
+    protobuf str type-check at widget render.
+
+    Fix (pages/1_Opportunities.py): _safe_str helper applied to every
+    text pre-seed (position_name / institute / field / link / notes).
+    """
+
+    def test_selecting_second_row_after_save_on_first_does_not_raise(self, db):
+        """The exact user-reported flow, end-to-end.
+
+        Save-then-switch-rows must not raise; Notes text_area must render
+        for the second row without a NaN landing in session_state."""
+        database.add_position({"position_name": "Alpha"})
+        database.add_position({"position_name": "Beta"})
+        database.add_position({"position_name": "Gamma"})
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # Row 0: trigger a Save so the first row gets explicit empty
+        # strings in its text columns — this is what upgrades pandas's
+        # dtype to object and puts NaN in the OTHER rows' cells.
+        _select_row(at, 0)
+        at.button(key="edit_overview_submit").click()
+        _keep_selection(at, 0)
+        at.run()
+        assert not at.exception, (
+            f"Saving Overview on row 0 unexpectedly raised: {at.exception}"
+        )
+
+        # Row 1: this is what blew up before the fix.
+        _select_row(at, 1)
+        assert not at.exception, (
+            "Selecting row 1 after saving row 0 raised — NaN pre-seed "
+            "regression:\n"
+            f"{at.exception}"
+        )
+
+        # Sanity: the Notes text_area rendered at all, and its value is a
+        # real empty string rather than something pandas-y that would
+        # have crashed proto serialisation.
+        notes = at.text_area(key="edit_notes")
+        assert notes is not None, "Notes text_area missing after row switch"
+        assert notes.value == "", (
+            f"Expected '' for unsaved Beta.notes, got {notes.value!r}"
+        )
+
+        # And row 2 for good measure — pandas hands back NaN for its
+        # text cells too.
+        _select_row(at, 2)
+        assert not at.exception, (
+            f"Selecting row 2 also raised (NaN pre-seed regression): "
+            f"{at.exception}"
+        )
+
+    def test_safe_str_coerces_nan_and_none_to_empty_string(self):
+        """Unit pin on the production _safe_str helper itself.
+
+        If anyone ever rewrites this with `if v is None` only, this
+        test catches the NaN case that the integration test above would
+        also flag — but this one pinpoints the failure without
+        requiring an AppTest run."""
+        # Load the page module directly so we can poke at its helpers
+        # without actually running the page script's top-level code.
+        # pages/1_Opportunities.py does call database.init_db() at
+        # import time, but that's a no-op when the schema is current
+        # and uses the `db` fixture's patched DB_PATH via conftest.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_opp_page_module", "pages/1_Opportunities.py"
+        )
+        # We need _safe_str only — executing the whole page runs every
+        # top-level st.* call against no AppTest context. Instead,
+        # read the source and exec just the helper definition.
+        src = open("pages/1_Opportunities.py", "r", encoding="utf-8").read()
+        # Extract the _safe_str definition up to the next top-level `def`
+        # or blank-then-non-indented line. Simpler: find the string, take
+        # a slice, exec into an isolated namespace.
+        marker = "def _safe_str("
+        start = src.index(marker)
+        # The helper ends at the next blank line followed by a
+        # non-indented `def` or any non-indented code.
+        end = src.index("\n\n\n", start) if "\n\n\n" in src[start:] else len(src)
+        # Widen a little to capture the full def+body; looking for the
+        # next top-level `def ` after our function.
+        next_def = src.find("\ndef ", start + len(marker))
+        if next_def != -1:
+            end = min(end, next_def)
+        fn_src = src[start:end]
+
+        import math as _math
+        ns: dict = {"math": _math, "Any": object}
+        exec(fn_src, ns)
+        _safe_str = ns["_safe_str"]
+
+        assert _safe_str(None) == ""
+        assert _safe_str(float("nan")) == ""
+        assert _safe_str("") == ""
+        assert _safe_str("hello") == "hello"
+        assert _safe_str(42) == "42"
