@@ -10,8 +10,8 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 4 merged to main; Tier 5 T5-A/B/C/D/E all done — all four edit-panel tabs (Overview + Requirements + Materials + Notes) Save wired via `database.update_position` AND Overview Delete wired via `@st.dialog` confirm with FK cascade; 220 tests passing; zero deprecation warnings. Next: T5-F (pre-merge review + open PR).
-**Git:** `feature/phase-3-tier5` branch active; T5-A/B/C/D/E commits local (tests + impl + docs).
+**Phase:** Phase 3 Tier 5 **complete** — all four edit-panel tabs (Overview + Requirements + Materials + Notes) Save wired via `database.update_position`, Overview Delete wired via `@st.dialog` confirm with FK cascade, 2 review fixes applied, and 1 user-reported NaN-pre-seed bug fixed (`_safe_str` helper). **223 tests passing; zero deprecation warnings.** Pre-merge review done (`reviews/phase-3-tier5-premerge.md`). Next: merge PR → Phase 4 (full `app.py` dashboard).
+**Git:** `feature/phase-3-tier5` branch — 17 commits ahead of main, pushed, PR open.
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
 **App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table + row selection + edit panel with **all four tabs' Save wired + Overview Delete via `@st.dialog`** (Confirm → `database.delete_position` + paired cleanup + FK cascade; Cancel → no state change).
 
@@ -39,7 +39,7 @@ Markdown files in `exports/` are auto-generated backups, not the source of truth
 | `database.py` | All SQLite reads/writes; no Streamlit imports ✅ |
 | `exports.py` | Regenerates markdown files; stub until Phase 6 ✅ |
 | `app.py` | Dashboard home page stub ✅ (Phase 4 = full dashboard) |
-| `pages/1_Opportunities.py` | Quick-add + filter bar + table + row selection + edit-panel shell ✅ (T1–T3 + T4-A/B) — T4-C–T5 pending |
+| `pages/1_Opportunities.py` | Quick-add + filter bar + table + row selection + edit panel with all four tabs' Save + Overview Delete ✅ (T1–T5 complete) |
 | `pages/2_Applications.py` | Progress tracking + status updates |
 | `pages/3_Recommenders.py` | Recommender log + pending alerts |
 | `pages/4_Export.py` | Manual export trigger + file download |

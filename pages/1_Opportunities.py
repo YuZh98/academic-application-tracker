@@ -2,8 +2,9 @@
 # Opportunities page — position table, quick-add form, inline full edit.
 # Shipped: Tier 1 (quick-add + empty state), Tier 2 (filter bar),
 #          Tier 3 (positions table + deadline urgency),
-#          Tier 4 (row selection + Overview / Requirements / Materials / Notes tabs).
-# Pending: Tier 5 (Save / Delete actions with confirm dialog).
+#          Tier 4 (row selection + Overview / Requirements / Materials / Notes tabs),
+#          Tier 5 (Save on all four tabs + Overview Delete via @st.dialog confirm
+#                  with FK cascade; _safe_str pre-seed guard).
 
 import datetime
 import math

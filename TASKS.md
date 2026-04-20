@@ -1,15 +1,16 @@
 # Tasks
 
 ## In Progress
-- [ ] Phase 3 Tier 5: Save / Delete with confirm dialog
+_(Awaiting PR review → merge → Phase 4)_
+
+## Done in this phase
+- [x] Phase 3 Tier 5: Save / Delete with confirm dialog — **merge-ready**
   - [x] T5-A: Overview Save (update_position + toast + error path + selection survival via _skip_table_reset)
   - [x] T5-B: Requirements Save (preserve done_* across req flips Y↔N)
   - [x] T5-C: Materials Save (writes done_* only for req_* == 'Y')
   - [x] T5-D: Notes Save (empty → "")
   - [x] T5-E: Delete with st.dialog confirm (Overview tab only; FK cascade)
-  - [ ] T5-F: pre-merge review + open PR
-
-## Done in this phase
+  - [x] T5-F: pre-merge review (`reviews/phase-3-tier5-premerge.md`) + open PR
 - [x] Phase 3 Tier 4 merged to main (T4-A through T4-G)
   - T4-A row-selection, T4-B edit-panel shell, T4-C Overview widgets,
     T4-D Requirements radios, T4-E Materials state-driven checkboxes,
@@ -30,6 +31,8 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-20 — Phase 3 Tier 5-F: pre-merge review — commit-by-commit walkthrough + release-notes doc (`reviews/phase-3-tier5-premerge.md`); verified acceptance criteria (`pytest -q` = 223 passed; `pytest -W error::DeprecationWarning` = 223 passed; `git diff main..HEAD -- database.py config.py exports.py app.py` = empty; no hardcoded vocab via grep; form id ≠ widget key via smoke test; all save/delete paths use `st.toast` on success + `st.error` on failure uniformly); updated `CLAUDE.md`, `TASKS.md`, `roadmap.md`, `memory/project_state.md` to reflect Tier-5 complete; staled header comment in `pages/1_Opportunities.py` updated (Tier 5 moved from Pending → Shipped); branch pushed to origin; PR opened against main
+- [x] 2026-04-20 — Phase 3 Tier 5 post-review fix: pandas-NaN-in-pre-seed TypeError (user-reported) — adding 3 positions via Quick Add + Saving row 0 + selecting row 1 raised `TypeError: bad argument type for built-in operation` under every edit-panel tab (Notes area replaced entirely by the red error). Root cause: pandas returns `float('nan')` for NULL TEXT cells once any row has a real string (column dtype upgraded to `object`); the pre-seed idiom `r[col] or ""` mis-fires because NaN is truthy — `nan or ""` evaluates to `nan`, and NaN in `session_state` blows up Streamlit's widget protobuf str type-check. Fix: module-level `_safe_str(v)` helper (`None` or `math.isnan(float(v))` → `""`) applied to all five text pre-seed sites (position_name / institute / field / link / notes). Regression pinned by `TestPreSeedNaNCoercion` (end-to-end reproduction + helper-contract unit). 223 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 5-E: Overview Delete — `@st.dialog("Delete this position?")` opened by a primary-styled `st.button(key='edit_delete')` on the Overview tab **outside** `st.form('edit_overview')` (form only allows `form_submit_button`); target sid/name are passed via `session_state["_delete_target_id"/"_delete_target_name"]` and the Overview tab re-invokes `_confirm_delete_dialog()` on every rerun while the pending flag is set — Streamlit's built-in dialog-re-render magic does NOT carry through AppTest's script-run model (verified with an isolation probe `/tmp/dialog_probe.py`). **Confirm** → `database.delete_position(sid)` → `st.toast` → clear all four session_state keys (paired `_delete_target_*` + `selected_position_id` / `_edit_form_sid`) → `st.rerun()`. **Cancel** → clear only `_delete_target_*`, set `_skip_table_reset=True` so selection survives → `st.rerun()`. FK cascade via existing schema (`PRAGMA foreign_keys=ON` + `ON DELETE CASCADE` on applications.position_id and recommenders.position_id). Extended the selection-resolution `elif` to also preserve selection while `_delete_target_id in session_state`, otherwise the Confirm/Cancel click's internal rerun would collapse the edit panel before the dialog could re-open and the click would be lost. Failure mode mirrors Tier-5 save paths: raising `delete_position` → friendly `st.error("Could not delete: ...")`, no re-raise, `_delete_target_*` and selection preserved so the user can retry. 7 new AppTest tests in `TestDeleteAction` (render, confirm deletes, FK cascade pin, paired cleanup, toast w/ name, cancel is a no-op, DB-failure error path). AppTest caveats worth noting: `Button.type` reports widget-class not the Streamlit `type=` param (primary styling verified by code review, not automated); `AppTest.session_state` has no `.get()` — use `"key" in at.session_state` + subscript. **220 total passing, 0 deprecation warnings**.
 - [x] 2026-04-20 — Phase 3 Tier 5-D: Notes Save — `st.form_submit_button('Save Changes', key='edit_notes_submit')` inside `st.form('edit_notes_form')` wired to `database.update_position`; payload `{'notes': <text or ''>}`; empty input is stored as `""` not NULL (pinned by `test_save_empty_stored_as_empty_string`) so round-trips through pre-seed (NULL→"") + no-op save leave DB stable at `""`; reuses all Tier-5 patterns (toast, friendly `st.error` without re-raise, `_edit_form_sid` pop, `_skip_table_reset` one-shot); 5 new AppTest tests in `TestNotesSave`; 213 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 5-C: Materials Save — `st.form_submit_button('Save Changes', key='edit_materials_submit')` inside `st.form('edit_materials')` wired to `database.update_position`; payload built from a comprehension over the **visible** subset of `config.REQUIREMENT_DOCS` (req_* == 'Y' on live session_state) containing ONLY `done_*` keys cast `int(bool(...))` — hidden `done_*` columns are never written, so prior prepared-doc state survives any `req_*` Y↔N flip (critical contract pinned by `test_save_preserves_done_fields_hidden_by_req_n`, mirrors T5-B from the opposite side); empty-state path unchanged (info hint, no form); reuses all Tier-5 patterns; 5 new AppTest tests in `TestMaterialsSave`; relaxed `test_unwired_save_buttons_still_disabled` count assertion (tooltip check preserved); 208 total passing at T5-C; 213 after T5-D
@@ -60,4 +63,4 @@
 
 ---
 
-_Updated: 2026-04-20 (Tier 4 merged; T5-A/B/C/D/E all done — all four tabs' Save wired + Overview Delete via st.dialog; T5-F next — pre-merge review + PR)_
+_Updated: 2026-04-20 (Tier 5 complete — all four tabs' Save wired + Overview Delete via st.dialog + review fixes + NaN pre-seed fix + pre-merge review doc; PR open; 223 tests passing)_
