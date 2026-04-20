@@ -1113,16 +1113,30 @@ def _done_key(done_col: str) -> str:
     return f"edit_{done_col}"
 
 
+def _checkbox_rendered(at: AppTest, key: str) -> bool:
+    """True iff a checkbox with the given key is present on the rendered page.
+
+    AppTest's `at.checkbox(key=...)` raises KeyError when no match exists, so
+    checking 'is this widget rendered?' needs to catch that. We cannot use
+    'key in session_state' as a proxy because the pre-seed populates
+    edit_done_* unconditionally (so 'user toggles req include mid-edit'
+    doesn't flash an unseeded checkbox)."""
+    try:
+        at.checkbox(key=key)
+        return True
+    except KeyError:
+        return False
+
+
 class TestMaterialsTabWidgets:
 
     def test_no_materials_widgets_without_selection(self, db):
-        """None of the edit_done_* keys may be seeded before a row is selected."""
+        """No done_* checkbox may render before a row is selected."""
         database.add_position({"position_name": "Alpha", "req_cv": "Y"})
         at = _run_page()
-        for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
-            assert _done_key(done_col) not in at.session_state, (
-                f"Widget {_done_key(done_col)!r} should not exist before selection"
-            )
+        assert len(at.checkbox) == 0, (
+            f"Expected 0 checkboxes before selection, got {len(at.checkbox)}"
+        )
 
     def test_empty_state_when_no_required_docs(self, db):
         """With all req_* = 'N' (the schema default), the Materials tab must
@@ -1133,11 +1147,10 @@ class TestMaterialsTabWidgets:
         at.run()
         _select_row(at, 0)
         # No done_* checkboxes must render.
-        for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
-            assert _done_key(done_col) not in at.session_state, (
-                f"With all req_* = 'N', no done_* widgets should render; "
-                f"{done_col} leaked into session_state"
-            )
+        assert len(at.checkbox) == 0, (
+            f"With all req_* = 'N', no Materials checkboxes should render; "
+            f"got {len(at.checkbox)}"
+        )
         # An info hint must be present — substring match on "Requirements tab"
         # so the exact wording can evolve without churning the test.
         info_texts = [el.value for el in at.info]
@@ -1153,16 +1166,17 @@ class TestMaterialsTabWidgets:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        # done_cv is the only one required → only one in session_state.
-        assert _done_key("done_cv") in at.session_state
+        # done_cv is the only one required → exactly one checkbox rendered.
+        assert _checkbox_rendered(at, _done_key("done_cv")), (
+            "done_cv checkbox must render when req_cv == 'Y'"
+        )
         for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
             if done_col == "done_cv":
                 continue
-            assert _done_key(done_col) not in at.session_state, (
-                f"{done_col} should be hidden when its req_* is 'N'"
+            assert not _checkbox_rendered(at, _done_key(done_col)), (
+                f"{done_col} checkbox should be hidden when its req_* is 'N'"
             )
-        # And exactly one checkbox element total (excludes any other page
-        # checkboxes — there are none today, so this is tight).
+        # Tight bound: no other page checkboxes exist today.
         assert len(at.checkbox) == 1, (
             f"Expected 1 Materials checkbox, got {len(at.checkbox)}"
         )
@@ -1181,9 +1195,11 @@ class TestMaterialsTabWidgets:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        assert at.checkbox(key=_done_key("done_cv")).value is True
-        assert at.checkbox(key=_done_key("done_cover_letter")).value is False
-        assert at.checkbox(key=_done_key("done_transcripts")).value is False
+        # Use == (not `is`) because pandas surfaces numpy booleans
+        # (numpy.bool_), and `np.True_ is True` is False.
+        assert bool(at.checkbox(key=_done_key("done_cv")).value)          is True
+        assert bool(at.checkbox(key=_done_key("done_cover_letter")).value) is False
+        assert bool(at.checkbox(key=_done_key("done_transcripts")).value) is False
 
     def test_toggling_requirement_hides_checkbox(self, db):
         """State-driven behaviour: when the user flips req_cv from 'Y' to 'N'
@@ -1199,12 +1215,12 @@ class TestMaterialsTabWidgets:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        assert _done_key("done_cv") in at.session_state   # precondition
+        assert _checkbox_rendered(at, _done_key("done_cv"))   # precondition
         # Simulate the user flipping the req_cv radio to "Not needed".
         at.session_state["edit_req_cv"] = "N"
         at.run()
         assert not at.exception, f"Page raised on req toggle: {at.exception}"
-        assert _done_key("done_cv") not in at.session_state, (
+        assert not _checkbox_rendered(at, _done_key("done_cv")), (
             "Toggling edit_req_cv → 'N' must hide the done_cv checkbox"
         )
 
@@ -1218,7 +1234,7 @@ class TestMaterialsTabWidgets:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        assert _done_key("done_cv") not in at.session_state, (
+        assert not _checkbox_rendered(at, _done_key("done_cv")), (
             "'Optional' docs must be hidden from Materials (Y-only filter "
             "matches the readiness definition in database.py)"
         )
@@ -1233,9 +1249,10 @@ class TestMaterialsTabWidgets:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        first = at.checkbox(key=_done_key("done_cv")).value
+        # bool() normalises numpy.bool_ → Python bool so set equality works.
+        first = bool(at.checkbox(key=_done_key("done_cv")).value)
         _select_row(at, 1)
-        second = at.checkbox(key=_done_key("done_cv")).value
+        second = bool(at.checkbox(key=_done_key("done_cv")).value)
         assert {first, second} == {True, False}, (
             f"Selection change must re-seed done_cv; got {first!r} → {second!r}"
         )
