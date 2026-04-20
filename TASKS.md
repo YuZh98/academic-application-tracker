@@ -5,9 +5,9 @@
   - [x] T4-A: row-selection on positions table (session_state['selected_position_id'])
   - [x] T4-B: edit-panel shell — subheader + 4 empty tabs driven by config.EDIT_PANEL_TABS
   - [x] T4-C: Overview tab fields (7 pre-filled widgets in st.form + _edit_form_sid seed)
-  - [ ] T4-D: Requirements tab (config-driven checkboxes)
-  - [ ] T4-E: Materials tab (state-driven — shows only required docs)
-  - [ ] T4-F: Notes tab (text_area)
+  - [x] T4-D: Requirements tab (config-driven radios over REQUIREMENT_DOCS; 3-way Y/Optional/N)
+  - [x] T4-E: Materials tab (state-driven — shows only required docs)
+  - [x] T4-F: Notes tab (text_area)
   - [ ] T4-G: review + apply fixes + open PR
 
 ## Backlog
@@ -25,6 +25,9 @@
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-19 — Phase 3 Tier 4-F: Notes tab — single `st.text_area(key='edit_notes')` inside `st.form('edit_notes_form')`; pre-seed copies `positions.notes` with NULL→'' coercion; form id intentionally ≠ widget key to avoid `StreamlitValueAssignmentNotAllowedError` (form registers with `writes_allowed=False`); disabled Tier-5 save placeholder mirrors T4-C/D/E; 6 AppTest tests; 190 total passing
+- [x] 2026-04-19 — Phase 3 Tier 4-E: Materials tab — state-driven checkboxes filtered by `session_state[edit_{req_col}] == 'Y'` (Y-only matches database.py readiness def); empty-state hint when nothing required; pre-seed extended with `done_*` loop so req_* flip N→Y mid-edit shows DB value; `_checkbox_rendered` test helper via try/except KeyError; `bool(...)` normalization for numpy.bool_; 7 AppTest tests; 184 total passing
+- [x] 2026-04-19 — Phase 3 Tier 4-D: Requirements tab — one st.radio per REQUIREMENT_DOCS entry, options = REQUIREMENT_VALUES ('Y'|'Optional'|'N'), display via REQUIREMENT_LABELS; F2-style coercion; 7 AppTest tests incl. monkeypatch config-drive proof; 177 total passing
 - [x] 2026-04-19 — Phase 3 Tier 4-C: Overview tab — 7 pre-filled edit widgets in st.form('edit_overview'); _edit_form_sid sentinel defeats Streamlit's widget-value trap on selection change; 8 AppTest tests; 167 total passing
 - [x] 2026-04-19 — Phase 3 Tier 4-B: edit-panel shell (subheader + st.tabs from config.EDIT_PANEL_TABS); selected row looked up in unfiltered df; 6 AppTest tests; 159 total passing
 - [x] 2026-04-19 — Phase 3 Tier 4-A: single-row selection on positions table via st.dataframe(on_select='rerun'); 6 AppTest tests; 153 total passing
@@ -45,4 +48,4 @@
 
 ---
 
-_Updated: 2026-04-19 (T4-A + T4-B + T4-C complete; T4-D next)_
+_Updated: 2026-04-19 (T4-A–F complete; T4-G next — pre-merge review + PR)_

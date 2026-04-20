@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 T4-A–C complete — row selection + tab shell + Overview widgets; T4-D (Requirements) next |
+| Python app | 🔄 Phase 3 T4-A–F complete — all four edit tabs live (Overview / Requirements / Materials / Notes); T4-G (pre-merge review + PR) next |
 
 ---
 
@@ -64,8 +64,9 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Row selection on positions table (T4-A) | ✅ Done (2026-04-19) |
 | Edit-panel shell — subheader + 4 tabs (T4-B) | ✅ Done (2026-04-19) |
 | Overview tab — 7 pre-filled edit widgets (T4-C) | ✅ Done (2026-04-19) |
-| Requirements / Materials / Notes tab bodies (T4-D–F) | Pending (Tier 4) |
-| State-driven Materials tab (shows only required docs) | Pending (Tier 4) |
+| Requirements tab — config-driven 3-way radios (T4-D) | ✅ Done (2026-04-19) |
+| Materials tab — state-driven checkboxes (T4-E) | ✅ Done (2026-04-19) |
+| Notes tab — text_area (T4-F) | ✅ Done (2026-04-19) |
 | Save / Delete with confirm dialog | Pending (Tier 5) |
 
 **Commit message:** `feat: add Opportunities page with quick-add and full edit`
