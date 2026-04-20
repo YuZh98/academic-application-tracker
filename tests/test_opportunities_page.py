@@ -940,3 +940,148 @@ class TestOverviewTabWidgets:
             f"(= {config.PRIORITY_VALUES[0]!r}); got "
             f"{at.selectbox(key=EDIT_KEYS['priority']).value!r}"
         )
+
+
+# ── Requirements tab widgets (T4-D) ───────────────────────────────────────────
+# The Requirements tab renders one st.radio per entry in
+# config.REQUIREMENT_DOCS. Values are canonical DB strings ('Y', 'Optional',
+# 'N'); labels come from config.REQUIREMENT_LABELS via format_func so
+# session_state always holds the canonical value — no save-time translation.
+#
+# Widget key convention: "edit_" + req_col (e.g. "edit_req_cv").
+
+def _req_key(req_col: str) -> str:
+    """Return the session_state key for a given req_* column's radio widget."""
+    return f"edit_{req_col}"
+
+
+class TestRequirementsTabWidgets:
+
+    def test_no_requirements_widgets_without_selection(self, db):
+        """None of the edit_req_* keys must be seeded before a row is selected."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            assert _req_key(req_col) not in at.session_state, (
+                f"Widget {_req_key(req_col)!r} should not exist before selection"
+            )
+
+    def test_one_radio_per_requirement_doc(self, db):
+        """Exactly one radio per REQUIREMENT_DOCS entry must render after selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised on selection: {at.exception}"
+        for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            assert at.radio(key=_req_key(req_col)) is not None, (
+                f"Missing radio for {req_col!r}"
+            )
+        # And the total radio count equals the config length — guards against
+        # a stray hardcoded radio slipping in.
+        assert len(at.radio) == len(config.REQUIREMENT_DOCS), (
+            f"Expected {len(config.REQUIREMENT_DOCS)} radios, got {len(at.radio)}"
+        )
+
+    def test_radio_values_match_db(self, db):
+        """Each radio must pre-fill from the selected row's req_* column value."""
+        # Exercise all three vocabulary tiers so we catch one-way mappings.
+        database.add_position({
+            "position_name":        "Stanford BioStats",
+            "req_cv":               "Y",
+            "req_cover_letter":     "Y",
+            "req_writing_sample":   "Optional",
+            "req_teaching_statement": "N",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.radio(key=_req_key("req_cv")).value             == "Y"
+        assert at.radio(key=_req_key("req_cover_letter")).value   == "Y"
+        assert at.radio(key=_req_key("req_writing_sample")).value == "Optional"
+        assert at.radio(key=_req_key("req_teaching_statement")).value == "N"
+
+    def test_radio_options_are_canonical_db_values(self, db):
+        """Every radio must expose exactly config.REQUIREMENT_VALUES as options,
+        in the configured order — this is what keeps session_state canonical
+        so save-time writes can go straight into the TEXT column."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            options = list(at.radio(key=_req_key(req_col)).options)
+            assert options == config.REQUIREMENT_VALUES, (
+                f"Radio {req_col!r} options must match config.REQUIREMENT_VALUES.\n"
+                f"  Expected: {config.REQUIREMENT_VALUES}\n"
+                f"  Got:      {options}"
+            )
+
+    def test_null_req_falls_back_to_N(self, db):
+        """Defensive coercion (F2 analog): an unknown or None req_* value
+        must not crash the page and must not put an out-of-options value
+        into the radio's session_state — fall back to 'N' (schema default)."""
+        database.add_position({"position_name": "Alpha"})  # req_* defaults → 'N'
+        # Manually corrupt one req_* column to simulate an unknown value
+        # (e.g. from a future migration or sqlite3 CLI edit).
+        import sqlite3
+        with sqlite3.connect(database.DB_PATH) as conn:
+            conn.execute(
+                "UPDATE positions SET req_cv = 'Maybe' WHERE position_name = ?",
+                ("Alpha",),
+            )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised on unknown req_* value: {at.exception}"
+        assert at.radio(key=_req_key("req_cv")).value == "N", (
+            "Unknown req_* value must coerce to 'N' (schema default), "
+            f"got {at.radio(key=_req_key('req_cv')).value!r}"
+        )
+
+    def test_widgets_update_on_selection_change(self, db):
+        """Widget-value-trap regression guard on the req_* path: switching
+        rows must re-seed the req_* widgets, not stick on the first."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Beta",  "req_cv": "N"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first = at.radio(key=_req_key("req_cv")).value
+        _select_row(at, 1)
+        second = at.radio(key=_req_key("req_cv")).value
+        assert {first, second} == {"Y", "N"}, (
+            f"Selection change must re-seed req_cv; got {first!r} → {second!r}"
+        )
+        assert first != second, (
+            "req_cv did not update on selection change — widget-value trap"
+        )
+
+    def test_config_driven_new_doc_renders_new_widget(self, db, monkeypatch):
+        """The core config-drive proof: appending a new tuple to
+        config.REQUIREMENT_DOCS (and re-running init_db to add the column)
+        must make a new radio appear automatically, with no page-file change."""
+        new_docs = config.REQUIREMENT_DOCS + [
+            ("req_portfolio", "done_portfolio", "Portfolio"),
+        ]
+        monkeypatch.setattr(config, "REQUIREMENT_DOCS", new_docs)
+        # init_db is migration-aware: ALTER TABLE ADD COLUMN for the new doc.
+        database.init_db()
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised with extended config: {at.exception}"
+        assert at.radio(key=_req_key("req_portfolio")) is not None, (
+            "Adding a new doc to config.REQUIREMENT_DOCS must render a new "
+            "radio automatically — this proves the page is config-driven, "
+            "not hardcoded. If this fails, the page loops over a local "
+            "constant instead of config.REQUIREMENT_DOCS."
+        )
+        # The new widget must participate in the same canonical-options
+        # contract as the others.
+        assert list(at.radio(key=_req_key("req_portfolio")).options) \
+            == config.REQUIREMENT_VALUES
+        # And its default value (from the migration's DEFAULT 'N') should
+        # land in session_state as 'N' after the pre-seed coercion.
+        assert at.radio(key=_req_key("req_portfolio")).value == "N"
