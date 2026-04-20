@@ -1444,20 +1444,21 @@ class TestNotesTabWidgets:
         )
 
     def test_unwired_save_buttons_still_disabled(self, db):
-        """Mirror T4-D/E: the Requirements and Notes save buttons must remain
-        disabled with the Tier-5 tooltip until T5-B / T5-D wire them. Catches
-        accidental enabling before their respective writes land.
+        """The Notes save button must remain disabled with the Tier-5 tooltip
+        until T5-D wires it. Catches accidental enabling before the Notes
+        write lands.
 
-        T5-A updated this test: Overview is now wired, so it is no longer in
-        the disabled set. With all req_* = 'N', Materials renders no form →
-        Requirements + Notes = 2 disabled buttons expected."""
+        T5-A enabled Overview. T5-B enabled Requirements. With all req_* = 'N',
+        Materials renders no form → Notes is the only disabled form submit
+        on the page (>= 1). Assertion relaxed accordingly; the tooltip check
+        still pins every remaining disabled placeholder."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         disabled = [b for b in at.button if getattr(b, "disabled", False)]
-        assert len(disabled) >= 2, (
-            f"Expected at least 2 disabled Save buttons (Requirements + Notes), "
+        assert len(disabled) >= 1, (
+            f"Expected at least 1 disabled Save button (Notes), "
             f"got {len(disabled)}"
         )
         # The Tier-5 tooltip must appear on every disabled placeholder.
@@ -1689,4 +1690,173 @@ class TestOverviewSave:
             "Post-save widget value must reflect the saved state, not the "
             "pre-edit value. If this fails, the sentinel may be stuck on "
             "the pre-save render cycle."
+        )
+
+
+# ── Requirements tab Save (T5-B) ──────────────────────────────────────────────
+# The Requirements form persists all req_* columns via database.update_position.
+# Critical contract: Requirements Save NEVER writes done_* columns. The payload
+# is built from config.REQUIREMENT_DOCS → req_col only, so update_position's
+# parameterised UPDATE leaves the done_* columns of the row untouched. Flipping
+# req_cv from 'Y' to 'N' preserves done_cv — the user's "I've prepared the CV"
+# status is independent of whether any given position requires it right now.
+# DESIGN.md §6: Materials is checkbox-only; the readiness computation hides
+# rows where req_* != 'Y' but the underlying value is preserved.
+
+REQUIREMENTS_SUBMIT_KEY = "edit_requirements_submit"
+
+
+class TestRequirementsSave:
+
+    def test_save_persists_all_req_columns(self, db):
+        """Round-trip: set every req_* radio to a mix of values, click Save,
+        assert every req_* in the DB matches. Guards against a req column
+        being added to the form but forgotten in the update_position payload.
+        Also verifies the success toast fires with the position name."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        # Set each req_* to a value drawn from config.REQUIREMENT_VALUES,
+        # cycling through Y/Optional/N so every vocabulary tier is written
+        # at least once on a large-enough REQUIREMENT_DOCS list.
+        chosen = {}
+        for idx, (req_col, _done_col, _label) in enumerate(config.REQUIREMENT_DOCS):
+            value = config.REQUIREMENT_VALUES[idx % len(config.REQUIREMENT_VALUES)]
+            at.radio(key=_req_key(req_col)).set_value(value)
+            chosen[req_col] = value
+
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        for req_col, expected in chosen.items():
+            assert row[req_col] == expected, (
+                f"{req_col} should be {expected!r}, got {row[req_col]!r}"
+            )
+        assert at.toast, "Expected st.toast after a successful Requirements save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_done_fields_on_req_flip(self, db):
+        """Critical contract pin: Requirements Save must NOT touch done_*
+        columns. The user's "I've prepared the CV" status is independent of
+        whether any given position currently requires a CV. Flipping
+        req_cv from 'Y' → 'N' and saving MUST leave done_cv == 1 in the DB.
+
+        Rationale (DESIGN.md + user decision 2026-04-20): if req_cv later
+        flips back to 'Y', the Materials tab should again show 'CV: done'
+        without the user having to re-tick — the CV didn't un-prepare itself."""
+        database.add_position({
+            "position_name": "Alpha",
+            "req_cv":        "Y",
+            "done_cv":       1,
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        # Flip req_cv to N.
+        at.radio(key=_req_key("req_cv")).set_value("N")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["req_cv"] == "N", (
+            f"req_cv should have flipped to 'N', got {row['req_cv']!r}"
+        )
+        assert row["done_cv"] == 1, (
+            f"done_cv MUST be preserved across a req flip (user-confirmed "
+            f"contract 2026-04-20); got {row['done_cv']!r}. If this fails, "
+            f"the Requirements-save payload is writing done_* columns — it "
+            f"must contain only req_* keys."
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror T5-A / Tier-4 F1 on the Requirements path: a raising
+        update_position must surface a friendly st.error without re-raising."""
+        database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After Requirements save, the edit panel must re-render for the
+        SAME position — selected_position_id must survive the post-save
+        st.rerun() (via the T5-A _skip_table_reset one-shot)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Panel still rendered: the Requirements radio is still there.
+        assert at.radio(key=_req_key("req_cv")) is not None
+
+    def test_save_toast_survives_rerun(self, db):
+        """Regression guard for the Tier-1 st.success-clobber bug on the
+        Requirements path: st.toast must still be in at.toast after the
+        post-save rerun completes."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Requirements save must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
         )
