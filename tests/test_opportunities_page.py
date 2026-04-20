@@ -135,6 +135,34 @@ class TestQuickAddFormBehaviour:
             "No row should be inserted when position_name is empty"
         )
 
+    def test_save_error_shows_error_without_raising(self, db, monkeypatch):
+        """F1 (Tier-4 full review) regression guard: when database.add_position
+        raises, the page must surface an st.error but NOT re-raise the
+        exception. The previous implementation did `raise` after st.error,
+        which made Streamlit render the very traceback the handler exists
+        to prevent. This test patches add_position to raise and verifies
+        both sides of the contract."""
+        def _boom(_fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "add_position", _boom)
+
+        at = _run_page()
+        at.text_input(key="qa_position_name").input("Stanford BioStats")
+        at.button(key=SUBMIT_KEY).click()
+        at.run()
+
+        # Contract 1: user sees the friendly message.
+        assert at.error, "Expected st.error when add_position raises"
+        assert any("Could not save position" in el.value for el in at.error), (
+            f"Expected 'Could not save position' prefix in error, "
+            f"got: {[el.value for el in at.error]}"
+        )
+        # Contract 2: no uncaught exception reaches Streamlit's renderer.
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+
     def test_submit_with_whitespace_only_name_shows_error(self, db):
         """Whitespace-only position_name must be treated as empty (F3 fix).
 
@@ -638,10 +666,11 @@ class TestRowSelection:
 
     def test_quick_add_clears_selection(self, db):
         """Regression guard for Tier-4 review F1: Quick-Add's st.rerun() must
-        clear the dataframe selection state, because get_all_positions() orders
-        updated_at DESC — the new row lands at index 0 and every existing row
-        shifts +1, so a surviving selection index would silently re-bind the
-        edit panel to a different position."""
+        clear the dataframe selection state, because get_all_positions()
+        orders deadline_date ASC NULLS LAST — a new position's index
+        depends on its deadline relative to existing rows and can land
+        anywhere, so a surviving selection index could silently re-bind
+        the edit panel to a different position."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
@@ -658,6 +687,63 @@ class TestRowSelection:
         )
         assert "_edit_form_sid" not in at.session_state, (
             "Sentinel must be cleared alongside selected_position_id"
+        )
+
+    def test_filter_change_after_selection_clears_selection(self, db):
+        """F7 (Tier-4 full review) pin-down — PROTECTIVE behaviour regression
+        guard.
+
+        Naive mental model: selection is a positional row index, so a filter
+        change that shuffles which position lives at row 0 would silently
+        rebind selected_position_id to a different position's id.
+
+        Observed behaviour (probed in review): when a filter widget change
+        triggers the rerun, Streamlit resets the dataframe's selection
+        state to {'rows': []}. Our line 176–185 else-branch then pops
+        selected_position_id + _edit_form_sid. The user sees the edit
+        panel disappear on filter change — a safe, surprising-but-defensible
+        outcome (better than silent rebind to a wrong position).
+
+        This test pins that protective behaviour so a future Streamlit
+        release that changes the selection-on-data-change contract fails
+        loudly here, and we notice before it becomes a data-correctness
+        bug once Tier 5 Save wires up."""
+        pid_alpha = database.add_position(
+            {"position_name":  "Alpha",
+             "status":         "[OPEN]",
+             "deadline_date":  "2026-06-01"}
+        )
+        pid_beta = database.add_position(
+            {"position_name":  "Beta",
+             "status":         "[APPLIED]",
+             "deadline_date":  "2026-05-01"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # get_all_positions orders deadline_date ASC NULLS LAST → Beta at row 0.
+        _select_row(at, 0)
+        assert at.session_state["selected_position_id"] == pid_beta, (
+            f"Precondition: row 0 unfiltered must bind to Beta={pid_beta}; "
+            f"got {at.session_state['selected_position_id']}"
+        )
+        # Filter to [OPEN] → Beta filtered out, Alpha is the only visible row.
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.run()
+        assert not at.exception, f"Filter change raised: {at.exception}"
+        # Key assertion: Streamlit cleared the dataframe selection on the
+        # data change, so our page popped selected_position_id — NOT
+        # silently rebound it to pid_alpha.
+        assert "selected_position_id" not in at.session_state, (
+            "Filter change after selection must clear selected_position_id "
+            "(Streamlit resets dataframe selection when data changes + our "
+            "else-branch pops). If this fails, Streamlit's protective "
+            "reset may have changed — silent rebind to a different id "
+            f"(expected Alpha={pid_alpha}) is a data-correctness risk at "
+            f"Tier 5. Got: {at.session_state.get('selected_position_id')}"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "Sentinel must be popped alongside selected_position_id to keep "
+            "the pair invariant (F4 cleanup pairing)."
         )
 
 
