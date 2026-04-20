@@ -10,10 +10,10 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 4 merged to main; Tier 5 T5-A/B/C/D all done — all four edit-panel tabs (Overview + Requirements + Materials + Notes) Save wired via `database.update_position`; 213 tests passing; zero deprecation warnings. Next: T5-E (Delete with `st.dialog`) → T5-F (pre-merge review + PR).
-**Git:** `feature/phase-3-tier5` branch active; T5-A/B/C/D commits local (tests + impl + docs).
+**Phase:** Phase 3 Tier 4 merged to main; Tier 5 T5-A/B/C/D/E all done — all four edit-panel tabs (Overview + Requirements + Materials + Notes) Save wired via `database.update_position` AND Overview Delete wired via `@st.dialog` confirm with FK cascade; 220 tests passing; zero deprecation warnings. Next: T5-F (pre-merge review + open PR).
+**Git:** `feature/phase-3-tier5` branch active; T5-A/B/C/D/E commits local (tests + impl + docs).
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
-**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table + row selection + edit panel with **all four tabs' Save wired**. Delete still pending (T5-E).
+**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table + row selection + edit panel with **all four tabs' Save wired + Overview Delete via `@st.dialog`** (Confirm → `database.delete_position` + paired cleanup + FK cascade; Cancel → no state change).
 
 **To run:**
 ```

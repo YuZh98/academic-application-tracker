@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 Tier 4 merged; Tier 5 T5-A/B/C/D complete — all four edit-panel tabs' Save wired via `update_position`. T5-E (Delete with `st.dialog`) next. |
+| Python app | 🔄 Phase 3 Tier 4 merged; Tier 5 T5-A/B/C/D/E complete — all four edit-panel tabs' Save wired + Overview Delete via `@st.dialog`. T5-F (pre-merge review + PR) next. |
 
 ---
 
@@ -71,7 +71,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Requirements Save (T5-B) | ✅ Done (2026-04-20) |
 | Materials Save (T5-C) | ✅ Done (2026-04-20) |
 | Notes Save (T5-D) | ✅ Done (2026-04-20) |
-| Delete with st.dialog confirm (T5-E) | Pending |
+| Delete with st.dialog confirm (T5-E) | ✅ Done (2026-04-20) |
 | Tier 5 pre-merge review + PR (T5-F) | Pending |
 
 **Commit message:** `feat: add Opportunities page with quick-add and full edit`
