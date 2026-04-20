@@ -455,13 +455,11 @@ if "selected_position_id" in st.session_state:
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save materials: {exc}")
-        with tabs[3]:   # Notes — T4-F
+        with tabs[3]:   # Notes — T4-F + T5-D
             # Single free-form text_area for miscellaneous context (contact
             # details, interview prep hints, follow-up reminders). Pre-seeded
             # from the row's notes column via the _edit_form_sid block above,
-            # so selecting a different row re-loads its notes. Mirrors the
-            # T4-C/D/E submit-button placeholder contract — real save wires in
-            # Tier 5.
+            # so selecting a different row re-loads its notes.
             # Form id is "edit_notes_form" (not "edit_notes") to avoid a key
             # collision with the text_area's session_state slot — st.form
             # registers its id with writes_allowed=False, so sharing a name
@@ -474,11 +472,29 @@ if "selected_position_id" in st.session_state:
                     height=200,
                     placeholder="Free-form notes — contacts, prep hints, follow-ups…",
                 )
-                st.form_submit_button(
+                notes_submitted = st.form_submit_button(
                     "Save Changes",
-                    disabled=True,
-                    help="Coming in Tier 5 — Save/Delete actions.",
+                    key="edit_notes_submit",
                 )
+
+            # T5-D: notes column is TEXT NULL-able, but the storage contract
+            # (DESIGN.md §6 + CLAUDE.md 'Key Design Decisions') is that empty
+            # input is persisted as "" — not None / NULL. Pre-seed coerces
+            # NULL → "" on load so a no-op save leaves the DB stable at "".
+            # Mirrors all other Tier-5 save paths: toast, friendly st.error
+            # without re-raise, _edit_form_sid pop, _skip_table_reset one-shot.
+            if notes_submitted:
+                payload: dict[str, Any] = {
+                    "notes": st.session_state.get("edit_notes", "") or "",
+                }
+                try:
+                    database.update_position(sid, payload)
+                    st.toast(f'Saved notes for "{r["position_name"]}".')
+                    st.session_state.pop("_edit_form_sid", None)
+                    st.session_state["_skip_table_reset"] = True
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Could not save notes: {exc}")
     else:
         # F3 (Tier-4 review): the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
