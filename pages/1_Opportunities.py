@@ -243,10 +243,19 @@ if "selected_position_id" in st.session_state:
             # an unknown string (future migration, raw SQL edit) or is
             # missing from the row (e.g. during a migration-in-progress
             # test), fall back to 'N' — the schema default.
-            for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            for req_col, done_col, _label in config.REQUIREMENT_DOCS:
                 v = r[req_col] if req_col in r.index else None
                 safe_v = v if v in config.REQUIREMENT_VALUES else "N"
                 st.session_state[f"edit_{req_col}"] = safe_v
+
+                # T4-E: pre-seed one bool per done_* column for the Materials
+                # checkboxes. done_* is INTEGER 0/1; anything else (None,
+                # unexpected values) coerces to False. The checkbox itself
+                # is only rendered by the Materials tab when its req_* is
+                # 'Y' — but we seed unconditionally so switching a
+                # requirement on mid-edit doesn't flash an unseeded checkbox.
+                d = r[done_col] if done_col in r.index else 0
+                st.session_state[f"edit_{done_col}"] = (d == 1)
 
             st.session_state["_edit_form_sid"]     = sid
 
@@ -300,7 +309,31 @@ if "selected_position_id" in st.session_state:
                     help="Coming in Tier 5 — Save/Delete actions.",
                 )
         with tabs[2]:   # Materials — T4-E
-            pass
+            # State-driven: the visible checkbox list is built from the LIVE
+            # session_state["edit_{req_col}"] values (not the DB row), so
+            # toggling a radio on the Requirements tab updates this tab on
+            # the next rerun. Uses the Y-only filter that matches the
+            # readiness definition in database.py (~line 404).
+            visible = [
+                (req_col, done_col, label)
+                for req_col, done_col, label in config.REQUIREMENT_DOCS
+                if st.session_state.get(f"edit_{req_col}") == "Y"
+            ]
+            if not visible:
+                st.info(
+                    "No required documents yet — mark docs as required on "
+                    "the Requirements tab."
+                )
+            else:
+                with st.form("edit_materials"):
+                    for _req_col, done_col, label in visible:
+                        st.checkbox(label, key=f"edit_{done_col}")
+                    # Mirror T4-C/T4-D placeholder submit.
+                    st.form_submit_button(
+                        "Save Changes",
+                        disabled=True,
+                        help="Coming in Tier 5 — Save/Delete actions.",
+                    )
         with tabs[3]:   # Notes — T4-F
             pass
     else:
