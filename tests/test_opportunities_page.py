@@ -2209,3 +2209,227 @@ class TestNotesSave:
             f"Notes save must use st.toast, not st.success; got "
             f"st.success messages: {success_texts}"
         )
+
+
+# ── Overview tab Delete (T5-E) ───────────────────────────────────────────────
+# Delete lives on the Overview tab only (DESIGN.md §6 + user decision
+# 2026-04-20). Clicking Delete opens an st.dialog; Confirm cascades the
+# DELETE FROM positions via database.delete_position(sid), which removes
+# the applications + recommenders rows via ON DELETE CASCADE on the FKs
+# (schema: database.py ~lines 101 / 116). On success: toast, pop both
+# selected_position_id and _edit_form_sid, st.rerun(). On cancel: just
+# st.rerun() — no state change, no DB write. On DB failure: friendly
+# st.error, no re-raise, no state cleared (so the user can retry).
+#
+# Widget keys (public test contract — do not rename without updating
+# the constants here and the page):
+#   • Delete button (outside the Overview form): edit_delete
+#   • Confirm Delete button (inside dialog):     delete_confirm
+#   • Cancel button (inside dialog):             delete_cancel
+
+DELETE_BUTTON_KEY  = "edit_delete"
+DELETE_CONFIRM_KEY = "delete_confirm"
+DELETE_CANCEL_KEY  = "delete_cancel"
+
+
+class TestDeleteAction:
+
+    def test_delete_button_renders_on_overview(self, db):
+        """Delete button (type='primary') with key 'edit_delete' must be
+        present on the Overview tab after a row is selected. Must live
+        OUTSIDE st.form('edit_overview') because st.form only permits
+        st.form_submit_button inside."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        assert not at.exception, f"Page raised on selection: {at.exception}"
+        btn = at.button(key=DELETE_BUTTON_KEY)
+        assert btn is not None, "Missing Delete button with key 'edit_delete'"
+        # Primary styling: the delete is destructive and must stand out.
+        assert getattr(btn, "type", "") == "primary", (
+            f"Delete button should be type='primary' (destructive), got "
+            f"{getattr(btn, 'type', None)!r}"
+        )
+
+    def test_confirm_deletes_position(self, db):
+        """Click Delete → Confirm → the position is gone from the DB.
+        database.get_position(sid) raises KeyError for missing rows."""
+        sid = database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        # Dialog is now open; confirm must be reachable as a top-level button.
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        with pytest.raises(KeyError):
+            database.get_position(sid)
+
+    def test_confirm_cascades_applications_and_recommenders(self, db):
+        """FK cascade pin: deleting a position must also remove its
+        applications row (auto-created by add_position) and any recommender
+        rows (PRAGMA foreign_keys=ON + ON DELETE CASCADE on both FKs —
+        verified in database.py). Regression guard in case someone later
+        turns off PRAGMA or replaces the FK with a plain REFERENCES."""
+        sid = database.add_position({"position_name": "Alpha"})
+        database.add_recommender(sid, {"name": "Prof X"})
+        # Precondition: application + recommender rows exist for sid.
+        assert database.get_application(sid), (
+            "Application row should have been auto-created by add_position"
+        )
+        recs_before = database.get_recommenders(sid)
+        assert len(recs_before) == 1, (
+            f"Should have 1 recommender before delete, got {len(recs_before)}"
+        )
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        # applications row cascaded away (get_application returns {} when no row).
+        assert database.get_application(sid) == {}, (
+            "applications row must be cascaded away by FK ON DELETE CASCADE"
+        )
+        # recommenders rows cascaded away too.
+        recs_after = database.get_recommenders(sid)
+        assert len(recs_after) == 0, (
+            f"recommenders rows must be cascaded away, got {len(recs_after)} "
+            f"leftover rows — check PRAGMA foreign_keys=ON in _connect()"
+        )
+
+    def test_confirm_clears_selection_state(self, db):
+        """After confirm, both session_state keys that bind the edit panel to
+        a position (selected_position_id AND _edit_form_sid) must be cleared
+        together — they are paired throughout the page (T4 pattern), and
+        leaving one behind would let the next rerun alias with a future sid
+        and skip the pre-seed for the fresh selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Precondition: both keys are set by the row-selection flow.
+        assert "selected_position_id" in at.session_state
+        assert "_edit_form_sid" in at.session_state
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        assert "selected_position_id" not in at.session_state, (
+            "selected_position_id must be popped after a successful delete"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "_edit_form_sid must be popped alongside selected_position_id — "
+            "the pair is paired throughout the page (T4 pattern)"
+        )
+
+    def test_confirm_shows_toast_with_position_name(self, db):
+        """Success confirmation uses st.toast (survives the post-delete
+        st.rerun()) and references the deleted position's name so the user
+        sees which row went away."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        assert at.toast, "Expected st.toast after a successful delete"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the deleted position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_cancel_does_not_delete_or_clear_state(self, db):
+        """Cancel contract: clicking Cancel inside the dialog must close the
+        dialog and leave state completely untouched — position still in DB,
+        selection still active, no toast, no error."""
+        sid = database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CANCEL_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Cancel raised: {at.exception}"
+        # Position still present.
+        row = database.get_position(sid)
+        assert row["position_name"] == "Alpha", (
+            "Cancel must NOT delete the position"
+        )
+        # Selection still active — user's context preserved.
+        assert at.session_state.get("selected_position_id") == sid, (
+            "Cancel must NOT clear selected_position_id"
+        )
+        # No toast / no error.
+        assert not at.toast, (
+            f"Cancel must NOT fire a toast; got {[el.value for el in at.toast]}"
+        )
+        assert not at.error, (
+            f"Cancel must NOT render an error; got "
+            f"{[el.value for el in at.error]}"
+        )
+
+    def test_delete_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror the F1 failure contract on the Delete path: a raising
+        delete_position must surface a friendly st.error without re-raising.
+        Also defensive: selection state is NOT cleared on failure, so the
+        user can retry rather than losing their context."""
+        sid = database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "delete_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert at.error, "Expected st.error when delete_position raises"
+        assert any("Could not delete" in el.value for el in at.error), (
+            f"Expected 'Could not delete' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Delete handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on delete failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+        # Position row still present — the raise happened BEFORE any state
+        # was cleared. Retry-friendly.
+        assert database.get_position(sid)["position_name"] == "Alpha", (
+            "Position row must survive a failed delete (monkeypatched raise)"
+        )
