@@ -1487,6 +1487,19 @@ class TestNotesTabWidgets:
 OVERVIEW_SUBMIT_KEY = "edit_overview_submit"
 
 
+def _keep_selection(at: AppTest, row_index: int) -> None:
+    """Re-inject the positions_table selection state before the next at.run().
+
+    AppTest treats the dataframe's on_select='rerun' event as a single-run
+    signal: the injected `positions_table` session_state does NOT persist
+    across reruns. In a real browser the user's click is remembered in
+    widget session_state naturally. Multi-step tests that span a rerun
+    must re-assert the selection to mimic that browser-side persistence."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [row_index], "columns": []}
+    }
+
+
 class TestOverviewSave:
 
     def test_save_persists_all_seven_fields(self, db):
@@ -1519,6 +1532,7 @@ class TestOverviewSave:
         at.text_input(key=EDIT_KEYS["link"]).set_value("https://new.example")
 
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception}"
@@ -1540,6 +1554,7 @@ class TestOverviewSave:
         _select_row(at, 0)
         at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception}"
@@ -1560,6 +1575,7 @@ class TestOverviewSave:
         _select_row(at, 0)
         at.text_input(key=EDIT_KEYS["field"]).set_value("Biostatistics")
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
         at.run()
 
         # at.toast populated → the post-rerun script run still rendered it.
@@ -1589,6 +1605,7 @@ class TestOverviewSave:
         sid = at.session_state["selected_position_id"]
         at.text_input(key=EDIT_KEYS["position_name"]).set_value("   ")
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
         at.run()
 
         assert at.error, "Expected st.error for whitespace-only position_name"
@@ -1622,6 +1639,7 @@ class TestOverviewSave:
         _select_row(at, 0)
         at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
         at.run()
 
         assert at.error, "Expected st.error when update_position raises"
@@ -1652,6 +1670,7 @@ class TestOverviewSave:
         sid_before = at.session_state["selected_position_id"]
         at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception}"
