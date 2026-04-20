@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 T4-A–F complete — all four edit tabs live (Overview / Requirements / Materials / Notes); T4-G (pre-merge review + PR) next |
+| Python app | 🔄 Phase 3 **Tier 5 complete** — all four edit-panel tabs' Save + Overview Delete shipped; review fixes + NaN pre-seed fix applied; 223 tests passing; PR open against `main`. Phase 4 (full `app.py` dashboard) next. |
 
 ---
 
@@ -67,7 +67,12 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Requirements tab — config-driven 3-way radios (T4-D) | ✅ Done (2026-04-19) |
 | Materials tab — state-driven checkboxes (T4-E) | ✅ Done (2026-04-19) |
 | Notes tab — text_area (T4-F) | ✅ Done (2026-04-19) |
-| Save / Delete with confirm dialog | Pending (Tier 5) |
+| Overview Save — update_position + toast + error + selection survival (T5-A) | ✅ Done (2026-04-20) |
+| Requirements Save (T5-B) | ✅ Done (2026-04-20) |
+| Materials Save (T5-C) | ✅ Done (2026-04-20) |
+| Notes Save (T5-D) | ✅ Done (2026-04-20) |
+| Delete with st.dialog confirm (T5-E) | ✅ Done (2026-04-20) |
+| Tier 5 pre-merge review + PR (T5-F) | ✅ Done (2026-04-20) — `reviews/phase-3-tier5-premerge.md` |
 
 **Commit message:** `feat: add Opportunities page with quick-add and full edit`
 
@@ -144,6 +149,7 @@ These are accepted design decisions from ADR-001 that are intentionally deferred
 | Application goal setting (target N applications) and progress bar | P2 | Store in a `settings` table; show on dashboard |
 | Source effectiveness chart (which source yields most interviews) | P3 | Derived from existing `source` + `status` fields |
 | Application timeline chart (when applications cluster around deadlines) | P3 | Derived from `applied_date` |
+| File attachments on Materials panel (PDF / Markdown / TeX upload, open, replace, remove) | P2 | New `attachments` table + `attachments/` folder on disk; checkbox auto-flips on upload; FK cascade + `rmtree` on delete. Full design in DESIGN.md §11 "Adding file attachments to the Materials panel". |
 
 ---
 
