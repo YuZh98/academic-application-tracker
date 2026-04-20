@@ -2052,3 +2052,160 @@ class TestMaterialsSave:
             f"Materials save must use st.toast, not st.success; got "
             f"st.success messages: {success_texts}"
         )
+
+
+# ── Notes tab Save (T5-D) ────────────────────────────────────────────────────
+# The Notes form persists the free-form text_area via database.update_position.
+# Storage contract (DESIGN.md §6 + CLAUDE.md 'Key Design Decisions'): empty
+# input is stored as the empty string "" — NOT NULL — so round-trips through
+# the pre-seed (NULL → "") and a no-op save leave the DB stable at "".
+#
+# Widget keys already pinned in T4-F:
+#   • text_area: session_state key "edit_notes"  (NOTES_KEY constant)
+#   • form id:   "edit_notes_form"  (deliberately != widget key to avoid
+#                StreamlitValueAssignmentNotAllowedError — st.form registers
+#                its id with writes_allowed=False).
+# New in T5-D:
+#   • submit key: "edit_notes_submit"
+
+NOTES_SUBMIT_KEY = "edit_notes_submit"
+
+
+class TestNotesSave:
+
+    def test_save_persists_notes(self, db):
+        """Round-trip: type text, click Save, assert the DB row reflects it.
+        Also verifies the success toast fires with the position name."""
+        sid = database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.text_area(key=NOTES_KEY).set_value(
+            "Contact: jane@example.edu\nFollow up after Oct 15."
+        )
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["notes"] == (
+            "Contact: jane@example.edu\nFollow up after Oct 15."
+        ), f"notes did not round-trip; got {row['notes']!r}"
+        assert at.toast, "Expected st.toast after a successful Notes save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_empty_stored_as_empty_string(self, db):
+        """DESIGN.md contract: empty notes are stored as '', not NULL, so the
+        pre-seed (which coerces NULL → '') and a no-op save leave the DB
+        stable at ''. Seeds a row with non-empty notes, clears the text_area,
+        saves, and asserts the DB column is exactly the empty string."""
+        sid = database.add_position({
+            "position_name": "Alpha",
+            "notes":         "something to clear",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.text_area(key=NOTES_KEY).set_value("")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["notes"] == "", (
+            f"Empty notes must be stored as '' (not None / NULL); got "
+            f"{row['notes']!r}. If this fails, the save path is likely "
+            f"writing None for empty strings — the pre-seed would still "
+            f"coerce on load, but the DB column would drift to NULL."
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror the F1 failure contract on the Notes path: a raising
+        update_position must surface a friendly st.error without re-raising.
+        """
+        database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_area(key=NOTES_KEY).set_value("anything")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After Notes save, the edit panel must re-render for the SAME
+        position — selected_position_id must survive the post-save rerun via
+        the T5-A _skip_table_reset one-shot."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+
+        at.text_area(key=NOTES_KEY).set_value("context")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Panel still rendered: the Notes text_area is still there.
+        assert _text_area_rendered(at, NOTES_KEY), (
+            "Notes text_area must still render after save"
+        )
+
+    def test_save_toast_survives_rerun(self, db):
+        """Regression guard for the Tier-1 st.success-clobber bug on the
+        Notes path: st.toast must still be in at.toast after the post-save
+        rerun completes."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_area(key=NOTES_KEY).set_value("context")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Notes save must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
