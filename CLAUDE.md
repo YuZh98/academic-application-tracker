@@ -10,8 +10,8 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 T4-A–E done — row selection + tab shell + Overview + Requirements + Materials (state-driven checkboxes filtered by live session_state `edit_{req_col} == 'Y'`); 184 tests passing. Next: T4-F (Notes tab — text_area).
-**Git:** `feature/phase-3-tier4` branch active; T4-A–E commits local.
+**Phase:** Phase 3 T4-A–F done — all four edit tabs live (Overview + Requirements + Materials + Notes `st.text_area` pre-seeded from `positions.notes`); 190 tests passing. Next: T4-G (pre-merge review + open PR) → Tier 5 Save/Delete.
+**Git:** `feature/phase-3-tier4` branch active; T4-A–F commits local.
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
 **App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table (Tiers 1–3 done).
 
