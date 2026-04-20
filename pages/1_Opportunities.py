@@ -360,14 +360,14 @@ if "selected_position_id" in st.session_state:
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save changes: {exc}")
-        with tabs[1]:   # Requirements — T4-D
+        with tabs[1]:   # Requirements — T4-D + T5-B
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
             # session_state holds exactly what will go into the TEXT column
-            # at save time (T5); format_func looks up the friendly UI label
-            # via REQUIREMENT_LABELS. Per GUIDELINES §6 the page never
-            # hardcodes vocabulary — everything comes from config, which is
-            # what makes test_config_driven_new_doc_renders_new_widget green.
+            # at save time; format_func looks up the friendly UI label via
+            # REQUIREMENT_LABELS. Per GUIDELINES §6 the page never hardcodes
+            # vocabulary — everything comes from config, which is what
+            # makes test_config_driven_new_doc_renders_new_widget green.
             with st.form("edit_requirements"):
                 for req_col, _done_col, label in config.REQUIREMENT_DOCS:
                     st.radio(
@@ -377,13 +377,33 @@ if "selected_position_id" in st.session_state:
                         key=f"edit_{req_col}",
                         horizontal=True,
                     )
-                # Mirror T4-C: disabled placeholder button, tooltip makes
-                # the "not wired yet" state explicit. T5 adds the real save.
-                st.form_submit_button(
+                requirements_submitted = st.form_submit_button(
                     "Save Changes",
-                    disabled=True,
-                    help="Coming in Tier 5 — Save/Delete actions.",
+                    key="edit_requirements_submit",
                 )
+
+            # T5-B: critical contract — the payload is built from req_col
+            # keys ONLY. done_* columns are NEVER written by this save path,
+            # so the user's prepared-documents state (done_cv, done_transcripts,
+            # ...) is preserved across any req_* flip Y↔Optional↔N. If the
+            # user later switches req_cv back to 'Y', the Materials tab will
+            # again show the CV as done without the user re-ticking.
+            if requirements_submitted:
+                payload: dict[str, Any] = {
+                    req_col: st.session_state[f"edit_{req_col}"]
+                    for req_col, _done_col, _label in config.REQUIREMENT_DOCS
+                }
+                try:
+                    database.update_position(sid, payload)
+                    st.toast(f'Saved requirements for "{r["position_name"]}".')
+                    st.session_state.pop("_edit_form_sid", None)
+                    # Same one-shot as T5-A: preserve the selection across
+                    # the post-save rerun despite st.dataframe resetting
+                    # its event on data-change reruns.
+                    st.session_state["_skip_table_reset"] = True
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Could not save requirements: {exc}")
         with tabs[2]:   # Materials — T4-E
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
