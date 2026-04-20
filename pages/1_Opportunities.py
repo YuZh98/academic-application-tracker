@@ -2,15 +2,138 @@
 # Opportunities page — position table, quick-add form, inline full edit.
 # Shipped: Tier 1 (quick-add + empty state), Tier 2 (filter bar),
 #          Tier 3 (positions table + deadline urgency),
-#          Tier 4 (row selection + Overview / Requirements / Materials / Notes tabs).
-# Pending: Tier 5 (Save / Delete actions with confirm dialog).
+#          Tier 4 (row selection + Overview / Requirements / Materials / Notes tabs),
+#          Tier 5 (Save on all four tabs + Overview Delete via @st.dialog confirm
+#                  with FK cascade; _safe_str pre-seed guard).
 
 import datetime
+import math
 from typing import Any
 
 import streamlit as st
 import database
 import config
+
+
+def _safe_str(v: Any) -> str:
+    """Coerce a DataFrame cell to a widget-safe ``str``.
+
+    Why this exists: ``database.get_all_positions`` returns a pandas
+    DataFrame. Once **any** row in a TEXT column has a real string value,
+    pandas upgrades the column dtype to ``object`` — but NULL SQLite
+    values come back as ``float('nan')`` rather than ``None`` on the
+    rows that never had a value. The obvious-looking ``r[col] or ""``
+    idiom then mis-fires because ``nan`` is *truthy*
+    (``bool(float('nan')) is True``), so ``nan or ""`` evaluates to
+    ``nan`` and that NaN ends up assigned into ``session_state``.
+
+    Streamlit's widget protobuf serialisation then raises
+    ``TypeError: bad argument type for built-in operation`` the moment
+    it tries to push a ``float('nan')`` through a C-level ``str``
+    type-check (reproduced 2026-04-20 with three positions + Save on
+    the first only + selecting row 1 / 2).
+
+    Contract: ``None``, ``NaN`` (and any ``pd.isna``-truthy value) →
+    ``""``; everything else → ``str(v)``.
+    """
+    if v is None:
+        return ""
+    # NaN self-compare is False — works even if pandas isn't imported here.
+    if isinstance(v, float) and math.isnan(v):
+        return ""
+    return str(v)
+
+
+@st.dialog("Delete this position?")
+def _confirm_delete_dialog() -> None:
+    """Modal confirm dialog for irreversible position deletion (T5-E).
+
+    The target position is read from session_state keys
+    _delete_target_id / _delete_target_name set by the Overview tab's
+    Delete-button handler. Passing via session_state (rather than function
+    arguments) lets the caller re-invoke this dialog on every rerun while
+    the pending flag is set — required so confirm/cancel clicks actually
+    reach their branches. Streamlit's own "dialog auto-re-renders across
+    reruns" magic does not carry through AppTest's script-run model
+    (verified by an isolation probe 2026-04-20): the outer script has to
+    re-open the dialog itself while the pending state is set.
+
+    Outcomes:
+
+    • Confirm → database.delete_position(position_id) cascades the DELETE
+      through positions → applications + recommenders (schema FKs have
+      ON DELETE CASCADE; PRAGMA foreign_keys=ON in database._connect).
+      On success: st.toast, clear all four session_state keys (the
+      _delete_target_* pair AND the selected_position_id / _edit_form_sid
+      pair — paired cleanup per the T4 pattern), st.rerun() which closes
+      the dialog.
+    • Cancel → clear only the _delete_target_* pair; selected_position_id
+      / _edit_form_sid are preserved so the user returns to the same
+      edit context. Plain st.rerun() closes the dialog.
+
+    Failure mode mirrors every other Tier-5 save path: a raising
+    delete_position is caught, surfaced as a friendly st.error, and NOT
+    re-raised — re-raising would make Streamlit render the very traceback
+    the handler exists to prevent (F1 / GUIDELINES §8). Selection and
+    pending-delete state are intentionally preserved on failure so the
+    user can retry without losing context.
+    """
+    position_id: int | None = st.session_state.get("_delete_target_id")
+    position_name: str = st.session_state.get("_delete_target_name", "")
+
+    st.warning(
+        f'Delete **"{position_name}"**? This also removes its application '
+        f'and recommender rows (FK cascade) and **cannot be undone**.'
+    )
+    col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button(
+            "Confirm Delete",
+            type="primary",
+            key="delete_confirm",
+            width="stretch",
+        ):
+            # Review Fix #1 (phase-3-tier5-review.md): defend against a
+            # missing _delete_target_id (stale session_state, orphaned
+            # rerun, future refactor drops the assignment). Without this
+            # guard, database.delete_position(None) silently no-ops
+            # (WHERE id = NULL matches no rows) while the success toast
+            # still fires — the user reads "Deleted" but the row is intact.
+            # Surface a clear error and keep state untouched for retry.
+            if position_id is None:
+                st.error(
+                    "Delete target was lost — please re-open the dialog."
+                )
+                return
+            try:
+                database.delete_position(position_id)
+                st.toast(f'Deleted "{position_name}".')
+                # Paired cleanup (T4 pattern): both sentinels go together.
+                st.session_state.pop("selected_position_id", None)
+                st.session_state.pop("_edit_form_sid", None)
+                st.session_state.pop("_delete_target_id", None)
+                st.session_state.pop("_delete_target_name", None)
+                # No _skip_table_reset here: the row is gone, so the edit
+                # panel SHOULD collapse on the next rerun.
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Could not delete: {exc}")
+    with col_cancel:
+        if st.button("Cancel", key="delete_cancel", width="stretch"):
+            # Cancel contract: close the dialog, no data-state change.
+            # Clear only the pending-delete pair; selected_position_id /
+            # _edit_form_sid stay intact so the user returns to the same
+            # edit panel with nothing else changed.
+            st.session_state.pop("_delete_target_id", None)
+            st.session_state.pop("_delete_target_name", None)
+            # Reuse the T5-A one-shot: after this st.rerun(), the dataframe
+            # widget resets its on_select event (same AppTest / data-change
+            # behaviour pinned by T4), which would otherwise pop
+            # selected_position_id in the else branch of the selection-
+            # resolution block and collapse the edit panel. _skip_table_reset
+            # preserves the selection so the user lands back on the same row.
+            st.session_state["_skip_table_reset"] = True
+            st.rerun()
 
 
 def _deadline_urgency(date_str: str | None) -> str:
@@ -186,9 +309,41 @@ else:
     # tiers (tabs, edit fields, Save/Delete) can load the right position.
     selected_rows = list(event.selection.rows) if event is not None else []
     if selected_rows and 0 <= selected_rows[0] < len(df_display):
-        st.session_state["selected_position_id"] = int(
-            df_display.iloc[selected_rows[0]]["id"]
-        )
+        new_sid = int(df_display.iloc[selected_rows[0]]["id"])
+        # Review Fix #2 (phase-3-tier5-review.md): clear any stale
+        # pending-delete target when the selected row *changes*. Without
+        # this, a user who dismisses the delete dialog via the X/Escape
+        # (neither fires a button click, neither runs our Cancel handler)
+        # leaves _delete_target_id in session_state. If they then select
+        # a different row and later return to the original row, the
+        # elif-reopen branch in the Overview tab would fire a *phantom
+        # dialog* — no user click, no user intent. Clearing on row-change
+        # contains the leak to the original row. The X-dismiss-then-same-
+        # row case remains a known Streamlit limitation (no dialog-close
+        # event in 1.56); documented at the elif-reopen site.
+        prev_sid = st.session_state.get("selected_position_id")
+        if prev_sid is not None and prev_sid != new_sid:
+            st.session_state.pop("_delete_target_id", None)
+            st.session_state.pop("_delete_target_name", None)
+        st.session_state["selected_position_id"] = new_sid
+    elif (
+        st.session_state.pop("_skip_table_reset", False)
+        or "_delete_target_id" in st.session_state
+    ):
+        # T5-A: one-shot bypass consumed here. The save handler sets
+        # _skip_table_reset=True before its st.rerun() so this branch
+        # preserves selected_position_id across the save cycle — otherwise
+        # st.dataframe resets its event (same protective behaviour pinned
+        # by test_filter_change_after_selection_clears_selection) and the
+        # edit panel would collapse right after the user hit Save.
+        # T5-E: while a delete dialog is pending (_delete_target_id set),
+        # the Confirm/Cancel click fires an internal rerun that resets the
+        # dataframe event. Without this guard, selected_position_id would
+        # be popped, the edit panel would collapse, and the elif
+        # dialog-reopen branch in the Overview tab would never execute —
+        # swallowing the click. Preserving selection keeps the dialog
+        # reachable until the user resolves it.
+        pass
     else:
         # Empty selection, or index out-of-bounds after filter/data change.
         # F4 (Tier-4 review): keep the sentinel paired with the sid.
@@ -240,13 +395,18 @@ if "selected_position_id" in st.session_state:
             except (ValueError, TypeError):
                 safe_deadline = None
 
-            st.session_state["edit_position_name"] = r["position_name"] or ""
-            st.session_state["edit_institute"]     = r["institute"] or ""
-            st.session_state["edit_field"]         = r["field"] or ""
+            # _safe_str (not `r[col] or ""`) is load-bearing: pandas returns
+            # float('nan') for NULL text cells once any row has a real string,
+            # and NaN is truthy — `nan or ""` evaluates to `nan`, which then
+            # blows up st.text_input/text_area's protobuf str check with a
+            # bare "TypeError: bad argument type for built-in operation".
+            st.session_state["edit_position_name"] = _safe_str(r["position_name"])
+            st.session_state["edit_institute"]     = _safe_str(r["institute"])
+            st.session_state["edit_field"]         = _safe_str(r["field"])
             st.session_state["edit_priority"]      = safe_priority
             st.session_state["edit_status"]        = safe_status
             st.session_state["edit_deadline_date"] = safe_deadline
-            st.session_state["edit_link"]          = r["link"] or ""
+            st.session_state["edit_link"]          = _safe_str(r["link"])
 
             # T4-D: pre-seed one session_state slot per req_* column so the
             # Requirements-tab radios render with the row's current values.
@@ -269,20 +429,27 @@ if "selected_position_id" in st.session_state:
                 st.session_state[f"edit_{done_col}"] = (d == 1)
 
             # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
-            # NULL-able (schema: database.py ~line 84), so coerce None → ""
-            # before it reaches st.text_area — the widget expects str.
-            st.session_state["edit_notes"] = r["notes"] or ""
+            # NULL-able (schema: database.py ~line 84), so coerce None/NaN → ""
+            # before it reaches st.text_area — the widget expects str, and
+            # pandas hands back float('nan') for NULL cells on mixed-dtype
+            # object columns (see _safe_str docstring for the TypeError).
+            st.session_state["edit_notes"] = _safe_str(r["notes"])
 
             st.session_state["_edit_form_sid"]     = sid
 
         # config.EDIT_PANEL_TABS is the single source for label + order.
         # Unpacking by index keeps T4-C–F wiring readable even if tabs grow.
         tabs = st.tabs(config.EDIT_PANEL_TABS)
-        with tabs[0]:   # Overview — T4-C
-            # st.form batches edits so nothing writes on keystroke; the real
-            # Save action arrives in T5. The submit button is required by
-            # st.form but kept disabled to make the "read-only for now"
-            # contract explicit in the UI.
+        with tabs[0]:   # Overview — T4-C + T5-A
+            # st.form batches edits so nothing writes on keystroke; the
+            # submit button below is the only trigger that commits the
+            # changes via database.update_position (T5-A).
+            #
+            # Form id "edit_overview" does not collide with any widget key
+            # inside the form (all widget keys are prefixed edit_ + field
+            # name, e.g. edit_position_name); st.form registers the id with
+            # writes_allowed=False, so collision would raise
+            # StreamlitValueAssignmentNotAllowedError at render.
             with st.form("edit_overview"):
                 st.text_input("Position Name", key="edit_position_name")
                 st.text_input("Institute",     key="edit_institute")
@@ -293,21 +460,101 @@ if "selected_position_id" in st.session_state:
                              key="edit_status")
                 st.date_input("Deadline",      key="edit_deadline_date")
                 st.text_input("Link",          key="edit_link")
-                # F6 (Tier-4 review): tooltip makes the disabled state
-                # self-explanatory — no silent dead-end click.
-                st.form_submit_button(
+                overview_submitted = st.form_submit_button(
                     "Save Changes",
-                    disabled=True,
-                    help="Coming in Tier 5 — Save/Delete actions.",
+                    key="edit_overview_submit",
                 )
-        with tabs[1]:   # Requirements — T4-D
+
+            # T5-A: submit handler lives OUTSIDE the form (mirrors the
+            # quick-add pattern above) so st.error / st.toast render in the
+            # page body rather than nested inside the form, which would
+            # re-render on every form interaction.
+            if overview_submitted:
+                new_name = (
+                    st.session_state.get("edit_position_name") or ""
+                ).strip()
+                if not new_name:
+                    # Mirror quick-add F3: whitespace-only is treated as
+                    # empty. No DB write, no toast.
+                    st.error("Position Name is required.")
+                else:
+                    new_deadline = st.session_state.get("edit_deadline_date")
+                    payload: dict[str, Any] = {
+                        "position_name": new_name,
+                        "institute":     st.session_state.get("edit_institute", ""),
+                        "field":         st.session_state.get("edit_field", ""),
+                        "priority":      st.session_state["edit_priority"],
+                        "status":        st.session_state["edit_status"],
+                        "deadline_date": (
+                            new_deadline.isoformat()
+                            if isinstance(new_deadline, datetime.date)
+                            else None
+                        ),
+                        "link":          st.session_state.get("edit_link", ""),
+                    }
+                    # Mirror F1 (Tier-4 review) on the save path: surface a
+                    # friendly st.error on failure and DO NOT re-raise —
+                    # re-raising makes Streamlit render the very traceback
+                    # the handler exists to prevent.
+                    try:
+                        database.update_position(sid, payload)
+                        st.toast(f'Saved "{new_name}".')
+                        # Pop the sentinel so the next render re-seeds the
+                        # widgets from the freshly-persisted DB values
+                        # (e.g. position_name is now the stripped version).
+                        # selected_position_id is INTENTIONALLY preserved:
+                        # the user's context — which row they're editing —
+                        # must survive the rerun.
+                        st.session_state.pop("_edit_form_sid", None)
+                        # One-shot: tells the selection-resolution block
+                        # above to keep selected_position_id even if the
+                        # dataframe resets its selection on the post-save
+                        # rerun (pinned by T4 behaviour notes).
+                        st.session_state["_skip_table_reset"] = True
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not save changes: {exc}")
+
+            # T5-E: Delete lives on the Overview tab (DESIGN.md §6 + user
+            # decision 2026-04-20). It MUST live outside st.form("edit_overview")
+            # — st.form only permits st.form_submit_button inside; a plain
+            # st.button inside the form would raise. type='primary' marks
+            # the action as destructive in the UI.
+            #
+            # Dialog lifecycle: clicking Delete stashes the target id + name
+            # in session_state (_delete_target_id / _delete_target_name) and
+            # opens the dialog. The elif re-opens the same dialog on every
+            # subsequent rerun while those keys remain — without this,
+            # confirm/cancel clicks inside the dialog would not reach their
+            # branches in AppTest, because Streamlit's "dialog auto-re-renders
+            # across reruns" behaviour does not carry through AppTest's
+            # script-run model (verified by isolation probe 2026-04-20).
+            # Confirm and Cancel handlers inside the dialog clear the
+            # _delete_target_* pair themselves before st.rerun(), so the
+            # dialog disappears naturally on the next run.
+            #
+            # Review Fix #2 (phase-3-tier5-review.md): cross-row phantom
+            # dialogs (dismiss via X on row A, switch to row B, come back
+            # to row A, dialog reopens) are fixed by the row-change
+            # cleanup in the selection-resolution block above. Same-row
+            # phantom (dismiss via X on row A, stay on row A, reopens on
+            # next rerun) remains a known limitation — Streamlit 1.56 does
+            # not expose an on_close event for @st.dialog. Users can
+            # always click Cancel to dismiss cleanly.
+            if st.button("Delete", type="primary", key="edit_delete"):
+                st.session_state["_delete_target_id"]   = sid
+                st.session_state["_delete_target_name"] = r["position_name"]
+                _confirm_delete_dialog()
+            elif st.session_state.get("_delete_target_id") == sid:
+                _confirm_delete_dialog()
+        with tabs[1]:   # Requirements — T4-D + T5-B
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
             # session_state holds exactly what will go into the TEXT column
-            # at save time (T5); format_func looks up the friendly UI label
-            # via REQUIREMENT_LABELS. Per GUIDELINES §6 the page never
-            # hardcodes vocabulary — everything comes from config, which is
-            # what makes test_config_driven_new_doc_renders_new_widget green.
+            # at save time; format_func looks up the friendly UI label via
+            # REQUIREMENT_LABELS. Per GUIDELINES §6 the page never hardcodes
+            # vocabulary — everything comes from config, which is what
+            # makes test_config_driven_new_doc_renders_new_widget green.
             with st.form("edit_requirements"):
                 for req_col, _done_col, label in config.REQUIREMENT_DOCS:
                     st.radio(
@@ -317,14 +564,34 @@ if "selected_position_id" in st.session_state:
                         key=f"edit_{req_col}",
                         horizontal=True,
                     )
-                # Mirror T4-C: disabled placeholder button, tooltip makes
-                # the "not wired yet" state explicit. T5 adds the real save.
-                st.form_submit_button(
+                requirements_submitted = st.form_submit_button(
                     "Save Changes",
-                    disabled=True,
-                    help="Coming in Tier 5 — Save/Delete actions.",
+                    key="edit_requirements_submit",
                 )
-        with tabs[2]:   # Materials — T4-E
+
+            # T5-B: critical contract — the payload is built from req_col
+            # keys ONLY. done_* columns are NEVER written by this save path,
+            # so the user's prepared-documents state (done_cv, done_transcripts,
+            # ...) is preserved across any req_* flip Y↔Optional↔N. If the
+            # user later switches req_cv back to 'Y', the Materials tab will
+            # again show the CV as done without the user re-ticking.
+            if requirements_submitted:
+                payload: dict[str, Any] = {
+                    req_col: st.session_state[f"edit_{req_col}"]
+                    for req_col, _done_col, _label in config.REQUIREMENT_DOCS
+                }
+                try:
+                    database.update_position(sid, payload)
+                    st.toast(f'Saved requirements for "{r["position_name"]}".')
+                    st.session_state.pop("_edit_form_sid", None)
+                    # Same one-shot as T5-A: preserve the selection across
+                    # the post-save rerun despite st.dataframe resetting
+                    # its event on data-change reruns.
+                    st.session_state["_skip_table_reset"] = True
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Could not save requirements: {exc}")
+        with tabs[2]:   # Materials — T4-E + T5-C
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
             # toggling a radio on the Requirements tab updates this tab on
@@ -344,19 +611,42 @@ if "selected_position_id" in st.session_state:
                 with st.form("edit_materials"):
                     for _req_col, done_col, label in visible:
                         st.checkbox(label, key=f"edit_{done_col}")
-                    # Mirror T4-C/T4-D placeholder submit.
-                    st.form_submit_button(
+                    materials_submitted = st.form_submit_button(
                         "Save Changes",
-                        disabled=True,
-                        help="Coming in Tier 5 — Save/Delete actions.",
+                        key="edit_materials_submit",
                     )
-        with tabs[3]:   # Notes — T4-F
+
+                # T5-C: critical contract — the payload contains done_* keys
+                # ONLY for docs currently visible (req_* == 'Y'). done_* for
+                # hidden docs are never written, so prior prepared-doc state
+                # survives any req_* Y↔N flip — mirrors T5-B's preservation
+                # contract from the opposite side. Cast bool → int so the
+                # positions.done_* INTEGER 0/1 schema domain is honoured
+                # explicitly (SQLite would coerce a bool regardless, but the
+                # explicit cast matches how done_* is read elsewhere).
+                if materials_submitted:
+                    payload: dict[str, Any] = {
+                        done_col: int(
+                            bool(st.session_state.get(f"edit_{done_col}"))
+                        )
+                        for _req_col, done_col, _label in visible
+                    }
+                    try:
+                        database.update_position(sid, payload)
+                        st.toast(f'Saved materials for "{r["position_name"]}".')
+                        st.session_state.pop("_edit_form_sid", None)
+                        # Same one-shot as T5-A / T5-B: preserve selection
+                        # across the post-save rerun despite st.dataframe
+                        # resetting its event on data-change reruns.
+                        st.session_state["_skip_table_reset"] = True
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not save materials: {exc}")
+        with tabs[3]:   # Notes — T4-F + T5-D
             # Single free-form text_area for miscellaneous context (contact
             # details, interview prep hints, follow-up reminders). Pre-seeded
             # from the row's notes column via the _edit_form_sid block above,
-            # so selecting a different row re-loads its notes. Mirrors the
-            # T4-C/D/E submit-button placeholder contract — real save wires in
-            # Tier 5.
+            # so selecting a different row re-loads its notes.
             # Form id is "edit_notes_form" (not "edit_notes") to avoid a key
             # collision with the text_area's session_state slot — st.form
             # registers its id with writes_allowed=False, so sharing a name
@@ -369,11 +659,29 @@ if "selected_position_id" in st.session_state:
                     height=200,
                     placeholder="Free-form notes — contacts, prep hints, follow-ups…",
                 )
-                st.form_submit_button(
+                notes_submitted = st.form_submit_button(
                     "Save Changes",
-                    disabled=True,
-                    help="Coming in Tier 5 — Save/Delete actions.",
+                    key="edit_notes_submit",
                 )
+
+            # T5-D: notes column is TEXT NULL-able, but the storage contract
+            # (DESIGN.md §6 + CLAUDE.md 'Key Design Decisions') is that empty
+            # input is persisted as "" — not None / NULL. Pre-seed coerces
+            # NULL → "" on load so a no-op save leaves the DB stable at "".
+            # Mirrors all other Tier-5 save paths: toast, friendly st.error
+            # without re-raise, _edit_form_sid pop, _skip_table_reset one-shot.
+            if notes_submitted:
+                payload: dict[str, Any] = {
+                    "notes": st.session_state.get("edit_notes", "") or "",
+                }
+                try:
+                    database.update_position(sid, payload)
+                    st.toast(f'Saved notes for "{r["position_name"]}".')
+                    st.session_state.pop("_edit_form_sid", None)
+                    st.session_state["_skip_table_reset"] = True
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Could not save notes: {exc}")
     else:
         # F3 (Tier-4 review): the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later

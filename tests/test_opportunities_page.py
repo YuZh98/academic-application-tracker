@@ -1443,25 +1443,1196 @@ class TestNotesTabWidgets:
             f"widget-value trap. Got {second!r}"
         )
 
-    def test_save_button_disabled_until_tier5(self, db):
-        """Mirror T4-C/D/E: the submit button must exist (st.form requires it)
-        but stay disabled with the Tier-5 tooltip, so the 'not wired yet'
-        state is self-explanatory. Catches accidental enabling before T5
-        lands `database.update_position`."""
+    def test_unwired_save_buttons_still_disabled(self, db):
+        """Remaining disabled Tier-5 save buttons must still carry the
+        'Coming in Tier 5' tooltip until every tab's save is wired.
+
+        T5-A enabled Overview. T5-B enabled Requirements. T5-C enables
+        Materials. T5-D enables Notes. As each sub-task lands, the count
+        of disabled placeholders shrinks toward 0; this test pins that
+        every placeholder that IS still present carries the tooltip, so
+        no Tier-5 save ever renders enabled but broken."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        # Four disabled Save buttons total once Notes ships (Overview,
-        # Requirements, Materials-if-any, Notes). With all req_* = 'N',
-        # Materials renders no form → 3 disabled buttons expected.
         disabled = [b for b in at.button if getattr(b, "disabled", False)]
-        assert len(disabled) >= 3, (
-            f"Expected at least 3 disabled Save buttons (one per form), "
-            f"got {len(disabled)}"
-        )
         # The Tier-5 tooltip must appear on every disabled placeholder.
         for b in disabled:
             assert "Tier 5" in (b.help or ""), (
                 f"Disabled Save button missing Tier-5 tooltip: help={b.help!r}"
             )
+
+
+# ── Overview tab Save (T5-A) ──────────────────────────────────────────────────
+# The Overview form persists its 7 fields via database.update_position. Save is
+# per-tab (four independent submit buttons, one per tab) so the user can revise
+# and save in isolation; DESIGN.md §6 wireframe.
+#
+# Contract pinned here:
+#   • All 7 edited fields round-trip through update_position to the DB row.
+#   • Success → st.toast (survives the post-save rerun, unlike st.success).
+#   • Whitespace-only position_name blocked with st.error, no DB write.
+#   • Any exception from update_position surfaces as a friendly st.error
+#     without Streamlit rendering the traceback (F1 / GUIDELINES §8).
+#   • The selection (selected_position_id) survives the save → rerun so the
+#     edit panel re-renders for the same position instead of collapsing.
+#
+# Widget key for the submit button is part of the page's test contract —
+# do not rename without updating OVERVIEW_SUBMIT_KEY below.
+
+OVERVIEW_SUBMIT_KEY = "edit_overview_submit"
+
+
+def _keep_selection(at: AppTest, row_index: int) -> None:
+    """Re-inject the positions_table selection state before the next at.run().
+
+    AppTest treats the dataframe's on_select='rerun' event as a single-run
+    signal: the injected `positions_table` session_state does NOT persist
+    across reruns. In a real browser the user's click is remembered in
+    widget session_state naturally. Multi-step tests that span a rerun
+    must re-assert the selection to mimic that browser-side persistence."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [row_index], "columns": []}
+    }
+
+
+class TestOverviewSave:
+
+    def test_save_persists_all_seven_fields(self, db):
+        """Round-trip: edit every Overview widget, click Save, assert the DB
+        row reflects every new value. Guards against a field being added to
+        the form but forgotten in the update_position payload."""
+        database.add_position({
+            "position_name": "Original Name",
+            "institute":     "Original Inst",
+            "field":         "Original Field",
+            "priority":      "Medium",
+            "status":        "[OPEN]",
+            "deadline_date": "2026-01-01",
+            "link":          "https://old.example",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        # Edit every field.
+        at.text_input(key=EDIT_KEYS["position_name"]).set_value("New Name")
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("New Inst")
+        at.text_input(key=EDIT_KEYS["field"]).set_value("New Field")
+        at.selectbox(key=EDIT_KEYS["priority"]).set_value("High")
+        at.selectbox(key=EDIT_KEYS["status"]).set_value("[APPLIED]")
+        at.date_input(key=EDIT_KEYS["deadline_date"]).set_value(
+            datetime.date(2026, 9, 15)
+        )
+        at.text_input(key=EDIT_KEYS["link"]).set_value("https://new.example")
+
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["position_name"] == "New Name"
+        assert row["institute"]     == "New Inst"
+        assert row["field"]         == "New Field"
+        assert row["priority"]      == "High"
+        assert row["status"]        == "[APPLIED]"
+        assert row["deadline_date"] == "2026-09-15"
+        assert row["link"]          == "https://new.example"
+
+    def test_save_shows_toast_on_success(self, db):
+        """Success confirmation uses st.toast (not st.success) so it survives
+        the post-save st.rerun() — the same Tier-1 lesson as quick-add."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert at.toast, "Expected st.toast after a successful Overview save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_toast_survives_rerun(self, db):
+        """Explicit regression guard for the Tier-1 st.success-clobber bug:
+        AppTest captures the LAST script run. After save+rerun, st.toast must
+        still appear. st.success would be gone here — the whole reason we use
+        toast on write paths."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_input(key=EDIT_KEYS["field"]).set_value("Biostatistics")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
+        at.run()
+
+        # at.toast populated → the post-rerun script run still rendered it.
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        # And no st.success from the save handler — that would be a silent
+        # regression back to the rerun-clobbered pattern.
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Save handler must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
+
+    def test_save_whitespace_only_name_blocked(self, db):
+        """Whitespace-only position_name must be rejected with st.error and
+        must not write to the DB — mirrors the quick-add contract (F3) so
+        the same invariant holds for edits."""
+        database.add_position({
+            "position_name": "Original Name",
+            "institute":     "Original Inst",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+        at.text_input(key=EDIT_KEYS["position_name"]).set_value("   ")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
+        at.run()
+
+        assert at.error, "Expected st.error for whitespace-only position_name"
+        # DB unchanged.
+        row = database.get_position(sid)
+        assert row["position_name"] == "Original Name", (
+            f"DB must not be updated on validation failure; got "
+            f"position_name={row['position_name']!r}"
+        )
+        assert row["institute"] == "Original Inst"
+        # And no toast — success path must not fire on a validation error.
+        assert not at.toast, (
+            f"No toast should appear when save is blocked by validation; "
+            f"got {[el.value for el in at.toast]}"
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror of the Tier-4 F1 regression guard (quick-add path) on the
+        save path: when database.update_position raises, the page must show
+        a friendly st.error and NOT re-raise. The previous quick-add
+        implementation did `raise` after st.error, which made Streamlit
+        render the very traceback the handler existed to prevent."""
+        database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        # And no success toast on the failure path.
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After save, the edit panel must re-render for the SAME position —
+        selected_position_id must survive the post-save st.rerun(), and the
+        Overview widgets must still be on the page. Guards against a Tier-5
+        implementation that accidentally pops the selection (as the
+        quick-add path deliberately does, but for a different reason)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)   # mimic browser-side selection persistence
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Edit panel is still rendered (Overview widgets present).
+        assert at.text_input(key=EDIT_KEYS["position_name"]) is not None
+        # And the displayed institute reflects the persisted value.
+        assert at.text_input(key=EDIT_KEYS["institute"]).value == "MIT", (
+            "Post-save widget value must reflect the saved state, not the "
+            "pre-edit value. If this fails, the sentinel may be stuck on "
+            "the pre-save render cycle."
+        )
+
+
+# ── Requirements tab Save (T5-B) ──────────────────────────────────────────────
+# The Requirements form persists all req_* columns via database.update_position.
+# Critical contract: Requirements Save NEVER writes done_* columns. The payload
+# is built from config.REQUIREMENT_DOCS → req_col only, so update_position's
+# parameterised UPDATE leaves the done_* columns of the row untouched. Flipping
+# req_cv from 'Y' to 'N' preserves done_cv — the user's "I've prepared the CV"
+# status is independent of whether any given position requires it right now.
+# DESIGN.md §6: Materials is checkbox-only; the readiness computation hides
+# rows where req_* != 'Y' but the underlying value is preserved.
+
+REQUIREMENTS_SUBMIT_KEY = "edit_requirements_submit"
+
+
+class TestRequirementsSave:
+
+    def test_save_persists_all_req_columns(self, db):
+        """Round-trip: set every req_* radio to a mix of values, click Save,
+        assert every req_* in the DB matches. Guards against a req column
+        being added to the form but forgotten in the update_position payload.
+        Also verifies the success toast fires with the position name."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        # Set each req_* to a value drawn from config.REQUIREMENT_VALUES,
+        # cycling through Y/Optional/N so every vocabulary tier is written
+        # at least once on a large-enough REQUIREMENT_DOCS list.
+        chosen = {}
+        for idx, (req_col, _done_col, _label) in enumerate(config.REQUIREMENT_DOCS):
+            value = config.REQUIREMENT_VALUES[idx % len(config.REQUIREMENT_VALUES)]
+            at.radio(key=_req_key(req_col)).set_value(value)
+            chosen[req_col] = value
+
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        for req_col, expected in chosen.items():
+            assert row[req_col] == expected, (
+                f"{req_col} should be {expected!r}, got {row[req_col]!r}"
+            )
+        assert at.toast, "Expected st.toast after a successful Requirements save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_done_fields_on_req_flip(self, db):
+        """Critical contract pin: Requirements Save must NOT touch done_*
+        columns. The user's "I've prepared the CV" status is independent of
+        whether any given position currently requires a CV. Flipping
+        req_cv from 'Y' → 'N' and saving MUST leave done_cv == 1 in the DB.
+
+        Rationale (DESIGN.md + user decision 2026-04-20): if req_cv later
+        flips back to 'Y', the Materials tab should again show 'CV: done'
+        without the user having to re-tick — the CV didn't un-prepare itself."""
+        database.add_position({
+            "position_name": "Alpha",
+            "req_cv":        "Y",
+            "done_cv":       1,
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        # Flip req_cv to N.
+        at.radio(key=_req_key("req_cv")).set_value("N")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["req_cv"] == "N", (
+            f"req_cv should have flipped to 'N', got {row['req_cv']!r}"
+        )
+        assert row["done_cv"] == 1, (
+            f"done_cv MUST be preserved across a req flip (user-confirmed "
+            f"contract 2026-04-20); got {row['done_cv']!r}. If this fails, "
+            f"the Requirements-save payload is writing done_* columns — it "
+            f"must contain only req_* keys."
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror T5-A / Tier-4 F1 on the Requirements path: a raising
+        update_position must surface a friendly st.error without re-raising."""
+        database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After Requirements save, the edit panel must re-render for the
+        SAME position — selected_position_id must survive the post-save
+        st.rerun() (via the T5-A _skip_table_reset one-shot)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Panel still rendered: the Requirements radio is still there.
+        assert at.radio(key=_req_key("req_cv")) is not None
+
+    def test_save_toast_survives_rerun(self, db):
+        """Regression guard for the Tier-1 st.success-clobber bug on the
+        Requirements path: st.toast must still be in at.toast after the
+        post-save rerun completes."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Requirements save must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
+
+
+# ── Materials tab Save (T5-C) ────────────────────────────────────────────────
+# The Materials form persists done_* columns via database.update_position.
+# Critical contract: the payload contains done_* keys ONLY for docs whose
+# matching req_* is currently 'Y' on the LIVE session_state (the state-driven
+# visibility pinned by T4-E). Any done_* for a non-visible doc is NEVER in the
+# payload, so the user's prepared-documents history survives a req Y→N flip
+# on this tab exactly as it does on the Requirements tab (T5-B contract,
+# opposite direction).
+#
+# Storage: INT 0/1 (positions.done_* schema). The page casts bool → int before
+# the DB write so the schema's declared integer domain is honoured regardless
+# of SQLite's lenient type coercion.
+
+MATERIALS_SUBMIT_KEY = "edit_materials_submit"
+
+
+class TestMaterialsSave:
+
+    def test_save_persists_only_visible_done_fields(self, db):
+        """Round-trip: with two req_* = 'Y' and the rest = 'N', tick the two
+        visible checkboxes, click Save → the DB has done_* = 1 for the two
+        visible docs and the hidden done_* columns are left at their prior DB
+        values (here, 0 by schema default)."""
+        # Pick the first two REQUIREMENT_DOCS entries as the 'required' pair;
+        # the remainder stay at the schema-default 'N' / 0.
+        visible = config.REQUIREMENT_DOCS[:2]
+        hidden  = config.REQUIREMENT_DOCS[2:]
+        seed: dict[str, Any] = {"position_name": "Alpha"}
+        for req_col, _done_col, _label in visible:
+            seed[req_col] = "Y"
+        sid = database.add_position(seed)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        # Tick the visible checkboxes.
+        for _req_col, done_col, _label in visible:
+            at.checkbox(key=_done_key(done_col)).set_value(True)
+
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        for _req_col, done_col, _label in visible:
+            assert row[done_col] == 1, (
+                f"{done_col} should have persisted to 1, got {row[done_col]!r}"
+            )
+        for _req_col, done_col, _label in hidden:
+            assert row[done_col] == 0, (
+                f"{done_col} is hidden (req != 'Y') and must not be in the "
+                f"payload; schema default 0 must be preserved, got "
+                f"{row[done_col]!r}"
+            )
+        assert at.toast, "Expected st.toast after a successful Materials save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_done_fields_hidden_by_req_n(self, db):
+        """Critical contract pin (mirror of T5-B's done_* preservation, from
+        the Materials side): saving Materials MUST NOT touch any done_* whose
+        req_* is currently not 'Y'. Seed done_cv=1 while req_cv='N'; flip
+        req_research_statement to 'Y' live, tick that checkbox, save —
+        done_cv must still be 1 in the DB. Prevents a regression where the
+        page loops over ALL REQUIREMENT_DOCS and overwrites hidden done_*
+        with their (possibly stale) seeded bool value."""
+        sid = database.add_position({
+            "position_name":            "Alpha",
+            "req_cv":                   "N",
+            "done_cv":                  1,   # prepared earlier; currently hidden
+            "req_research_statement":   "N",
+            "done_research_statement":  0,
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        # Flip req_research_statement to 'Y' live via session_state directly —
+        # the Requirements-tab radio is inside st.form("edit_requirements") so
+        # widget values there do not commit to session_state until that form
+        # is submitted. Writing session_state is how T4-E's
+        # test_toggling_requirement_hides_checkbox drives the same
+        # state-driven visibility.
+        at.session_state[_req_key("req_research_statement")] = "Y"
+        _keep_selection(at, 0)
+        at.run()
+
+        # Tick the newly-visible checkbox and save.
+        at.checkbox(key=_done_key("done_research_statement")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["done_research_statement"] == 1, (
+            f"done_research_statement should have persisted to 1, got "
+            f"{row['done_research_statement']!r}"
+        )
+        assert row["done_cv"] == 1, (
+            f"done_cv MUST be preserved across a Materials save when its "
+            f"req_cv is 'N' (user-confirmed contract 2026-04-20); got "
+            f"{row['done_cv']!r}. If this fails, the Materials-save payload "
+            f"is writing done_* for docs whose req_* != 'Y' — it must only "
+            f"include done_* for visible docs."
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror the F1 failure contract on the Materials path: a raising
+        update_position must surface a friendly st.error without re-raising.
+        """
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After Materials save, the edit panel must re-render for the SAME
+        position — selected_position_id must survive the post-save rerun via
+        the T5-A _skip_table_reset one-shot."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Panel still rendered: the Materials checkbox is still there.
+        assert _checkbox_rendered(at, _done_key("done_cv")), (
+            "Materials checkbox must still render after save (req_cv is 'Y')"
+        )
+
+    def test_save_toast_survives_rerun(self, db):
+        """Regression guard for the Tier-1 st.success-clobber bug on the
+        Materials path: st.toast must still be in at.toast after the post-save
+        rerun completes."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Materials save must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
+
+
+# ── Notes tab Save (T5-D) ────────────────────────────────────────────────────
+# The Notes form persists the free-form text_area via database.update_position.
+# Storage contract (DESIGN.md §6 + CLAUDE.md 'Key Design Decisions'): empty
+# input is stored as the empty string "" — NOT NULL — so round-trips through
+# the pre-seed (NULL → "") and a no-op save leave the DB stable at "".
+#
+# Widget keys already pinned in T4-F:
+#   • text_area: session_state key "edit_notes"  (NOTES_KEY constant)
+#   • form id:   "edit_notes_form"  (deliberately != widget key to avoid
+#                StreamlitValueAssignmentNotAllowedError — st.form registers
+#                its id with writes_allowed=False).
+# New in T5-D:
+#   • submit key: "edit_notes_submit"
+
+NOTES_SUBMIT_KEY = "edit_notes_submit"
+
+
+class TestNotesSave:
+
+    def test_save_persists_notes(self, db):
+        """Round-trip: type text, click Save, assert the DB row reflects it.
+        Also verifies the success toast fires with the position name."""
+        sid = database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.text_area(key=NOTES_KEY).set_value(
+            "Contact: jane@example.edu\nFollow up after Oct 15."
+        )
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["notes"] == (
+            "Contact: jane@example.edu\nFollow up after Oct 15."
+        ), f"notes did not round-trip; got {row['notes']!r}"
+        assert at.toast, "Expected st.toast after a successful Notes save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_empty_stored_as_empty_string(self, db):
+        """DESIGN.md contract: empty notes are stored as '', not NULL, so the
+        pre-seed (which coerces NULL → '') and a no-op save leave the DB
+        stable at ''. Seeds a row with non-empty notes, clears the text_area,
+        saves, and asserts the DB column is exactly the empty string."""
+        sid = database.add_position({
+            "position_name": "Alpha",
+            "notes":         "something to clear",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.text_area(key=NOTES_KEY).set_value("")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["notes"] == "", (
+            f"Empty notes must be stored as '' (not None / NULL); got "
+            f"{row['notes']!r}. If this fails, the save path is likely "
+            f"writing None for empty strings — the pre-seed would still "
+            f"coerce on load, but the DB column would drift to NULL."
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror the F1 failure contract on the Notes path: a raising
+        update_position must surface a friendly st.error without re-raising.
+        """
+        database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_area(key=NOTES_KEY).set_value("anything")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After Notes save, the edit panel must re-render for the SAME
+        position — selected_position_id must survive the post-save rerun via
+        the T5-A _skip_table_reset one-shot."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+
+        at.text_area(key=NOTES_KEY).set_value("context")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Panel still rendered: the Notes text_area is still there.
+        assert _text_area_rendered(at, NOTES_KEY), (
+            "Notes text_area must still render after save"
+        )
+
+    def test_save_toast_survives_rerun(self, db):
+        """Regression guard for the Tier-1 st.success-clobber bug on the
+        Notes path: st.toast must still be in at.toast after the post-save
+        rerun completes."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_area(key=NOTES_KEY).set_value("context")
+        at.button(key=NOTES_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Notes save must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
+
+
+# ── Overview tab Delete (T5-E) ───────────────────────────────────────────────
+# Delete lives on the Overview tab only (DESIGN.md §6 + user decision
+# 2026-04-20). Clicking Delete opens an st.dialog; Confirm cascades the
+# DELETE FROM positions via database.delete_position(sid), which removes
+# the applications + recommenders rows via ON DELETE CASCADE on the FKs
+# (schema: database.py ~lines 101 / 116). On success: toast, pop both
+# selected_position_id and _edit_form_sid, st.rerun(). On cancel: just
+# st.rerun() — no state change, no DB write. On DB failure: friendly
+# st.error, no re-raise, no state cleared (so the user can retry).
+#
+# Widget keys (public test contract — do not rename without updating
+# the constants here and the page):
+#   • Delete button (outside the Overview form): edit_delete
+#   • Confirm Delete button (inside dialog):     delete_confirm
+#   • Cancel button (inside dialog):             delete_cancel
+
+DELETE_BUTTON_KEY  = "edit_delete"
+DELETE_CONFIRM_KEY = "delete_confirm"
+DELETE_CANCEL_KEY  = "delete_cancel"
+
+
+class TestDeleteAction:
+
+    def test_delete_button_renders_on_overview(self, db):
+        """Delete button with key 'edit_delete' must be present on the
+        Overview tab after a row is selected. Must live OUTSIDE
+        st.form('edit_overview') because st.form only permits
+        st.form_submit_button inside (a plain st.button inside a form would
+        raise at render).
+
+        The button's visual type='primary' (destructive styling) is a UI
+        concern not exposed by AppTest — the Button.type attribute there
+        reports the widget-class name ('button'), not the Streamlit type
+        parameter. Styling is verified manually / via the code review
+        checklist, not automated here."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        assert not at.exception, f"Page raised on selection: {at.exception}"
+        btn = at.button(key=DELETE_BUTTON_KEY)
+        assert btn is not None, "Missing Delete button with key 'edit_delete'"
+        assert (btn.label or "").lower() == "delete", (
+            f"Delete button label should be 'Delete', got {btn.label!r}"
+        )
+
+    def test_confirm_deletes_position(self, db):
+        """Click Delete → Confirm → the position is gone from the DB.
+        database.get_position(sid) raises KeyError for missing rows."""
+        sid = database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        # Dialog is now open; confirm must be reachable as a top-level button.
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        with pytest.raises(KeyError):
+            database.get_position(sid)
+
+    def test_confirm_cascades_applications_and_recommenders(self, db):
+        """FK cascade pin: deleting a position must also remove its
+        applications row (auto-created by add_position) and any recommender
+        rows (PRAGMA foreign_keys=ON + ON DELETE CASCADE on both FKs —
+        verified in database.py). Regression guard in case someone later
+        turns off PRAGMA or replaces the FK with a plain REFERENCES."""
+        sid = database.add_position({"position_name": "Alpha"})
+        database.add_recommender(sid, {"recommender_name": "Prof X"})
+        # Precondition: application + recommender rows exist for sid.
+        assert database.get_application(sid), (
+            "Application row should have been auto-created by add_position"
+        )
+        recs_before = database.get_recommenders(sid)
+        assert len(recs_before) == 1, (
+            f"Should have 1 recommender before delete, got {len(recs_before)}"
+        )
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        # applications row cascaded away (get_application returns {} when no row).
+        assert database.get_application(sid) == {}, (
+            "applications row must be cascaded away by FK ON DELETE CASCADE"
+        )
+        # recommenders rows cascaded away too.
+        recs_after = database.get_recommenders(sid)
+        assert len(recs_after) == 0, (
+            f"recommenders rows must be cascaded away, got {len(recs_after)} "
+            f"leftover rows — check PRAGMA foreign_keys=ON in _connect()"
+        )
+
+    def test_confirm_clears_selection_state(self, db):
+        """After confirm, both session_state keys that bind the edit panel to
+        a position (selected_position_id AND _edit_form_sid) must be cleared
+        together — they are paired throughout the page (T4 pattern), and
+        leaving one behind would let the next rerun alias with a future sid
+        and skip the pre-seed for the fresh selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Precondition: both keys are set by the row-selection flow.
+        assert "selected_position_id" in at.session_state
+        assert "_edit_form_sid" in at.session_state
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        assert "selected_position_id" not in at.session_state, (
+            "selected_position_id must be popped after a successful delete"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "_edit_form_sid must be popped alongside selected_position_id — "
+            "the pair is paired throughout the page (T4 pattern)"
+        )
+
+    def test_confirm_shows_toast_with_position_name(self, db):
+        """Success confirmation uses st.toast (survives the post-delete
+        st.rerun()) and references the deleted position's name so the user
+        sees which row went away."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete raised: {at.exception}"
+        assert at.toast, "Expected st.toast after a successful delete"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the deleted position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_cancel_does_not_delete_or_clear_state(self, db):
+        """Cancel contract: clicking Cancel inside the dialog must close the
+        dialog and leave state completely untouched — position still in DB,
+        selection still active, no toast, no error."""
+        sid = database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CANCEL_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Cancel raised: {at.exception}"
+        # Position still present.
+        row = database.get_position(sid)
+        assert row["position_name"] == "Alpha", (
+            "Cancel must NOT delete the position"
+        )
+        # Selection still active — user's context preserved.
+        # AppTest.session_state does NOT support .get() — use `in` + subscript.
+        assert "selected_position_id" in at.session_state, (
+            "Cancel must NOT clear selected_position_id"
+        )
+        assert at.session_state["selected_position_id"] == sid, (
+            f"Cancel must not alter the selected id; got "
+            f"{at.session_state['selected_position_id']} vs expected {sid}"
+        )
+        # No toast / no error.
+        assert not at.toast, (
+            f"Cancel must NOT fire a toast; got {[el.value for el in at.toast]}"
+        )
+        assert not at.error, (
+            f"Cancel must NOT render an error; got "
+            f"{[el.value for el in at.error]}"
+        )
+
+    def test_delete_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror the F1 failure contract on the Delete path: a raising
+        delete_position must surface a friendly st.error without re-raising.
+        Also defensive: selection state is NOT cleared on failure, so the
+        user can retry rather than losing their context."""
+        sid = database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "delete_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        at.button(key=DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert at.error, "Expected st.error when delete_position raises"
+        assert any("Could not delete" in el.value for el in at.error), (
+            f"Expected 'Could not delete' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Delete handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on delete failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+        # Position row still present — the raise happened BEFORE any state
+        # was cleared. Retry-friendly.
+        assert database.get_position(sid)["position_name"] == "Alpha", (
+            "Position row must survive a failed delete (monkeypatched raise)"
+        )
+
+    # ── Review fixes (phase-3-tier5-review.md) ────────────────────────────
+
+    def test_row_change_clears_pending_delete_target(self, db):
+        """Review Fix #2: if the user dismisses the delete dialog via the X
+        / Escape (neither fires a button click, neither runs our Cancel
+        handler), _delete_target_id lingers in session_state. Switching to
+        a DIFFERENT row must clear that stale target so that returning to
+        the original row later does NOT re-open a phantom dialog without
+        user intent.
+
+        Pins the row-change cleanup block in the selection-resolution
+        section of pages/1_Opportunities.py. Without the fix, the elif
+        dialog-reopen branch fires whenever the user re-selects the
+        original row, which is a surprise UX."""
+        sid_a = database.add_position({"position_name": "Alpha"})
+        sid_b = database.add_position({"position_name": "Beta"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+
+        # 1. Select row A and open the delete dialog.
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        assert at.session_state["_delete_target_id"] == sid_a, (
+            "Delete target should be row A after clicking Delete on it"
+        )
+
+        # 2. Simulate a UI-dismiss (no Cancel click) — no code runs, we
+        #    just select row B. The dataframe positional order is by
+        #    deadline_date ASC NULLS LAST; both rows have NULL deadline,
+        #    so tiebreak is by id ASC: row 0 = sid_a, row 1 = sid_b.
+        _keep_selection(at, 1)
+        at.run()
+
+        assert at.session_state["selected_position_id"] == sid_b, (
+            "Selection should have moved to row B"
+        )
+        assert "_delete_target_id" not in at.session_state, (
+            "Stale delete target must be cleared when the selected row "
+            "changes — otherwise returning to row A would re-open the "
+            "dialog without user action."
+        )
+        assert "_delete_target_name" not in at.session_state, (
+            "_delete_target_name must be cleared alongside _delete_target_id "
+            "(paired cleanup contract)."
+        )
+
+        # 3. Go back to row A — no phantom dialog must open.
+        _keep_selection(at, 0)
+        at.run()
+        assert at.session_state["selected_position_id"] == sid_a
+        # Confirm button only exists when the dialog body is currently
+        # rendered. Its absence is the pin — if the elif re-opens the
+        # dialog on row A, this button would exist.
+        try:
+            at.button(key=DELETE_CONFIRM_KEY)
+            phantom = True
+        except KeyError:
+            phantom = False
+        assert not phantom, (
+            "Phantom dialog regression: returning to row A after dismissing "
+            "the dialog and switching rows must NOT re-open the dialog."
+        )
+
+    # Note: Review Fix #1 (None guard in the Confirm handler) is pure
+    # defense-in-depth — it is NOT reachable through the page UI, because
+    # the only entry points to the dialog body (the Delete-button click
+    # and the elif re-open) both require _delete_target_id to be set.
+    # The guard is cheap insurance against a future refactor that drops
+    # the assignment or pops the key prematurely. Verified by code
+    # inspection; no regression test is possible without bypassing the
+    # dialog entry points entirely. Documented in reviews/phase-3-tier5-review.md.
+
+
+# ── Pre-seed NaN coercion (T5-D/E regression) ────────────────────────────────
+
+class TestPreSeedNaNCoercion:
+    """Pin the _safe_str fix for the TypeError-on-second-row bug.
+
+    Reproduction (2026-04-20, user-reported):
+      1. Quick Add three positions with only position_name set.
+      2. Select row 0; click Save on the Overview tab (writes '' into the
+         row's other TEXT columns).
+      3. Select row 1.
+      → st.text_area / st.text_input raise
+         'TypeError: bad argument type for built-in operation'.
+
+    Root cause: database.get_all_positions returns a pandas DataFrame.
+    Once any row in a TEXT column has a real string, pandas upgrades the
+    column dtype to object and hands back float('nan') for the NULL
+    cells on the still-blank rows. The previous pre-seed idiom
+    `r[col] or ""` then mis-fires because NaN is truthy — `nan or ""`
+    evaluates to `nan`, and NaN in session_state blows up Streamlit's
+    protobuf str type-check at widget render.
+
+    Fix (pages/1_Opportunities.py): _safe_str helper applied to every
+    text pre-seed (position_name / institute / field / link / notes).
+    """
+
+    def test_selecting_second_row_after_save_on_first_does_not_raise(self, db):
+        """The exact user-reported flow, end-to-end.
+
+        Save-then-switch-rows must not raise; Notes text_area must render
+        for the second row without a NaN landing in session_state."""
+        database.add_position({"position_name": "Alpha"})
+        database.add_position({"position_name": "Beta"})
+        database.add_position({"position_name": "Gamma"})
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # Row 0: trigger a Save so the first row gets explicit empty
+        # strings in its text columns — this is what upgrades pandas's
+        # dtype to object and puts NaN in the OTHER rows' cells.
+        _select_row(at, 0)
+        at.button(key="edit_overview_submit").click()
+        _keep_selection(at, 0)
+        at.run()
+        assert not at.exception, (
+            f"Saving Overview on row 0 unexpectedly raised: {at.exception}"
+        )
+
+        # Row 1: this is what blew up before the fix.
+        _select_row(at, 1)
+        assert not at.exception, (
+            "Selecting row 1 after saving row 0 raised — NaN pre-seed "
+            "regression:\n"
+            f"{at.exception}"
+        )
+
+        # Sanity: the Notes text_area rendered at all, and its value is a
+        # real empty string rather than something pandas-y that would
+        # have crashed proto serialisation.
+        notes = at.text_area(key="edit_notes")
+        assert notes is not None, "Notes text_area missing after row switch"
+        assert notes.value == "", (
+            f"Expected '' for unsaved Beta.notes, got {notes.value!r}"
+        )
+
+        # And row 2 for good measure — pandas hands back NaN for its
+        # text cells too.
+        _select_row(at, 2)
+        assert not at.exception, (
+            f"Selecting row 2 also raised (NaN pre-seed regression): "
+            f"{at.exception}"
+        )
+
+    def test_safe_str_coerces_nan_and_none_to_empty_string(self):
+        """Unit pin on the production _safe_str helper itself.
+
+        If anyone ever rewrites this with `if v is None` only, this
+        test catches the NaN case that the integration test above would
+        also flag — but this one pinpoints the failure without
+        requiring an AppTest run."""
+        # Load the page module directly so we can poke at its helpers
+        # without actually running the page script's top-level code.
+        # pages/1_Opportunities.py does call database.init_db() at
+        # import time, but that's a no-op when the schema is current
+        # and uses the `db` fixture's patched DB_PATH via conftest.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_opp_page_module", "pages/1_Opportunities.py"
+        )
+        # We need _safe_str only — executing the whole page runs every
+        # top-level st.* call against no AppTest context. Instead,
+        # read the source and exec just the helper definition.
+        src = open("pages/1_Opportunities.py", "r", encoding="utf-8").read()
+        # Extract the _safe_str definition up to the next top-level `def`
+        # or blank-then-non-indented line. Simpler: find the string, take
+        # a slice, exec into an isolated namespace.
+        marker = "def _safe_str("
+        start = src.index(marker)
+        # The helper ends at the next blank line followed by a
+        # non-indented `def` or any non-indented code.
+        end = src.index("\n\n\n", start) if "\n\n\n" in src[start:] else len(src)
+        # Widen a little to capture the full def+body; looking for the
+        # next top-level `def ` after our function.
+        next_def = src.find("\ndef ", start + len(marker))
+        if next_def != -1:
+            end = min(end, next_def)
+        fn_src = src[start:end]
+
+        import math as _math
+        ns: dict = {"math": _math, "Any": object}
+        exec(fn_src, ns)
+        _safe_str = ns["_safe_str"]
+
+        assert _safe_str(None) == ""
+        assert _safe_str(float("nan")) == ""
+        assert _safe_str("") == ""
+        assert _safe_str("hello") == "hello"
+        assert _safe_str(42) == "42"
