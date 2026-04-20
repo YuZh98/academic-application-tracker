@@ -189,6 +189,14 @@ else:
         st.session_state["selected_position_id"] = int(
             df_display.iloc[selected_rows[0]]["id"]
         )
+    elif st.session_state.pop("_skip_table_reset", False):
+        # T5-A: one-shot bypass consumed here. The save handler sets
+        # _skip_table_reset=True before its st.rerun() so this branch
+        # preserves selected_position_id across the save cycle — otherwise
+        # st.dataframe resets its event (same protective behaviour pinned
+        # by test_filter_change_after_selection_clears_selection) and the
+        # edit panel would collapse right after the user hit Save.
+        pass
     else:
         # Empty selection, or index out-of-bounds after filter/data change.
         # F4 (Tier-4 review): keep the sentinel paired with the sid.
@@ -278,11 +286,16 @@ if "selected_position_id" in st.session_state:
         # config.EDIT_PANEL_TABS is the single source for label + order.
         # Unpacking by index keeps T4-C–F wiring readable even if tabs grow.
         tabs = st.tabs(config.EDIT_PANEL_TABS)
-        with tabs[0]:   # Overview — T4-C
-            # st.form batches edits so nothing writes on keystroke; the real
-            # Save action arrives in T5. The submit button is required by
-            # st.form but kept disabled to make the "read-only for now"
-            # contract explicit in the UI.
+        with tabs[0]:   # Overview — T4-C + T5-A
+            # st.form batches edits so nothing writes on keystroke; the
+            # submit button below is the only trigger that commits the
+            # changes via database.update_position (T5-A).
+            #
+            # Form id "edit_overview" does not collide with any widget key
+            # inside the form (all widget keys are prefixed edit_ + field
+            # name, e.g. edit_position_name); st.form registers the id with
+            # writes_allowed=False, so collision would raise
+            # StreamlitValueAssignmentNotAllowedError at render.
             with st.form("edit_overview"):
                 st.text_input("Position Name", key="edit_position_name")
                 st.text_input("Institute",     key="edit_institute")
@@ -293,13 +306,60 @@ if "selected_position_id" in st.session_state:
                              key="edit_status")
                 st.date_input("Deadline",      key="edit_deadline_date")
                 st.text_input("Link",          key="edit_link")
-                # F6 (Tier-4 review): tooltip makes the disabled state
-                # self-explanatory — no silent dead-end click.
-                st.form_submit_button(
+                overview_submitted = st.form_submit_button(
                     "Save Changes",
-                    disabled=True,
-                    help="Coming in Tier 5 — Save/Delete actions.",
+                    key="edit_overview_submit",
                 )
+
+            # T5-A: submit handler lives OUTSIDE the form (mirrors the
+            # quick-add pattern above) so st.error / st.toast render in the
+            # page body rather than nested inside the form, which would
+            # re-render on every form interaction.
+            if overview_submitted:
+                new_name = (
+                    st.session_state.get("edit_position_name") or ""
+                ).strip()
+                if not new_name:
+                    # Mirror quick-add F3: whitespace-only is treated as
+                    # empty. No DB write, no toast.
+                    st.error("Position Name is required.")
+                else:
+                    new_deadline = st.session_state.get("edit_deadline_date")
+                    payload: dict[str, Any] = {
+                        "position_name": new_name,
+                        "institute":     st.session_state.get("edit_institute", ""),
+                        "field":         st.session_state.get("edit_field", ""),
+                        "priority":      st.session_state["edit_priority"],
+                        "status":        st.session_state["edit_status"],
+                        "deadline_date": (
+                            new_deadline.isoformat()
+                            if isinstance(new_deadline, datetime.date)
+                            else None
+                        ),
+                        "link":          st.session_state.get("edit_link", ""),
+                    }
+                    # Mirror F1 (Tier-4 review) on the save path: surface a
+                    # friendly st.error on failure and DO NOT re-raise —
+                    # re-raising makes Streamlit render the very traceback
+                    # the handler exists to prevent.
+                    try:
+                        database.update_position(sid, payload)
+                        st.toast(f'Saved "{new_name}".')
+                        # Pop the sentinel so the next render re-seeds the
+                        # widgets from the freshly-persisted DB values
+                        # (e.g. position_name is now the stripped version).
+                        # selected_position_id is INTENTIONALLY preserved:
+                        # the user's context — which row they're editing —
+                        # must survive the rerun.
+                        st.session_state.pop("_edit_form_sid", None)
+                        # One-shot: tells the selection-resolution block
+                        # above to keep selected_position_id even if the
+                        # dataframe resets its selection on the post-save
+                        # rerun (pinned by T4 behaviour notes).
+                        st.session_state["_skip_table_reset"] = True
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not save changes: {exc}")
         with tabs[1]:   # Requirements — T4-D
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
