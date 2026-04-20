@@ -1443,21 +1443,21 @@ class TestNotesTabWidgets:
             f"widget-value trap. Got {second!r}"
         )
 
-    def test_save_button_disabled_until_tier5(self, db):
-        """Mirror T4-C/D/E: the submit button must exist (st.form requires it)
-        but stay disabled with the Tier-5 tooltip, so the 'not wired yet'
-        state is self-explanatory. Catches accidental enabling before T5
-        lands `database.update_position`."""
+    def test_unwired_save_buttons_still_disabled(self, db):
+        """Mirror T4-D/E: the Requirements and Notes save buttons must remain
+        disabled with the Tier-5 tooltip until T5-B / T5-D wire them. Catches
+        accidental enabling before their respective writes land.
+
+        T5-A updated this test: Overview is now wired, so it is no longer in
+        the disabled set. With all req_* = 'N', Materials renders no form →
+        Requirements + Notes = 2 disabled buttons expected."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        # Four disabled Save buttons total once Notes ships (Overview,
-        # Requirements, Materials-if-any, Notes). With all req_* = 'N',
-        # Materials renders no form → 3 disabled buttons expected.
         disabled = [b for b in at.button if getattr(b, "disabled", False)]
-        assert len(disabled) >= 3, (
-            f"Expected at least 3 disabled Save buttons (one per form), "
+        assert len(disabled) >= 2, (
+            f"Expected at least 2 disabled Save buttons (Requirements + Notes), "
             f"got {len(disabled)}"
         )
         # The Tier-5 tooltip must appear on every disabled placeholder.
@@ -1465,3 +1465,209 @@ class TestNotesTabWidgets:
             assert "Tier 5" in (b.help or ""), (
                 f"Disabled Save button missing Tier-5 tooltip: help={b.help!r}"
             )
+
+
+# ── Overview tab Save (T5-A) ──────────────────────────────────────────────────
+# The Overview form persists its 7 fields via database.update_position. Save is
+# per-tab (four independent submit buttons, one per tab) so the user can revise
+# and save in isolation; DESIGN.md §6 wireframe.
+#
+# Contract pinned here:
+#   • All 7 edited fields round-trip through update_position to the DB row.
+#   • Success → st.toast (survives the post-save rerun, unlike st.success).
+#   • Whitespace-only position_name blocked with st.error, no DB write.
+#   • Any exception from update_position surfaces as a friendly st.error
+#     without Streamlit rendering the traceback (F1 / GUIDELINES §8).
+#   • The selection (selected_position_id) survives the save → rerun so the
+#     edit panel re-renders for the same position instead of collapsing.
+#
+# Widget key for the submit button is part of the page's test contract —
+# do not rename without updating OVERVIEW_SUBMIT_KEY below.
+
+OVERVIEW_SUBMIT_KEY = "edit_overview_submit"
+
+
+class TestOverviewSave:
+
+    def test_save_persists_all_seven_fields(self, db):
+        """Round-trip: edit every Overview widget, click Save, assert the DB
+        row reflects every new value. Guards against a field being added to
+        the form but forgotten in the update_position payload."""
+        database.add_position({
+            "position_name": "Original Name",
+            "institute":     "Original Inst",
+            "field":         "Original Field",
+            "priority":      "Medium",
+            "status":        "[OPEN]",
+            "deadline_date": "2026-01-01",
+            "link":          "https://old.example",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        # Edit every field.
+        at.text_input(key=EDIT_KEYS["position_name"]).set_value("New Name")
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("New Inst")
+        at.text_input(key=EDIT_KEYS["field"]).set_value("New Field")
+        at.selectbox(key=EDIT_KEYS["priority"]).set_value("High")
+        at.selectbox(key=EDIT_KEYS["status"]).set_value("[APPLIED]")
+        at.date_input(key=EDIT_KEYS["deadline_date"]).set_value(
+            datetime.date(2026, 9, 15)
+        )
+        at.text_input(key=EDIT_KEYS["link"]).set_value("https://new.example")
+
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["position_name"] == "New Name"
+        assert row["institute"]     == "New Inst"
+        assert row["field"]         == "New Field"
+        assert row["priority"]      == "High"
+        assert row["status"]        == "[APPLIED]"
+        assert row["deadline_date"] == "2026-09-15"
+        assert row["link"]          == "https://new.example"
+
+    def test_save_shows_toast_on_success(self, db):
+        """Success confirmation uses st.toast (not st.success) so it survives
+        the post-save st.rerun() — the same Tier-1 lesson as quick-add."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert at.toast, "Expected st.toast after a successful Overview save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_toast_survives_rerun(self, db):
+        """Explicit regression guard for the Tier-1 st.success-clobber bug:
+        AppTest captures the LAST script run. After save+rerun, st.toast must
+        still appear. st.success would be gone here — the whole reason we use
+        toast on write paths."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_input(key=EDIT_KEYS["field"]).set_value("Biostatistics")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        at.run()
+
+        # at.toast populated → the post-rerun script run still rendered it.
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        # And no st.success from the save handler — that would be a silent
+        # regression back to the rerun-clobbered pattern.
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Save handler must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
+
+    def test_save_whitespace_only_name_blocked(self, db):
+        """Whitespace-only position_name must be rejected with st.error and
+        must not write to the DB — mirrors the quick-add contract (F3) so
+        the same invariant holds for edits."""
+        database.add_position({
+            "position_name": "Original Name",
+            "institute":     "Original Inst",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+        at.text_input(key=EDIT_KEYS["position_name"]).set_value("   ")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        at.run()
+
+        assert at.error, "Expected st.error for whitespace-only position_name"
+        # DB unchanged.
+        row = database.get_position(sid)
+        assert row["position_name"] == "Original Name", (
+            f"DB must not be updated on validation failure; got "
+            f"position_name={row['position_name']!r}"
+        )
+        assert row["institute"] == "Original Inst"
+        # And no toast — success path must not fire on a validation error.
+        assert not at.toast, (
+            f"No toast should appear when save is blocked by validation; "
+            f"got {[el.value for el in at.toast]}"
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror of the Tier-4 F1 regression guard (quick-add path) on the
+        save path: when database.update_position raises, the page must show
+        a friendly st.error and NOT re-raise. The previous quick-add
+        implementation did `raise` after st.error, which made Streamlit
+        render the very traceback the handler existed to prevent."""
+        database.add_position({"position_name": "Alpha"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        # And no success toast on the failure path.
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After save, the edit panel must re-render for the SAME position —
+        selected_position_id must survive the post-save st.rerun(), and the
+        Overview widgets must still be on the page. Guards against a Tier-5
+        implementation that accidentally pops the selection (as the
+        quick-add path deliberately does, but for a different reason)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+        at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Edit panel is still rendered (Overview widgets present).
+        assert at.text_input(key=EDIT_KEYS["position_name"]) is not None
+        # And the displayed institute reflects the persisted value.
+        assert at.text_input(key=EDIT_KEYS["institute"]).value == "MIT", (
+            "Post-save widget value must reflect the saved state, not the "
+            "pre-edit value. If this fails, the sentinel may be stuck on "
+            "the pre-save render cycle."
+        )
