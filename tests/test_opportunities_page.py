@@ -1094,3 +1094,151 @@ class TestRequirementsTabWidgets:
         # land in session_state as 'N' after the pre-seed coercion — this
         # IS the canonical-value half of the contract.
         assert at.radio(key=_req_key("req_portfolio")).value == "N"
+
+
+# ── Materials tab widgets (T4-E) ──────────────────────────────────────────────
+# The Materials tab is state-driven: it renders one st.checkbox per done_*
+# column ONLY for documents whose req_* is 'Y' (matching the readiness
+# definition in database.py ~line 404 — "A position is 'ready' if every
+# document where req_* = 'Y' has done_* = 1"). The source of truth for
+# "is this required?" is session_state["edit_{req_col}"], not the raw DB
+# value, so a user toggling a Requirements-tab radio sees the Materials
+# tab update on the next rerun.
+#
+# Widget key convention: "edit_" + done_col (e.g. "edit_done_cv"), mirroring
+# the edit_req_* keys from T4-D.
+
+def _done_key(done_col: str) -> str:
+    """Return the session_state key for a given done_* column's checkbox."""
+    return f"edit_{done_col}"
+
+
+class TestMaterialsTabWidgets:
+
+    def test_no_materials_widgets_without_selection(self, db):
+        """None of the edit_done_* keys may be seeded before a row is selected."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = _run_page()
+        for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
+            assert _done_key(done_col) not in at.session_state, (
+                f"Widget {_done_key(done_col)!r} should not exist before selection"
+            )
+
+    def test_empty_state_when_no_required_docs(self, db):
+        """With all req_* = 'N' (the schema default), the Materials tab must
+        show an info hint directing the user to the Requirements tab — rendering
+        zero checkboxes would be a silent dead-end UI."""
+        database.add_position({"position_name": "Alpha"})   # all req_* default 'N'
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # No done_* checkboxes must render.
+        for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
+            assert _done_key(done_col) not in at.session_state, (
+                f"With all req_* = 'N', no done_* widgets should render; "
+                f"{done_col} leaked into session_state"
+            )
+        # An info hint must be present — substring match on "Requirements tab"
+        # so the exact wording can evolve without churning the test.
+        info_texts = [el.value for el in at.info]
+        assert any("Requirements tab" in t for t in info_texts), (
+            f"Expected a Materials empty-state hint pointing to the "
+            f"Requirements tab; got info elements: {info_texts}"
+        )
+
+    def test_only_required_doc_checkboxes_shown(self, db):
+        """With req_cv='Y' and everything else 'N', exactly one checkbox
+        (done_cv) must render — not zero, not len(REQUIREMENT_DOCS)."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # done_cv is the only one required → only one in session_state.
+        assert _done_key("done_cv") in at.session_state
+        for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
+            if done_col == "done_cv":
+                continue
+            assert _done_key(done_col) not in at.session_state, (
+                f"{done_col} should be hidden when its req_* is 'N'"
+            )
+        # And exactly one checkbox element total (excludes any other page
+        # checkboxes — there are none today, so this is tight).
+        assert len(at.checkbox) == 1, (
+            f"Expected 1 Materials checkbox, got {len(at.checkbox)}"
+        )
+
+    def test_checkbox_initial_state_matches_db(self, db):
+        """Pre-seed must translate done_* INTEGER (0/1) to bool correctly."""
+        database.add_position({
+            "position_name":   "Stanford BioStats",
+            "req_cv":          "Y",
+            "done_cv":          1,
+            "req_cover_letter": "Y",
+            "done_cover_letter": 0,
+            "req_transcripts":  "Y",
+            # done_transcripts omitted → schema default 0
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.checkbox(key=_done_key("done_cv")).value is True
+        assert at.checkbox(key=_done_key("done_cover_letter")).value is False
+        assert at.checkbox(key=_done_key("done_transcripts")).value is False
+
+    def test_toggling_requirement_hides_checkbox(self, db):
+        """State-driven behaviour: when the user flips req_cv from 'Y' to 'N'
+        on the Requirements tab, the done_cv checkbox on the Materials tab
+        must disappear on the next rerun.
+
+        We drive this via session_state["edit_req_cv"] rather than a raw DB
+        update because the source of truth for 'is this required?' is the
+        live widget state (_edit_form_sid only reseeds on selection change
+        — a DB-only update would not re-trigger the pre-seed). This is the
+        faithful test of state-driven design."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _done_key("done_cv") in at.session_state   # precondition
+        # Simulate the user flipping the req_cv radio to "Not needed".
+        at.session_state["edit_req_cv"] = "N"
+        at.run()
+        assert not at.exception, f"Page raised on req toggle: {at.exception}"
+        assert _done_key("done_cv") not in at.session_state, (
+            "Toggling edit_req_cv → 'N' must hide the done_cv checkbox"
+        )
+
+    def test_optional_docs_are_hidden(self, db):
+        """Pins the Y-only filter choice: 'Optional' docs are NOT shown in
+        Materials. If the product later decides Optional should participate
+        in the readiness view, this test will fail loudly and force an
+        explicit re-evaluation (alongside the matching change in
+        database.count_materials_ready / get_positions_missing_docs)."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Optional"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _done_key("done_cv") not in at.session_state, (
+            "'Optional' docs must be hidden from Materials (Y-only filter "
+            "matches the readiness definition in database.py)"
+        )
+
+    def test_checkboxes_update_on_selection_change(self, db):
+        """Widget-value-trap regression guard on the done_* path: selecting a
+        different row must re-seed the done_* widgets with that row's values."""
+        database.add_position({"position_name": "Alpha",
+                               "req_cv": "Y", "done_cv": 1})
+        database.add_position({"position_name": "Beta",
+                               "req_cv": "Y", "done_cv": 0})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first = at.checkbox(key=_done_key("done_cv")).value
+        _select_row(at, 1)
+        second = at.checkbox(key=_done_key("done_cv")).value
+        assert {first, second} == {True, False}, (
+            f"Selection change must re-seed done_cv; got {first!r} → {second!r}"
+        )
+        assert first != second, (
+            "done_cv did not update on selection change — widget-value trap"
+        )
