@@ -10,10 +10,10 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 4 merged to main; Tier 5 T5-A done — Overview tab Save wired via `database.update_position`; 198 tests passing; zero deprecation warnings. Next: T5-B (Requirements Save) → T5-C (Materials Save) → T5-D (Notes Save) → T5-E (Delete dialog) → T5-F (pre-merge review + PR).
-**Git:** `feature/phase-3-tier5` branch active; T5-A commits local (tests + impl + docs).
+**Phase:** Phase 3 Tier 4 merged to main; Tier 5 T5-A + T5-B done — Overview + Requirements tab Save both wired via `database.update_position`; 203 tests passing; zero deprecation warnings. Next: T5-C (Materials Save) → T5-D (Notes Save) → T5-E (Delete dialog) → T5-F (pre-merge review + PR).
+**Git:** `feature/phase-3-tier5` branch active; T5-A + T5-B commits local (tests + impl + docs).
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
-**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table + row selection + edit panel (Overview Save wired; Requirements/Materials/Notes save still disabled placeholders).
+**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table + row selection + edit panel (Overview + Requirements Save wired; Materials/Notes save still disabled placeholders).
 
 **To run:**
 ```
