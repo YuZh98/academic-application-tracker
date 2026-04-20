@@ -13,6 +13,86 @@ import database
 import config
 
 
+@st.dialog("Delete this position?")
+def _confirm_delete_dialog() -> None:
+    """Modal confirm dialog for irreversible position deletion (T5-E).
+
+    The target position is read from session_state keys
+    _delete_target_id / _delete_target_name set by the Overview tab's
+    Delete-button handler. Passing via session_state (rather than function
+    arguments) lets the caller re-invoke this dialog on every rerun while
+    the pending flag is set — required so confirm/cancel clicks actually
+    reach their branches. Streamlit's own "dialog auto-re-renders across
+    reruns" magic does not carry through AppTest's script-run model
+    (verified by an isolation probe 2026-04-20): the outer script has to
+    re-open the dialog itself while the pending state is set.
+
+    Outcomes:
+
+    • Confirm → database.delete_position(position_id) cascades the DELETE
+      through positions → applications + recommenders (schema FKs have
+      ON DELETE CASCADE; PRAGMA foreign_keys=ON in database._connect).
+      On success: st.toast, clear all four session_state keys (the
+      _delete_target_* pair AND the selected_position_id / _edit_form_sid
+      pair — paired cleanup per the T4 pattern), st.rerun() which closes
+      the dialog.
+    • Cancel → clear only the _delete_target_* pair; selected_position_id
+      / _edit_form_sid are preserved so the user returns to the same
+      edit context. Plain st.rerun() closes the dialog.
+
+    Failure mode mirrors every other Tier-5 save path: a raising
+    delete_position is caught, surfaced as a friendly st.error, and NOT
+    re-raised — re-raising would make Streamlit render the very traceback
+    the handler exists to prevent (F1 / GUIDELINES §8). Selection and
+    pending-delete state are intentionally preserved on failure so the
+    user can retry without losing context.
+    """
+    position_id: int | None = st.session_state.get("_delete_target_id")
+    position_name: str = st.session_state.get("_delete_target_name", "")
+
+    st.warning(
+        f'Delete **"{position_name}"**? This also removes its application '
+        f'and recommender rows (FK cascade) and **cannot be undone**.'
+    )
+    col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button(
+            "Confirm Delete",
+            type="primary",
+            key="delete_confirm",
+            width="stretch",
+        ):
+            try:
+                database.delete_position(position_id)
+                st.toast(f'Deleted "{position_name}".')
+                # Paired cleanup (T4 pattern): both sentinels go together.
+                st.session_state.pop("selected_position_id", None)
+                st.session_state.pop("_edit_form_sid", None)
+                st.session_state.pop("_delete_target_id", None)
+                st.session_state.pop("_delete_target_name", None)
+                # No _skip_table_reset here: the row is gone, so the edit
+                # panel SHOULD collapse on the next rerun.
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Could not delete: {exc}")
+    with col_cancel:
+        if st.button("Cancel", key="delete_cancel", width="stretch"):
+            # Cancel contract: close the dialog, no data-state change.
+            # Clear only the pending-delete pair; selected_position_id /
+            # _edit_form_sid stay intact so the user returns to the same
+            # edit panel with nothing else changed.
+            st.session_state.pop("_delete_target_id", None)
+            st.session_state.pop("_delete_target_name", None)
+            # Reuse the T5-A one-shot: after this st.rerun(), the dataframe
+            # widget resets its on_select event (same AppTest / data-change
+            # behaviour pinned by T4), which would otherwise pop
+            # selected_position_id in the else branch of the selection-
+            # resolution block and collapse the edit panel. _skip_table_reset
+            # preserves the selection so the user lands back on the same row.
+            st.session_state["_skip_table_reset"] = True
+            st.rerun()
+
+
 def _deadline_urgency(date_str: str | None) -> str:
     """Return 'urgent', 'alert', or '' based on days until the deadline.
 
@@ -189,13 +269,23 @@ else:
         st.session_state["selected_position_id"] = int(
             df_display.iloc[selected_rows[0]]["id"]
         )
-    elif st.session_state.pop("_skip_table_reset", False):
+    elif (
+        st.session_state.pop("_skip_table_reset", False)
+        or "_delete_target_id" in st.session_state
+    ):
         # T5-A: one-shot bypass consumed here. The save handler sets
         # _skip_table_reset=True before its st.rerun() so this branch
         # preserves selected_position_id across the save cycle — otherwise
         # st.dataframe resets its event (same protective behaviour pinned
         # by test_filter_change_after_selection_clears_selection) and the
         # edit panel would collapse right after the user hit Save.
+        # T5-E: while a delete dialog is pending (_delete_target_id set),
+        # the Confirm/Cancel click fires an internal rerun that resets the
+        # dataframe event. Without this guard, selected_position_id would
+        # be popped, the edit panel would collapse, and the elif
+        # dialog-reopen branch in the Overview tab would never execute —
+        # swallowing the click. Preserving selection keeps the dialog
+        # reachable until the user resolves it.
         pass
     else:
         # Empty selection, or index out-of-bounds after filter/data change.
@@ -360,6 +450,30 @@ if "selected_position_id" in st.session_state:
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save changes: {exc}")
+
+            # T5-E: Delete lives on the Overview tab (DESIGN.md §6 + user
+            # decision 2026-04-20). It MUST live outside st.form("edit_overview")
+            # — st.form only permits st.form_submit_button inside; a plain
+            # st.button inside the form would raise. type='primary' marks
+            # the action as destructive in the UI.
+            #
+            # Dialog lifecycle: clicking Delete stashes the target id + name
+            # in session_state (_delete_target_id / _delete_target_name) and
+            # opens the dialog. The elif re-opens the same dialog on every
+            # subsequent rerun while those keys remain — without this,
+            # confirm/cancel clicks inside the dialog would not reach their
+            # branches in AppTest, because Streamlit's "dialog auto-re-renders
+            # across reruns" behaviour does not carry through AppTest's
+            # script-run model (verified by isolation probe 2026-04-20).
+            # Confirm and Cancel handlers inside the dialog clear the
+            # _delete_target_* pair themselves before st.rerun(), so the
+            # dialog disappears naturally on the next run.
+            if st.button("Delete", type="primary", key="edit_delete"):
+                st.session_state["_delete_target_id"]   = sid
+                st.session_state["_delete_target_name"] = r["position_name"]
+                _confirm_delete_dialog()
+            elif st.session_state.get("_delete_target_id") == sid:
+                _confirm_delete_dialog()
         with tabs[1]:   # Requirements — T4-D + T5-B
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
