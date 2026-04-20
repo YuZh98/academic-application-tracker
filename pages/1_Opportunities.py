@@ -257,6 +257,11 @@ if "selected_position_id" in st.session_state:
                 d = r[done_col] if done_col in r.index else 0
                 st.session_state[f"edit_{done_col}"] = (d == 1)
 
+            # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
+            # NULL-able (schema: database.py ~line 84), so coerce None → ""
+            # before it reaches st.text_area — the widget expects str.
+            st.session_state["edit_notes"] = r["notes"] or ""
+
             st.session_state["_edit_form_sid"]     = sid
 
         # config.EDIT_PANEL_TABS is the single source for label + order.
@@ -335,7 +340,29 @@ if "selected_position_id" in st.session_state:
                         help="Coming in Tier 5 — Save/Delete actions.",
                     )
         with tabs[3]:   # Notes — T4-F
-            pass
+            # Single free-form text_area for miscellaneous context (contact
+            # details, interview prep hints, follow-up reminders). Pre-seeded
+            # from the row's notes column via the _edit_form_sid block above,
+            # so selecting a different row re-loads its notes. Mirrors the
+            # T4-C/D/E submit-button placeholder contract — real save wires in
+            # Tier 5.
+            # Form id is "edit_notes_form" (not "edit_notes") to avoid a key
+            # collision with the text_area's session_state slot — st.form
+            # registers its id with writes_allowed=False, so sharing a name
+            # with any existing session_state key raises
+            # StreamlitValueAssignmentNotAllowedError at render time.
+            with st.form("edit_notes_form"):
+                st.text_area(
+                    "Notes",
+                    key="edit_notes",
+                    height=200,
+                    placeholder="Free-form notes — contacts, prep hints, follow-ups…",
+                )
+                st.form_submit_button(
+                    "Save Changes",
+                    disabled=True,
+                    help="Coming in Tier 5 — Save/Delete actions.",
+                )
     else:
         # F3 (Tier-4 review): the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
