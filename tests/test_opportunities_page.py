@@ -135,6 +135,34 @@ class TestQuickAddFormBehaviour:
             "No row should be inserted when position_name is empty"
         )
 
+    def test_save_error_shows_error_without_raising(self, db, monkeypatch):
+        """F1 (Tier-4 full review) regression guard: when database.add_position
+        raises, the page must surface an st.error but NOT re-raise the
+        exception. The previous implementation did `raise` after st.error,
+        which made Streamlit render the very traceback the handler exists
+        to prevent. This test patches add_position to raise and verifies
+        both sides of the contract."""
+        def _boom(_fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "add_position", _boom)
+
+        at = _run_page()
+        at.text_input(key="qa_position_name").input("Stanford BioStats")
+        at.button(key=SUBMIT_KEY).click()
+        at.run()
+
+        # Contract 1: user sees the friendly message.
+        assert at.error, "Expected st.error when add_position raises"
+        assert any("Could not save position" in el.value for el in at.error), (
+            f"Expected 'Could not save position' prefix in error, "
+            f"got: {[el.value for el in at.error]}"
+        )
+        # Contract 2: no uncaught exception reaches Streamlit's renderer.
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+
     def test_submit_with_whitespace_only_name_shows_error(self, db):
         """Whitespace-only position_name must be treated as empty (F3 fix).
 
@@ -638,10 +666,11 @@ class TestRowSelection:
 
     def test_quick_add_clears_selection(self, db):
         """Regression guard for Tier-4 review F1: Quick-Add's st.rerun() must
-        clear the dataframe selection state, because get_all_positions() orders
-        updated_at DESC — the new row lands at index 0 and every existing row
-        shifts +1, so a surviving selection index would silently re-bind the
-        edit panel to a different position."""
+        clear the dataframe selection state, because get_all_positions()
+        orders deadline_date ASC NULLS LAST — a new position's index
+        depends on its deadline relative to existing rows and can land
+        anywhere, so a surviving selection index could silently re-bind
+        the edit panel to a different position."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
@@ -658,6 +687,63 @@ class TestRowSelection:
         )
         assert "_edit_form_sid" not in at.session_state, (
             "Sentinel must be cleared alongside selected_position_id"
+        )
+
+    def test_filter_change_after_selection_clears_selection(self, db):
+        """F7 (Tier-4 full review) pin-down — PROTECTIVE behaviour regression
+        guard.
+
+        Naive mental model: selection is a positional row index, so a filter
+        change that shuffles which position lives at row 0 would silently
+        rebind selected_position_id to a different position's id.
+
+        Observed behaviour (probed in review): when a filter widget change
+        triggers the rerun, Streamlit resets the dataframe's selection
+        state to {'rows': []}. Our line 176–185 else-branch then pops
+        selected_position_id + _edit_form_sid. The user sees the edit
+        panel disappear on filter change — a safe, surprising-but-defensible
+        outcome (better than silent rebind to a wrong position).
+
+        This test pins that protective behaviour so a future Streamlit
+        release that changes the selection-on-data-change contract fails
+        loudly here, and we notice before it becomes a data-correctness
+        bug once Tier 5 Save wires up."""
+        pid_alpha = database.add_position(
+            {"position_name":  "Alpha",
+             "status":         "[OPEN]",
+             "deadline_date":  "2026-06-01"}
+        )
+        pid_beta = database.add_position(
+            {"position_name":  "Beta",
+             "status":         "[APPLIED]",
+             "deadline_date":  "2026-05-01"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # get_all_positions orders deadline_date ASC NULLS LAST → Beta at row 0.
+        _select_row(at, 0)
+        assert at.session_state["selected_position_id"] == pid_beta, (
+            f"Precondition: row 0 unfiltered must bind to Beta={pid_beta}; "
+            f"got {at.session_state['selected_position_id']}"
+        )
+        # Filter to [OPEN] → Beta filtered out, Alpha is the only visible row.
+        at.selectbox(key="filter_status").select("[OPEN]")
+        at.run()
+        assert not at.exception, f"Filter change raised: {at.exception}"
+        # Key assertion: Streamlit cleared the dataframe selection on the
+        # data change, so our page popped selected_position_id — NOT
+        # silently rebound it to pid_alpha.
+        assert "selected_position_id" not in at.session_state, (
+            "Filter change after selection must clear selected_position_id "
+            "(Streamlit resets dataframe selection when data changes + our "
+            "else-branch pops). If this fails, Streamlit's protective "
+            "reset may have changed — silent rebind to a different id "
+            f"(expected Alpha={pid_alpha}) is a data-correctness risk at "
+            f"Tier 5. Got: {at.session_state.get('selected_position_id')}"
+        )
+        assert "_edit_form_sid" not in at.session_state, (
+            "Sentinel must be popped alongside selected_position_id to keep "
+            "the pair invariant (F4 cleanup pairing)."
         )
 
 
@@ -940,3 +1026,442 @@ class TestOverviewTabWidgets:
             f"(= {config.PRIORITY_VALUES[0]!r}); got "
             f"{at.selectbox(key=EDIT_KEYS['priority']).value!r}"
         )
+
+
+# ── Requirements tab widgets (T4-D) ───────────────────────────────────────────
+# The Requirements tab renders one st.radio per entry in
+# config.REQUIREMENT_DOCS. Values are canonical DB strings ('Y', 'Optional',
+# 'N'); labels come from config.REQUIREMENT_LABELS via format_func so
+# session_state always holds the canonical value — no save-time translation.
+#
+# Widget key convention: "edit_" + req_col (e.g. "edit_req_cv").
+
+def _req_key(req_col: str) -> str:
+    """Return the session_state key for a given req_* column's radio widget."""
+    return f"edit_{req_col}"
+
+
+class TestRequirementsTabWidgets:
+
+    def test_no_requirements_widgets_without_selection(self, db):
+        """None of the edit_req_* keys must be seeded before a row is selected."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            assert _req_key(req_col) not in at.session_state, (
+                f"Widget {_req_key(req_col)!r} should not exist before selection"
+            )
+
+    def test_one_radio_per_requirement_doc(self, db):
+        """Exactly one radio per REQUIREMENT_DOCS entry must render after selection."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised on selection: {at.exception}"
+        for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            assert at.radio(key=_req_key(req_col)) is not None, (
+                f"Missing radio for {req_col!r}"
+            )
+        # And the total radio count equals the config length — guards against
+        # a stray hardcoded radio slipping in.
+        assert len(at.radio) == len(config.REQUIREMENT_DOCS), (
+            f"Expected {len(config.REQUIREMENT_DOCS)} radios, got {len(at.radio)}"
+        )
+
+    def test_radio_values_match_db(self, db):
+        """Each radio must pre-fill from the selected row's req_* column value."""
+        # Exercise all three vocabulary tiers so we catch one-way mappings.
+        database.add_position({
+            "position_name":        "Stanford BioStats",
+            "req_cv":               "Y",
+            "req_cover_letter":     "Y",
+            "req_writing_sample":   "Optional",
+            "req_teaching_statement": "N",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.radio(key=_req_key("req_cv")).value             == "Y"
+        assert at.radio(key=_req_key("req_cover_letter")).value   == "Y"
+        assert at.radio(key=_req_key("req_writing_sample")).value == "Optional"
+        assert at.radio(key=_req_key("req_teaching_statement")).value == "N"
+
+    def test_radio_options_display_config_labels_in_order(self, db):
+        """Every radio must expose the three tiers in config order, shown via
+        config.REQUIREMENT_LABELS. AppTest surfaces `.options` as the
+        formatted display strings (not the canonical values), so this is the
+        observable side of the canonical-value contract; the canonical-value
+        half is covered by test_radio_values_match_db."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        expected_labels = [config.REQUIREMENT_LABELS[v]
+                           for v in config.REQUIREMENT_VALUES]
+        for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
+            options = list(at.radio(key=_req_key(req_col)).options)
+            assert options == expected_labels, (
+                f"Radio {req_col!r} options must match "
+                f"[REQUIREMENT_LABELS[v] for v in REQUIREMENT_VALUES].\n"
+                f"  Expected: {expected_labels}\n"
+                f"  Got:      {options}"
+            )
+
+    def test_null_req_falls_back_to_N(self, db):
+        """Defensive coercion (F2 analog): an unknown or None req_* value
+        must not crash the page and must not put an out-of-options value
+        into the radio's session_state — fall back to 'N' (schema default)."""
+        database.add_position({"position_name": "Alpha"})  # req_* defaults → 'N'
+        # Manually corrupt one req_* column to simulate an unknown value
+        # (e.g. from a future migration or sqlite3 CLI edit).
+        import sqlite3
+        with sqlite3.connect(database.DB_PATH) as conn:
+            conn.execute(
+                "UPDATE positions SET req_cv = 'Maybe' WHERE position_name = ?",
+                ("Alpha",),
+            )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised on unknown req_* value: {at.exception}"
+        assert at.radio(key=_req_key("req_cv")).value == "N", (
+            "Unknown req_* value must coerce to 'N' (schema default), "
+            f"got {at.radio(key=_req_key('req_cv')).value!r}"
+        )
+
+    def test_widgets_update_on_selection_change(self, db):
+        """Widget-value-trap regression guard on the req_* path: switching
+        rows must re-seed the req_* widgets, not stick on the first."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Beta",  "req_cv": "N"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first = at.radio(key=_req_key("req_cv")).value
+        _select_row(at, 1)
+        second = at.radio(key=_req_key("req_cv")).value
+        assert {first, second} == {"Y", "N"}, (
+            f"Selection change must re-seed req_cv; got {first!r} → {second!r}"
+        )
+        assert first != second, (
+            "req_cv did not update on selection change — widget-value trap"
+        )
+
+    def test_config_driven_new_doc_renders_new_widget(self, db, monkeypatch):
+        """The core config-drive proof: appending a new tuple to
+        config.REQUIREMENT_DOCS (and re-running init_db to add the column)
+        must make a new radio appear automatically, with no page-file change."""
+        new_docs = config.REQUIREMENT_DOCS + [
+            ("req_portfolio", "done_portfolio", "Portfolio"),
+        ]
+        monkeypatch.setattr(config, "REQUIREMENT_DOCS", new_docs)
+        # init_db is migration-aware: ALTER TABLE ADD COLUMN for the new doc.
+        database.init_db()
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, f"Page raised with extended config: {at.exception}"
+        assert at.radio(key=_req_key("req_portfolio")) is not None, (
+            "Adding a new doc to config.REQUIREMENT_DOCS must render a new "
+            "radio automatically — this proves the page is config-driven, "
+            "not hardcoded. If this fails, the page loops over a local "
+            "constant instead of config.REQUIREMENT_DOCS."
+        )
+        # The new widget must participate in the same options contract as
+        # the others — AppTest surfaces .options as display labels, so the
+        # expected list is REQUIREMENT_LABELS[v] for v in REQUIREMENT_VALUES.
+        expected_labels = [config.REQUIREMENT_LABELS[v]
+                           for v in config.REQUIREMENT_VALUES]
+        assert list(at.radio(key=_req_key("req_portfolio")).options) \
+            == expected_labels
+        # And its default value (from the migration's DEFAULT 'N') should
+        # land in session_state as 'N' after the pre-seed coercion — this
+        # IS the canonical-value half of the contract.
+        assert at.radio(key=_req_key("req_portfolio")).value == "N"
+
+
+# ── Materials tab widgets (T4-E) ──────────────────────────────────────────────
+# The Materials tab is state-driven: it renders one st.checkbox per done_*
+# column ONLY for documents whose req_* is 'Y' (matching the readiness
+# definition in database.py ~line 404 — "A position is 'ready' if every
+# document where req_* = 'Y' has done_* = 1"). The source of truth for
+# "is this required?" is session_state["edit_{req_col}"], not the raw DB
+# value, so a user toggling a Requirements-tab radio sees the Materials
+# tab update on the next rerun.
+#
+# Widget key convention: "edit_" + done_col (e.g. "edit_done_cv"), mirroring
+# the edit_req_* keys from T4-D.
+
+def _done_key(done_col: str) -> str:
+    """Return the session_state key for a given done_* column's checkbox."""
+    return f"edit_{done_col}"
+
+
+def _checkbox_rendered(at: AppTest, key: str) -> bool:
+    """True iff a checkbox with the given key is present on the rendered page.
+
+    AppTest's `at.checkbox(key=...)` raises KeyError when no match exists, so
+    checking 'is this widget rendered?' needs to catch that. We cannot use
+    'key in session_state' as a proxy because the pre-seed populates
+    edit_done_* unconditionally (so 'user toggles req include mid-edit'
+    doesn't flash an unseeded checkbox)."""
+    try:
+        at.checkbox(key=key)
+        return True
+    except KeyError:
+        return False
+
+
+class TestMaterialsTabWidgets:
+
+    def test_no_materials_widgets_without_selection(self, db):
+        """No done_* checkbox may render before a row is selected."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = _run_page()
+        assert len(at.checkbox) == 0, (
+            f"Expected 0 checkboxes before selection, got {len(at.checkbox)}"
+        )
+
+    def test_empty_state_when_no_required_docs(self, db):
+        """With all req_* = 'N' (the schema default), the Materials tab must
+        show an info hint directing the user to the Requirements tab — rendering
+        zero checkboxes would be a silent dead-end UI."""
+        database.add_position({"position_name": "Alpha"})   # all req_* default 'N'
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # No done_* checkboxes must render.
+        assert len(at.checkbox) == 0, (
+            f"With all req_* = 'N', no Materials checkboxes should render; "
+            f"got {len(at.checkbox)}"
+        )
+        # An info hint must be present — substring match on "Requirements tab"
+        # so the exact wording can evolve without churning the test.
+        info_texts = [el.value for el in at.info]
+        assert any("Requirements tab" in t for t in info_texts), (
+            f"Expected a Materials empty-state hint pointing to the "
+            f"Requirements tab; got info elements: {info_texts}"
+        )
+
+    def test_only_required_doc_checkboxes_shown(self, db):
+        """With req_cv='Y' and everything else 'N', exactly one checkbox
+        (done_cv) must render — not zero, not len(REQUIREMENT_DOCS)."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # done_cv is the only one required → exactly one checkbox rendered.
+        assert _checkbox_rendered(at, _done_key("done_cv")), (
+            "done_cv checkbox must render when req_cv == 'Y'"
+        )
+        for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
+            if done_col == "done_cv":
+                continue
+            assert not _checkbox_rendered(at, _done_key(done_col)), (
+                f"{done_col} checkbox should be hidden when its req_* is 'N'"
+            )
+        # Tight bound: no other page checkboxes exist today.
+        assert len(at.checkbox) == 1, (
+            f"Expected 1 Materials checkbox, got {len(at.checkbox)}"
+        )
+
+    def test_checkbox_initial_state_matches_db(self, db):
+        """Pre-seed must translate done_* INTEGER (0/1) to bool correctly."""
+        database.add_position({
+            "position_name":   "Stanford BioStats",
+            "req_cv":          "Y",
+            "done_cv":          1,
+            "req_cover_letter": "Y",
+            "done_cover_letter": 0,
+            "req_transcripts":  "Y",
+            # done_transcripts omitted → schema default 0
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Use == (not `is`) because pandas surfaces numpy booleans
+        # (numpy.bool_), and `np.True_ is True` is False.
+        assert bool(at.checkbox(key=_done_key("done_cv")).value)          is True
+        assert bool(at.checkbox(key=_done_key("done_cover_letter")).value) is False
+        assert bool(at.checkbox(key=_done_key("done_transcripts")).value) is False
+
+    def test_toggling_requirement_hides_checkbox(self, db):
+        """State-driven behaviour: when the user flips req_cv from 'Y' to 'N'
+        on the Requirements tab, the done_cv checkbox on the Materials tab
+        must disappear on the next rerun.
+
+        We drive this via session_state["edit_req_cv"] rather than a raw DB
+        update because the source of truth for 'is this required?' is the
+        live widget state (_edit_form_sid only reseeds on selection change
+        — a DB-only update would not re-trigger the pre-seed). This is the
+        faithful test of state-driven design."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _checkbox_rendered(at, _done_key("done_cv"))   # precondition
+        # Simulate the user flipping the req_cv radio to "Not needed".
+        at.session_state["edit_req_cv"] = "N"
+        at.run()
+        assert not at.exception, f"Page raised on req toggle: {at.exception}"
+        assert not _checkbox_rendered(at, _done_key("done_cv")), (
+            "Toggling edit_req_cv → 'N' must hide the done_cv checkbox"
+        )
+
+    def test_optional_docs_are_hidden(self, db):
+        """Pins the Y-only filter choice: 'Optional' docs are NOT shown in
+        Materials. If the product later decides Optional should participate
+        in the readiness view, this test will fail loudly and force an
+        explicit re-evaluation (alongside the matching change in
+        database.count_materials_ready / get_positions_missing_docs)."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Optional"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not _checkbox_rendered(at, _done_key("done_cv")), (
+            "'Optional' docs must be hidden from Materials (Y-only filter "
+            "matches the readiness definition in database.py)"
+        )
+
+    def test_checkboxes_update_on_selection_change(self, db):
+        """Widget-value-trap regression guard on the done_* path: selecting a
+        different row must re-seed the done_* widgets with that row's values."""
+        database.add_position({"position_name": "Alpha",
+                               "req_cv": "Y", "done_cv": 1})
+        database.add_position({"position_name": "Beta",
+                               "req_cv": "Y", "done_cv": 0})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # bool() normalises numpy.bool_ → Python bool so set equality works.
+        first = bool(at.checkbox(key=_done_key("done_cv")).value)
+        _select_row(at, 1)
+        second = bool(at.checkbox(key=_done_key("done_cv")).value)
+        assert {first, second} == {True, False}, (
+            f"Selection change must re-seed done_cv; got {first!r} → {second!r}"
+        )
+        assert first != second, (
+            "done_cv did not update on selection change — widget-value trap"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T4-F — Notes tab
+# ═══════════════════════════════════════════════════════════════════════════
+# Widget key: "edit_notes" (session_state) on a single st.text_area inside an
+# st.form("edit_notes"). Pre-seeded from positions.notes via the same
+# _edit_form_sid-gated block as the other tabs.
+
+NOTES_KEY = "edit_notes"
+
+
+def _text_area_rendered(at: AppTest, key: str) -> bool:
+    """True iff a text_area with the given key is present on the rendered page.
+
+    Mirrors `_checkbox_rendered`: AppTest raises KeyError when no match
+    exists, so we can't probe with `key in session_state` (pre-seed may have
+    populated the slot even when the widget is not currently drawn)."""
+    try:
+        at.text_area(key=key)
+        return True
+    except KeyError:
+        return False
+
+
+class TestNotesTabWidgets:
+
+    def test_no_text_area_without_selection(self, db):
+        """No Notes text_area may render before a row is selected — the edit
+        panel (and everything in it) is gated by selected_position_id."""
+        database.add_position({"position_name": "Alpha"})
+        at = _run_page()
+        assert not _text_area_rendered(at, NOTES_KEY), (
+            "edit_notes text_area must not render before row selection"
+        )
+
+    def test_text_area_renders_when_row_selected(self, db):
+        """Baseline positive contract: selecting a row must produce exactly
+        one text_area with key=edit_notes on the page."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _text_area_rendered(at, NOTES_KEY), (
+            "Notes tab must render a text_area keyed edit_notes after selection"
+        )
+        # Tight bound: no other page text_area exists today. If a future tier
+        # adds more, update this count explicitly rather than loosening it.
+        assert len(at.text_area) == 1, (
+            f"Expected 1 text_area on the page, got {len(at.text_area)}"
+        )
+
+    def test_text_area_preseeded_from_db(self, db):
+        """Pre-seed must copy positions.notes into session_state verbatim,
+        so the widget displays the saved notes without the user clicking
+        'edit'."""
+        notes = "Follow up with Prof. Smith after SfN. Ref: lab website."
+        database.add_position({"position_name": "Alpha", "notes": notes})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_area(key=NOTES_KEY).value == notes, (
+            f"Expected edit_notes pre-seeded to {notes!r}, "
+            f"got {at.text_area(key=NOTES_KEY).value!r}"
+        )
+
+    def test_null_notes_coerced_to_empty_string(self, db):
+        """positions.notes is nullable (TEXT without NOT NULL); a NULL value
+        must coerce to '' so st.text_area gets a valid str, never a None
+        that would crash the widget or render literal 'None'."""
+        database.add_position({"position_name": "Alpha"})   # notes omitted → NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_area(key=NOTES_KEY).value == "", (
+            f"NULL notes must coerce to empty string, got "
+            f"{at.text_area(key=NOTES_KEY).value!r}"
+        )
+
+    def test_notes_reseed_on_selection_change(self, db):
+        """Widget-value-trap regression guard: once session_state['edit_notes']
+        is set, Streamlit ignores the `value=` kwarg on later reruns. The
+        _edit_form_sid sentinel must force a re-seed when the user selects a
+        different row — otherwise row B's notes would show row A's text."""
+        database.add_position({"position_name": "Alpha", "notes": "alpha notes"})
+        database.add_position({"position_name": "Beta",  "notes": "beta notes"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        first = at.text_area(key=NOTES_KEY).value
+        _select_row(at, 1)
+        second = at.text_area(key=NOTES_KEY).value
+        assert first == "alpha notes", f"Row 0 notes mis-seeded: {first!r}"
+        assert second == "beta notes", (
+            f"Row 1 notes did not re-seed on selection change — "
+            f"widget-value trap. Got {second!r}"
+        )
+
+    def test_save_button_disabled_until_tier5(self, db):
+        """Mirror T4-C/D/E: the submit button must exist (st.form requires it)
+        but stay disabled with the Tier-5 tooltip, so the 'not wired yet'
+        state is self-explanatory. Catches accidental enabling before T5
+        lands `database.update_position`."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Four disabled Save buttons total once Notes ships (Overview,
+        # Requirements, Materials-if-any, Notes). With all req_* = 'N',
+        # Materials renders no form → 3 disabled buttons expected.
+        disabled = [b for b in at.button if getattr(b, "disabled", False)]
+        assert len(disabled) >= 3, (
+            f"Expected at least 3 disabled Save buttons (one per form), "
+            f"got {len(disabled)}"
+        )
+        # The Tier-5 tooltip must appear on every disabled placeholder.
+        for b in disabled:
+            assert "Tier 5" in (b.help or ""), (
+                f"Disabled Save button missing Tier-5 tooltip: help={b.help!r}"
+            )

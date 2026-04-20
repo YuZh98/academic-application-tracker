@@ -1,7 +1,9 @@
 # pages/1_Opportunities.py
 # Opportunities page — position table, quick-add form, inline full edit.
-# Phase 3 Tier 1: quick-add form + empty state.
-# Tiers 2–5 will add: filter bar, table, row edit, save/delete.
+# Shipped: Tier 1 (quick-add + empty state), Tier 2 (filter bar),
+#          Tier 3 (positions table + deadline urgency),
+#          Tier 4 (row selection + Overview / Requirements / Materials / Notes tabs).
+# Pending: Tier 5 (Save / Delete actions with confirm dialog).
 
 import datetime
 from typing import Any
@@ -72,23 +74,28 @@ if submitted:
             fields["deadline_date"] = deadline_date.isoformat()
         # F1: wrap database write per GUIDELINES.md §8 — show a clear message on
         # failure rather than exposing a raw traceback to the user.
+        # F1 (Tier-4 full review): the previous version re-raised after
+        # st.error, which made Streamlit render the very traceback this
+        # handler exists to prevent. Swallow the exception here — the
+        # friendly message is the intended user-facing behaviour.
         try:
             database.add_position(fields)
             st.toast(f'Added "{position_name}" to your list.')
-            # F1 (Tier-4 review): get_all_positions() orders updated_at DESC,
-            # so the new row lands at index 0 and every previously-displayed
-            # row shifts +1. The dataframe widget's selection state is an
-            # index into df_display — leaving it intact would silently
-            # re-bind the edit panel to a different position. Clear all
-            # three session keys together to keep the selection/sentinel
-            # invariant aligned in one place.
+            # F1 (Tier-4 review): get_all_positions() orders
+            # deadline_date ASC NULLS LAST. A quick-added position's
+            # positional index depends on its deadline relative to existing
+            # rows — it can land anywhere, shifting the index of the
+            # previously-selected row. The dataframe widget's selection
+            # state is an index into df_display, so leaving it intact
+            # would silently re-bind the edit panel to a different
+            # position. Clear all three session keys together to keep the
+            # selection/sentinel invariant aligned in one place.
             st.session_state.pop("positions_table", None)
             st.session_state.pop("selected_position_id", None)
             st.session_state.pop("_edit_form_sid", None)
             st.rerun()
         except Exception as e:
             st.error(f"Could not save position: {e}")
-            raise
 
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
 col_status, col_priority, col_field = st.columns([2, 2, 3])
@@ -155,7 +162,11 @@ else:
     # without updating TABLE_KEY in tests/test_opportunities_page.py.
     event = st.dataframe(
         df_display,
-        use_container_width=True,
+        # F2 (Tier-4 full review): use_container_width=True is deprecated in
+        # Streamlit 1.56 (removal after 2025-12-31) — replaced with the
+        # documented `width="stretch"` equivalent. Silences ~60 warnings
+        # per test run.
+        width="stretch",
         hide_index=True,
         column_order=display_cols,
         column_config={
@@ -236,6 +247,32 @@ if "selected_position_id" in st.session_state:
             st.session_state["edit_status"]        = safe_status
             st.session_state["edit_deadline_date"] = safe_deadline
             st.session_state["edit_link"]          = r["link"] or ""
+
+            # T4-D: pre-seed one session_state slot per req_* column so the
+            # Requirements-tab radios render with the row's current values.
+            # Same F2-style coercion as priority/status: if a column holds
+            # an unknown string (future migration, raw SQL edit) or is
+            # missing from the row (e.g. during a migration-in-progress
+            # test), fall back to 'N' — the schema default.
+            for req_col, done_col, _label in config.REQUIREMENT_DOCS:
+                v = r[req_col] if req_col in r.index else None
+                safe_v = v if v in config.REQUIREMENT_VALUES else "N"
+                st.session_state[f"edit_{req_col}"] = safe_v
+
+                # T4-E: pre-seed one bool per done_* column for the Materials
+                # checkboxes. done_* is INTEGER 0/1; anything else (None,
+                # unexpected values) coerces to False. The checkbox itself
+                # is only rendered by the Materials tab when its req_* is
+                # 'Y' — but we seed unconditionally so switching a
+                # requirement on mid-edit doesn't flash an unseeded checkbox.
+                d = r[done_col] if done_col in r.index else 0
+                st.session_state[f"edit_{done_col}"] = (d == 1)
+
+            # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
+            # NULL-able (schema: database.py ~line 84), so coerce None → ""
+            # before it reaches st.text_area — the widget expects str.
+            st.session_state["edit_notes"] = r["notes"] or ""
+
             st.session_state["_edit_form_sid"]     = sid
 
         # config.EDIT_PANEL_TABS is the single source for label + order.
@@ -264,11 +301,79 @@ if "selected_position_id" in st.session_state:
                     help="Coming in Tier 5 — Save/Delete actions.",
                 )
         with tabs[1]:   # Requirements — T4-D
-            pass
+            # One st.radio per entry in config.REQUIREMENT_DOCS. The options
+            # are the canonical DB values (REQUIREMENT_VALUES) so
+            # session_state holds exactly what will go into the TEXT column
+            # at save time (T5); format_func looks up the friendly UI label
+            # via REQUIREMENT_LABELS. Per GUIDELINES §6 the page never
+            # hardcodes vocabulary — everything comes from config, which is
+            # what makes test_config_driven_new_doc_renders_new_widget green.
+            with st.form("edit_requirements"):
+                for req_col, _done_col, label in config.REQUIREMENT_DOCS:
+                    st.radio(
+                        label,
+                        options=config.REQUIREMENT_VALUES,
+                        format_func=config.REQUIREMENT_LABELS.get,
+                        key=f"edit_{req_col}",
+                        horizontal=True,
+                    )
+                # Mirror T4-C: disabled placeholder button, tooltip makes
+                # the "not wired yet" state explicit. T5 adds the real save.
+                st.form_submit_button(
+                    "Save Changes",
+                    disabled=True,
+                    help="Coming in Tier 5 — Save/Delete actions.",
+                )
         with tabs[2]:   # Materials — T4-E
-            pass
+            # State-driven: the visible checkbox list is built from the LIVE
+            # session_state["edit_{req_col}"] values (not the DB row), so
+            # toggling a radio on the Requirements tab updates this tab on
+            # the next rerun. Uses the Y-only filter that matches the
+            # readiness definition in database.py (~line 404).
+            visible = [
+                (req_col, done_col, label)
+                for req_col, done_col, label in config.REQUIREMENT_DOCS
+                if st.session_state.get(f"edit_{req_col}") == "Y"
+            ]
+            if not visible:
+                st.info(
+                    "No required documents yet — mark docs as required on "
+                    "the Requirements tab."
+                )
+            else:
+                with st.form("edit_materials"):
+                    for _req_col, done_col, label in visible:
+                        st.checkbox(label, key=f"edit_{done_col}")
+                    # Mirror T4-C/T4-D placeholder submit.
+                    st.form_submit_button(
+                        "Save Changes",
+                        disabled=True,
+                        help="Coming in Tier 5 — Save/Delete actions.",
+                    )
         with tabs[3]:   # Notes — T4-F
-            pass
+            # Single free-form text_area for miscellaneous context (contact
+            # details, interview prep hints, follow-up reminders). Pre-seeded
+            # from the row's notes column via the _edit_form_sid block above,
+            # so selecting a different row re-loads its notes. Mirrors the
+            # T4-C/D/E submit-button placeholder contract — real save wires in
+            # Tier 5.
+            # Form id is "edit_notes_form" (not "edit_notes") to avoid a key
+            # collision with the text_area's session_state slot — st.form
+            # registers its id with writes_allowed=False, so sharing a name
+            # with any existing session_state key raises
+            # StreamlitValueAssignmentNotAllowedError at render time.
+            with st.form("edit_notes_form"):
+                st.text_area(
+                    "Notes",
+                    key="edit_notes",
+                    height=200,
+                    placeholder="Free-form notes — contacts, prep hints, follow-ups…",
+                )
+                st.form_submit_button(
+                    "Save Changes",
+                    disabled=True,
+                    help="Coming in Tier 5 — Save/Delete actions.",
+                )
     else:
         # F3 (Tier-4 review): the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
