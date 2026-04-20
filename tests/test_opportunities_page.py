@@ -2443,3 +2443,77 @@ class TestDeleteAction:
         assert database.get_position(sid)["position_name"] == "Alpha", (
             "Position row must survive a failed delete (monkeypatched raise)"
         )
+
+    # ── Review fixes (phase-3-tier5-review.md) ────────────────────────────
+
+    def test_row_change_clears_pending_delete_target(self, db):
+        """Review Fix #2: if the user dismisses the delete dialog via the X
+        / Escape (neither fires a button click, neither runs our Cancel
+        handler), _delete_target_id lingers in session_state. Switching to
+        a DIFFERENT row must clear that stale target so that returning to
+        the original row later does NOT re-open a phantom dialog without
+        user intent.
+
+        Pins the row-change cleanup block in the selection-resolution
+        section of pages/1_Opportunities.py. Without the fix, the elif
+        dialog-reopen branch fires whenever the user re-selects the
+        original row, which is a surprise UX."""
+        sid_a = database.add_position({"position_name": "Alpha"})
+        sid_b = database.add_position({"position_name": "Beta"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+
+        # 1. Select row A and open the delete dialog.
+        _select_row(at, 0)
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        assert at.session_state["_delete_target_id"] == sid_a, (
+            "Delete target should be row A after clicking Delete on it"
+        )
+
+        # 2. Simulate a UI-dismiss (no Cancel click) — no code runs, we
+        #    just select row B. The dataframe positional order is by
+        #    deadline_date ASC NULLS LAST; both rows have NULL deadline,
+        #    so tiebreak is by id ASC: row 0 = sid_a, row 1 = sid_b.
+        _keep_selection(at, 1)
+        at.run()
+
+        assert at.session_state["selected_position_id"] == sid_b, (
+            "Selection should have moved to row B"
+        )
+        assert "_delete_target_id" not in at.session_state, (
+            "Stale delete target must be cleared when the selected row "
+            "changes — otherwise returning to row A would re-open the "
+            "dialog without user action."
+        )
+        assert "_delete_target_name" not in at.session_state, (
+            "_delete_target_name must be cleared alongside _delete_target_id "
+            "(paired cleanup contract)."
+        )
+
+        # 3. Go back to row A — no phantom dialog must open.
+        _keep_selection(at, 0)
+        at.run()
+        assert at.session_state["selected_position_id"] == sid_a
+        # Confirm button only exists when the dialog body is currently
+        # rendered. Its absence is the pin — if the elif re-opens the
+        # dialog on row A, this button would exist.
+        try:
+            at.button(key=DELETE_CONFIRM_KEY)
+            phantom = True
+        except KeyError:
+            phantom = False
+        assert not phantom, (
+            "Phantom dialog regression: returning to row A after dismissing "
+            "the dialog and switching rows must NOT re-open the dialog."
+        )
+
+    # Note: Review Fix #1 (None guard in the Confirm handler) is pure
+    # defense-in-depth — it is NOT reachable through the page UI, because
+    # the only entry points to the dialog body (the Delete-button click
+    # and the elif re-open) both require _delete_target_id to be set.
+    # The guard is cheap insurance against a future refactor that drops
+    # the assignment or pops the key prematurely. Verified by code
+    # inspection; no regression test is possible without bypassing the
+    # dialog entry points entirely. Documented in reviews/phase-3-tier5-review.md.

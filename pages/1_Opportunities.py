@@ -62,6 +62,18 @@ def _confirm_delete_dialog() -> None:
             key="delete_confirm",
             width="stretch",
         ):
+            # Review Fix #1 (phase-3-tier5-review.md): defend against a
+            # missing _delete_target_id (stale session_state, orphaned
+            # rerun, future refactor drops the assignment). Without this
+            # guard, database.delete_position(None) silently no-ops
+            # (WHERE id = NULL matches no rows) while the success toast
+            # still fires — the user reads "Deleted" but the row is intact.
+            # Surface a clear error and keep state untouched for retry.
+            if position_id is None:
+                st.error(
+                    "Delete target was lost — please re-open the dialog."
+                )
+                return
             try:
                 database.delete_position(position_id)
                 st.toast(f'Deleted "{position_name}".')
@@ -266,9 +278,23 @@ else:
     # tiers (tabs, edit fields, Save/Delete) can load the right position.
     selected_rows = list(event.selection.rows) if event is not None else []
     if selected_rows and 0 <= selected_rows[0] < len(df_display):
-        st.session_state["selected_position_id"] = int(
-            df_display.iloc[selected_rows[0]]["id"]
-        )
+        new_sid = int(df_display.iloc[selected_rows[0]]["id"])
+        # Review Fix #2 (phase-3-tier5-review.md): clear any stale
+        # pending-delete target when the selected row *changes*. Without
+        # this, a user who dismisses the delete dialog via the X/Escape
+        # (neither fires a button click, neither runs our Cancel handler)
+        # leaves _delete_target_id in session_state. If they then select
+        # a different row and later return to the original row, the
+        # elif-reopen branch in the Overview tab would fire a *phantom
+        # dialog* — no user click, no user intent. Clearing on row-change
+        # contains the leak to the original row. The X-dismiss-then-same-
+        # row case remains a known Streamlit limitation (no dialog-close
+        # event in 1.56); documented at the elif-reopen site.
+        prev_sid = st.session_state.get("selected_position_id")
+        if prev_sid is not None and prev_sid != new_sid:
+            st.session_state.pop("_delete_target_id", None)
+            st.session_state.pop("_delete_target_name", None)
+        st.session_state["selected_position_id"] = new_sid
     elif (
         st.session_state.pop("_skip_table_reset", False)
         or "_delete_target_id" in st.session_state
@@ -468,6 +494,15 @@ if "selected_position_id" in st.session_state:
             # Confirm and Cancel handlers inside the dialog clear the
             # _delete_target_* pair themselves before st.rerun(), so the
             # dialog disappears naturally on the next run.
+            #
+            # Review Fix #2 (phase-3-tier5-review.md): cross-row phantom
+            # dialogs (dismiss via X on row A, switch to row B, come back
+            # to row A, dialog reopens) are fixed by the row-change
+            # cleanup in the selection-resolution block above. Same-row
+            # phantom (dismiss via X on row A, stay on row A, reopens on
+            # next rerun) remains a known limitation — Streamlit 1.56 does
+            # not expose an on_close event for @st.dialog. Users can
+            # always click Cancel to dismiss cleanly.
             if st.button("Delete", type="primary", key="edit_delete"):
                 st.session_state["_delete_target_id"]   = sid
                 st.session_state["_delete_target_name"] = r["position_name"]
