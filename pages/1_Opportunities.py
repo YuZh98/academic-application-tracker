@@ -6,11 +6,41 @@
 # Pending: Tier 5 (Save / Delete actions with confirm dialog).
 
 import datetime
+import math
 from typing import Any
 
 import streamlit as st
 import database
 import config
+
+
+def _safe_str(v: Any) -> str:
+    """Coerce a DataFrame cell to a widget-safe ``str``.
+
+    Why this exists: ``database.get_all_positions`` returns a pandas
+    DataFrame. Once **any** row in a TEXT column has a real string value,
+    pandas upgrades the column dtype to ``object`` — but NULL SQLite
+    values come back as ``float('nan')`` rather than ``None`` on the
+    rows that never had a value. The obvious-looking ``r[col] or ""``
+    idiom then mis-fires because ``nan`` is *truthy*
+    (``bool(float('nan')) is True``), so ``nan or ""`` evaluates to
+    ``nan`` and that NaN ends up assigned into ``session_state``.
+
+    Streamlit's widget protobuf serialisation then raises
+    ``TypeError: bad argument type for built-in operation`` the moment
+    it tries to push a ``float('nan')`` through a C-level ``str``
+    type-check (reproduced 2026-04-20 with three positions + Save on
+    the first only + selecting row 1 / 2).
+
+    Contract: ``None``, ``NaN`` (and any ``pd.isna``-truthy value) →
+    ``""``; everything else → ``str(v)``.
+    """
+    if v is None:
+        return ""
+    # NaN self-compare is False — works even if pandas isn't imported here.
+    if isinstance(v, float) and math.isnan(v):
+        return ""
+    return str(v)
 
 
 @st.dialog("Delete this position?")
@@ -364,13 +394,18 @@ if "selected_position_id" in st.session_state:
             except (ValueError, TypeError):
                 safe_deadline = None
 
-            st.session_state["edit_position_name"] = r["position_name"] or ""
-            st.session_state["edit_institute"]     = r["institute"] or ""
-            st.session_state["edit_field"]         = r["field"] or ""
+            # _safe_str (not `r[col] or ""`) is load-bearing: pandas returns
+            # float('nan') for NULL text cells once any row has a real string,
+            # and NaN is truthy — `nan or ""` evaluates to `nan`, which then
+            # blows up st.text_input/text_area's protobuf str check with a
+            # bare "TypeError: bad argument type for built-in operation".
+            st.session_state["edit_position_name"] = _safe_str(r["position_name"])
+            st.session_state["edit_institute"]     = _safe_str(r["institute"])
+            st.session_state["edit_field"]         = _safe_str(r["field"])
             st.session_state["edit_priority"]      = safe_priority
             st.session_state["edit_status"]        = safe_status
             st.session_state["edit_deadline_date"] = safe_deadline
-            st.session_state["edit_link"]          = r["link"] or ""
+            st.session_state["edit_link"]          = _safe_str(r["link"])
 
             # T4-D: pre-seed one session_state slot per req_* column so the
             # Requirements-tab radios render with the row's current values.
@@ -393,9 +428,11 @@ if "selected_position_id" in st.session_state:
                 st.session_state[f"edit_{done_col}"] = (d == 1)
 
             # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
-            # NULL-able (schema: database.py ~line 84), so coerce None → ""
-            # before it reaches st.text_area — the widget expects str.
-            st.session_state["edit_notes"] = r["notes"] or ""
+            # NULL-able (schema: database.py ~line 84), so coerce None/NaN → ""
+            # before it reaches st.text_area — the widget expects str, and
+            # pandas hands back float('nan') for NULL cells on mixed-dtype
+            # object columns (see _safe_str docstring for the TypeError).
+            st.session_state["edit_notes"] = _safe_str(r["notes"])
 
             st.session_state["_edit_form_sid"]     = sid
 
