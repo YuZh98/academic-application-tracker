@@ -1,7 +1,9 @@
 # pages/1_Opportunities.py
 # Opportunities page — position table, quick-add form, inline full edit.
-# Phase 3 Tier 1: quick-add form + empty state.
-# Tiers 2–5 will add: filter bar, table, row edit, save/delete.
+# Shipped: Tier 1 (quick-add + empty state), Tier 2 (filter bar),
+#          Tier 3 (positions table + deadline urgency),
+#          Tier 4 (row selection + Overview / Requirements / Materials / Notes tabs).
+# Pending: Tier 5 (Save / Delete actions with confirm dialog).
 
 import datetime
 from typing import Any
@@ -72,23 +74,28 @@ if submitted:
             fields["deadline_date"] = deadline_date.isoformat()
         # F1: wrap database write per GUIDELINES.md §8 — show a clear message on
         # failure rather than exposing a raw traceback to the user.
+        # F1 (Tier-4 full review): the previous version re-raised after
+        # st.error, which made Streamlit render the very traceback this
+        # handler exists to prevent. Swallow the exception here — the
+        # friendly message is the intended user-facing behaviour.
         try:
             database.add_position(fields)
             st.toast(f'Added "{position_name}" to your list.')
-            # F1 (Tier-4 review): get_all_positions() orders updated_at DESC,
-            # so the new row lands at index 0 and every previously-displayed
-            # row shifts +1. The dataframe widget's selection state is an
-            # index into df_display — leaving it intact would silently
-            # re-bind the edit panel to a different position. Clear all
-            # three session keys together to keep the selection/sentinel
-            # invariant aligned in one place.
+            # F1 (Tier-4 review): get_all_positions() orders
+            # deadline_date ASC NULLS LAST. A quick-added position's
+            # positional index depends on its deadline relative to existing
+            # rows — it can land anywhere, shifting the index of the
+            # previously-selected row. The dataframe widget's selection
+            # state is an index into df_display, so leaving it intact
+            # would silently re-bind the edit panel to a different
+            # position. Clear all three session keys together to keep the
+            # selection/sentinel invariant aligned in one place.
             st.session_state.pop("positions_table", None)
             st.session_state.pop("selected_position_id", None)
             st.session_state.pop("_edit_form_sid", None)
             st.rerun()
         except Exception as e:
             st.error(f"Could not save position: {e}")
-            raise
 
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
 col_status, col_priority, col_field = st.columns([2, 2, 3])
@@ -155,7 +162,11 @@ else:
     # without updating TABLE_KEY in tests/test_opportunities_page.py.
     event = st.dataframe(
         df_display,
-        use_container_width=True,
+        # F2 (Tier-4 full review): use_container_width=True is deprecated in
+        # Streamlit 1.56 (removal after 2025-12-31) — replaced with the
+        # documented `width="stretch"` equivalent. Silences ~60 warnings
+        # per test run.
+        width="stretch",
         hide_index=True,
         column_order=display_cols,
         column_config={
