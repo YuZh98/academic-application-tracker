@@ -1444,23 +1444,19 @@ class TestNotesTabWidgets:
         )
 
     def test_unwired_save_buttons_still_disabled(self, db):
-        """The Notes save button must remain disabled with the Tier-5 tooltip
-        until T5-D wires it. Catches accidental enabling before the Notes
-        write lands.
+        """Remaining disabled Tier-5 save buttons must still carry the
+        'Coming in Tier 5' tooltip until every tab's save is wired.
 
-        T5-A enabled Overview. T5-B enabled Requirements. With all req_* = 'N',
-        Materials renders no form → Notes is the only disabled form submit
-        on the page (>= 1). Assertion relaxed accordingly; the tooltip check
-        still pins every remaining disabled placeholder."""
+        T5-A enabled Overview. T5-B enabled Requirements. T5-C enables
+        Materials. T5-D enables Notes. As each sub-task lands, the count
+        of disabled placeholders shrinks toward 0; this test pins that
+        every placeholder that IS still present carries the tooltip, so
+        no Tier-5 save ever renders enabled but broken."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         disabled = [b for b in at.button if getattr(b, "disabled", False)]
-        assert len(disabled) >= 1, (
-            f"Expected at least 1 disabled Save button (Notes), "
-            f"got {len(disabled)}"
-        )
         # The Tier-5 tooltip must appear on every disabled placeholder.
         for b in disabled:
             assert "Tier 5" in (b.help or ""), (
@@ -1858,5 +1854,197 @@ class TestRequirementsSave:
         success_texts = [el.value for el in at.success]
         assert not any("Saved" in t or "saved" in t for t in success_texts), (
             f"Requirements save must use st.toast, not st.success; got "
+            f"st.success messages: {success_texts}"
+        )
+
+
+# ── Materials tab Save (T5-C) ────────────────────────────────────────────────
+# The Materials form persists done_* columns via database.update_position.
+# Critical contract: the payload contains done_* keys ONLY for docs whose
+# matching req_* is currently 'Y' on the LIVE session_state (the state-driven
+# visibility pinned by T4-E). Any done_* for a non-visible doc is NEVER in the
+# payload, so the user's prepared-documents history survives a req Y→N flip
+# on this tab exactly as it does on the Requirements tab (T5-B contract,
+# opposite direction).
+#
+# Storage: INT 0/1 (positions.done_* schema). The page casts bool → int before
+# the DB write so the schema's declared integer domain is honoured regardless
+# of SQLite's lenient type coercion.
+
+MATERIALS_SUBMIT_KEY = "edit_materials_submit"
+
+
+class TestMaterialsSave:
+
+    def test_save_persists_only_visible_done_fields(self, db):
+        """Round-trip: with two req_* = 'Y' and the rest = 'N', tick the two
+        visible checkboxes, click Save → the DB has done_* = 1 for the two
+        visible docs and the hidden done_* columns are left at their prior DB
+        values (here, 0 by schema default)."""
+        # Pick the first two REQUIREMENT_DOCS entries as the 'required' pair;
+        # the remainder stay at the schema-default 'N' / 0.
+        visible = config.REQUIREMENT_DOCS[:2]
+        hidden  = config.REQUIREMENT_DOCS[2:]
+        seed: dict[str, Any] = {"position_name": "Alpha"}
+        for req_col, _done_col, _label in visible:
+            seed[req_col] = "Y"
+        sid = database.add_position(seed)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        # Tick the visible checkboxes.
+        for _req_col, done_col, _label in visible:
+            at.checkbox(key=_done_key(done_col)).set_value(True)
+
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        for _req_col, done_col, _label in visible:
+            assert row[done_col] == 1, (
+                f"{done_col} should have persisted to 1, got {row[done_col]!r}"
+            )
+        for _req_col, done_col, _label in hidden:
+            assert row[done_col] == 0, (
+                f"{done_col} is hidden (req != 'Y') and must not be in the "
+                f"payload; schema default 0 must be preserved, got "
+                f"{row[done_col]!r}"
+            )
+        assert at.toast, "Expected st.toast after a successful Materials save"
+        assert any("Alpha" in el.value for el in at.toast), (
+            f"Toast should reference the position name; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_done_fields_hidden_by_req_n(self, db):
+        """Critical contract pin (mirror of T5-B's done_* preservation, from
+        the Materials side): saving Materials MUST NOT touch any done_* whose
+        req_* is currently not 'Y'. Seed done_cv=1 while req_cv='N'; flip
+        req_research_statement to 'Y' live, tick that checkbox, save —
+        done_cv must still be 1 in the DB. Prevents a regression where the
+        page loops over ALL REQUIREMENT_DOCS and overwrites hidden done_*
+        with their (possibly stale) seeded bool value."""
+        sid = database.add_position({
+            "position_name":            "Alpha",
+            "req_cv":                   "N",
+            "done_cv":                  1,   # prepared earlier; currently hidden
+            "req_research_statement":   "N",
+            "done_research_statement":  0,
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        # Flip req_research_statement to 'Y' live — this reveals the
+        # done_research_statement checkbox on the next rerun via the
+        # state-driven visibility logic.
+        at.radio(key=_req_key("req_research_statement")).set_value("Y")
+        at.run()
+
+        # Tick the newly-visible checkbox and save.
+        at.checkbox(key=_done_key("done_research_statement")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["done_research_statement"] == 1, (
+            f"done_research_statement should have persisted to 1, got "
+            f"{row['done_research_statement']!r}"
+        )
+        assert row["done_cv"] == 1, (
+            f"done_cv MUST be preserved across a Materials save when its "
+            f"req_cv is 'N' (user-confirmed contract 2026-04-20); got "
+            f"{row['done_cv']!r}. If this fails, the Materials-save payload "
+            f"is writing done_* for docs whose req_* != 'Y' — it must only "
+            f"include done_* for visible docs."
+        )
+
+    def test_save_db_failure_shows_error_no_traceback(self, db, monkeypatch):
+        """Mirror the F1 failure contract on the Materials path: a raising
+        update_position must surface a friendly st.error without re-raising.
+        """
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+
+        def _boom(_position_id, _fields):
+            raise RuntimeError("db unavailable")
+        monkeypatch.setattr(database, "update_position", _boom)
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.error, "Expected st.error when update_position raises"
+        assert any("Could not save" in el.value for el in at.error), (
+            f"Expected 'Could not save' prefix in error, got: "
+            f"{[el.value for el in at.error]}"
+        )
+        assert not at.exception, (
+            f"Save handler must swallow the exception after st.error; "
+            f"got uncaught: {at.exception}"
+        )
+        assert not at.toast, (
+            f"No toast should appear on save failure; got "
+            f"{[el.value for el in at.toast]}"
+        )
+
+    def test_save_preserves_selection_across_rerun(self, db):
+        """After Materials save, the edit panel must re-render for the SAME
+        position — selected_position_id must survive the post-save rerun via
+        the T5-A _skip_table_reset one-shot."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid_before = at.session_state["selected_position_id"]
+
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert "selected_position_id" in at.session_state, (
+            "Selection must survive the post-save rerun — without it the "
+            "edit panel collapses and the user loses context."
+        )
+        assert at.session_state["selected_position_id"] == sid_before, (
+            f"Selected id drifted across rerun: {sid_before} → "
+            f"{at.session_state['selected_position_id']}"
+        )
+        # Panel still rendered: the Materials checkbox is still there.
+        assert _checkbox_rendered(at, _done_key("done_cv")), (
+            "Materials checkbox must still render after save (req_cv is 'Y')"
+        )
+
+    def test_save_toast_survives_rerun(self, db):
+        """Regression guard for the Tier-1 st.success-clobber bug on the
+        Materials path: st.toast must still be in at.toast after the post-save
+        rerun completes."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert at.toast, (
+            "Toast should survive the post-save rerun. If this fails, check "
+            "that the success path uses st.toast, not st.success."
+        )
+        success_texts = [el.value for el in at.success]
+        assert not any("Saved" in t or "saved" in t for t in success_texts), (
+            f"Materials save must use st.toast, not st.success; got "
             f"st.success messages: {success_texts}"
         )
