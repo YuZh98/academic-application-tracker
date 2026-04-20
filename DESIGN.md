@@ -718,3 +718,30 @@ User updates response_type to "Offer" and saves
 
 ### Adding a new tracker profile (postdoc + software simultaneously)
 The current design supports one active profile. A future v2 could add a `profile` column to the `positions` table, allowing mixed-profile tracking within one database. This is a schema migration, not an architectural change.
+
+### Adding file attachments to the Materials panel (deferred — see roadmap backlog)
+Today the Materials tab is checkbox-only (`done_* INTEGER 0/1`). A future version can let the user attach the actual document (PDF / Markdown / TeX) without rewriting existing tabs.
+
+**Approach:** files on local disk, paths in DB.
+
+1. Add `ATTACHMENT_FORMATS = {"pdf", "md", "tex"}` and `ATTACHMENT_MAX_MB = 10` to `config.py`.
+2. Add a new table in `database.init_db()`:
+   ```sql
+   attachments(
+     id INTEGER PRIMARY KEY,
+     position_id INTEGER NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
+     doc_type TEXT NOT NULL,        -- key from REQUIREMENT_DOCS
+     file_path TEXT NOT NULL,       -- relative: attachments/<position_id>/<doc_type>.<ext>
+     file_format TEXT NOT NULL,     -- one of ATTACHMENT_FORMATS
+     uploaded_at TEXT NOT NULL,
+     UNIQUE(position_id, doc_type)
+   )
+   ```
+3. Add three functions to `database.py`: `save_attachment`, `get_attachment`, `delete_attachment`. Each calls `exports.write_all()` for parity with other writers.
+4. Create `attachments/` folder at project root; add to `.gitignore` like `postdoc.db`.
+5. In `pages/1_Opportunities.py` Materials tab, add `st.file_uploader(type=list(config.ATTACHMENT_FORMATS))` per required-doc row, plus Open / Replace / Remove buttons when a file exists. A successful upload auto-flips the checkbox to `done = 1` (still user-overridable).
+6. Delete cascade already removes attachment rows; add `shutil.rmtree(f"attachments/{position_id}")` to the delete-position path so orphaned files are cleaned.
+
+**Why filesystem, not BLOB:** keeps `postdoc.db` small, lets the user open files in their native editor, makes manual backup obvious. Trade-off: backup script must include `attachments/` alongside `postdoc.db`.
+
+**Non-goals:** in-app editing of attached files, version history, cloud sync. The user edits files in their preferred editor and re-uploads.
