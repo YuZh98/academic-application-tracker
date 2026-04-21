@@ -1,12 +1,124 @@
 # app.py
 # Streamlit entry point — dashboard home page.
-# Phase 3 stub: initialises the database and shows a placeholder.
-# Full dashboard (KPI cards, funnel, timeline, alerts) is Phase 4.
+#
+# Phase 4 build-out: answers "What do I do today?" at a glance. This file
+# is layered in over several tiers (see PHASE_4_GUIDELINES.md):
+#   T1 — app shell + 4 KPI cards + 🔄 refresh + empty-DB hero   ✅ done
+#   T2 — application funnel                                     (next)
+#   T3 — materials readiness panel
+#   T4 — upcoming timeline
+#   T5 — recommender alerts
 
+from datetime import date
+
+import pandas as pd
 import streamlit as st
+
+import config
 import database
 
 database.init_db()
 
-st.title("Postdoc Tracker")
-st.info("Dashboard coming in Phase 4.")
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+NEXT_INTERVIEW_EMPTY = "—"  # Locked decision U3: grid-consistent empty-state glyph.
+
+
+def _next_interview_display(upcoming: pd.DataFrame) -> str:
+    """Format the Next-Interview KPI value from get_upcoming_interviews().
+
+    User-locked behaviour (2026-04-21):
+      - Pick the EARLIEST future date across interview1_date AND
+        interview2_date across all rows.
+      - The paired institute belongs to whichever position owns that date.
+      - Render as '{Mon D} · {institute}' (short month + day, no year).
+      - Empty / no upcoming date → NEXT_INTERVIEW_EMPTY ('—').
+
+    The underlying query includes a row when EITHER date is future, so
+    the other column on the same row may be in the past — scanning both
+    columns for the minimum FUTURE date is required.
+    """
+    if upcoming.empty:
+        return NEXT_INTERVIEW_EMPTY
+
+    today_iso = date.today().isoformat()
+    best_iso: str | None = None
+    best_institute: str | None = None
+    for _, row in upcoming.iterrows():
+        for col in ("interview1_date", "interview2_date"):
+            v = row[col]
+            if pd.isna(v) or v == "" or v < today_iso:
+                continue
+            if best_iso is None or v < best_iso:
+                best_iso = v
+                best_institute = row["institute"]
+
+    if best_iso is None:
+        return NEXT_INTERVIEW_EMPTY
+
+    d = date.fromisoformat(best_iso)
+    label = f"{d.strftime('%b')} {d.day}"
+    if best_institute and not pd.isna(best_institute):
+        label += f" · {best_institute}"
+    return label
+
+# ── Top bar ───────────────────────────────────────────────────────────────────
+# Title on the left, 🔄 Refresh on the right (DESIGN.md §app.py). Streamlit
+# already reruns on widget interaction; the manual refresh covers the case
+# where data changed in another tab (e.g. Opportunities) — user decision C3.
+title_col, refresh_col = st.columns([6, 1])
+with title_col:
+    st.title("Postdoc Tracker")
+with refresh_col:
+    if st.button("🔄 Refresh", key="dashboard_refresh"):
+        st.rerun()
+
+# ── KPI row ───────────────────────────────────────────────────────────────────
+# Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
+# Tracked = open + applied — "opportunities that might get moved forward".
+# Applied and Interview are single-bucket counts of their namesake status.
+# Next Interview = earliest future date across interview1_date +
+# interview2_date, rendered '{Mon D} · {institute}'; '—' when none
+# (locked decision U3). All status literals via config.STATUS_* aliases.
+_status_counts = database.count_by_status()
+tracked = (
+    _status_counts.get(config.STATUS_OPEN, 0)
+    + _status_counts.get(config.STATUS_APPLIED, 0)
+)
+applied = _status_counts.get(config.STATUS_APPLIED, 0)
+interview = _status_counts.get(config.STATUS_INTERVIEW, 0)
+next_interview = _next_interview_display(database.get_upcoming_interviews())
+
+# ── Empty-DB hero (T1-E) ──────────────────────────────────────────────────────
+# Locked decision U5: when the counted KPI buckets are all zero, show a hero
+# panel above the KPI grid with a CTA that routes to the Opportunities page.
+# The grid still renders below — tests pin this so the hero is purely additive.
+# Trigger = tracked + applied + interview == 0. A DB with only terminal-status
+# rows (CLOSED/REJECTED/DECLINED) also satisfies this; if product call later
+# narrows the trigger to 'total positions == 0', a single test (currently
+# `test_terminal_only_db_still_shows_hero`) needs updating.
+if tracked == 0 and applied == 0 and interview == 0:
+    with st.container(border=True):
+        st.subheader("Welcome to your Postdoc Tracker")
+        st.write(
+            "You haven't added any positions yet. "
+            "Start by logging one — even rough notes — "
+            "and come back here to see your pipeline take shape."
+        )
+        if st.button(
+            "+ Add your first position",
+            key="dashboard_empty_cta",
+            type="primary",
+        ):
+            st.switch_page("pages/1_Opportunities.py")
+
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.metric(label="Tracked", value=str(tracked))
+with c2:
+    st.metric(label="Applied", value=str(applied))
+with c3:
+    st.metric(label="Interview", value=str(interview))
+with c4:
+    st.metric(label="Next Interview", value=next_interview)

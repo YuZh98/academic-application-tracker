@@ -4,12 +4,12 @@
 **Phase 4 — Dashboard (`app.py`)** — plan locked in `PHASE_4_GUIDELINES.md`. 6 tiers, ~9 sessions, ~9.5 hr. Critical path: T1 → T2 → T3 → T4 → T5 → T6.
 
 ### Phase 4 — Dashboard (pending)
-- [ ] **T1** App shell + KPI cards (~1.5 hr, 3 sessions, branch `feature/phase-4-tier1`)
-  - [ ] T1-A: top bar (title + 🔄 refresh button calling `st.rerun()`)
-  - [ ] T1-B: KPI layout shell — `st.columns(4)` placeholders with keys
-  - [ ] T1-C: wire `count_by_status()` → Tracked / Applied / Interview
-  - [ ] T1-D: wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"`, per U3)
-  - [ ] T1-E: fully-empty-DB hero callout + CTA to Opportunities (per U5)
+- [~] **T1** App shell + KPI cards (~1.5 hr, 3 sessions, branch `feature/phase-4-tier1`)
+  - [x] T1-A: `tests/test_app_page.py` scaffold + empty-DB smoke test + 4-KPI-column shape test
+  - [x] T1-B: `app.py` shell — title + `database.init_db()` + `st.columns(4)` with 4 `st.metric` placeholder cards (labels per DESIGN.md; values `"—"`)
+  - [x] T1-C: top bar 🔄 refresh button (`st.rerun()`) + wire `count_by_status()` → Tracked / Applied / Interview
+  - [x] T1-D: wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"`, per U3)
+  - [x] T1-E: fully-empty-DB hero callout + CTA to Opportunities (per U5)
 - [ ] **T2** Application funnel (Plotly) (~2.0 hr, 2 sessions, branch `feature/phase-4-tier2`)
   - [ ] T2-A: Plotly horizontal bar from `count_by_status()`, colors via `config.STATUS_COLORS`
   - [ ] T2-B: empty-state render (no positions → descriptive text, not broken figure)
@@ -34,7 +34,10 @@
 **Decisions locked:** C3 keep refresh, C4 skip caching, C5 sync GUIDELINES.md, C6 fix DESIGN §6 line 431, C8 one test file, U2 `st.columns(2)`, U3 "—" on empty, U5 empty-DB hero.
 
 ## Done in this phase
-_(Phase 4 deliverables will land here as tiers ship.)_
+- [x] 2026-04-21 — Phase 4 T1-E: empty-DB hero callout + CTA. `app.py` renders a bordered `st.container` above the KPI grid when `tracked == 0 and applied == 0 and interview == 0` containing an `st.subheader("Welcome to your Postdoc Tracker")`, a short explainer, and a primary `st.button("+ Add your first position")` that calls `st.switch_page("pages/1_Opportunities.py")` (U5). Trigger keys off the three counted KPI buckets rather than total position count — Phase 4 scope precludes a new `database.py` helper; as a result a DB containing only terminal-status rows (CLOSED/REJECTED/DECLINED) still triggers the hero (pinned by `test_terminal_only_db_still_shows_hero` so any future narrowing of the trigger is a visible test change). KPI grid continues to render beneath the hero (pinned by `test_kpi_grid_still_renders_beneath_hero`). CTA discoverability asserted by button label; routing target asserted at source level (AppTest single-file mode has no sibling-page registry, so a real click would raise — source-level pin is the acceptance criterion). Tests: 7 new in `TestT1EEmptyDbHero` (empty-DB render, KPI grid still rendered, hero hidden for each of [OPEN]/[APPLIED]/[INTERVIEW], terminal-only edge pin, `st.switch_page` target). **246 passing, 0 deprecation warnings.**
+- [x] 2026-04-21 — Phase 4 T1-D: Next Interview KPI wired. `app.py` gains a `_next_interview_display(df)` helper that scans BOTH `interview1_date` and `interview2_date` across every row from `database.get_upcoming_interviews()`, picks the earliest FUTURE date, and renders `'{Mon D} · {institute}'` (matches DESIGN §app.py wireframe verbatim; e.g. `"May 3 · MIT"`). Empty / no-upcoming → `"—"` per locked decision U3. Both `pd.isna` and `v == ""` are guarded before string-compare-to-today (NaN would raise `TypeError: '<' not supported between instances of 'float' and 'str'` in a naïve `v < today`). User-locked rules 2026-04-21: format = `'{Mon D} · {institute}'` (no year); selection = earliest future date across both columns across all rows; paired institute owns that date. Tests: 7 new (`TestT1DNextInterviewKpi`: empty DB, no interview dates, all past, single upcoming, earliest-across-positions wins, interview2 beats another row's interview1, past in same row as future-far doesn't leak). 239 passing, 0 deprecation warnings.
+- [x] 2026-04-21 — Phase 4 T1-C: KPI count wiring + 🔄 refresh button. `app.py` now reads `database.count_by_status()` and renders live values in the first three KPI cards (Tracked = `count([OPEN]) + count([APPLIED])`, Applied = `count([APPLIED])`, Interview = `count([INTERVIEW])`); Next Interview stays `"—"` until T1-D. Top-bar `st.columns([6, 1])` places the title on the left and a `🔄 Refresh` button on the right that calls `st.rerun()` (decision C3). **Tracked-bucket decision** (new, locked with user 2026-04-21): "opportunities that might get moved forward" = OPEN + APPLIED; INTERVIEW and OFFER are excluded because they're tracked by their own KPIs. **Phase 4 scope deviation** (approved by user 2026-04-21): added three named-status aliases to `config.py` (`STATUS_OPEN` / `STATUS_APPLIED` / `STATUS_INTERVIEW`) so `app.py` can reference specific statuses without hardcoding the literal strings — keeps the anti-typo guardrail in place and satisfies the Phase 4 pre-merge grep rule (`grep -nE "\[OPEN\]|\[APPLIED\]|\[INTERVIEW\]" app.py` → zero hits). Tests: 7 new (`TestT1CKpiCountsAndRefresh`: empty-DB zeros, Tracked = OPEN+APPLIED, Applied bucket, Interview bucket, terminal statuses excluded, refresh button render, refresh-click rerender). 232 passing, 0 deprecation warnings.
+- [x] 2026-04-20 — Phase 4 T1-A + T1-B: dashboard test scaffold + app shell. `tests/test_app_page.py` created (class `TestT1AppShell`, 2 tests) reusing the shared `db` fixture; `app.py` stub replaced with title + `database.init_db()` + `st.columns(4)` rendering four `st.metric` cards with labels "Tracked" / "Applied" / "Interview" / "Next Interview" and `"—"` placeholder values. **Deviation from plan**: PHASE_4_GUIDELINES.md §Test-conventions called for `st.metric(..., key=...)` lookup; verified against live Streamlit 1.56 that `st.metric` has no `key=` parameter (`TypeError` on unexpected kwarg); tests use label-based + positional lookup instead, which is the idiomatic AppTest path and doubles as a DESIGN.md contract check. Guideline corrected in same `chore:` commit. 225/225 passing, 0 deprecation warnings.
 
 ## Backlog
 
@@ -85,4 +88,4 @@ _(Phase 4 deliverables will land here as tiers ship.)_
 
 ---
 
-_Updated: 2026-04-20 (Phase 3 merged to main; Phase 4 plan locked — see `PHASE_4_GUIDELINES.md`; next action: T1-A on branch `feature/phase-4-tier1`)_
+_Updated: 2026-04-21 (Phase 4 T1 complete — T1-A/B/C/D/E all shipped on `feature/phase-4-tier1`; 246 tests green, 0 deprecation warnings; next action: T1 pre-merge review & PR OR start T2 — Plotly application funnel)_

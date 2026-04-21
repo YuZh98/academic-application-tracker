@@ -8,6 +8,7 @@ _Load at the start of every Phase 4 session. Supplements GUIDELINES.md — does 
 
 **In scope:**
 1. **T1** — App shell + 4 KPI cards (Tracked / Applied / Interview / Next Interview)
+   - **Tracked-bucket semantics (locked 2026-04-21):** Tracked = `count_by_status()["[OPEN]"] + count_by_status()["[APPLIED]"]`. Rationale: "opportunities that might get moved forward." `[INTERVIEW]` / `[OFFER]` have their own KPIs downstream; terminal statuses are excluded.
 2. **T2** — Application funnel (Plotly horizontal bar, color-coded by status)
 3. **T3** — Materials Readiness panel (ready vs. pending counts, grid-aligned with T2)
 4. **T4** — Upcoming timeline (next 30 days: deadlines merged with interviews)
@@ -16,6 +17,7 @@ _Load at the start of every Phase 4 session. Supplements GUIDELINES.md — does 
 
 **Out of scope (deliberately):**
 - Any change to `database.py`, `config.py`, `exports.py`, `pages/1_Opportunities.py`
+  - **Narrow carve-out (approved by user 2026-04-21, T1-C):** three additive named aliases in `config.py` — `STATUS_OPEN`, `STATUS_APPLIED`, `STATUS_INTERVIEW` (defined over existing `STATUS_VALUES` entries). Needed so `app.py`'s per-bucket KPI counts can name specific statuses without hardcoding literals (the anti-typo guardrail + Phase 4 pre-merge grep rule). Pure additive; no schema drift, no behavior change. **No other `config.py` edits are permitted without an equivalently explicit user decision.**
 - Recommender alerts row-by-row (we group by person; row-wise is Phase 5)
 - Edit affordances on the dashboard (dashboard is read-only — click-through lands on Opportunities)
 - `@st.cache_data` wrapping (C4: skip caching in Phase 4; revisit post-merge if actual slowness measured)
@@ -78,14 +80,14 @@ These decisions are **closed**. If new evidence emerges mid-phase, raise it as a
 ## Sub-task breakdown & session pairing
 
 ### T1 — App shell + KPI cards  (~1.5 hr, 3 sessions)
-- **T1-A** `test:` + `feat:` — top bar (title + 🔄 refresh button that calls `st.rerun()`)
-- **T1-B** `test:` + `feat:` — KPI layout shell: `st.columns(4)` with placeholders
-- **T1-C** `test:` + `feat:` — wire `count_by_status()` into Tracked / Applied / Interview KPI values
-- **T1-D** `test:` + `feat:` — wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"` per U3)
-- **T1-E** `test:` + `feat:` — fully-empty-DB hero callout (per U5): when all three counts = 0, render a hero panel above the KPI grid with a CTA button that `st.switch_page()`s to Opportunities
+- **T1-A** `test:` — `tests/test_app_page.py` scaffold (per C8) with empty-DB smoke test and 4-KPI-column shape test ✅ done 2026-04-20
+- **T1-B** `test:` + `feat:` — `app.py` shell: title "Postdoc Tracker" + `database.init_db()` + `st.columns(4)` with four `st.metric` cards (labels "Tracked" / "Applied" / "Interview" / "Next Interview"; values `"—"` placeholders until C/D wire the real queries) ✅ done 2026-04-20
+- **T1-C** `test:` + `feat:` — top bar 🔄 refresh button (calls `st.rerun()`) + wire `count_by_status()` into Tracked / Applied / Interview KPI values ✅ done 2026-04-21 (see Deferred-Decision Log entry 2026-04-21 for the narrow `config.py` carve-out and Tracked-bucket semantics)
+- **T1-D** `test:` + `feat:` — wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"` per U3) ✅ done 2026-04-21 (format + selection rule locked in Deferred-Decision Log)
+- **T1-E** `test:` + `feat:` — fully-empty-DB hero callout (per U5): when all three counts = 0, render a hero panel above the KPI grid with a CTA button that `st.switch_page()`s to Opportunities ✅ done 2026-04-21 (trigger = `tracked + applied + interview == 0`; terminal-only DB edge case pinned by `test_terminal_only_db_still_shows_hero`; source-level assertion on `st.switch_page("pages/1_Opportunities.py")` target since AppTest single-file mode can't navigate)
 - `chore:` — one commit per sub-task, rolling up tracker updates
 
-**Session pairing:** one session covers T1-A+B; one session T1-C+D; one session T1-E. Each session = 1 branch push; all 3 stay on `feature/phase-4-tier1` until T1 reviewed.
+**Session pairing:** one session covers T1-A+B (test scaffold + shell); one session T1-C+D (refresh button + KPI wiring); one session T1-E (empty-DB hero). Each session = 1 branch push; all stay on `feature/phase-4-tier1` until T1 reviewed.
 
 ### T2 — Application funnel  (~2.0 hr, 2 sessions)
 - **T2-A** `test:` + `feat:` — Plotly horizontal bar built from `count_by_status()`, one bar per STATUS_VALUE, colors from `config.STATUS_COLORS`
@@ -141,7 +143,7 @@ These decisions are **closed**. If new evidence emerges mid-phase, raise it as a
 - **Seed data via `database.add_position()` + `database.upsert_application()`** — never raw SQL in tests
 - Reset DB between tests via a `conftest.py`-style fixture if needed (or wipe rows in setUp); do NOT replace `database.DB_PATH` at runtime (Phase 3 pattern remains valid)
 - Plotly assertions: retrieve the figure via `at.get("plotly_chart")` (verify the Streamlit API before using — Plotly element selector may differ); compare data arrays to expected, not pixel output
-- KPI card value assertions: walk `at.markdown` / `at.metric` elements by key — **assign a key to every `st.metric`** so tests can look them up deterministically
+- KPI card value assertions: walk `at.metric` elements and identify them by **label** (the spec'd strings in DESIGN.md §app.py: "Tracked", "Applied", "Interview", "Next Interview") or by positional order within the fixed `st.columns(4)` render. **`st.metric` in Streamlit 1.56 has no `key=` parameter** (verified against the installed API); display-only primitives don't expose one. Label-based lookup is the idiomatic AppTest path and doubles as a regression check against the DESIGN contract.
 
 **Minimum coverage bar:** every KPI card, every chart, every empty-state branch pinned by at least one test.
 
@@ -185,7 +187,10 @@ Any ambiguity encountered mid-phase that needs a user call, logged here with pro
 
 | Date | Question | Option A | Option B | Recommendation | Status |
 |------|----------|----------|----------|----------------|--------|
-| — | — | — | — | — | — |
+| 2026-04-21 | T1-C: what does "Tracked" KPI count? | Sum of all positions (incl. terminal) | Non-terminal only | User chose: **OPEN + APPLIED** ("opportunities that might get moved forward"); INTERVIEW/OFFER are excluded because they have their own KPIs. | ✅ Closed (locked in §Scope) |
+| 2026-04-21 | T1-C: how to name specific statuses in `app.py` without hardcoding literals, given `config.py` is out-of-scope? | Edit `config.py` to add three named aliases | Positional-index access into `STATUS_VALUES` | User chose A; narrow carve-out — three additive aliases only, no other `config.py` edits permitted in Phase 4. | ✅ Closed (logged in §Out of scope) |
+| 2026-04-21 | T1-D: what should the Next Interview KPI value show? | Exactly as wireframe: `'{Mon D} · {institute}'` (no year) | With year, or date only, or with `position_name` instead | User chose A; matches DESIGN.md §app.py wireframe verbatim. Renders e.g. `"May 3 · MIT"`. | ✅ Closed |
+| 2026-04-21 | T1-D: which row/column becomes "next"? | Earliest future date across BOTH `interview1_date` AND `interview2_date` across all rows; paired institute belongs to whichever position owns that date | First row's `interview1_date` only | User chose A. Columns are symmetric; past dates on the same row as a future-far date are ignored (row-level filter is not enough — `get_upcoming_interviews()` includes a row when *either* date is future). | ✅ Closed |
 
 ---
 
