@@ -145,4 +145,8 @@ _funnel_fig = go.Figure(
         )
     ]
 )
+# Plotly renders horizontal bars bottom-to-top by default (first y-category
+# at the bottom). Reverse the axis so the pipeline reads top-down —
+# [OPEN] at the top, [DECLINED] at the bottom — matching STATUS_VALUES order.
+_funnel_fig.update_yaxes(autorange="reversed")
 st.plotly_chart(_funnel_fig, key="funnel_chart")
