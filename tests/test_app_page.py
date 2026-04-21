@@ -410,3 +410,139 @@ class TestT1EEmptyDbHero:
             "CTA must use st.switch_page() per U5 (not a link or markdown)."
         )
 
+
+# ── T2-A: Application Funnel — Plotly horizontal bar from count_by_status ─────
+
+class TestT2AFunnelBar:
+    """T2-A: Plotly horizontal bar funnel built from `count_by_status()`.
+
+    Contract (DESIGN.md §app.py + PHASE_4_GUIDELINES.md §T2-A):
+      - One bar per `config.STATUS_VALUES` entry, in the canonical order of
+        that list (so the pipeline reads top-to-bottom OPEN → DECLINED).
+      - A status with zero positions still renders as a zero-width bar —
+        keeps the grid shape stable and makes "no applied" visually
+        distinct from "status doesn't exist".
+      - Orientation: horizontal (long status labels are readable on the y-axis).
+      - Marker colors sourced from `config.STATUS_COLORS` — never hardcoded
+        in `app.py`. This is the same anti-typo guardrail as STATUS_VALUES.
+      - Chart renders whether the DB is empty or not; T2-B will later swap
+        the figure for descriptive text on the fully-empty-DB branch.
+
+    Test-access pattern: AppTest surfaces `st.plotly_chart` as an
+    `UnknownElement` whose `.value` triggers a session_state KeyError for
+    stateless charts. `json.loads(el.proto.spec)` is the stable path —
+    the spec is a full plotly figure JSON (`{data: [...], layout: {...}}`).
+    """
+
+    @staticmethod
+    def _funnel_trace(at: AppTest) -> dict:
+        """Return the first trace dict of the first plotly chart on the page.
+
+        Fails the test (via assert) if no chart is found — used as the
+        single entry point for every T2-A assertion to keep one failure
+        message per missing-chart scenario."""
+        import json
+        charts = at.get("plotly_chart")
+        assert len(charts) >= 1, (
+            f"Expected at least one plotly chart on the dashboard (the "
+            f"Application Funnel), got {len(charts)}."
+        )
+        spec = json.loads(charts[0].proto.spec)
+        assert spec.get("data"), (
+            "Funnel chart spec has no data traces — expected a single Bar trace."
+        )
+        return spec["data"][0]
+
+    def test_funnel_chart_is_rendered(self, db):
+        """A plotly chart is present on the dashboard even on an empty DB.
+
+        (T2-B will later make the empty-DB branch show descriptive text
+        instead; when that lands this test is updated in the same commit.)"""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        charts = at.get("plotly_chart")
+        assert len(charts) >= 1, (
+            f"Expected an Application Funnel plotly chart, got {len(charts)}."
+        )
+
+    def test_funnel_has_one_bar_per_status_value_in_order(self, db):
+        """y-axis labels match config.STATUS_VALUES, in that exact order.
+
+        Pinning order (not just membership) because DESIGN.md reads the
+        pipeline top-to-bottom — flipping OPEN↔DECLINED would break the
+        mental model without tripping any other test."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        trace = self._funnel_trace(at)
+        assert list(trace["y"]) == list(config.STATUS_VALUES), (
+            f"Funnel y-axis must list every STATUS_VALUE in config order.\n"
+            f"  expected: {config.STATUS_VALUES}\n"
+            f"  got:      {list(trace['y'])}"
+        )
+
+    def test_funnel_is_horizontal(self, db):
+        """Orientation is 'h' — status labels on y-axis, counts on x-axis."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        trace = self._funnel_trace(at)
+        assert trace.get("orientation") == "h", (
+            f"Funnel must be horizontal (orientation='h'), got "
+            f"{trace.get('orientation')!r}"
+        )
+
+    def test_funnel_x_values_match_count_by_status(self, db):
+        """x-values read from `count_by_status()` in STATUS_VALUES order.
+
+        Seeds a mix of statuses and checks the bar lengths. This also
+        verifies that count_by_status's sparse dict (zero-count statuses
+        omitted) is expanded to the full STATUS_VALUES length with zeros."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
+        database.add_position(make_position({"position_name": "D", "status": "[INTERVIEW]"}))
+        database.add_position(make_position({"position_name": "E", "status": "[OFFER]"}))
+
+        counts = database.count_by_status()
+        expected = [counts.get(s, 0) for s in config.STATUS_VALUES]
+
+        at = _run_page()
+        trace = self._funnel_trace(at)
+        assert list(trace["x"]) == expected, (
+            f"Funnel x-values must mirror count_by_status() in STATUS_VALUES "
+            f"order.\n  expected: {expected}\n  got:      {list(trace['x'])}"
+        )
+
+    def test_funnel_bar_colors_come_from_config(self, db):
+        """Marker colors are `config.STATUS_COLORS[s]` for each status,
+        in STATUS_VALUES order. Anti-typo guardrail — the same grep rule
+        that forbids hardcoded status literals in app.py forbids hardcoded
+        colors (they'd drift from STATUS_COLORS silently)."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        trace = self._funnel_trace(at)
+        marker = trace.get("marker", {})
+        expected_colors = [config.STATUS_COLORS[s] for s in config.STATUS_VALUES]
+        assert list(marker.get("color", [])) == expected_colors, (
+            f"Funnel marker colors must come from config.STATUS_COLORS, in "
+            f"STATUS_VALUES order.\n  expected: {expected_colors}\n"
+            f"  got:      {list(marker.get('color', []))}"
+        )
+
+    def test_funnel_missing_statuses_render_as_zero_bars(self, db):
+        """count_by_status() OMITS zero-count statuses from its dict.
+        The funnel must still render every STATUS_VALUES bar with the
+        missing ones coerced to 0 — otherwise the chart's shape changes
+        as buckets fill up, and color/position assertions elsewhere break."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        trace = self._funnel_trace(at)
+        assert len(trace["x"]) == len(config.STATUS_VALUES)
+        assert len(trace["y"]) == len(config.STATUS_VALUES)
+        # Every status except [OPEN] should read 0.
+        for status, count in zip(trace["y"], trace["x"]):
+            if status == config.STATUS_OPEN:
+                assert count == 1, f"[OPEN] bar should be 1, got {count}"
+            else:
+                assert count == 0, (
+                    f"Status {status!r} has no seeded rows; expected 0, got {count}"
+                )
