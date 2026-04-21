@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 **merged to main** via PR #3 (`c972385`); 223 tests green on `main`. Phase 4 (full `app.py` dashboard) **planned** — see `PHASE_4_GUIDELINES.md`; 6 tiers, ~9 sessions. Next branch: `feature/phase-4-tier1`. |
+| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **in progress** on `feature/phase-4-tier1`: T1-A + T1-B shipped (dashboard test scaffold + `app.py` shell with 4-column KPI skeleton); 225 tests green. Next: T1-C (top bar refresh + wire `count_by_status()`). |
 
 ---
 
@@ -85,9 +85,9 @@ A local, personal postdoc application tracker that answers one question clearly:
 
 | Tier | Sub-task | Status |
 |------|----------|--------|
-| T1 | T1-A: top bar + 🔄 refresh button | Pending |
-| T1 | T1-B: `st.columns(4)` KPI layout shell | Pending |
-| T1 | T1-C: wire `count_by_status()` → 3 KPI values | Pending |
+| T1 | T1-A: `tests/test_app_page.py` scaffold + empty-DB smoke + 4-KPI shape test | ✅ Done (2026-04-20) |
+| T1 | T1-B: `app.py` shell — title + `init_db()` + `st.columns(4)` × `st.metric` placeholders | ✅ Done (2026-04-20) |
+| T1 | T1-C: top bar 🔄 refresh button + wire `count_by_status()` → 3 KPI values | Pending |
 | T1 | T1-D: wire `get_upcoming_interviews()` → Next Interview (empty → `"—"`, per U3) | Pending |
 | T1 | T1-E: fully-empty-DB hero callout + CTA (per U5) | Pending |
 | T2 | T2-A: Plotly funnel from `count_by_status()` + `config.STATUS_COLORS` | Pending |

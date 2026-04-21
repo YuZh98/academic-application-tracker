@@ -10,10 +10,12 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 4 **kicking off** — `app.py` stub → full dashboard. Plan locked in `PHASE_4_GUIDELINES.md` (6 tiers T1–T6, ~9 sessions, ~9.5 hr; critical path linear). 8 design decisions (C3/C4/C5/C6/C8/U2/U3/U5) closed by user on 2026-04-20. Phase 3 Tier 5 merged to `main` via PR #3 (merge commit `c972385`); 223 tests passing, zero deprecation warnings on `main`. Next session: **T1-A** (top bar + 🔄 refresh button) on branch `feature/phase-4-tier1`.
-**Git:** on `main` at `c972385`. No active feature branch yet; T1 opens `feature/phase-4-tier1`.
+**Phase:** Phase 4 **in progress** — T1-A + T1-B shipped on `feature/phase-4-tier1`. Plan locked in `PHASE_4_GUIDELINES.md` (6 tiers, ~9 sessions, ~9.5 hr; critical path linear). 8 design decisions closed 2026-04-20. 225 tests passing, zero deprecation warnings. Next session: **T1-C** (top bar 🔄 refresh button + wire `count_by_status()` into Tracked / Applied / Interview).
+**Git:** on `feature/phase-4-tier1`. Two commits since branching: `test(phase-4-t1)` (T1-A) + `feat(phase-4-t1)` (T1-B). `chore:` pending on this session's tracker rollup.
 **Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions). All 5 dashboard queries exist and are Phase-2 tested.
-**App:** `app.py` stub (13 lines, placeholder `st.info`) — Phase 4 replaces it. `pages/1_Opportunities.py` = Tiers 1–5 complete and frozen for Phase 4.
+**App:** `app.py` now renders title + `st.columns(4)` × `st.metric` skeleton with `"—"` placeholder values. `pages/1_Opportunities.py` = Tiers 1–5 complete and frozen for Phase 4.
+
+**Phase 4 deviation log (T1-B):** `PHASE_4_GUIDELINES.md` originally called for `st.metric(..., key=...)` keyed lookup in tests. Verified against live Streamlit 1.56 that `st.metric` has no `key=` parameter (`TypeError` on unexpected kwarg); `at.metric[i].key` is `None` because the base `Element.key` attr is only populated for stateful widgets. Tests use **label-based lookup** instead — matches DESIGN.md §app.py UI contract and is the idiomatic AppTest path for display-only elements. Guideline corrected in same `chore:` commit.
 
 **To run:**
 ```

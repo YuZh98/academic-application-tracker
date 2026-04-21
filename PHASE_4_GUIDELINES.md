@@ -78,14 +78,14 @@ These decisions are **closed**. If new evidence emerges mid-phase, raise it as a
 ## Sub-task breakdown & session pairing
 
 ### T1 — App shell + KPI cards  (~1.5 hr, 3 sessions)
-- **T1-A** `test:` + `feat:` — top bar (title + 🔄 refresh button that calls `st.rerun()`)
-- **T1-B** `test:` + `feat:` — KPI layout shell: `st.columns(4)` with placeholders
-- **T1-C** `test:` + `feat:` — wire `count_by_status()` into Tracked / Applied / Interview KPI values
+- **T1-A** `test:` — `tests/test_app_page.py` scaffold (per C8) with empty-DB smoke test and 4-KPI-column shape test ✅ done 2026-04-20
+- **T1-B** `test:` + `feat:` — `app.py` shell: title "Postdoc Tracker" + `database.init_db()` + `st.columns(4)` with four `st.metric` cards (labels "Tracked" / "Applied" / "Interview" / "Next Interview"; values `"—"` placeholders until C/D wire the real queries) ✅ done 2026-04-20
+- **T1-C** `test:` + `feat:` — top bar 🔄 refresh button (calls `st.rerun()`) + wire `count_by_status()` into Tracked / Applied / Interview KPI values
 - **T1-D** `test:` + `feat:` — wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"` per U3)
 - **T1-E** `test:` + `feat:` — fully-empty-DB hero callout (per U5): when all three counts = 0, render a hero panel above the KPI grid with a CTA button that `st.switch_page()`s to Opportunities
 - `chore:` — one commit per sub-task, rolling up tracker updates
 
-**Session pairing:** one session covers T1-A+B; one session T1-C+D; one session T1-E. Each session = 1 branch push; all 3 stay on `feature/phase-4-tier1` until T1 reviewed.
+**Session pairing:** one session covers T1-A+B (test scaffold + shell); one session T1-C+D (refresh button + KPI wiring); one session T1-E (empty-DB hero). Each session = 1 branch push; all stay on `feature/phase-4-tier1` until T1 reviewed.
 
 ### T2 — Application funnel  (~2.0 hr, 2 sessions)
 - **T2-A** `test:` + `feat:` — Plotly horizontal bar built from `count_by_status()`, one bar per STATUS_VALUE, colors from `config.STATUS_COLORS`
@@ -141,7 +141,7 @@ These decisions are **closed**. If new evidence emerges mid-phase, raise it as a
 - **Seed data via `database.add_position()` + `database.upsert_application()`** — never raw SQL in tests
 - Reset DB between tests via a `conftest.py`-style fixture if needed (or wipe rows in setUp); do NOT replace `database.DB_PATH` at runtime (Phase 3 pattern remains valid)
 - Plotly assertions: retrieve the figure via `at.get("plotly_chart")` (verify the Streamlit API before using — Plotly element selector may differ); compare data arrays to expected, not pixel output
-- KPI card value assertions: walk `at.markdown` / `at.metric` elements by key — **assign a key to every `st.metric`** so tests can look them up deterministically
+- KPI card value assertions: walk `at.metric` elements and identify them by **label** (the spec'd strings in DESIGN.md §app.py: "Tracked", "Applied", "Interview", "Next Interview") or by positional order within the fixed `st.columns(4)` render. **`st.metric` in Streamlit 1.56 has no `key=` parameter** (verified against the installed API); display-only primitives don't expose one. Label-based lookup is the idiomatic AppTest path and doubles as a regression check against the DESIGN contract.
 
 **Minimum coverage bar:** every KPI card, every chart, every empty-state branch pinned by at least one test.
 
