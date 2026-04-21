@@ -42,6 +42,15 @@ STATUS_COLORS: dict[str, str] = {
     "[DECLINED]":  "gray",
 }
 
+# Named aliases for the individual pipeline statuses. Page code that needs
+# a *specific* status (e.g. the dashboard's per-bucket KPI counts) references
+# these rather than hardcoding the literal — keeps the anti-typo guardrail in
+# place without forcing positional-index access into STATUS_VALUES. Added in
+# Phase 4 T1-C for app.py's Tracked / Applied / Interview counters.
+STATUS_OPEN:      str = STATUS_VALUES[0]  # "[OPEN]"
+STATUS_APPLIED:   str = STATUS_VALUES[1]  # "[APPLIED]"
+STATUS_INTERVIEW: str = STATUS_VALUES[2]  # "[INTERVIEW]"
+
 # Terminal statuses — positions in these states are done and excluded from
 # actionable views (upcoming deadlines, materials readiness, etc.).
 # database.py reads this list; never hardcode these strings outside config.py.
