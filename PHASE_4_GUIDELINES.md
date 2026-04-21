@@ -83,7 +83,7 @@ These decisions are **closed**. If new evidence emerges mid-phase, raise it as a
 - **T1-A** `test:` — `tests/test_app_page.py` scaffold (per C8) with empty-DB smoke test and 4-KPI-column shape test ✅ done 2026-04-20
 - **T1-B** `test:` + `feat:` — `app.py` shell: title "Postdoc Tracker" + `database.init_db()` + `st.columns(4)` with four `st.metric` cards (labels "Tracked" / "Applied" / "Interview" / "Next Interview"; values `"—"` placeholders until C/D wire the real queries) ✅ done 2026-04-20
 - **T1-C** `test:` + `feat:` — top bar 🔄 refresh button (calls `st.rerun()`) + wire `count_by_status()` into Tracked / Applied / Interview KPI values ✅ done 2026-04-21 (see Deferred-Decision Log entry 2026-04-21 for the narrow `config.py` carve-out and Tracked-bucket semantics)
-- **T1-D** `test:` + `feat:` — wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"` per U3)
+- **T1-D** `test:` + `feat:` — wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"` per U3) ✅ done 2026-04-21 (format + selection rule locked in Deferred-Decision Log)
 - **T1-E** `test:` + `feat:` — fully-empty-DB hero callout (per U5): when all three counts = 0, render a hero panel above the KPI grid with a CTA button that `st.switch_page()`s to Opportunities
 - `chore:` — one commit per sub-task, rolling up tracker updates
 
@@ -189,6 +189,8 @@ Any ambiguity encountered mid-phase that needs a user call, logged here with pro
 |------|----------|----------|----------|----------------|--------|
 | 2026-04-21 | T1-C: what does "Tracked" KPI count? | Sum of all positions (incl. terminal) | Non-terminal only | User chose: **OPEN + APPLIED** ("opportunities that might get moved forward"); INTERVIEW/OFFER are excluded because they have their own KPIs. | ✅ Closed (locked in §Scope) |
 | 2026-04-21 | T1-C: how to name specific statuses in `app.py` without hardcoding literals, given `config.py` is out-of-scope? | Edit `config.py` to add three named aliases | Positional-index access into `STATUS_VALUES` | User chose A; narrow carve-out — three additive aliases only, no other `config.py` edits permitted in Phase 4. | ✅ Closed (logged in §Out of scope) |
+| 2026-04-21 | T1-D: what should the Next Interview KPI value show? | Exactly as wireframe: `'{Mon D} · {institute}'` (no year) | With year, or date only, or with `position_name` instead | User chose A; matches DESIGN.md §app.py wireframe verbatim. Renders e.g. `"May 3 · MIT"`. | ✅ Closed |
+| 2026-04-21 | T1-D: which row/column becomes "next"? | Earliest future date across BOTH `interview1_date` AND `interview2_date` across all rows; paired institute belongs to whichever position owns that date | First row's `interview1_date` only | User chose A. Columns are symmetric; past dates on the same row as a future-far date are ignored (row-level filter is not enough — `get_upcoming_interviews()` includes a row when *either* date is future). | ✅ Closed |
 
 ---
 
