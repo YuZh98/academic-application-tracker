@@ -10,10 +10,10 @@ On OPT. Building a personal tracker to manage the full application lifecycle.
 ---
 
 ## Project State
-**Phase:** Phase 3 Tier 5 **complete** — all four edit-panel tabs (Overview + Requirements + Materials + Notes) Save wired via `database.update_position`, Overview Delete wired via `@st.dialog` confirm with FK cascade, 2 review fixes applied, and 1 user-reported NaN-pre-seed bug fixed (`_safe_str` helper). **223 tests passing; zero deprecation warnings.** Pre-merge review done (`reviews/phase-3-tier5-premerge.md`). Next: merge PR → Phase 4 (full `app.py` dashboard).
-**Git:** `feature/phase-3-tier5` branch — 17 commits ahead of main, pushed, PR open.
-**Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions).
-**App:** `app.py` stub exists (launches with placeholder). `pages/1_Opportunities.py` has quick-add form + filter bar + positions table + row selection + edit panel with **all four tabs' Save wired + Overview Delete via `@st.dialog`** (Confirm → `database.delete_position` + paired cleanup + FK cascade; Cancel → no state change).
+**Phase:** Phase 4 **kicking off** — `app.py` stub → full dashboard. Plan locked in `PHASE_4_GUIDELINES.md` (6 tiers T1–T6, ~9 sessions, ~9.5 hr; critical path linear). 8 design decisions (C3/C4/C5/C6/C8/U2/U3/U5) closed by user on 2026-04-20. Phase 3 Tier 5 merged to `main` via PR #3 (merge commit `c972385`); 223 tests passing, zero deprecation warnings on `main`. Next session: **T1-A** (top bar + 🔄 refresh button) on branch `feature/phase-4-tier1`.
+**Git:** on `main` at `c972385`. No active feature branch yet; T1 opens `feature/phase-4-tier1`.
+**Database:** `postdoc.db` created and initialized (3 tables, 37 columns in positions). All 5 dashboard queries exist and are Phase-2 tested.
+**App:** `app.py` stub (13 lines, placeholder `st.info`) — Phase 4 replaces it. `pages/1_Opportunities.py` = Tiers 1–5 complete and frozen for Phase 4.
 
 **To run:**
 ```
@@ -57,6 +57,7 @@ Markdown files in `exports/` are auto-generated backups, not the source of truth
 |------|------|
 | `DESIGN.md` | Master technical specification — architecture, schema, UI wireframes, data flow |
 | `GUIDELINES.md` | Coding conventions for all sessions |
+| `PHASE_4_GUIDELINES.md` | Phase-4-specific rules, locked decisions, sub-task breakdown (load each Phase 4 session) |
 | `roadmap.md` | Phases, status, backlog, future plans |
 | `OPPORTUNITIES.md` | Original hand-maintained table (superseded by DB once app is built) |
 | `PROGRESS.md` | Original hand-maintained table (superseded by DB) |

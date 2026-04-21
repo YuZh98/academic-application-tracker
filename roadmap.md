@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 **Tier 5 complete** — all four edit-panel tabs' Save + Overview Delete shipped; review fixes + NaN pre-seed fix applied; 223 tests passing; PR open against `main`. Phase 4 (full `app.py` dashboard) next. |
+| Python app | 🔄 Phase 3 **merged to main** via PR #3 (`c972385`); 223 tests green on `main`. Phase 4 (full `app.py` dashboard) **planned** — see `PHASE_4_GUIDELINES.md`; 6 tiers, ~9 sessions. Next branch: `feature/phase-4-tier1`. |
 
 ---
 
@@ -80,15 +80,40 @@ A local, personal postdoc application tracker that answers one question clearly:
 
 ### Phase 4 — Dashboard
 **Goal:** Home page answers "What do I do today?" at a glance.
+**Plan locked:** `PHASE_4_GUIDELINES.md` (6 tiers, ~9 sessions, ~9.5 hr; critical path linear).
+**Test file:** single `tests/test_app_page.py` (per decision C8).
 
-| Task | Status |
-|------|--------|
-| Write full `app.py` | Pending |
-| KPI cards: Tracked / Applied / Interview Stage / Next Interview date | Pending |
-| Application funnel chart (Plotly horizontal bar, color-coded by status) | Pending |
-| Materials Readiness panel (ready vs. missing count) | Pending |
-| Upcoming deadlines + events timeline (next 30 days, red if ≤ 7 days) | Pending |
-| Recommender alerts panel (asked > 7 days, not yet submitted) | Pending |
+| Tier | Sub-task | Status |
+|------|----------|--------|
+| T1 | T1-A: top bar + 🔄 refresh button | Pending |
+| T1 | T1-B: `st.columns(4)` KPI layout shell | Pending |
+| T1 | T1-C: wire `count_by_status()` → 3 KPI values | Pending |
+| T1 | T1-D: wire `get_upcoming_interviews()` → Next Interview (empty → `"—"`, per U3) | Pending |
+| T1 | T1-E: fully-empty-DB hero callout + CTA (per U5) | Pending |
+| T2 | T2-A: Plotly funnel from `count_by_status()` + `config.STATUS_COLORS` | Pending |
+| T2 | T2-B: funnel empty-state render | Pending |
+| T2 | T2-C: `st.columns(2)` left half (per U2) | Pending |
+| T3 | T3-A: render `compute_materials_readiness()` | Pending |
+| T3 | T3-B: `st.columns(2)` right half (per U2) | Pending |
+| T4 | T4-A: merge deadlines + interviews DataFrame | Pending |
+| T4 | T4-B: urgency column from config thresholds | Pending |
+| T4 | T4-C: `st.dataframe(width="stretch")` render | Pending |
+| T4 | T4-D: timeline empty state | Pending |
+| T5 | T5-A: group `get_pending_recommenders` by recommender | Pending |
+| T5 | T5-B: per-person card + `mailto:` link | Pending |
+| T5 | T5-C: alerts empty state | Pending |
+| T6 | T6-A: pre-merge review doc | Pending |
+| T6 | T6-B: PR + merge + delete branch | Pending |
+
+**Decisions log (locked 2026-04-20):**
+- C3: keep `[🔄 Refresh]` button
+- C4: skip `@st.cache_data` in Phase 4 (revisit post-merge only if slowness measured)
+- C5: sync GUIDELINES.md §7 (`st.toast`) + §8 (no re-raise) — applied
+- C6: DESIGN.md §6 line 431 readiness scope fix — applied
+- C8: one test file `tests/test_app_page.py` for the whole dashboard
+- U2: Funnel + Readiness via `st.columns(2)`; stacking on narrow windows OK
+- U3: Next-Interview KPI shows `"—"` when empty
+- U5: fully-empty-DB hero callout at top of `app.py`
 
 **Commit message:** `feat: add dashboard home page`
 
@@ -180,6 +205,8 @@ The DB schema is generated from `config.py` at `init_db()` time — new fields a
 
 ## Design Reference
 All architectural decisions, rationale, and critiques are recorded in this session's conversation history. Key documents committed to the repo:
-- `GUIDELINES.md` — coding conventions
+- `DESIGN.md` — master technical specification (schema, UI wireframes, data flow)
+- `GUIDELINES.md` — coding conventions (all sessions)
+- `PHASE_4_GUIDELINES.md` — Phase-4-specific rules, locked decisions, sub-tasks
 - `CLAUDE.md` — session memory
 - `roadmap.md` — this file

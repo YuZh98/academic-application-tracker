@@ -1,28 +1,48 @@
 # Tasks
 
 ## In Progress
-_(Awaiting PR review → merge → Phase 4)_
+**Phase 4 — Dashboard (`app.py`)** — plan locked in `PHASE_4_GUIDELINES.md`. 6 tiers, ~9 sessions, ~9.5 hr. Critical path: T1 → T2 → T3 → T4 → T5 → T6.
+
+### Phase 4 — Dashboard (pending)
+- [ ] **T1** App shell + KPI cards (~1.5 hr, 3 sessions, branch `feature/phase-4-tier1`)
+  - [ ] T1-A: top bar (title + 🔄 refresh button calling `st.rerun()`)
+  - [ ] T1-B: KPI layout shell — `st.columns(4)` placeholders with keys
+  - [ ] T1-C: wire `count_by_status()` → Tracked / Applied / Interview
+  - [ ] T1-D: wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"`, per U3)
+  - [ ] T1-E: fully-empty-DB hero callout + CTA to Opportunities (per U5)
+- [ ] **T2** Application funnel (Plotly) (~2.0 hr, 2 sessions, branch `feature/phase-4-tier2`)
+  - [ ] T2-A: Plotly horizontal bar from `count_by_status()`, colors via `config.STATUS_COLORS`
+  - [ ] T2-B: empty-state render (no positions → descriptive text, not broken figure)
+  - [ ] T2-C: place in left half of `st.columns(2)` (per U2)
+- [ ] **T3** Materials Readiness (~1.0 hr, 1 session, branch `feature/phase-4-tier3`)
+  - [ ] T3-A: render `compute_materials_readiness()` → "N ready / M pending" + mini bar
+  - [ ] T3-B: place in right half of `st.columns(2)` (per U2)
+- [ ] **T4** Upcoming timeline (~2.5 hr, 2 sessions, branch `feature/phase-4-tier4`)
+  - [ ] T4-A: merge `get_upcoming_deadlines(30)` + `get_upcoming_interviews()` by date
+  - [ ] T4-B: urgency column from `DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS`
+  - [ ] T4-C: `st.dataframe(width="stretch")` with (date, label, kind, urgency)
+  - [ ] T4-D: empty state
+- [ ] **T5** Recommender alerts (~1.5 hr, 1 session, branch `feature/phase-4-tier5`)
+  - [ ] T5-A: fetch `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)`, group by recommender
+  - [ ] T5-B: per-person card with `mailto:` prefilled (subject + position names)
+  - [ ] T5-C: empty state
+- [ ] **T6** Pre-merge review + PR (~1.0 hr, 2 sessions)
+  - [ ] T6-A: `reviews/phase-4-premerge.md` with verified acceptance criteria
+  - [ ] T6-B: open PR → merge → delete branch (mirror Tier 5-F)
+
+**Tests:** one file, `tests/test_app_page.py` (per C8). Class per tier.
+**Decisions locked:** C3 keep refresh, C4 skip caching, C5 sync GUIDELINES.md, C6 fix DESIGN §6 line 431, C8 one test file, U2 `st.columns(2)`, U3 "—" on empty, U5 empty-DB hero.
 
 ## Done in this phase
-- [x] Phase 3 Tier 5: Save / Delete with confirm dialog — **merge-ready**
-  - [x] T5-A: Overview Save (update_position + toast + error path + selection survival via _skip_table_reset)
-  - [x] T5-B: Requirements Save (preserve done_* across req flips Y↔N)
-  - [x] T5-C: Materials Save (writes done_* only for req_* == 'Y')
-  - [x] T5-D: Notes Save (empty → "")
-  - [x] T5-E: Delete with st.dialog confirm (Overview tab only; FK cascade)
-  - [x] T5-F: pre-merge review (`reviews/phase-3-tier5-premerge.md`) + open PR
-- [x] Phase 3 Tier 4 merged to main (T4-A through T4-G)
-  - T4-A row-selection, T4-B edit-panel shell, T4-C Overview widgets,
-    T4-D Requirements radios, T4-E Materials state-driven checkboxes,
-    T4-F Notes text_area, T4-G pre-merge review + PR #2
+_(Phase 4 deliverables will land here as tiers ship.)_
 
 ## Backlog
 
 ### App build (in order)
-- [ ] Phase 4: write full `app.py` dashboard
 - [ ] Phase 5: write `pages/2_Applications.py` and `pages/3_Recommenders.py`
 - [ ] Phase 6: complete `exports.py` and `pages/4_Export.py`
 - [ ] Phase 7: polish — urgency colors, empty states, search, confirm dialogs
+- [ ] DX: add `pythonpath = .` to `pytest.ini` (one-line fix; user deferred at Phase 3 close)
 
 ### Application tasks
 - [ ] Draft research statement
@@ -31,6 +51,8 @@ _(Awaiting PR review → merge → Phase 4)_
 - [ ] Request recommendation letters from advisors
 
 ## Completed
+- [x] 2026-04-20 — Phase 3 **merged to main** via PR #3 (merge commit `c972385`); branch `feature/phase-3-tier5` deleted on origin; 223 tests passing on `main`, zero deprecation warnings.
+- [x] 2026-04-20 — Phase 4 planning + `PHASE_4_GUIDELINES.md` drafted (6 tiers, ~15 sub-tasks, critical path mapped, 8 design decisions closed); DESIGN.md line 431 readiness scope synced with implementation; GUIDELINES.md §7 (`st.toast` over `st.success`) and §8 (no re-raise in user-facing paths) synced.
 - [x] 2026-04-20 — Phase 3 Tier 5-F: pre-merge review — commit-by-commit walkthrough + release-notes doc (`reviews/phase-3-tier5-premerge.md`); verified acceptance criteria (`pytest -q` = 223 passed; `pytest -W error::DeprecationWarning` = 223 passed; `git diff main..HEAD -- database.py config.py exports.py app.py` = empty; no hardcoded vocab via grep; form id ≠ widget key via smoke test; all save/delete paths use `st.toast` on success + `st.error` on failure uniformly); updated `CLAUDE.md`, `TASKS.md`, `roadmap.md`, `memory/project_state.md` to reflect Tier-5 complete; staled header comment in `pages/1_Opportunities.py` updated (Tier 5 moved from Pending → Shipped); branch pushed to origin; PR opened against main
 - [x] 2026-04-20 — Phase 3 Tier 5 post-review fix: pandas-NaN-in-pre-seed TypeError (user-reported) — adding 3 positions via Quick Add + Saving row 0 + selecting row 1 raised `TypeError: bad argument type for built-in operation` under every edit-panel tab (Notes area replaced entirely by the red error). Root cause: pandas returns `float('nan')` for NULL TEXT cells once any row has a real string (column dtype upgraded to `object`); the pre-seed idiom `r[col] or ""` mis-fires because NaN is truthy — `nan or ""` evaluates to `nan`, and NaN in `session_state` blows up Streamlit's widget protobuf str type-check. Fix: module-level `_safe_str(v)` helper (`None` or `math.isnan(float(v))` → `""`) applied to all five text pre-seed sites (position_name / institute / field / link / notes). Regression pinned by `TestPreSeedNaNCoercion` (end-to-end reproduction + helper-contract unit). 223 total passing, 0 deprecation warnings
 - [x] 2026-04-20 — Phase 3 Tier 5-E: Overview Delete — `@st.dialog("Delete this position?")` opened by a primary-styled `st.button(key='edit_delete')` on the Overview tab **outside** `st.form('edit_overview')` (form only allows `form_submit_button`); target sid/name are passed via `session_state["_delete_target_id"/"_delete_target_name"]` and the Overview tab re-invokes `_confirm_delete_dialog()` on every rerun while the pending flag is set — Streamlit's built-in dialog-re-render magic does NOT carry through AppTest's script-run model (verified with an isolation probe `/tmp/dialog_probe.py`). **Confirm** → `database.delete_position(sid)` → `st.toast` → clear all four session_state keys (paired `_delete_target_*` + `selected_position_id` / `_edit_form_sid`) → `st.rerun()`. **Cancel** → clear only `_delete_target_*`, set `_skip_table_reset=True` so selection survives → `st.rerun()`. FK cascade via existing schema (`PRAGMA foreign_keys=ON` + `ON DELETE CASCADE` on applications.position_id and recommenders.position_id). Extended the selection-resolution `elif` to also preserve selection while `_delete_target_id in session_state`, otherwise the Confirm/Cancel click's internal rerun would collapse the edit panel before the dialog could re-open and the click would be lost. Failure mode mirrors Tier-5 save paths: raising `delete_position` → friendly `st.error("Could not delete: ...")`, no re-raise, `_delete_target_*` and selection preserved so the user can retry. 7 new AppTest tests in `TestDeleteAction` (render, confirm deletes, FK cascade pin, paired cleanup, toast w/ name, cancel is a no-op, DB-failure error path). AppTest caveats worth noting: `Button.type` reports widget-class not the Streamlit `type=` param (primary styling verified by code review, not automated); `AppTest.session_state` has no `.get()` — use `"key" in at.session_state` + subscript. **220 total passing, 0 deprecation warnings**.
@@ -63,4 +85,4 @@ _(Awaiting PR review → merge → Phase 4)_
 
 ---
 
-_Updated: 2026-04-20 (Tier 5 complete — all four tabs' Save wired + Overview Delete via st.dialog + review fixes + NaN pre-seed fix + pre-merge review doc; PR open; 223 tests passing)_
+_Updated: 2026-04-20 (Phase 3 merged to main; Phase 4 plan locked — see `PHASE_4_GUIDELINES.md`; next action: T1-A on branch `feature/phase-4-tier1`)_
