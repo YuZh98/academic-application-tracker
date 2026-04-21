@@ -329,10 +329,15 @@ class TestT1EEmptyDbHero:
 
     @staticmethod
     def _hero_heading_rendered(at: AppTest) -> bool:
-        """Heuristic: the hero places a subheader above the KPI grid. We
-        don't pin the exact copy (it may be tuned in Phase 7 polish) but
-        we do require *some* subheader — the KPI-only render has none."""
-        return len(at.subheader) >= 1
+        """Pin: the hero subheader contains the load-bearing word 'Welcome'.
+
+        Substring (rather than exact copy) survives Phase 7 polish that may
+        rephrase around the same greeting verb, but will fail if Phase 7
+        drops the welcome message entirely OR if a future tier (T2 funnel,
+        T3 readiness, etc.) lands a panel subheader and the hero is silently
+        removed — counting subheaders alone would mask that regression once
+        the page has any other subheader on it."""
+        return any("Welcome" in s.value for s in at.subheader)
 
     def test_empty_db_renders_hero_with_cta(self, db):
         """Fresh DB: hero + CTA are visible."""
