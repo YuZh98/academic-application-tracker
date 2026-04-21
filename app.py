@@ -90,6 +90,29 @@ applied = _status_counts.get(config.STATUS_APPLIED, 0)
 interview = _status_counts.get(config.STATUS_INTERVIEW, 0)
 next_interview = _next_interview_display(database.get_upcoming_interviews())
 
+# ── Empty-DB hero (T1-E) ──────────────────────────────────────────────────────
+# Locked decision U5: when the counted KPI buckets are all zero, show a hero
+# panel above the KPI grid with a CTA that routes to the Opportunities page.
+# The grid still renders below — tests pin this so the hero is purely additive.
+# Trigger = tracked + applied + interview == 0. A DB with only terminal-status
+# rows (CLOSED/REJECTED/DECLINED) also satisfies this; if product call later
+# narrows the trigger to 'total positions == 0', a single test (currently
+# `test_terminal_only_db_still_shows_hero`) needs updating.
+if tracked == 0 and applied == 0 and interview == 0:
+    with st.container(border=True):
+        st.subheader("Welcome to your Postdoc Tracker")
+        st.write(
+            "You haven't added any positions yet. "
+            "Start by logging one — even rough notes — "
+            "and come back here to see your pipeline take shape."
+        )
+        if st.button(
+            "+ Add your first position",
+            key="dashboard_empty_cta",
+            type="primary",
+        ):
+            st.switch_page("pages/1_Opportunities.py")
+
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.metric(label="Tracked", value=str(tracked))
