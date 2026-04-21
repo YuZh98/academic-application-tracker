@@ -299,3 +299,109 @@ class TestT1DNextInterviewKpi:
             "Earliest FUTURE date across both columns should win; past "
             "dates must not beat a later-but-future date from another row."
         )
+
+
+# ── T1-E: fully-empty-DB hero callout + CTA into Opportunities ────────────────
+
+class TestT1EEmptyDbHero:
+    """T1-E: hero panel above the KPI grid when Tracked + Applied + Interview
+    are all zero, with a CTA that `st.switch_page()`s to the Opportunities
+    page. Per locked decision U5 (PHASE_4_GUIDELINES.md).
+
+    Trigger semantics: all three counted-KPI buckets read zero. A DB that
+    contains only terminal-status rows ([CLOSED]/[REJECTED]/[DECLINED])
+    satisfies this too — the test_terminal_only_db_still_shows_hero case
+    pins that behaviour explicitly so any future refactor (e.g. switching
+    the trigger to 'total positions == 0') shows up as a test change.
+
+    CTA discoverability: tests look for the button by label, not by key —
+    same AppTest convention used elsewhere in this file.
+    """
+
+    CTA_LABEL = "+ Add your first position"
+    HERO_TARGET_PAGE = "pages/1_Opportunities.py"
+
+    @staticmethod
+    def _has_cta(at: AppTest) -> bool:
+        return any(
+            b.label == TestT1EEmptyDbHero.CTA_LABEL for b in at.button
+        )
+
+    @staticmethod
+    def _hero_heading_rendered(at: AppTest) -> bool:
+        """Heuristic: the hero places a subheader above the KPI grid. We
+        don't pin the exact copy (it may be tuned in Phase 7 polish) but
+        we do require *some* subheader — the KPI-only render has none."""
+        return len(at.subheader) >= 1
+
+    def test_empty_db_renders_hero_with_cta(self, db):
+        """Fresh DB: hero + CTA are visible."""
+        at = _run_page()
+        assert self._has_cta(at), (
+            f"Expected a CTA button labelled {self.CTA_LABEL!r} on an empty DB. "
+            f"Got labels: {[b.label for b in at.button]}"
+        )
+        assert self._hero_heading_rendered(at), (
+            "Expected a hero subheader above the KPI grid on an empty DB."
+        )
+
+    def test_kpi_grid_still_renders_beneath_hero(self, db):
+        """Hero does not replace the KPI grid — it sits above it."""
+        at = _run_page()
+        assert len(at.metric) == 4, (
+            f"KPI grid must still render beneath the hero, got {len(at.metric)} metrics"
+        )
+        labels = [m.label for m in at.metric]
+        assert labels == KPI_LABELS, (
+            f"KPI labels unchanged on empty-DB: expected {KPI_LABELS}, got {labels}"
+        )
+
+    def test_hero_hidden_when_open_position_exists(self, db):
+        """A single [OPEN] position bumps Tracked off zero → hero hides."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        assert not self._has_cta(at), (
+            "Hero CTA must NOT render once a trackable position exists."
+        )
+
+    def test_hero_hidden_when_applied_position_exists(self, db):
+        database.add_position(make_position({"position_name": "A", "status": "[APPLIED]"}))
+        at = _run_page()
+        assert not self._has_cta(at)
+
+    def test_hero_hidden_when_interview_position_exists(self, db):
+        database.add_position(make_position({"position_name": "A", "status": "[INTERVIEW]"}))
+        at = _run_page()
+        assert not self._has_cta(at)
+
+    def test_terminal_only_db_still_shows_hero(self, db):
+        """Edge case: a DB with only terminal-status rows still has all
+        three counted KPIs at zero, so the hero fires. This pins the
+        'all three counts == 0' trigger — swap to a total-positions gate
+        later via a single test update if the product call changes."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        assert self._has_cta(at), (
+            "With only terminal-status rows, all three counted KPIs are zero "
+            "→ hero should render per the current trigger."
+        )
+
+    def test_cta_targets_opportunities_page(self, db):
+        """The CTA must route to pages/1_Opportunities.py via st.switch_page.
+
+        AppTest single-file mode does not register sibling pages, so clicking
+        st.switch_page raises; instead we pin the target by reading app.py's
+        source — the page path is part of the UI contract."""
+        import pathlib
+        src = pathlib.Path("app.py").read_text(encoding="utf-8")
+        assert self.HERO_TARGET_PAGE in src, (
+            f"app.py must st.switch_page() to {self.HERO_TARGET_PAGE!r}; "
+            f"target path not found in source."
+        )
+        assert "st.switch_page" in src, (
+            "CTA must use st.switch_page() per U5 (not a link or markdown)."
+        )
+
