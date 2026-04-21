@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **in progress** on `feature/phase-4-tier1`: T1-A + T1-B + T1-C + T1-D shipped — all 4 KPI cards fully live (Tracked/Applied/Interview via `count_by_status()`; Next Interview via `get_upcoming_interviews()`) + 🔄 refresh button; 239 tests green. Next: T1-E (fully-empty-DB hero callout per U5). |
+| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **T1 complete** on `feature/phase-4-tier1`: T1-A/B/C/D/E shipped — 4 KPI cards fully live (Tracked/Applied/Interview via `count_by_status()`; Next Interview via `get_upcoming_interviews()`) + 🔄 refresh button + empty-DB hero callout with CTA `st.switch_page()` into Opportunities (U5); 246 tests green. Next: T1 pre-merge review + PR, or proceed to T2 (Plotly funnel). |
 
 ---
 
@@ -89,7 +89,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | T1 | T1-B: `app.py` shell — title + `init_db()` + `st.columns(4)` × `st.metric` placeholders | ✅ Done (2026-04-20) |
 | T1 | T1-C: top bar 🔄 refresh button + wire `count_by_status()` → 3 KPI values | ✅ Done (2026-04-21) |
 | T1 | T1-D: wire `get_upcoming_interviews()` → Next Interview (empty → `"—"`, per U3) | ✅ Done (2026-04-21) |
-| T1 | T1-E: fully-empty-DB hero callout + CTA (per U5) | Pending |
+| T1 | T1-E: fully-empty-DB hero callout + CTA (per U5) | ✅ Done (2026-04-21) |
 | T2 | T2-A: Plotly funnel from `count_by_status()` + `config.STATUS_COLORS` | Pending |
 | T2 | T2-B: funnel empty-state render | Pending |
 | T2 | T2-C: `st.columns(2)` left half (per U2) | Pending |
