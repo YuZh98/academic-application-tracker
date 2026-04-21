@@ -10,8 +10,8 @@
   - [x] T1-C: top bar 🔄 refresh button (`st.rerun()`) + wire `count_by_status()` → Tracked / Applied / Interview
   - [x] T1-D: wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"`, per U3)
   - [x] T1-E: fully-empty-DB hero callout + CTA to Opportunities (per U5)
-- [ ] **T2** Application funnel (Plotly) (~2.0 hr, 2 sessions, branch `feature/phase-4-tier2`)
-  - [ ] T2-A: Plotly horizontal bar from `count_by_status()`, colors via `config.STATUS_COLORS`
+- [~] **T2** Application funnel (Plotly) (~2.0 hr, 2 sessions, branch `feature/phase-4-Tier2-ApplicationFunnel`)
+  - [x] T2-A: Plotly horizontal bar from `count_by_status()`, colors via `config.STATUS_COLORS`
   - [ ] T2-B: empty-state render (no positions → descriptive text, not broken figure)
   - [ ] T2-C: place in left half of `st.columns(2)` (per U2)
 - [ ] **T3** Materials Readiness (~1.0 hr, 1 session, branch `feature/phase-4-tier3`)
@@ -88,4 +88,4 @@
 
 ---
 
-_Updated: 2026-04-21 (Phase 4 T1 complete — T1-A/B/C/D/E all shipped on `feature/phase-4-tier1`; 246 tests green, 0 deprecation warnings; next action: T1 pre-merge review & PR OR start T2 — Plotly application funnel)_
+_Updated: 2026-04-21 (Phase 4 T1 merged via PR #4; T2-A shipped on `feature/phase-4-Tier2-ApplicationFunnel` — Plotly horizontal bar from `count_by_status()` with `config.STATUS_COLORS`. 252 tests green, 0 deprecation warnings. Next: T2-B empty-state branch, then T2-C `st.columns(2)` wrap.)_
