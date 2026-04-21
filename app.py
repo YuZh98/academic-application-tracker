@@ -12,6 +12,7 @@
 from datetime import date
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 import config
@@ -122,3 +123,26 @@ with c3:
     st.metric(label="Interview", value=str(interview))
 with c4:
     st.metric(label="Next Interview", value=next_interview)
+
+# ── Application Funnel (T2-A) ─────────────────────────────────────────────────
+# Plotly horizontal bar — one bar per config.STATUS_VALUES entry in canonical
+# order so the pipeline reads top-to-bottom OPEN → DECLINED. count_by_status()
+# returns a sparse dict (zero-count statuses omitted); we fill missing buckets
+# with 0 so the chart shape stays stable as the pipeline fills up. Marker
+# colors come from config.STATUS_COLORS — same anti-typo guardrail as the
+# status literals, keeps the pre-merge grep rule enforcing a single source.
+# T2-B will add an empty-state branch; T2-C will wrap in st.columns(2).
+st.subheader("Application Funnel")
+_funnel_x = [_status_counts.get(s, 0) for s in config.STATUS_VALUES]
+_funnel_colors = [config.STATUS_COLORS[s] for s in config.STATUS_VALUES]
+_funnel_fig = go.Figure(
+    data=[
+        go.Bar(
+            x=_funnel_x,
+            y=list(config.STATUS_VALUES),
+            orientation="h",
+            marker_color=_funnel_colors,
+        )
+    ]
+)
+st.plotly_chart(_funnel_fig, key="funnel_chart")
