@@ -8,6 +8,8 @@
 # Uses the shared `db` fixture from tests/conftest.py so each test runs
 # against a fresh temp SQLite DB. Never touches postdoc.db.
 
+from datetime import date, timedelta
+
 from streamlit.testing.v1 import AppTest
 
 import config
@@ -168,3 +170,132 @@ class TestT1CKpiCountsAndRefresh:
         kpis = self._kpis(at)
         assert kpis["Tracked"] == "2", f"After refresh, Tracked should be 2, got {kpis['Tracked']!r}"
         assert kpis["Applied"] == "1", f"After refresh, Applied should be 1, got {kpis['Applied']!r}"
+
+
+# ── T1-D: Next Interview KPI — wire get_upcoming_interviews() ─────────────────
+
+class TestT1DNextInterviewKpi:
+    """T1-D: wire database.get_upcoming_interviews() into the Next Interview
+    KPI card per DESIGN.md §app.py; '—' on empty per locked decision U3.
+
+    User decisions (2026-04-21):
+    - Value format: "{Mon D} · {institute}" (e.g. 'May 3 · MIT') — short
+      month + day, no year, with institute.
+    - Selection: take the EARLIEST future date across interview1_date AND
+      interview2_date across all rows. The paired institute belongs to
+      whichever position owns that winning date.
+    - No upcoming interview anywhere → '—'.
+
+    The underlying query (database.get_upcoming_interviews) returns each
+    position as one row with two date columns, and a row is included when
+    EITHER date is future — so the other may be in the past. The SQL
+    ORDER BY sorts by interview1_date then interview2_date, which means
+    'earliest future date' is not necessarily the first row's first column.
+    The selection test cases below pin that.
+    """
+
+    @staticmethod
+    def _next(at: AppTest) -> str:
+        return next(str(m.value) for m in at.metric if m.label == "Next Interview")
+
+    @staticmethod
+    def _expected(d: date, institute: str) -> str:
+        """The agreed Next-Interview format: '{Mon D} · {institute}'."""
+        return f"{d.strftime('%b')} {d.day} · {institute}"
+
+    def test_empty_db_shows_em_dash(self, db):
+        at = _run_page()
+        assert self._next(at) == "—", (
+            f"Empty DB must show '—' per U3, got {self._next(at)!r}"
+        )
+
+    def test_position_without_interview_dates_shows_em_dash(self, db):
+        """A tracked position with no application/interview rows scheduled
+        must leave the Next Interview KPI empty."""
+        database.add_position(make_position({"position_name": "P", "institute": "Stanford"}))
+        at = _run_page()
+        assert self._next(at) == "—"
+
+    def test_all_past_interviews_show_em_dash(self, db):
+        """If every seeded interview date is in the past, nothing is upcoming."""
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        pid = database.add_position(
+            make_position({"position_name": "P", "institute": "Stanford"})
+        )
+        database.upsert_application(
+            pid, {"interview1_date": yesterday, "interview2_date": yesterday}
+        )
+        at = _run_page()
+        assert self._next(at) == "—"
+
+    def test_single_upcoming_interview_formats_date_and_institute(self, db):
+        """One upcoming interview → '{Mon D} · {institute}'."""
+        d_future = date.today() + timedelta(days=10)
+        pid = database.add_position(
+            make_position({"position_name": "BioStats Postdoc", "institute": "MIT"})
+        )
+        database.upsert_application(pid, {"interview1_date": d_future.isoformat()})
+
+        at = _run_page()
+        assert self._next(at) == self._expected(d_future, "MIT"), (
+            f"Expected {self._expected(d_future, 'MIT')!r}, got {self._next(at)!r}"
+        )
+
+    def test_earliest_among_positions_wins(self, db):
+        """Across positions, the earliest future date wins — and it carries
+        its own position's institute."""
+        d_early = date.today() + timedelta(days=5)
+        d_late  = date.today() + timedelta(days=20)
+        pid_a = database.add_position(
+            make_position({"position_name": "A", "institute": "Stanford"})
+        )
+        pid_b = database.add_position(
+            make_position({"position_name": "B", "institute": "MIT"})
+        )
+        database.upsert_application(pid_a, {"interview1_date": d_late.isoformat()})
+        database.upsert_application(pid_b, {"interview1_date": d_early.isoformat()})
+
+        at = _run_page()
+        assert self._next(at) == self._expected(d_early, "MIT")
+
+    def test_interview2_date_beats_another_rows_interview1(self, db):
+        """Columns are symmetric: an interview2_date that's earlier than
+        another row's interview1_date wins, with its own row's institute."""
+        d_near = date.today() + timedelta(days=3)
+        d_far  = date.today() + timedelta(days=30)
+        pid_a = database.add_position(
+            make_position({"position_name": "A", "institute": "Stanford"})
+        )
+        pid_b = database.add_position(
+            make_position({"position_name": "B", "institute": "MIT"})
+        )
+        database.upsert_application(pid_a, {"interview2_date": d_near.isoformat()})
+        database.upsert_application(pid_b, {"interview1_date": d_far.isoformat()})
+
+        at = _run_page()
+        assert self._next(at) == self._expected(d_near, "Stanford")
+
+    def test_past_date_in_same_row_is_ignored(self, db):
+        """Regression guard: a row with interview1_date=past and
+        interview2_date=future-far must NOT win over another position
+        whose interview1_date is future-near. Picking blindly by column
+        (or by row order) would mis-pick the past date."""
+        past      = (date.today() - timedelta(days=7)).isoformat()
+        d_far     = (date.today() + timedelta(days=25)).isoformat()
+        d_near    = date.today() + timedelta(days=3)
+        pid_a = database.add_position(
+            make_position({"position_name": "A", "institute": "Stanford"})
+        )
+        pid_b = database.add_position(
+            make_position({"position_name": "B", "institute": "MIT"})
+        )
+        database.upsert_application(
+            pid_a, {"interview1_date": past, "interview2_date": d_far}
+        )
+        database.upsert_application(pid_b, {"interview1_date": d_near.isoformat()})
+
+        at = _run_page()
+        assert self._next(at) == self._expected(d_near, "MIT"), (
+            "Earliest FUTURE date across both columns should win; past "
+            "dates must not beat a later-but-future date from another row."
+        )
