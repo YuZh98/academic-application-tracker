@@ -428,7 +428,8 @@ def get_pending_recommenders(days: int) -> pd.DataFrame:
     and submitted_date IS NULL, joined with position_name."""
 
 def compute_materials_readiness() -> dict[str, int]:
-    """Return {"ready": N, "pending": M} for positions with status=[OPEN].
+    """Return {"ready": N, "pending": M} for positions with status in
+    ([OPEN], [APPLIED], [INTERVIEW]) — i.e. the "active" pipeline.
     A position is "ready" if every required doc (req_* = 'Y') has done_* = 1."""
 ```
 

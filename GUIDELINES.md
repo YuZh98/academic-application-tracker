@@ -175,17 +175,23 @@ deadline = st.text_input("Deadline (YYYY-MM-DD)")
 ### Use `st.form()` for all data writes
 Prevents partial saves on widget interaction:
 ```python
-with st.form("add_position"):
-    name = st.text_input("Position Name")
+with st.form("add_position_form"):   # form id ≠ any widget key inside
+    name = st.text_input("Position Name", key="add_position_name")
     submitted = st.form_submit_button("Save")
 if submitted:
     database.add_position({"position_name": name, ...})
-    st.success("Position added.")
+    st.toast("Position added.")      # st.toast survives st.rerun; st.success gets clobbered
     st.rerun()
 ```
 
-### Show errors with `st.error()`, successes with `st.success()`
+**Form id ≠ any widget key inside the form.** `st.form` registers with
+`writes_allowed=False`; a collision raises at render. Convention: suffix
+form ids with `_form` (e.g. `edit_notes_form` with widget key `edit_notes`).
+
+### Show errors with `st.error()`, successes with `st.toast()`
 Never use `print()` for user-facing messages in Streamlit.
+Prefer `st.toast` over `st.success` — toasts persist across `st.rerun()`;
+`st.success` is cleared on the next script run.
 
 ---
 
@@ -194,19 +200,22 @@ Never use `print()` for user-facing messages in Streamlit.
 This is a personal tool. The goal is **clear messages, not silent failures**.
 
 ```python
-# Preferred pattern for database operations
+# Preferred pattern for user-facing database writes
 try:
     database.add_position(fields)
-    st.success("Position saved.")
+    st.toast("Position saved.")
 except sqlite3.IntegrityError as e:
     st.error(f"Could not save: {e}")
 except Exception as e:
     st.error(f"Unexpected error: {e}")
-    raise   # re-raise so the full traceback appears in the terminal
+    # Do NOT re-raise in user-facing save paths — re-raising renders the
+    # very traceback the handler exists to hide. Log to the terminal via
+    # the exception context if needed; the friendly message is the UX.
 ```
 
-- Do not `try/except` around everything. Let unexpected errors propagate to the terminal where they can be diagnosed.
-- Do validate user input before calling database functions: check required fields are non-empty before attempting a write.
+- Do not `try/except` around everything. Let unexpected errors **in non-UI code paths** (e.g. startup, `init_db`) propagate to the terminal where they can be diagnosed.
+- In user-facing save/delete paths, catch `Exception` broadly, show `st.error(...)`, and **do not re-raise** — the point of the handler is to hide the traceback from the end user.
+- Do validate user input before calling database functions: check required fields are non-empty (including whitespace-only strings) before attempting a write.
 
 ---
 
