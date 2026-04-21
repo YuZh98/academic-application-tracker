@@ -4,10 +4,10 @@
 **Phase 4 — Dashboard (`app.py`)** — plan locked in `PHASE_4_GUIDELINES.md`. 6 tiers, ~9 sessions, ~9.5 hr. Critical path: T1 → T2 → T3 → T4 → T5 → T6.
 
 ### Phase 4 — Dashboard (pending)
-- [ ] **T1** App shell + KPI cards (~1.5 hr, 3 sessions, branch `feature/phase-4-tier1`)
-  - [ ] T1-A: top bar (title + 🔄 refresh button calling `st.rerun()`)
-  - [ ] T1-B: KPI layout shell — `st.columns(4)` placeholders with keys
-  - [ ] T1-C: wire `count_by_status()` → Tracked / Applied / Interview
+- [~] **T1** App shell + KPI cards (~1.5 hr, 3 sessions, branch `feature/phase-4-tier1`)
+  - [x] T1-A: `tests/test_app_page.py` scaffold + empty-DB smoke test + 4-KPI-column shape test
+  - [x] T1-B: `app.py` shell — title + `database.init_db()` + `st.columns(4)` with 4 `st.metric` placeholder cards (labels per DESIGN.md; values `"—"`)
+  - [ ] T1-C: top bar 🔄 refresh button (`st.rerun()`) + wire `count_by_status()` → Tracked / Applied / Interview
   - [ ] T1-D: wire `get_upcoming_interviews()` → Next Interview date (empty → `"—"`, per U3)
   - [ ] T1-E: fully-empty-DB hero callout + CTA to Opportunities (per U5)
 - [ ] **T2** Application funnel (Plotly) (~2.0 hr, 2 sessions, branch `feature/phase-4-tier2`)
@@ -34,7 +34,7 @@
 **Decisions locked:** C3 keep refresh, C4 skip caching, C5 sync GUIDELINES.md, C6 fix DESIGN §6 line 431, C8 one test file, U2 `st.columns(2)`, U3 "—" on empty, U5 empty-DB hero.
 
 ## Done in this phase
-_(Phase 4 deliverables will land here as tiers ship.)_
+- [x] 2026-04-20 — Phase 4 T1-A + T1-B: dashboard test scaffold + app shell. `tests/test_app_page.py` created (class `TestT1AppShell`, 2 tests) reusing the shared `db` fixture; `app.py` stub replaced with title + `database.init_db()` + `st.columns(4)` rendering four `st.metric` cards with labels "Tracked" / "Applied" / "Interview" / "Next Interview" and `"—"` placeholder values. **Deviation from plan**: PHASE_4_GUIDELINES.md §Test-conventions called for `st.metric(..., key=...)` lookup; verified against live Streamlit 1.56 that `st.metric` has no `key=` parameter (`TypeError` on unexpected kwarg); tests use label-based + positional lookup instead, which is the idiomatic AppTest path and doubles as a DESIGN.md contract check. Guideline corrected in same `chore:` commit. 225/225 passing, 0 deprecation warnings.
 
 ## Backlog
 
@@ -85,4 +85,4 @@ _(Phase 4 deliverables will land here as tiers ship.)_
 
 ---
 
-_Updated: 2026-04-20 (Phase 3 merged to main; Phase 4 plan locked — see `PHASE_4_GUIDELINES.md`; next action: T1-A on branch `feature/phase-4-tier1`)_
+_Updated: 2026-04-20 (Phase 4 T1-A + T1-B shipped on `feature/phase-4-tier1`; 225 tests green; next action: T1-C — top bar refresh + wire `count_by_status()` into first three KPIs)_
