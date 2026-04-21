@@ -528,6 +528,29 @@ class TestT2AFunnelBar:
             f"  got:      {list(marker.get('color', []))}"
         )
 
+    def test_funnel_y_axis_reads_top_down_in_pipeline_order(self, db):
+        """Visual order must match reading order: [OPEN] at the TOP of the
+        chart, [DECLINED] at the bottom — the same top-down flow as
+        config.STATUS_VALUES.
+
+        Plotly renders horizontal bars bottom-to-top by default (first
+        y-category sits at the bottom), which inverts the pipeline. The
+        fix is `yaxis.autorange='reversed'`. Asserting on the layout flag
+        (rather than, say, comparing screenshot pixels) keeps the test
+        stable and tells a future reader exactly what went wrong if it
+        trips — without it, flipping the data list would silently also
+        flip the colors + the logical pairing."""
+        import json
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        spec = json.loads(at.get("plotly_chart")[0].proto.spec)
+        yaxis = spec.get("layout", {}).get("yaxis", {})
+        assert yaxis.get("autorange") == "reversed", (
+            "Funnel yaxis must set autorange='reversed' so [OPEN] is at "
+            "the top and [DECLINED] at the bottom (pipeline reads top-down). "
+            f"Got yaxis={yaxis!r}"
+        )
+
     def test_funnel_missing_statuses_render_as_zero_bars(self, db):
         """count_by_status() OMITS zero-count statuses from its dict.
         The funnel must still render every STATUS_VALUES bar with the
