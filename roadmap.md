@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **T1 merged** via PR #4 (`f49ec5f`). **Tier 2 COMPLETE** on `feature/phase-4-Tier2-ApplicationFunnel`: T2-A Plotly horizontal bar (`count_by_status()`, `STATUS_COLORS`, y-axis reversed) + T2-B Option C empty-state (`st.info` wording γ) + T2-C `st.columns(2)` left-half wrap (right half reserved for T3); 263 tests green. Next: T3 — Materials Readiness panel. |
+| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **T1 merged** via PR #4, **T2 merged** via PR #5. **Tier 3 COMPLETE** on `feature/phase-4-tier3-MaterialReadiness` — two `st.progress` bars (ready / pending) + CTA inside T2-C's right half-width column; locked empty-state copy + label pins; 271 tests green, 0 deprecation warnings. Next: T4 — Upcoming timeline. |
 
 ---
 
@@ -93,8 +93,8 @@ A local, personal postdoc application tracker that answers one question clearly:
 | T2 | T2-A: Plotly funnel from `count_by_status()` + `config.STATUS_COLORS` | ✅ Done (2026-04-21) |
 | T2 | T2-B: funnel empty-state render | ✅ Done (2026-04-21) |
 | T2 | T2-C: `st.columns(2)` left half (per U2) | ✅ Done (2026-04-21) |
-| T3 | T3-A: render `compute_materials_readiness()` | Pending |
-| T3 | T3-B: `st.columns(2)` right half (per U2) | Pending |
+| T3 | T3-A: render `compute_materials_readiness()` | ✅ Done (2026-04-22) |
+| T3 | T3-B: `st.columns(2)` right half (per U2) | ✅ Done (2026-04-22) |
 | T4 | T4-A: merge deadlines + interviews DataFrame | Pending |
 | T4 | T4-B: urgency column from config thresholds | Pending |
 | T4 | T4-C: `st.dataframe(width="stretch")` render | Pending |
