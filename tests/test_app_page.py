@@ -810,3 +810,276 @@ class TestT2CFunnelLayout:
             f"Empty-state info must render inside the left half-width "
             f"column. Got left-column info bodies: {left_info_bodies}"
         )
+
+
+# ── T3: Materials Readiness — right half of the T2-C `st.columns(2)` ──────────
+
+class TestT3MaterialsReadiness:
+    """T3: Materials Readiness panel on the dashboard.
+
+    Locked design decisions (conductor brief, 2026-04-22):
+      D1. Visual = TWO `st.progress` bars (Ready, Missing); each value =
+          count / max(ready + pending, 1). No st.metric, no Plotly.
+      D2. CTA button labelled exactly '→ Opportunities page' with
+          key='materials_readiness_cta' calling
+          st.switch_page('pages/1_Opportunities.py') on click.
+      D3. Empty state: when `ready + pending == 0`, skip both bars + CTA
+          and render st.info with the locked copy. Subheader ALWAYS renders.
+      D4. Ship as one commit-triple (no T3-A / T3-B split).
+      D5. Denominator guarded by `max(ready + pending, 1)`.
+
+    Layout: the panel lives in the RIGHT half of the SINGLE `st.columns(2)`
+    created in T2-C (no new split). The `proto.weight == 0.5` pair is the
+    structural marker — same pattern as TestT2CFunnelLayout.
+
+    AppTest access pattern (probed against Streamlit 1.56):
+      - `st.progress(value: float, text: str | None)` — AppTest exposes
+        each bar as an `UnknownElement` at `at.get("progress")`; the
+        underlying proto has `.value` (int 0-100) and `.text` (label).
+        Column-scoped retrieval (`col.get("progress")`) works identically.
+      - CTA route: AppTest single-file mode cannot navigate siblings, so
+        the switch_page target is pinned at the source level (T1-E precedent).
+    """
+
+    SUBHEADER = "Materials Readiness"
+    EMPTY_COPY = (
+        "Materials readiness will appear once you've added positions "
+        "with required documents."
+    )
+    CTA_LABEL = "→ Opportunities page"
+    CTA_KEY = "materials_readiness_cta"
+    TARGET_PAGE = "pages/1_Opportunities.py"
+
+    @staticmethod
+    def _half_width_columns(at: AppTest):
+        return [c for c in at.columns if c.proto.weight == 0.5]
+
+    @classmethod
+    def _right_col(cls, at: AppTest):
+        halves = cls._half_width_columns(at)
+        assert len(halves) == 2, (
+            f"T3 precondition: the T2-C `st.columns(2)` pair must exist. "
+            f"Got {len(halves)} half-width columns."
+        )
+        return halves[1]
+
+    @classmethod
+    def _left_col(cls, at: AppTest):
+        halves = cls._half_width_columns(at)
+        assert len(halves) == 2, (
+            f"T3 precondition: the T2-C `st.columns(2)` pair must exist. "
+            f"Got {len(halves)} half-width columns."
+        )
+        return halves[0]
+
+    @classmethod
+    def _subheader_in(cls, col) -> bool:
+        return any(s.value == cls.SUBHEADER for s in col.subheader)
+
+    def test_subheader_renders_in_right_column_always(self, db):
+        """The 'Materials Readiness' subheader renders inside the right
+        half-width column on BOTH an empty DB and a populated DB — so
+        page height doesn't flicker across the empty-to-seeded transition
+        (mirrors T2-C's stability pin on the funnel subheader)."""
+        at_empty = _run_page()
+        assert self._subheader_in(self._right_col(at_empty)), (
+            "Expected 'Materials Readiness' subheader inside the right "
+            "half-width column on an empty DB. Right subheaders: "
+            f"{[s.value for s in self._right_col(at_empty).subheader]}"
+        )
+
+        database.add_position(
+            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Y"})
+        )
+        at_seeded = _run_page()
+        assert self._subheader_in(self._right_col(at_seeded)), (
+            "Expected 'Materials Readiness' subheader inside the right "
+            "half-width column on a populated DB. Right subheaders: "
+            f"{[s.value for s in self._right_col(at_seeded).subheader]}"
+        )
+
+    def test_subheader_does_not_leak_into_left_column(self, db):
+        """The left half is reserved for the Application Funnel — the
+        Readiness subheader must not appear there. Pins that the block
+        is actually inside `with _right_col:` and not leaked to the
+        top-level or the wrong column."""
+        database.add_position(
+            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Y"})
+        )
+        at = _run_page()
+        left = self._left_col(at)
+        assert not self._subheader_in(left), (
+            "'Materials Readiness' subheader must NOT appear in the left "
+            "half-width column (reserved for the funnel). Left subheaders: "
+            f"{[s.value for s in left.subheader]}"
+        )
+
+    def test_empty_db_shows_info_empty_state(self, db):
+        """Empty DB (ready + pending == 0): exactly one st.info inside
+        the right column, zero progress bars, no CTA button. D3 locked."""
+        at = _run_page()
+        right = self._right_col(at)
+        assert len(right.get("progress")) == 0, (
+            f"Empty DB must render NO progress bars in the right column "
+            f"(D3). Got {len(right.get('progress'))}."
+        )
+        info_bodies = [i.value for i in right.info]
+        assert len(info_bodies) == 1, (
+            f"Empty DB must render exactly one st.info in the right "
+            f"column (the readiness empty state). Got: {info_bodies}"
+        )
+        cta_buttons = [b for b in right.button if b.key == self.CTA_KEY]
+        assert cta_buttons == [], (
+            f"CTA button must NOT render in the empty state (D3). "
+            f"Got buttons with key={self.CTA_KEY!r}: {cta_buttons}"
+        )
+
+    def test_readiness_copy_is_spec_exact(self, db):
+        """Empty-state copy matches the locked string verbatim.
+
+        Mirrors TestT2BFunnelEmptyState.test_empty_state_copy_is_spec_exact —
+        guards against accidental rewording; a rephrase requires a new
+        user decision."""
+        at = _run_page()
+        right = self._right_col(at)
+        matching = [i for i in right.info if i.value == self.EMPTY_COPY]
+        assert len(matching) == 1, (
+            f"Expected exactly one info in the right column with the exact "
+            f"copy {self.EMPTY_COPY!r}. Got: {[i.value for i in right.info]}"
+        )
+
+    def test_populated_db_renders_two_progress_bars(self, db):
+        """Seed 1 ready + 2 pending → exactly 2 progress bars (values
+        1/3 and 2/3) in the right column, no empty-state info.
+
+        Readiness semantics (database.compute_materials_readiness):
+          - Active-only (status in OPEN / APPLIED / INTERVIEW).
+          - 'Ready' iff every req_* = 'Y' also has done_* = 1.
+          - Only counts positions with at least one required doc.
+        Using req_cv='Y' for all three; flip done_cv for the ready one."""
+        database.add_position(make_position({
+            "position_name": "Ready-A", "status": "[OPEN]",
+            "req_cv": "Y", "done_cv": 1,
+        }))
+        database.add_position(make_position({
+            "position_name": "Pending-B", "status": "[APPLIED]",
+            "req_cv": "Y", "done_cv": 0,
+        }))
+        database.add_position(make_position({
+            "position_name": "Pending-C", "status": "[INTERVIEW]",
+            "req_cv": "Y", "done_cv": 0,
+        }))
+
+        at = _run_page()
+        right = self._right_col(at)
+        bars = right.get("progress")
+        assert len(bars) == 2, (
+            f"Populated DB (1 ready + 2 pending) must render exactly 2 "
+            f"progress bars in the right column. Got {len(bars)}."
+        )
+        # proto.value is the 0-100 int form of the float passed to st.progress.
+        v0 = bars[0].proto.value / 100.0
+        v1 = bars[1].proto.value / 100.0
+        assert abs(v0 - (1 / 3)) < 0.02, (
+            f"First bar (Ready) should be 1/3 ≈ 0.333; got {v0} "
+            f"(proto.value={bars[0].proto.value})."
+        )
+        assert abs(v1 - (2 / 3)) < 0.02, (
+            f"Second bar (Missing) should be 2/3 ≈ 0.667; got {v1} "
+            f"(proto.value={bars[1].proto.value})."
+        )
+        assert all(i.value != self.EMPTY_COPY for i in right.info), (
+            "Empty-state info must NOT render once any position has a "
+            "required doc. Got right-column info bodies: "
+            f"{[i.value for i in right.info]}"
+        )
+
+    def test_progress_labels_include_counts(self, db):
+        """Progress bar labels carry the exact 'Ready to submit: N' and
+        'Still missing: M' copy, in that order. The conductor brief
+        accepts the verified parameter name (`text=`) — asserting on the
+        visible string is what the UI contract promises."""
+        database.add_position(make_position({
+            "position_name": "Ready-A", "status": "[OPEN]",
+            "req_cv": "Y", "done_cv": 1,
+        }))
+        database.add_position(make_position({
+            "position_name": "Pending-B", "status": "[APPLIED]",
+            "req_cv": "Y", "done_cv": 0,
+        }))
+        database.add_position(make_position({
+            "position_name": "Pending-C", "status": "[INTERVIEW]",
+            "req_cv": "Y", "done_cv": 0,
+        }))
+
+        at = _run_page()
+        right = self._right_col(at)
+        bars = right.get("progress")
+        assert len(bars) == 2, (
+            f"Precondition for this test: 2 progress bars. Got {len(bars)}."
+        )
+        label0 = bars[0].proto.text
+        label1 = bars[1].proto.text
+        assert label0 == "Ready to submit: 1", (
+            f"First bar label must be 'Ready to submit: 1', got {label0!r}"
+        )
+        assert label1 == "Still missing: 2", (
+            f"Second bar label must be 'Still missing: 2', got {label1!r}"
+        )
+
+    def test_terminal_only_db_shows_empty_state(self, db):
+        """A DB with only terminal-status rows has no active positions,
+        so compute_materials_readiness() returns 0/0 — the empty-state
+        info must render (and no progress bars, no CTA).
+
+        This differs from the T2-B funnel (which still renders on a
+        terminal-only DB) because the readiness panel is definitionally
+        scoped to the active pipeline."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(make_position({
+                "position_name": f"P-{term}", "status": term, "req_cv": "Y",
+            }))
+        at = _run_page()
+        right = self._right_col(at)
+        assert len(right.get("progress")) == 0, (
+            "Terminal-only DB → ready + pending == 0 → no progress bars."
+        )
+        matching = [i for i in right.info if i.value == self.EMPTY_COPY]
+        assert len(matching) == 1, (
+            f"Terminal-only DB must render the readiness empty-state info. "
+            f"Got right-column info bodies: {[i.value for i in right.info]}"
+        )
+        cta_buttons = [b for b in right.button if b.key == self.CTA_KEY]
+        assert cta_buttons == [], (
+            "CTA must NOT render in the terminal-only (empty-state) case."
+        )
+
+    def test_cta_button_routes_to_opportunities_page(self, db):
+        """CTA contract (D2):
+          (a) A button with key='materials_readiness_cta' and label
+              '→ Opportunities page' renders in the populated case.
+          (b) app.py source contains the st.switch_page('pages/1_Opportunities.py')
+              call inside the readiness block (AppTest single-file mode
+              cannot navigate siblings — T1-E precedent)."""
+        database.add_position(make_position({
+            "position_name": "A", "status": "[OPEN]",
+            "req_cv": "Y", "done_cv": 0,
+        }))
+        at = _run_page()
+        right = self._right_col(at)
+        cta_buttons = [b for b in right.button if b.key == self.CTA_KEY]
+        assert len(cta_buttons) == 1, (
+            f"Expected exactly one CTA button with key={self.CTA_KEY!r} "
+            f"in the right column. Got keys: {[b.key for b in right.button]}"
+        )
+        assert cta_buttons[0].label == self.CTA_LABEL, (
+            f"CTA button label must be exactly {self.CTA_LABEL!r}, got "
+            f"{cta_buttons[0].label!r}"
+        )
+
+        import pathlib
+        src = pathlib.Path("app.py").read_text(encoding="utf-8")
+        assert f'st.switch_page("{self.TARGET_PAGE}")' in src, (
+            f"app.py must call st.switch_page(\"{self.TARGET_PAGE}\") — "
+            "T1-E precedent pins the route target at the source level."
+        )
