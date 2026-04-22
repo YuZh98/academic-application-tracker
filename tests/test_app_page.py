@@ -569,3 +569,123 @@ class TestT2AFunnelBar:
                 assert count == 0, (
                     f"Status {status!r} has no seeded rows; expected 0, got {count}"
                 )
+
+
+# ── T2-B: Application Funnel empty-state ──────────────────────────────────────
+
+class TestT2BFunnelEmptyState:
+    """T2-B: when there are literally no positions, swap the Plotly figure
+    for descriptive text so the dashboard doesn't render an empty/broken
+    chart with seven zero-width bars.
+
+    Trigger semantics (user decision 2026-04-21, Option C):
+      - Empty-state fires iff `sum(count_by_status().values()) == 0` — i.e.
+        no rows in the positions table at all.
+      - A DB with only terminal-status rows ([CLOSED]/[REJECTED]/[DECLINED])
+        still has positions, so the figure STILL RENDERS (with the terminal
+        bars non-zero and the active bars at 0). This differs intentionally
+        from T1-E's hero trigger, which fires on 'no active pipeline'. The
+        funnel's job is visual pipeline state; terminal-only rows are valid
+        state to visualize.
+
+    Copy (user decision 2026-04-21, wording γ):
+      'Application funnel will appear once you've added positions.'
+
+    Rendered via st.info(...). AppTest exposes info elements at `at.info`,
+    each with `.value` returning the body string.
+
+    Subheader stability:
+      'Application Funnel' renders in BOTH branches so the page shape does
+      not flicker when the first position is added.
+    """
+
+    EMPTY_COPY = "Application funnel will appear once you've added positions."
+
+    @staticmethod
+    def _empty_state_shown(at: AppTest) -> bool:
+        return any(
+            TestT2BFunnelEmptyState.EMPTY_COPY in (i.value or "")
+            for i in at.info
+        )
+
+    @staticmethod
+    def _funnel_subheader_shown(at: AppTest) -> bool:
+        """The 'Application Funnel' subheader must render in both branches."""
+        return any("Application Funnel" in s.value for s in at.subheader)
+
+    def test_empty_db_hides_figure_and_shows_empty_state(self, db):
+        """No positions at all → no plotly_chart; empty-state info is shown."""
+        at = _run_page()
+        charts = at.get("plotly_chart")
+        assert len(charts) == 0, (
+            f"Empty DB must not render the funnel chart (T2-B Option C); "
+            f"got {len(charts)} plotly_chart element(s)."
+        )
+        assert self._empty_state_shown(at), (
+            f"Expected empty-state info with copy {self.EMPTY_COPY!r} on "
+            f"empty DB. Got info bodies: {[i.value for i in at.info]}"
+        )
+
+    def test_empty_state_copy_is_spec_exact(self, db):
+        """Exact copy pin — guards against accidental rewording (the user
+        locked wording γ on 2026-04-21; a rephrase needs a new decision)."""
+        at = _run_page()
+        matching = [i for i in at.info if i.value == self.EMPTY_COPY]
+        assert len(matching) == 1, (
+            f"Expected exactly one info element with the exact copy "
+            f"{self.EMPTY_COPY!r}. Got info bodies: {[i.value for i in at.info]}"
+        )
+
+    def test_single_open_position_renders_figure_not_empty_state(self, db):
+        """A single [OPEN] position → funnel chart renders; empty-state hides."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        charts = at.get("plotly_chart")
+        assert len(charts) >= 1, (
+            f"Funnel must render when at least one position exists; "
+            f"got {len(charts)} plotly_chart element(s)."
+        )
+        assert not self._empty_state_shown(at), (
+            "Empty-state info must NOT render once any position exists. "
+            f"Found info bodies: {[i.value for i in at.info]}"
+        )
+
+    def test_terminal_only_db_still_renders_figure(self, db):
+        """Option C guard: terminal-only DB has positions, so the funnel
+        still renders (with terminal bars non-zero and active bars at 0).
+
+        This is the critical Option C vs Option A divergence — the T1-E
+        hero DOES fire in this case (it gates on active-pipeline counts),
+        but the funnel renders regardless because terminal rows are valid
+        visual state. Swapping to Option A here is a single-test change."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        charts = at.get("plotly_chart")
+        assert len(charts) >= 1, (
+            "Terminal-only DB has positions (just not active ones); the "
+            "funnel must still render. Got 0 plotly_chart elements."
+        )
+        assert not self._empty_state_shown(at), (
+            "Empty-state copy must NOT render when any position exists, "
+            "even in terminal statuses. Got info bodies: "
+            f"{[i.value for i in at.info]}"
+        )
+
+    def test_subheader_renders_in_both_branches(self, db):
+        """'Application Funnel' subheader persists across the empty → seeded
+        transition, so the page height doesn't jump when the first
+        position is added."""
+        at = _run_page()
+        assert self._funnel_subheader_shown(at), (
+            "Empty-state branch must still render the 'Application Funnel' "
+            f"subheader. Got: {[s.value for s in at.subheader]}"
+        )
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        assert self._funnel_subheader_shown(at), (
+            "Seeded branch must still render the 'Application Funnel' "
+            f"subheader. Got: {[s.value for s in at.subheader]}"
+        )
