@@ -12,7 +12,7 @@
   - [x] T1-E: fully-empty-DB hero callout + CTA to Opportunities (per U5)
 - [~] **T2** Application funnel (Plotly) (~2.0 hr, 2 sessions, branch `feature/phase-4-Tier2-ApplicationFunnel`)
   - [x] T2-A: Plotly horizontal bar from `count_by_status()`, colors via `config.STATUS_COLORS`
-  - [ ] T2-B: empty-state render (no positions → descriptive text, not broken figure)
+  - [x] T2-B: empty-state render (Option C trigger: `sum(count_by_status().values()) == 0`; wording γ: "Application funnel will appear once you've added positions.")
   - [ ] T2-C: place in left half of `st.columns(2)` (per U2)
 - [ ] **T3** Materials Readiness (~1.0 hr, 1 session, branch `feature/phase-4-tier3`)
   - [ ] T3-A: render `compute_materials_readiness()` → "N ready / M pending" + mini bar
@@ -88,4 +88,4 @@
 
 ---
 
-_Updated: 2026-04-21 (Phase 4 T1 merged via PR #4; T2-A shipped on `feature/phase-4-Tier2-ApplicationFunnel` — Plotly horizontal bar from `count_by_status()` with `config.STATUS_COLORS`. 252 tests green, 0 deprecation warnings. Next: T2-B empty-state branch, then T2-C `st.columns(2)` wrap.)_
+_Updated: 2026-04-21 (Phase 4 T1 merged via PR #4; T2-A + T2-B shipped on `feature/phase-4-Tier2-ApplicationFunnel` — Plotly horizontal bar with `STATUS_COLORS` + Option C empty-state branch (`st.info` wording γ). 258 tests green, 0 deprecation warnings. Next: T2-C — wrap funnel in left half of `st.columns(2)` per U2.)_

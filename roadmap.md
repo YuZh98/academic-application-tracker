@@ -17,7 +17,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | Virtual environment | ✅ Created (.venv/) |
 | Data layer | ✅ database.py + exports.py stub |
 | SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **T1 merged** via PR #4 (`f49ec5f`). **T2-A** (Plotly horizontal bar funnel from `count_by_status()` with `config.STATUS_COLORS`) shipped on `feature/phase-4-Tier2-ApplicationFunnel`; 252 tests green. Next: T2-B empty-state branch, then T2-C wrap in `st.columns(2)` left half (per U2). |
+| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **T1 merged** via PR #4 (`f49ec5f`). **T2-A + T2-B** (Plotly horizontal bar funnel from `count_by_status()` with `config.STATUS_COLORS` + Option C empty-state branch via `st.info`) shipped on `feature/phase-4-Tier2-ApplicationFunnel`; 258 tests green. Next: T2-C — wrap funnel in `st.columns(2)` left half (per U2). |
 
 ---
 
@@ -91,7 +91,7 @@ A local, personal postdoc application tracker that answers one question clearly:
 | T1 | T1-D: wire `get_upcoming_interviews()` → Next Interview (empty → `"—"`, per U3) | ✅ Done (2026-04-21) |
 | T1 | T1-E: fully-empty-DB hero callout + CTA (per U5) | ✅ Done (2026-04-21) |
 | T2 | T2-A: Plotly funnel from `count_by_status()` + `config.STATUS_COLORS` | ✅ Done (2026-04-21) |
-| T2 | T2-B: funnel empty-state render | Pending |
+| T2 | T2-B: funnel empty-state render | ✅ Done (2026-04-21) |
 | T2 | T2-C: `st.columns(2)` left half (per U2) | Pending |
 | T3 | T3-A: render `compute_materials_readiness()` | Pending |
 | T3 | T3-B: `st.columns(2)` right half (per U2) | Pending |
