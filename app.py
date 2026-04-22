@@ -4,8 +4,8 @@
 # Phase 4 build-out: answers "What do I do today?" at a glance. This file
 # is layered in over several tiers (see PHASE_4_GUIDELINES.md):
 #   T1 — app shell + 4 KPI cards + 🔄 refresh + empty-DB hero   ✅ done
-#   T2 — application funnel                                     (next)
-#   T3 — materials readiness panel
+#   T2 — application funnel (Plotly bar + empty-state + columns wrap)  ✅ done
+#   T3 — materials readiness panel                              (next)
 #   T4 — upcoming timeline
 #   T5 — recommender alerts
 

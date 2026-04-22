@@ -795,12 +795,17 @@ class TestT2CFunnelLayout:
         """Empty DB: the T2-B info copy must live INSIDE the left half
         column too — otherwise the empty-state branch accidentally
         escapes the layout wrap and the right-half alignment breaks
-        when T3-B lands."""
+        when T3-B lands.
+
+        References `TestT2BFunnelEmptyState.EMPTY_COPY` rather than
+        re-literalizing the string so a future wording change (which
+        requires a new user decision per §T2-B) updates one constant,
+        not multiple. See phase-4-Tier2 review Fix #2."""
         at = _run_page()
         halves = self._half_width_columns(at)
         left = halves[0]
         left_info_bodies = [i.value for i in left.info]
-        expected = "Application funnel will appear once you've added positions."
+        expected = TestT2BFunnelEmptyState.EMPTY_COPY
         assert expected in left_info_bodies, (
             f"Empty-state info must render inside the left half-width "
             f"column. Got left-column info bodies: {left_info_bodies}"
