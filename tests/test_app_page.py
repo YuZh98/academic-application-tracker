@@ -689,3 +689,119 @@ class TestT2BFunnelEmptyState:
             "Seeded branch must still render the 'Application Funnel' "
             f"subheader. Got: {[s.value for s in at.subheader]}"
         )
+
+
+# ── T2-C: Application Funnel — placed in left half of st.columns(2) (U2) ──────
+
+class TestT2CFunnelLayout:
+    """T2-C: place the funnel inside the LEFT half of an `st.columns(2)` so
+    the right half can host T3's Materials Readiness panel (locked user
+    decision U2 — PHASE_4_GUIDELINES.md §Locked decisions).
+
+    Layout-detection strategy:
+      AppTest exposes each column as `Column` objects in `at.columns`. Each
+      column's `proto.weight` attribute is the fraction of the flex
+      container it occupies — for `st.columns(2)` both halves have
+      weight == 0.5, distinct from the existing dashboard columns:
+        - title row: `st.columns([6, 1])` → weights ≈0.857 / 0.143
+        - KPI grid: `st.columns(4)`        → weight == 0.25 each
+      So `weight == 0.5` uniquely identifies the T2-C pair.
+
+    T3-B will REUSE this same `st.columns(2)` (not create a new one), so
+    the "exactly 2 columns with weight 0.5" invariant holds through T3
+    landing as well — any future tier that adds another 2-col split on
+    the dashboard will trip this test, which is the desired guard.
+
+    Tests pin the structural contract (column weight + which half holds
+    the subheader) rather than raw AppTest indices, so reordering or
+    adding widgets around the funnel doesn't cause spurious failures.
+    """
+
+    FUNNEL_SUBHEADER = "Application Funnel"
+
+    @staticmethod
+    def _half_width_columns(at: AppTest):
+        """Return (in page order) every AppTest Column with weight == 0.5."""
+        return [c for c in at.columns if c.proto.weight == 0.5]
+
+    @classmethod
+    def _column_has_funnel_subheader(cls, col) -> bool:
+        return any(s.value == cls.FUNNEL_SUBHEADER for s in col.subheader)
+
+    def test_exactly_two_half_width_columns_exist(self, db):
+        """The T2-C wrap creates the single `st.columns(2)` pair on the
+        dashboard. Two half-width columns = one pair = the funnel split.
+        Any additional 2-col split (until an explicit layout-change
+        decision) would trip this test — desired guard."""
+        at = _run_page()
+        halves = self._half_width_columns(at)
+        assert len(halves) == 2, (
+            f"Expected exactly 2 half-width columns (the T2-C pair), got "
+            f"{len(halves)}. Dashboard column weights: "
+            f"{[c.proto.weight for c in at.columns]}"
+        )
+
+    def test_funnel_lives_in_a_half_width_column(self, db):
+        """Exactly one half-width column carries the 'Application Funnel'
+        subheader — pins the wrap is actually inside the new 2-col split
+        (not accidentally left at the top level)."""
+        at = _run_page()
+        halves = self._half_width_columns(at)
+        owners = [c for c in halves if self._column_has_funnel_subheader(c)]
+        assert len(owners) == 1, (
+            f"Expected exactly one half-width column to own the "
+            f"'Application Funnel' subheader, got {len(owners)}. "
+            f"Subheaders per half-width column: "
+            f"{[[s.value for s in c.subheader] for c in halves]}"
+        )
+
+    def test_funnel_is_in_left_half(self, db):
+        """Left half = first half-width column in page order (U2: funnel
+        LEFT, readiness right — DESIGN.md §app.py wireframe)."""
+        at = _run_page()
+        halves = self._half_width_columns(at)
+        assert len(halves) == 2, (
+            f"Precondition for this test: exactly 2 half-width columns. "
+            f"Got {len(halves)}."
+        )
+        left, right = halves[0], halves[1]
+        assert self._column_has_funnel_subheader(left), (
+            "Funnel must be in the LEFT half-width column (first in page "
+            f"order). Left-column subheaders: {[s.value for s in left.subheader]}"
+        )
+        assert not self._column_has_funnel_subheader(right), (
+            "Funnel subheader must NOT leak into the RIGHT half — that "
+            "column is reserved for T3's Materials Readiness. Right-column "
+            f"subheaders: {[s.value for s in right.subheader]}"
+        )
+
+    def test_funnel_figure_renders_inside_left_column(self, db):
+        """Seeded DB: the plotly chart must live INSIDE the left half
+        column, not at top-level. Asserting scoped retrieval (col.get
+        rather than at.get) pins that the whole funnel block was moved
+        as a unit, not just the subheader."""
+        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        at = _run_page()
+        halves = self._half_width_columns(at)
+        left = halves[0]
+        charts_in_left = left.get("plotly_chart")
+        assert len(charts_in_left) >= 1, (
+            f"Funnel figure must render inside the left half-width column. "
+            f"Got {len(charts_in_left)} charts in left; "
+            f"{len(at.get('plotly_chart'))} at top level."
+        )
+
+    def test_empty_state_info_renders_inside_left_column(self, db):
+        """Empty DB: the T2-B info copy must live INSIDE the left half
+        column too — otherwise the empty-state branch accidentally
+        escapes the layout wrap and the right-half alignment breaks
+        when T3-B lands."""
+        at = _run_page()
+        halves = self._half_width_columns(at)
+        left = halves[0]
+        left_info_bodies = [i.value for i in left.info]
+        expected = "Application funnel will appear once you've added positions."
+        assert expected in left_info_bodies, (
+            f"Empty-state info must render inside the left half-width "
+            f"column. Got left-column info bodies: {left_info_bodies}"
+        )
