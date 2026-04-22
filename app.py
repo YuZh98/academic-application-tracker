@@ -124,38 +124,47 @@ with c3:
 with c4:
     st.metric(label="Next Interview", value=next_interview)
 
-# ── Application Funnel (T2-A + T2-B) ──────────────────────────────────────────
-# Plotly horizontal bar — one bar per config.STATUS_VALUES entry in canonical
-# order so the pipeline reads top-to-bottom OPEN → DECLINED. count_by_status()
-# returns a sparse dict (zero-count statuses omitted); we fill missing buckets
-# with 0 so the chart shape stays stable as the pipeline fills up. Marker
-# colors come from config.STATUS_COLORS — same anti-typo guardrail as the
-# status literals, keeps the pre-merge grep rule enforcing a single source.
-#
-# T2-B empty-state (Option C, locked 2026-04-21): when the positions table
-# is literally empty (no rows at all), skip the Plotly chart and show a
-# descriptive info instead. A terminal-only DB still renders the figure —
-# terminal rows are valid visual state, and the T1-E hero separately covers
-# 'no active pipeline'. Subheader renders in both branches so page height
-# doesn't flicker when the first position lands. T2-C will wrap in st.columns(2).
-st.subheader("Application Funnel")
-if sum(_status_counts.values()) == 0:
-    st.info("Application funnel will appear once you've added positions.")
-else:
-    _funnel_x = [_status_counts.get(s, 0) for s in config.STATUS_VALUES]
-    _funnel_colors = [config.STATUS_COLORS[s] for s in config.STATUS_VALUES]
-    _funnel_fig = go.Figure(
-        data=[
-            go.Bar(
-                x=_funnel_x,
-                y=list(config.STATUS_VALUES),
-                orientation="h",
-                marker_color=_funnel_colors,
-            )
-        ]
-    )
-    # Plotly renders horizontal bars bottom-to-top by default (first y-category
-    # at the bottom). Reverse the axis so the pipeline reads top-down —
-    # [OPEN] at the top, [DECLINED] at the bottom — matching STATUS_VALUES order.
-    _funnel_fig.update_yaxes(autorange="reversed")
-    st.plotly_chart(_funnel_fig, key="funnel_chart")
+# ── Funnel + Readiness row (T2-C) ─────────────────────────────────────────────
+# Two equal-width columns per locked decision U2: Application Funnel on the
+# left, Materials Readiness (T3) on the right. T3-B will place its content
+# inside `_right_col` below — the split is created once here and reused so
+# the dashboard stays a single 2-column row (no second `st.columns(2)` call).
+_left_col, _right_col = st.columns(2)
+
+with _left_col:
+    # ── Application Funnel (T2-A + T2-B) ──────────────────────────────────────
+    # Plotly horizontal bar — one bar per config.STATUS_VALUES entry in
+    # canonical order so the pipeline reads top-to-bottom OPEN → DECLINED.
+    # count_by_status() returns a sparse dict (zero-count statuses omitted);
+    # we fill missing buckets with 0 so the chart shape stays stable as the
+    # pipeline fills up. Marker colors come from config.STATUS_COLORS — same
+    # anti-typo guardrail as the status literals, keeps the pre-merge grep
+    # rule enforcing a single source.
+    #
+    # T2-B empty-state (Option C, locked 2026-04-21): when the positions table
+    # is literally empty (no rows at all), skip the Plotly chart and show a
+    # descriptive info instead. A terminal-only DB still renders the figure —
+    # terminal rows are valid visual state, and the T1-E hero separately
+    # covers 'no active pipeline'. Subheader renders in both branches so page
+    # height doesn't flicker when the first position lands.
+    st.subheader("Application Funnel")
+    if sum(_status_counts.values()) == 0:
+        st.info("Application funnel will appear once you've added positions.")
+    else:
+        _funnel_x = [_status_counts.get(s, 0) for s in config.STATUS_VALUES]
+        _funnel_colors = [config.STATUS_COLORS[s] for s in config.STATUS_VALUES]
+        _funnel_fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=_funnel_x,
+                    y=list(config.STATUS_VALUES),
+                    orientation="h",
+                    marker_color=_funnel_colors,
+                )
+            ]
+        )
+        # Plotly renders horizontal bars bottom-to-top by default (first
+        # y-category at the bottom). Reverse the axis so the pipeline reads
+        # top-down — first STATUS_VALUES entry at the top, last at the bottom.
+        _funnel_fig.update_yaxes(autorange="reversed")
+        st.plotly_chart(_funnel_fig, key="funnel_chart")
