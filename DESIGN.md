@@ -330,7 +330,7 @@ CREATE TABLE IF NOT EXISTS positions (
 
     -- Identity & metadata
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    status           TEXT    NOT NULL DEFAULT '[SAVED]',   -- from config.STATUS_VALUES[0]
+    status           TEXT    NOT NULL DEFAULT '<STATUS_SAVED>',   -- placeholder: interpolated from config
     priority         TEXT,                                 -- from config.PRIORITY_VALUES
     created_at       TEXT    DEFAULT (date('now')),
     updated_at       TEXT    DEFAULT (datetime('now')),    -- maintained by trigger
@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS applications (
     response_date          TEXT,
     response_type          TEXT,                   -- from config.RESPONSE_TYPES
     result_notify_date     TEXT,
-    result                 TEXT    DEFAULT 'Pending',   -- from config.RESULT_DEFAULT
+    result                 TEXT    DEFAULT '<RESULT_DEFAULT>',   -- placeholder: interpolated from config
     notes                  TEXT,
     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
 );
@@ -437,6 +437,13 @@ TABLE` statements via f-strings that read `config.STATUS_VALUES[0]` and
 `config.RESULT_DEFAULT`. Column names for the `req_*` / `done_*` pairs
 come from `config.REQUIREMENT_DOCS`. No user-supplied value ever reaches
 the DDL; `config.py` is the only string source.
+
+The DDL above shows DEFAULT clauses with `<ALIAS_NAME>` placeholders
+(e.g. `'<STATUS_SAVED>'`, `'<RESULT_DEFAULT>'`); at `init_db()`
+construction time, the f-strings substitute in the current config
+value. The placeholders let DESIGN stay immune to a rename of the
+underlying constant: rename `STATUS_VALUES[0]` from `"[SAVED]"` to
+something else and only `config.py` changes.
 
 ### 6.3 Data migrations
 
@@ -806,7 +813,7 @@ the full interview sequence.
 ```
 
 **Behaviour:**
-- **Default filter** excludes positions with status `[SAVED]` or `[CLOSED]` — they are pre-application or withdrawn and have no application data worth showing.
+- **Default filter** excludes positions with status `STATUS_SAVED` or `STATUS_CLOSED` — they are pre-application or withdrawn and have no application data worth showing.
 - **"All recs submitted"** column is a live computation via `database.is_all_recs_submitted(position_id)`; no stored summary.
 - **"Confirmation"** column reads `confirmation_received` (flag) and displays its `confirmation_date` (if set) as a tooltip.
 - **Interviews** are edited as a list: one row per `interviews` record, ordered by `sequence`. Each row has `scheduled_date`, `format`, `notes`. Add appends a new interview with the next `sequence`. Delete removes one row (FK from `applications`).
@@ -909,42 +916,52 @@ Two writers can promote `positions.status` as a side effect — both
 accept a keyword argument `propagate_status: bool = True`; when False,
 no pipeline promotion fires.
 
+**Placeholder convention.** In the SQL snippets below, `<STATUS_*>`
+placeholders interpolate to the corresponding `config.py` alias value
+at query-construction time, and `<TERMINAL_STATUSES>` interpolates to
+the tuple of all terminal status values. References elsewhere in this
+section use the alias names directly (e.g. `STATUS_APPLIED`) rather
+than the underlying literal (e.g. `[APPLIED]`), so a rename in
+`config.py` does not ripple into this section.
+
 | # | Trigger (in which writer) | Condition | Cascade |
 |---|--------------------------|-----------|---------|
-| R1 | `upsert_application` | `applied_date` transitions from NULL to non-NULL | `UPDATE positions SET status = '[APPLIED]' WHERE id = ? AND status = '[SAVED]'` |
-| R2 | `add_interview` | Any successful interview insert | `UPDATE positions SET status = '[INTERVIEW]' WHERE id = ? AND status = '[APPLIED]'` |
-| R3 | `upsert_application` | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '[OFFER]' WHERE id = ? AND status NOT IN (<TERMINAL_STATUSES>)` |
+| R1 | `upsert_application` | `applied_date` transitions from NULL to non-NULL | `UPDATE positions SET status = '<STATUS_APPLIED>' WHERE id = ? AND status = '<STATUS_SAVED>'` |
+| R2 | `add_interview` | Any successful interview insert | `UPDATE positions SET status = '<STATUS_INTERVIEW>' WHERE id = ? AND status = '<STATUS_APPLIED>'` |
+| R3 | `upsert_application` | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '<STATUS_OFFER>' WHERE id = ? AND status NOT IN (<TERMINAL_STATUSES>)` |
 
 **R1 and R2 are idempotent by construction** — the `AND status = '<prev>'`
 guard makes the cascade a no-op when the position is already at or past
 the target stage. R2 does **not** inspect the interview count: the
-status guard alone delivers the correct semantics (first interview on an
-`[APPLIED]` position promotes; subsequent interviews on an `[INTERVIEW]`
-position are no-ops; a position at `[OFFER]` or terminal is not
-regressed). An earlier draft of R2 counted interviews ("exactly one
-after insert") but that over-restricts: if the user back-edits status to
-`[APPLIED]` while retaining existing interviews, adding another
-interview would fail to promote. The count-free form avoids this.
+status guard alone delivers the correct semantics (first interview on a
+`STATUS_APPLIED` position promotes; subsequent interviews on a
+`STATUS_INTERVIEW` position are no-ops; a position at `STATUS_OFFER` or
+terminal is not regressed). An earlier draft of R2 counted interviews
+("exactly one after insert") but that over-restricts: if the user
+back-edits status to `STATUS_APPLIED` while retaining existing
+interviews, adding another interview would fail to promote. The
+count-free form avoids this.
 
 **R3 overrides non-terminal stages but guards against terminals.**
-Receiving an Offer while at `[SAVED]`, `[APPLIED]`, or `[INTERVIEW]`
-lands the position at `[OFFER]` directly. A position already in a
-terminal stage (`[CLOSED]`, `[REJECTED]`, `[DECLINED]`) is **not**
-silently regressed — the user must first move the status out of the
-terminal bucket, and then the next `upsert_application` with
-`response_type = "Offer"` will promote. This prevents a stray edit, data
-import, or misread response from clobbering a terminal decision.
+Receiving an Offer while at `STATUS_SAVED`, `STATUS_APPLIED`, or
+`STATUS_INTERVIEW` lands the position at `STATUS_OFFER` directly. A
+position already in a terminal stage (any member of
+`TERMINAL_STATUSES`) is **not** silently regressed — the user must
+first move the status out of the terminal bucket, and then the next
+`upsert_application` with `response_type = "Offer"` will promote. This
+prevents a stray edit, data import, or misread response from clobbering
+a terminal decision.
 
 If R1 and R3 fire from the same `upsert_application` call, the combined
 effect depends on the pre-state. The per-state behaviour is:
 
 | Pre-state | R1 fires? | R3 fires? | Post-state |
 |-----------|-----------|-----------|------------|
-| `[SAVED]` | Yes (→ `[APPLIED]`) | Yes (→ `[OFFER]`) | `[OFFER]` |
-| `[APPLIED]` | No | Yes (→ `[OFFER]`) | `[OFFER]` |
-| `[INTERVIEW]` | No | Yes (→ `[OFFER]`) | `[OFFER]` |
-| `[OFFER]` | No | Yes (no-op, already there) | `[OFFER]` |
-| `[CLOSED]` / `[REJECTED]` / `[DECLINED]` | No | No (terminal guard) | unchanged |
+| `STATUS_SAVED` | Yes (→ `STATUS_APPLIED`) | Yes (→ `STATUS_OFFER`) | `STATUS_OFFER` |
+| `STATUS_APPLIED` | No | Yes (→ `STATUS_OFFER`) | `STATUS_OFFER` |
+| `STATUS_INTERVIEW` | No | Yes (→ `STATUS_OFFER`) | `STATUS_OFFER` |
+| `STATUS_OFFER` | No | Yes (no-op, already there) | `STATUS_OFFER` |
+| any member of `TERMINAL_STATUSES` | No | No (terminal guard) | unchanged |
 
 All cascades execute inside the same transaction as the primary write,
 so a failure rolls the whole call back.
