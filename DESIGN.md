@@ -436,7 +436,7 @@ before any page renders:
 2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a per-status color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has a UI label
 4. `set(TERMINAL_STATUSES) <= set(STATUS_VALUES)` — terminals are a subset
-5. The raw statuses across all `FUNNEL_BUCKETS` tuples, flattened, equal `set(STATUS_VALUES)` with no duplicates — every status lives in exactly one bucket
+5. Let `F = [raw for (_, raws, _) in FUNNEL_BUCKETS for raw in raws]`. Require `sorted(F) == sorted(STATUS_VALUES)` (multiset equality). This asserts two facts at once: every raw status appears in some bucket, **and** no status appears in more than one bucket.
 6. `FUNNEL_DEFAULT_HIDDEN <= {label for label, _, _ in FUNNEL_BUCKETS}` — the hidden-by-default set references real bucket labels
 7. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label
 8. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
@@ -828,7 +828,7 @@ values.
 | KPI: Applied | `count_by_status().get(STATUS_APPLIED, 0)` | — | — |
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
 | KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
-| Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
+| Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
 | Funnel toggles | One checkbox per `FUNNEL_DEFAULT_HIDDEN` bucket label (currently Closed + Archived); state persists via `st.session_state` keyed by `_funnel_show_<label>` | Checkbox labels match bucket labels | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
 | Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` by date; `st.dataframe(width="stretch")`, columns (Date, Label, Kind, Urgency); Status shown via `STATUS_LABELS[raw]`; Kind ∈ {"deadline", "interview"} | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS` |
@@ -858,7 +858,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 
 | Panel | Empty-state behaviour |
 |-------|-----------------------|
-| Funnel | If `sum(count_by_status().values()) == 0` (no rows anywhere), show `st.info("Application funnel will appear once you've added positions.")`. A DB with only terminal-status rows still renders the chart (the Show-toggle reveals the inactive bars). Subheader + toggles render in both branches (page-height stability). |
+| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")`. (b) *No visible data* — total is non-zero but `sum(counts.get(raw, 0) for (label, raws, _) in FUNNEL_BUCKETS if is_visible(label) for raw in raws) == 0` (i.e. every non-zero bucket is hidden by `FUNNEL_DEFAULT_HIDDEN` and the user hasn't toggled it on): show `st.info("All your positions are in hidden buckets. Use the toggles above to reveal them.")`. (c) *Otherwise* render the chart. Subheader + toggle row render in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications sees a subheader + toggle row above a chart area of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the toggles). |
 | Materials Readiness | If `ready + pending == 0`, show `st.info("Materials readiness will appear once you've added positions with required documents.")`. Subheader renders in both branches. |
 | Upcoming | If merged DataFrame is empty, show `st.info("No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`. |
 | Recommender Alerts | If `get_pending_recommenders()` returns empty, show `st.info("No pending recommender follow-ups.")`. |
@@ -1057,18 +1057,42 @@ no pipeline promotion fires.
 | # | Trigger (in which writer) | Condition | Cascade |
 |---|--------------------------|-----------|---------|
 | R1 | `upsert_application` | `applied_date` transitions from NULL to non-NULL | `UPDATE positions SET status = '[APPLIED]' WHERE id = ? AND status = '[SAVED]'` |
-| R2 | `add_interview` | After the insert, this application has exactly one interview row (the just-inserted one) | `UPDATE positions SET status = '[INTERVIEW]' WHERE id = ? AND status = '[APPLIED]'` |
-| R3 | `upsert_application` | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '[OFFER]' WHERE id = ?` (unconditional — Offer overrides earlier stages) |
+| R2 | `add_interview` | Any successful interview insert | `UPDATE positions SET status = '[INTERVIEW]' WHERE id = ? AND status = '[APPLIED]'` |
+| R3 | `upsert_application` | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '[OFFER]' WHERE id = ? AND status NOT IN (<TERMINAL_STATUSES>)` |
 
-R1 and R2 are **guarded** — they only promote from the immediately-
-previous stage. A backward edit (e.g. deleting an interview from a
-position already at `[OFFER]`) does not regress the pipeline. R3 is
-**unconditional** — receiving an Offer always lands at `[OFFER]`
-regardless of prior stage.
+**R1 and R2 are idempotent by construction** — the `AND status = '<prev>'`
+guard makes the cascade a no-op when the position is already at or past
+the target stage. R2 does **not** inspect the interview count: the
+status guard alone delivers the correct semantics (first interview on an
+`[APPLIED]` position promotes; subsequent interviews on an `[INTERVIEW]`
+position are no-ops; a position at `[OFFER]` or terminal is not
+regressed). An earlier draft of R2 counted interviews ("exactly one
+after insert") but that over-restricts: if the user back-edits status to
+`[APPLIED]` while retaining existing interviews, adding another
+interview would fail to promote. The count-free form avoids this.
 
-If R1 and R3 fire from the same `upsert_application` call, R3 wins
-(evaluated last, unconditional). The combined effect equals
-`[SAVED] → [OFFER]` in one transaction.
+**R3 overrides non-terminal stages but guards against terminals.**
+Receiving an Offer while at `[SAVED]`, `[APPLIED]`, or `[INTERVIEW]`
+lands the position at `[OFFER]` directly. A position already in a
+terminal stage (`[CLOSED]`, `[REJECTED]`, `[DECLINED]`) is **not**
+silently regressed — the user must first move the status out of the
+terminal bucket, and then the next `upsert_application` with
+`response_type = "Offer"` will promote. This prevents a stray edit, data
+import, or misread response from clobbering a terminal decision.
+
+If R1 and R3 fire from the same `upsert_application` call, the combined
+effect depends on the pre-state. The per-state behaviour is:
+
+| Pre-state | R1 fires? | R3 fires? | Post-state |
+|-----------|-----------|-----------|------------|
+| `[SAVED]` | Yes (→ `[APPLIED]`) | Yes (→ `[OFFER]`) | `[OFFER]` |
+| `[APPLIED]` | No | Yes (→ `[OFFER]`) | `[OFFER]` |
+| `[INTERVIEW]` | No | Yes (→ `[OFFER]`) | `[OFFER]` |
+| `[OFFER]` | No | Yes (no-op, already there) | `[OFFER]` |
+| `[CLOSED]` / `[REJECTED]` / `[DECLINED]` | No | No (terminal guard) | unchanged |
+
+All cascades execute inside the same transaction as the primary write,
+so a failure rolls the whole call back.
 
 Each writer that can promote returns an indicator
 `{"status_changed": bool, "new_status": str | None}` so callers can
