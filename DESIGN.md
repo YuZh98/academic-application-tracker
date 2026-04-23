@@ -1,5 +1,5 @@
 # System Design: Postdoc Application Tracker
-**Version:** 1.0 | **Date:** 2026-04-15 | **Status:** Approved for implementation
+**Version:** 1.1 | **Updated:** 2026-04-23 | **Status:** Living reference (drift pass — pre-v1-ship refactor, no architectural change)
 
 ---
 
@@ -91,14 +91,19 @@ A local, single-user web application that:
 
 ## 3. Technology Stack
 
-| Component | Choice | Minimum version | Rationale |
-|-----------|--------|----------------|-----------|
+| Component | Choice | Required ≥ | Rationale |
+|-----------|--------|-----------|-----------|
 | Language | Python | 3.14.0 (system) | Already installed; familiar to stats/data users |
 | Environment | venv (`.venv/`) | stdlib | Zero extra tools; isolates packages; gitignored |
-| UI framework | Streamlit | 1.35 | Python-native; R Shiny equivalent; no HTML/JS needed |
-| Charts | Plotly Express | 5.22 | Interactive by default; one-line chart calls; familiar |
+| UI framework | Streamlit | 1.50 | Python-native; R Shiny equivalent; `width="stretch"` requires ≥ 1.50 |
+| Charts | Plotly (Graph Objects) | 5.22 | Interactive by default; used via `plotly.graph_objects.Figure` / `go.Bar` |
 | Data frames | Pandas | 2.2 | Bridges SQLite rows and Streamlit display |
 | Database | SQLite via `sqlite3` | stdlib | No server; single file; standard SQL; gitignored |
+
+**Tested with (as of v0.4.0, 2026-04-23):** Streamlit 1.56.0 · Plotly 6.7.0 · pandas 3.0.2 · Python 3.14.0.
+The `Required ≥` column is the minimum known-working version; if a user clones with
+older versions, features like `st.dataframe(width="stretch")` and `st.switch_page()`
+will fail. Bump the minimum when a new API is adopted.
 
 **Install command:**
 ```bash
@@ -133,7 +138,7 @@ Postdoc/
 │   ├── 3_Recommenders.py     ← Recommender log + pending alerts
 │   └── 4_Export.py           ← Manual export trigger + file download
 │
-├── exports/                  ← Auto-generated markdown (gitignored or committed)
+├── exports/                  ← Auto-generated markdown (COMMITTED — human-readable backup)
 │   ├── OPPORTUNITIES.md      ← Generated from positions table
 │   ├── PROGRESS.md           ← Generated from applications table
 │   └── RECOMMENDERS.md       ← Generated from recommenders table
@@ -141,11 +146,21 @@ Postdoc/
 ├── postdoc.db                ← SQLite database (GITIGNORED — binary, personal data)
 ├── requirements.txt          ← Exact pinned versions (committed)
 │
+├── tests/                    ← pytest suite (committed)
+├── reviews/                  ← pre-merge review docs, one per tier (committed)
+├── docs/                     ← supplemental docs (committed — added in v1.1 refactor)
+│   ├── adr/                  ← architectural decision records (new decisions only)
+│   └── dev-notes/            ← deep dives: git workflow, Streamlit state gotchas
+│
 ├── DESIGN.md                 ← This file — master technical specification
 ├── GUIDELINES.md             ← Coding conventions for all sessions
 ├── roadmap.md                ← Phase tracker and backlog
-├── CLAUDE.md                 ← Session working memory
-├── TASKS.md                  ← Current to-do list
+├── CHANGELOG.md              ← Release history (v0.x.y, append-only)
+├── README.md                 ← Public entry point (added at v1 ship prep)
+├── LICENSE                   ← MIT (added at v1 ship prep)
+│
+├── CLAUDE.md                 ← Session working memory (GITIGNORED since v1.1)
+├── PHASE_*_GUIDELINES.md     ← Phase-specific internal playbooks (GITIGNORED since v1.1)
 │
 └── .gitignore
 ```
@@ -157,15 +172,25 @@ Postdoc/
 
 ## 5. `config.py` — Full Specification
 
-`config.py` is the **only file that changes** when adding a new field type or adapting the tracker to a different job context. Every other module reads from it.
+`config.py` is the **single source of truth** for vocabulary, constants, and field
+definitions. Every other module reads from it; no other file hardcodes a status
+string, priority value, or requirement-doc label.
+
+The block below mirrors `config.py` as of **v0.4.0 (2026-04-23)**.
+The `config.py` file itself remains canonical — if this mirror drifts, the file wins.
+
+### 5.1 Constants
 
 ```python
 # ── Tracker identity ──────────────────────────────────────────────
 TRACKER_PROFILE = "postdoc"   # Options: "postdoc" | "software_eng" | "faculty"
+# NOTE: currently UNUSED by any module (no init_db or page reads it).
+# Tracked as C2 in v1.1 refactor: either wire (import-time validation +
+# profile-gated fields) or remove. Code cleanup pending user decision.
 
 # ── Status pipeline (ordered: index = pipeline position) ─────────
 STATUS_VALUES = [
-    "[OPEN]",        # Found; not yet applied
+    "[OPEN]",        # Found; not yet applied     — rename to "[SAVED]" planned for v0.5
     "[APPLIED]",     # Application submitted
     "[INTERVIEW]",   # Interview stage reached
     "[OFFER]",       # Offer received
@@ -174,7 +199,17 @@ STATUS_VALUES = [
     "[DECLINED]",    # Offer turned down
 ]
 
-# Status → Streamlit color name (used in st.badge / markdown coloring)
+# Named aliases for specific pipeline stages — page code references these
+# instead of positional indices or literal strings (added Phase 4 T1-C).
+STATUS_OPEN      = STATUS_VALUES[0]   # "[OPEN]"
+STATUS_APPLIED   = STATUS_VALUES[1]   # "[APPLIED]"
+STATUS_INTERVIEW = STATUS_VALUES[2]   # "[INTERVIEW]"
+
+# Terminal = pipeline-end states; excluded from "active" queries
+# (upcoming deadlines, materials readiness, etc.).
+TERMINAL_STATUSES = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
+
+# Status → Streamlit color name (valid for st.badge AND Plotly marker_color).
 STATUS_COLORS = {
     "[OPEN]":      "blue",
     "[APPLIED]":   "orange",
@@ -186,7 +221,7 @@ STATUS_COLORS = {
 }
 
 # ── Controlled vocabularies ───────────────────────────────────────
-PRIORITY_VALUES    = ["High", "Med", "Low", "Stretch"]
+PRIORITY_VALUES    = ["High", "Med", "Low", "Stretch"]   # "Med"→"Medium" planned for v0.5
 WORK_AUTH_OPTIONS  = ["Any", "OPT", "J-1", "H1B", "No Sponsorship", "Ask"]
 FULL_TIME_OPTIONS  = ["Yes", "No", "Part-time"]
 SOURCE_OPTIONS     = [
@@ -197,8 +232,11 @@ RESPONSE_TYPES     = [
     "Acknowledgement", "Screening Call", "Interview Invite",
     "Rejection", "Offer", "Other",
 ]
-RESULT_VALUES      = [
-    "Pending", "Offer Accepted", "Offer Declined", "Rejected", "Withdrawn",
+# RESULT_DEFAULT must match DEFAULT in applications table DDL (C7 coupling).
+RESULT_DEFAULT    = "Pending"
+RESULT_VALUES     = [
+    RESULT_DEFAULT,
+    "Offer Accepted", "Offer Declined", "Rejected", "Withdrawn",
 ]
 RELATIONSHIP_TYPES = [
     "PhD Advisor", "Committee Member", "Collaborator",
@@ -206,8 +244,19 @@ RELATIONSHIP_TYPES = [
 ]
 
 # ── Requirement document types ────────────────────────────────────
-# Tuple: (db_req_column, db_done_column, display_label)
-# To add a new document type: append one tuple here. Nothing else needs to change.
+# Canonical DB values for req_* columns. Display order: "Required" first.
+REQUIREMENT_VALUES = ["Y", "Optional", "N"]
+
+# UI labels for each canonical value — used by st.radio(format_func=...).
+REQUIREMENT_LABELS = {
+    "Y":        "Required",
+    "Optional": "Optional",
+    "N":        "Not needed",
+}
+
+# Each tuple: (db_req_column, db_done_column, display_label).
+# To add a new document type (e.g., Portfolio): append one tuple here.
+# database.init_db() auto-migrates the schema; no other file needs changing.
 REQUIREMENT_DOCS = [
     ("req_cv",                  "done_cv",                  "CV"),
     ("req_cover_letter",        "done_cover_letter",        "Cover Letter"),
@@ -228,15 +277,50 @@ QUICK_ADD_FIELDS = [
     "link",            # text (URL)
 ]
 
+# ── Opportunities edit panel ──────────────────────────────────────
+# Tab labels + order for the inline edit panel on pages/1_Opportunities.py.
+EDIT_PANEL_TABS = ["Overview", "Requirements", "Materials", "Notes"]
+
 # ── Dashboard display thresholds ──────────────────────────────────
 DEADLINE_ALERT_DAYS    = 30   # Show upcoming deadlines within this window
 DEADLINE_URGENT_DAYS   = 7    # Color deadline red if within this many days
 RECOMMENDER_ALERT_DAYS = 7    # Alert if asked N+ days ago, no submission yet
 ```
 
+### 5.2 Invariants enforced at import time
+
+`config.py` runs these assertions at module import; they catch drift
+before any page renders:
+
+1. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a color.
+2. `set(TERMINAL_STATUSES) <= set(STATUS_VALUES)` — terminals are a subset.
+3. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label.
+
+**Planned (v1.1 refactor — C12):** add `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS`.
+
+### 5.3 Extension recipes
+
+| Goal | What to edit |
+|------|--------------|
+| Add a new requirement document | Append one tuple to `REQUIREMENT_DOCS`; restart the app so `init_db()` migrates columns |
+| Add a priority / source / response type | Append to the relevant vocabulary list |
+| Add a new pipeline status | Append to `STATUS_VALUES` AND add an entry to `STATUS_COLORS`; decide if it's terminal (then add to `TERMINAL_STATUSES`) |
+| Switch to `software_eng` profile | Change `TRACKER_PROFILE`; edit `REQUIREMENT_DOCS` / vocabularies as the new domain needs; no DB migration required for renamed columns (add new columns; old columns persist until you wipe the DB) |
+
 ---
 
 ## 6. Database Schema
+
+> **Canonical definition:** `database.init_db()` in `database.py`. The DDL
+> and column reference below mirror that code as of v0.4.0 (2026-04-23).
+> If the code drifts from this doc, the code wins.
+>
+> **Known coupling (C6/C7, slated for v0.5 code cleanup):** the `positions.status`
+> `DEFAULT '[OPEN]'` and `applications.result DEFAULT 'Pending'` are SQL literals —
+> they are **not** read from `config.STATUS_VALUES[0]` / `config.RESULT_DEFAULT`.
+> A rename in `config.py` does not propagate to the schema DEFAULTs. When renaming
+> either constant, also update `init_db()` DDL and write a one-shot `UPDATE`
+> migration for existing rows.
 
 ### Entity-Relationship Summary
 ```
@@ -415,9 +499,10 @@ def delete_recommender(rec_id: int) -> None:
 def count_by_status() -> dict[str, int]:
     """Return {status_value: count} for all positions."""
 
-def get_upcoming_deadlines(days: int) -> pd.DataFrame:
-    """Return open positions with deadline_date within the next `days` days,
-    ordered by deadline_date ASC."""
+def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
+    """Return non-terminal positions with deadline_date within the next
+    `days` days, ordered by deadline_date ASC.
+    Excludes positions whose status is in config.TERMINAL_STATUSES."""
 
 def get_upcoming_interviews() -> pd.DataFrame:
     """Return application rows where interview1_date or interview2_date
@@ -428,9 +513,11 @@ def get_pending_recommenders(days: int) -> pd.DataFrame:
     and submitted_date IS NULL, joined with position_name."""
 
 def compute_materials_readiness() -> dict[str, int]:
-    """Return {"ready": N, "pending": M} for positions with status in
-    ([OPEN], [APPLIED], [INTERVIEW]) — i.e. the "active" pipeline.
-    A position is "ready" if every required doc (req_* = 'Y') has done_* = 1."""
+    """Return {"ready": N, "pending": M} for active positions.
+    Active = status in (config.STATUS_OPEN, STATUS_APPLIED, STATUS_INTERVIEW).
+    A position is "ready" if every document where req_* = 'Y' has done_* = 1.
+    Only positions with at least one required doc (req_* = 'Y') are counted —
+    a position with all docs set to 'N' contributes to neither ready nor pending."""
 ```
 
 ### `exports.py` — Public Function Signatures
@@ -675,9 +762,30 @@ User updates response_type to "Offer" and saves
       → exports.write_all()
 ```
 
+> **Design TBD for Phase 5 (C13):** the "page detects response_type == 'Offer'
+> and prompts" step puts cross-table business logic in the page file, which
+> conflicts with GUIDELINES §2 "page files — display only." Two options:
+>
+> - **Option A (keep in page):** the prompt is a UX concern, not business logic —
+>   the underlying writes stay atomic in `database.py`. Accept a narrow carve-out.
+> - **Option B (move to database.py):** add a
+>   `upsert_application(..., propagate_status: bool = True)` kwarg. The cascade
+>   becomes atomic and the page stays dumb.
+>
+> Decide before Phase 5 builds the Applications page. Recommended: **Option B**
+> (atomicity + testability); will be logged as an ADR when the decision lands.
+
 ---
 
 ## 10. Design Decisions Log
+
+> **Namespace note (added v1.1, 2026-04-23):** The `D1`–`D10` entries below are the
+> original v1.0 architectural decisions and retain their bare numbering.
+> Decisions made **during implementation phases** are namespaced by phase:
+> `P3-D1`, `P4-D1`, etc. (see `CLAUDE.md` / phase review docs).
+> Decisions made **from v1.1 forward** land in `docs/adr/` as
+> `ADR-NNNN` files (Michael-Nygard format). An entry should appear in only
+> one of these systems at a time; avoid cross-listing.
 
 | ID | Decision | Rationale | Alternative considered |
 |----|----------|-----------|----------------------|
@@ -712,10 +820,16 @@ User updates response_type to "Offer" and saves
 
 ### Switching to a general job tracker profile
 1. Open `config.py`
-2. Change `TRACKER_PROFILE = "software_eng"`
-3. Update `REQUIREMENT_DOCS` to remove postdoc-specific docs and add new ones (e.g., coding challenge)
-4. Update `POSITION_FIELDS` vocabulary as needed (salary range, remote/onsite, equity)
-5. No changes to `database.py`, `exports.py`, or any page file
+2. Change `TRACKER_PROFILE = "software_eng"` (note: currently unused; C2)
+3. Update `REQUIREMENT_DOCS` to remove postdoc-specific docs and add new ones (e.g., `req_coding_challenge`)
+4. Update `QUICK_ADD_FIELDS` if the default-capture set should differ, plus
+   relevant vocabulary lists (e.g., add `"remote_ok"` to a new `FULL_TIME_OPTIONS` entry
+   or create a `REMOTE_OPTIONS` list)
+5. For postdoc-specific columns that no longer make sense (`mentor`, `stipend`), the
+   schema retains them — they'll be NULL. A future profile-aware `init_db()` could
+   conditionally include them; v1 leaves the columns and hides them from the UI.
+6. No changes to `database.py`, `exports.py`, or any page file beyond removing the
+   unused columns from page forms.
 
 ### Adding a new tracker profile (postdoc + software simultaneously)
 The current design supports one active profile. A future v2 could add a `profile` column to the `positions` table, allowing mixed-profile tracking within one database. This is a schema migration, not an architectural change.
