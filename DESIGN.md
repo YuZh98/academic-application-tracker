@@ -206,215 +206,77 @@ Postdoc/
 and field definitions. Every other module reads from it; no other file
 hardcodes a status string, priority value, or requirement-doc label.
 
-### 5.1 Constants
+### 5.1 Symbol index
 
-```python
-# ── Tracker profile ────────────────────────────────────────────────
-# The profile discriminator for this tracker build. v1 supports "postdoc"
-# only; VALID_PROFILES is both the import-time validation set and the
-# extension hook for v2+ profile variants (see §12.1).
-TRACKER_PROFILE: str = "postdoc"
-VALID_PROFILES: set[str] = {"postdoc"}   # v2 may add "software_eng", "faculty", ...
+The constants listed below are the v1 API of `config.py`. Actual
+values, inline rationale, and defensive assertions live in
+[`config.py`](config.py); this section is a DESIGN-level index of
+**what each symbol is for and where it is consumed**. Literal values
+are shown here only when they are short and architecturally stable
+(e.g. the fixed set of pipeline statuses referenced by DDL and
+auto-promotion rules). Longer enumerations are described by category
+— open `config.py` for the exhaustive list.
 
-# ── Status pipeline (ordered: index = pipeline position) ──────────
-STATUS_VALUES: list[str] = [
-    "[SAVED]",       # Found; saved for review; not yet applied
-    "[APPLIED]",     # Application submitted
-    "[INTERVIEW]",   # Interview stage reached
-    "[OFFER]",       # Offer received
-    "[CLOSED]",      # Deadline passed or user withdrew pre-application
-    "[REJECTED]",    # Rejection received after applying
-    "[DECLINED]",    # Offer turned down by applicant
-]
+#### Tracker identity
 
-# Named aliases for each pipeline stage. Page code references these
-# rather than positional indices or literal strings — keeps the
-# anti-typo guardrail in place (grep rule catches literal usage at
-# merge time). All seven statuses have aliases for symmetry.
-STATUS_SAVED     = STATUS_VALUES[0]   # "[SAVED]"
-STATUS_APPLIED   = STATUS_VALUES[1]   # "[APPLIED]"
-STATUS_INTERVIEW = STATUS_VALUES[2]   # "[INTERVIEW]"
-STATUS_OFFER     = STATUS_VALUES[3]   # "[OFFER]"
-STATUS_CLOSED    = STATUS_VALUES[4]   # "[CLOSED]"
-STATUS_REJECTED  = STATUS_VALUES[5]   # "[REJECTED]"
-STATUS_DECLINED  = STATUS_VALUES[6]   # "[DECLINED]"
+| Constant | Type | Role |
+|----------|------|------|
+| `TRACKER_PROFILE` | `str` | Profile discriminator; v1 = `"postdoc"`. Extension hook for v2+ profile variants (§12.1). |
+| `VALID_PROFILES` | `set[str]` | Import-time validation set for `TRACKER_PROFILE`; guarded by §5.2 invariant #1. |
 
-# Terminal statuses — positions in these states are excluded from "active"
-# queries (upcoming deadlines, materials readiness, etc.).
-TERMINAL_STATUSES: list[str] = [STATUS_CLOSED, STATUS_REJECTED, STATUS_DECLINED]
+#### Status pipeline
 
-# Storage-to-color map for **per-status surfaces** (status badge on the
-# Opportunities table, tooltip indicators, any place where a single raw
-# status value needs a color). Values are from the overlap of the
-# st.badge palette and Plotly marker_color CSS-color vocabulary.
-#
-# Funnel bar colors come from FUNNEL_BUCKETS, not this dict — the funnel
-# renders presentation buckets, not raw statuses.
-STATUS_COLORS: dict[str, str] = {
-    "[SAVED]":     "blue",
-    "[APPLIED]":   "orange",
-    "[INTERVIEW]": "violet",
-    "[OFFER]":     "green",
-    "[CLOSED]":    "gray",
-    "[REJECTED]":  "red",
-    "[DECLINED]":  "gray",
-}
+| Constant | Type | Role |
+|----------|------|------|
+| `STATUS_VALUES` | `list[str]` | Ordered pipeline: `[SAVED]` → `[APPLIED]` → `[INTERVIEW]` → `[OFFER]` → `[CLOSED]` → `[REJECTED]` → `[DECLINED]`. Index = pipeline position. Referenced by §6.2 DDL `DEFAULT` clause, §8.1 funnel, and §9.3 auto-promotion rules. |
+| `STATUS_SAVED` / `STATUS_APPLIED` / `STATUS_INTERVIEW` / `STATUS_OFFER` / `STATUS_CLOSED` / `STATUS_REJECTED` / `STATUS_DECLINED` | `str` | One named alias per `STATUS_VALUES[i]`. Page code uses these rather than literals — anti-typo guardrail enforced by pre-merge grep. |
+| `TERMINAL_STATUSES` | `list[str]` | Subset of `STATUS_VALUES` (`[CLOSED]` / `[REJECTED]` / `[DECLINED]`). Excluded from "active" queries (upcoming deadlines, materials readiness); also guards R3 auto-promotion against regression (§9.3). |
+| `STATUS_COLORS` | `dict[str, str]` | Per-status color for single-status surfaces (Opportunities-table badge, tooltips). Values drawn from the intersection of the `st.badge` color vocabulary and Plotly CSS color names. **Not** used for funnel bars — see `FUNNEL_BUCKETS`. Drift caught by §5.2 invariant #2. |
+| `STATUS_LABELS` | `dict[str, str]` | Storage-to-UI label. Storage keeps bracketed values as enum sentinels; UI strips the brackets via this dict. Every status surface rendered to a user MUST go through this map — never print a raw key. Drift caught by §5.2 invariant #3. |
 
-# Storage-to-UI-label map. Storage retains square brackets as a visual
-# enum sentinel; UI strips them via this dict. Every surface that
-# renders a status to a user MUST go through STATUS_LABELS — never
-# print a raw key.
-STATUS_LABELS: dict[str, str] = {
-    "[SAVED]":     "Saved",
-    "[APPLIED]":   "Applied",
-    "[INTERVIEW]": "Interview",
-    "[OFFER]":     "Offer",
-    "[CLOSED]":    "Closed",
-    "[REJECTED]":  "Rejected",
-    "[DECLINED]":  "Declined",
-}
+#### Dashboard funnel (presentation layer)
 
-# Presentation-layer groupings for the dashboard funnel.
-# Each entry: (UI label, tuple of raw STATUS_VALUES contributing to this
-# bar, bucket color).
-#
-# The chart sums counts within each bucket. Order = display order
-# (top-down when the y-axis is reversed).
-#
-# "Archived" groups [REJECTED] + [DECLINED] — both are outcomes after
-# engagement. [CLOSED] stays its own bucket because pre-application
-# withdrawal is a genuinely distinct state.
-#
-# Bucket colors live here (not in STATUS_COLORS) because the funnel
-# groups multiple raw statuses per bar; the bucket owns its color.
-FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
-    ("Saved",     ("[SAVED]",),                  "blue"),
-    ("Applied",   ("[APPLIED]",),                "orange"),
-    ("Interview", ("[INTERVIEW]",),              "violet"),
-    ("Offer",     ("[OFFER]",),                  "green"),
-    ("Closed",    ("[CLOSED]",),                 "gray"),
-    ("Archived",  ("[REJECTED]", "[DECLINED]"),  "gray"),
-]
+| Constant | Type | Role |
+|----------|------|------|
+| `FUNNEL_BUCKETS` | `list[tuple[str, tuple[str, ...], str]]` | Presentation-layer grouping of raw statuses into funnel bars. Each entry: `(UI label, raw-status tuple, bucket color)`. Order = top-down display order (y-axis reversed). "Archived" aggregates `[REJECTED]` + `[DECLINED]` (D17); `[CLOSED]` stays its own bucket. Multiset coverage of `STATUS_VALUES` guarded by §5.2 invariant #5. |
+| `FUNNEL_DEFAULT_HIDDEN` | `set[str]` | Bucket labels hidden by default on the dashboard funnel. Revealed all at once by the single `[expand]` button; state held in `st.session_state["_funnel_expanded"]` for the current session only (D24, §8.1). Validated by §5.2 invariant #6. |
 
-# Buckets hidden by default on the dashboard funnel. Users reveal them
-# all at once by clicking a single `[expand]` button rendered below the
-# chart; the reveal persists via `st.session_state['_funnel_expanded']`
-# for the current session only. Default-hiding terminal outcomes keeps
-# the dashboard focused on active work (D24). Values must be bucket
-# labels from FUNNEL_BUCKETS.
-FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
+#### Vocabularies (user-facing selectbox options)
 
-# ── Position priority ─────────────────────────────────────────────
-# Subjective user judgment of fit / want. User sets at add-time and
-# can edit. Informs the Opportunities filter and attention-ordering.
-# Distinct from **urgency** (see dashboard thresholds below): priority
-# is subjective and stored; urgency is objective and computed.
-PRIORITY_VALUES: list[str] = ["High", "Medium", "Low", "Stretch"]
+| Constant | Type | Role |
+|----------|------|------|
+| `PRIORITY_VALUES` | `list[str]` | User's subjective fit — `High` / `Medium` / `Low` / `Stretch`. Stored; distinct from computed urgency. |
+| `WORK_AUTH_OPTIONS` | `list[str]` | Three-value categorical (`Yes` / `No` / `Unknown`) answering "does the posting accept this applicant's work authorization?" Paired with freetext `work_auth_note` for nuance (D22). |
+| `FULL_TIME_OPTIONS` | `list[str]` | Employment type: `Full-time` / `Part-time` / `Contract`. |
+| `SOURCE_OPTIONS` | `list[str]` | Where the posting was found (lab site, job board, referral, etc.). Fuels the P3 "source effectiveness" analytic sketched in §12.7. |
+| `RESPONSE_TYPES` | `list[str]` | First-response categorization. The value `"Offer"` fires auto-promotion rule R3 (§9.3). |
+| `RESULT_DEFAULT` | `str` | `"Pending"` — matches the `applications.result` schema `DEFAULT` clause; renaming requires a one-shot `UPDATE` migration (§6.3). |
+| `RESULT_VALUES` | `list[str]` | Final application outcome; starts with `RESULT_DEFAULT`, then accepted / declined / rejected / withdrawn. |
+| `RELATIONSHIP_TYPES` | `list[str]` | Recommender-to-applicant relationship (advisor / committee / collaborator / …). |
+| `INTERVIEW_FORMATS` | `list[str]` | Vocabulary for the `interviews.format` column: `Phone` / `Video` / `Onsite` / `Other`. |
 
-# ── Work authorization ─────────────────────────────────────────────
-# Three-value categorical answering "Does the posting accept the
-# applicant's work authorization?":
-#   "Yes"     — posting explicitly welcomes OPT / international applicants
-#   "No"      — posting explicitly requires US citizenship or permanent residency
-#   "Unknown" — posting does not say; user has not investigated yet
-#
-# Complementary freetext column work_auth_note (on the positions table)
-# captures posting-specific detail ("green card required", "EU citizens
-# preferred", "STEM OPT extension accepted"). The categorical drives
-# filtering; the note preserves nuance without bloating the vocabulary.
-WORK_AUTH_OPTIONS: list[str] = ["Yes", "No", "Unknown"]
+#### Requirement documents
 
-# ── Full-time / part-time / contract ──────────────────────────────
-FULL_TIME_OPTIONS: list[str] = ["Full-time", "Part-time", "Contract"]
+| Constant | Type | Role |
+|----------|------|------|
+| `REQUIREMENT_VALUES` | `list[str]` | Canonical DB values for `req_*` columns: `Yes` / `Optional` / `No`. |
+| `REQUIREMENT_LABELS` | `dict[str, str]` | UI labels for the three canonical values. Radios use `format_func=REQUIREMENT_LABELS.get` so `session_state` holds the DB value — no save-time translation. Drift caught by §5.2 invariant #7. |
+| `REQUIREMENT_DOCS` | `list[tuple[str, str, str]]` | Document-type schema driver: `(req_column, done_column, display_label)` per document type. Appending one tuple is the whole contract for adding a new document type — `init_db()` auto-adds both columns on next start (§6.3). |
 
-# ── Where the posting was found ───────────────────────────────────
-SOURCE_OPTIONS: list[str] = [
-    "Lab website", "AcademicJobsOnline", "HigherEdJobs",
-    "LinkedIn", "Referral", "Conference", "Listserv", "Other",
-]
+#### Forms and UI structure
 
-# ── Application response types ────────────────────────────────────
-RESPONSE_TYPES: list[str] = [
-    "Acknowledgement", "Screening Call", "Interview Invite",
-    "Rejection", "Offer", "Other",
-]
+| Constant | Type | Role |
+|----------|------|------|
+| `QUICK_ADD_FIELDS` | `list[str]` | Column names shown in the quick-add form. Ordered: `position_name`, `institute`, `field`, `deadline_date`, `priority`, `link`. Keeping this ≤ 6 is a capture-friction design rule (D6). |
+| `EDIT_PANEL_TABS` | `list[str]` | Tab labels for the Opportunities edit panel in display order: `Overview`, `Requirements`, `Materials`, `Notes`. |
 
-# ── Application outcome ───────────────────────────────────────────
-# RESULT_DEFAULT is the applications.result DEFAULT in the schema.
-# The schema DDL reads this constant via f-string, so renaming here
-# propagates to the CREATE TABLE clause automatically (see §6.2).
-RESULT_DEFAULT: str = "Pending"
-RESULT_VALUES: list[str] = [
-    RESULT_DEFAULT,
-    "Offer Accepted", "Offer Declined", "Rejected", "Withdrawn",
-]
+#### Dashboard thresholds (days)
 
-# ── Recommender relationship types ────────────────────────────────
-RELATIONSHIP_TYPES: list[str] = [
-    "PhD Advisor", "Committee Member", "Collaborator",
-    "Postdoc Supervisor", "Department Faculty", "Other",
-]
-
-# ── Interview format ──────────────────────────────────────────────
-# Vocabulary for the format column on the interviews sub-table.
-INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
-
-# ── Requirement document types ────────────────────────────────────
-# Canonical DB values for req_* columns. Order = display order on the
-# Requirements tab radio ("Required" leftmost as the common case).
-REQUIREMENT_VALUES: list[str] = ["Yes", "Optional", "No"]
-
-# UI labels for each canonical value. Radios look up display text via
-# format_func=REQUIREMENT_LABELS.get so session_state keeps the
-# canonical DB value — no save-time translation needed.
-REQUIREMENT_LABELS: dict[str, str] = {
-    "Yes":      "Required",
-    "Optional": "Optional",
-    "No":       "Not needed",
-}
-
-# Each tuple: (db_req_column, db_done_column, display_label).
-# To add a new document type (e.g., Portfolio): append one tuple here.
-# database.init_db() auto-migrates the schema on next start.
-REQUIREMENT_DOCS: list[tuple[str, str, str]] = [
-    ("req_cv",                  "done_cv",                  "CV"),
-    ("req_cover_letter",        "done_cover_letter",        "Cover Letter"),
-    ("req_transcripts",         "done_transcripts",         "Transcripts"),
-    ("req_research_statement",  "done_research_statement",  "Research Statement"),
-    ("req_writing_sample",      "done_writing_sample",      "Writing Sample"),
-    ("req_teaching_statement",  "done_teaching_statement",  "Teaching Statement"),
-    ("req_diversity_statement", "done_diversity_statement", "Diversity Statement"),
-]
-
-# ── Quick-add form fields (minimal — capture at discovery) ────────
-# Each string must be an exact column name on the positions table.
-QUICK_ADD_FIELDS: list[str] = [
-    "position_name",   # text input
-    "institute",       # text input
-    "field",           # text input
-    "deadline_date",   # st.date_input
-    "priority",        # st.selectbox from PRIORITY_VALUES
-    "link",            # text input (URL)
-]
-
-# ── Opportunities edit panel ──────────────────────────────────────
-# Tab labels + order for the inline edit panel on pages/1_Opportunities.py.
-# To add a new tab, append the label here and extend the page's tab-body
-# dispatch in pages/1_Opportunities.py.
-EDIT_PANEL_TABS: list[str] = ["Overview", "Requirements", "Materials", "Notes"]
-
-# ── Dashboard display thresholds ──────────────────────────────────
-# "Urgency" is **computed** from deadline_date at query time — it is
-# NOT stored. Distinct from "priority" (user's subjective fit).
-# Boundaries are inclusive on the narrower band:
-#   days-until-deadline ≤ DEADLINE_URGENT_DAYS → urgent  (flagged 🔴)
-#   days-until-deadline ≤ DEADLINE_ALERT_DAYS  → alert   (flagged 🟡)
-#   days-until-deadline >  DEADLINE_ALERT_DAYS → normal
-# A deadline exactly 7 days away is urgent (not alert).
-DEADLINE_ALERT_DAYS: int    = 30
-DEADLINE_URGENT_DAYS: int   = 7
-RECOMMENDER_ALERT_DAYS: int = 7
-```
+| Constant | Type | Role |
+|----------|------|------|
+| `DEADLINE_ALERT_DAYS` | `int` | Upcoming-window width. A deadline within this many days surfaces on the Upcoming panel (§8.1). |
+| `DEADLINE_URGENT_DAYS` | `int` | Inner urgency band. A deadline within this many days is flagged 🔴; between this and `DEADLINE_ALERT_DAYS` is 🟡. Inclusive on the narrower band: exactly N days away → urgent. Ordering guarded by §5.2 invariant #8. |
+| `RECOMMENDER_ALERT_DAYS` | `int` | Recommender asked ≥ this many days ago with no submitted letter → surfaces on Recommender Alerts (§8.1). |
 
 ### 5.2 Import-time invariants
 
