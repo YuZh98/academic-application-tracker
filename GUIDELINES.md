@@ -16,12 +16,17 @@ source .venv/bin/activate
 ```
 
 **Pinned minimum versions** (exact pins in `requirements.txt` after first install):
-| Package | Minimum |
-|---------|---------|
-| streamlit | 1.35 |
-| plotly | 5.22 |
-| pandas | 2.2 |
-| sqlite3 | stdlib — no install needed |
+| Package | Required ≥ | Tested with (v0.4.0) |
+|---------|-----------|----------------------|
+| streamlit | 1.50 | 1.56.0 |
+| plotly | 5.22 | 6.7.0 |
+| pandas | 2.2 | 3.0.2 |
+| sqlite3 | stdlib — no install needed | — |
+
+The `Required ≥` column is the floor (APIs used in the current codebase
+won't work on older versions — `width="stretch"` needs Streamlit ≥ 1.50).
+Bump the floor when a newer API is adopted; keep Tested-with in sync with
+what CI actually runs.
 
 **Never install packages globally.** Always install inside `.venv`.
 
