@@ -308,8 +308,10 @@ FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
     ("Archived",  ("[REJECTED]", "[DECLINED]"),  "gray"),
 ]
 
-# Buckets hidden by default on the dashboard funnel. Users opt in via
-# per-bucket toggle checkboxes. Default-hiding terminal outcomes keeps
+# Buckets hidden by default on the dashboard funnel. Users reveal them
+# all at once by clicking a single `[expand]` button rendered below the
+# chart; the reveal persists via `st.session_state['_funnel_expanded']`
+# for the current session only. Default-hiding terminal outcomes keeps
 # the dashboard focused on active work (D24). Values must be bucket
 # labels from FUNNEL_BUCKETS.
 FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
@@ -829,16 +831,18 @@ values.
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
 | KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
-| Funnel toggles | One checkbox per `FUNNEL_DEFAULT_HIDDEN` bucket label (currently Closed + Archived); state persists via `st.session_state` keyed by `_funnel_show_<label>` | Checkbox labels match bucket labels | — |
+| Funnel `[expand]` button | Single button rendered below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty; clicking flips the session flag `st.session_state["_funnel_expanded"]` to `True`, which promotes every bucket in `FUNNEL_DEFAULT_HIDDEN` (currently Closed + Archived) to visible for the rest of the session. Replaces the earlier per-bucket checkbox model (one click reveals all hidden buckets at once). | Button label: `"[expand]"` | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
 | Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` by date; `st.dataframe(width="stretch")`, columns (Date, Label, Kind, Urgency); Status shown via `STATUS_LABELS[raw]`; Kind ∈ {"deadline", "interview"} | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS` |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
 
 **Funnel visibility rules.** The funnel renders buckets in the order
 listed in `FUNNEL_BUCKETS`. A bucket is visible when **not** in
-`FUNNEL_DEFAULT_HIDDEN`, or when its show-toggle has been turned on by
-the user in the current session. Hiding the terminal buckets by default
-keeps the dashboard focused on active work (D24).
+`FUNNEL_DEFAULT_HIDDEN`, or when the user has clicked `[expand]` in
+the current session (flipping `st.session_state["_funnel_expanded"]`
+to `True` reveals every `FUNNEL_DEFAULT_HIDDEN` bucket at once).
+Hiding the terminal buckets by default keeps the dashboard focused on
+active work (D24).
 
 **Empty-DB hero.** When
 
@@ -858,7 +862,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 
 | Panel | Empty-state behaviour |
 |-------|-----------------------|
-| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")`. (b) *No visible data* — total is non-zero but `sum(counts.get(raw, 0) for (label, raws, _) in FUNNEL_BUCKETS if is_visible(label) for raw in raws) == 0` (i.e. every non-zero bucket is hidden by `FUNNEL_DEFAULT_HIDDEN` and the user hasn't toggled it on): show `st.info("All your positions are in hidden buckets. Use the toggles above to reveal them.")`. (c) *Otherwise* render the chart. Subheader + toggle row render in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications sees a subheader + toggle row above a chart area of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the toggles). |
+| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")` and suppress the `[expand]` button (nothing to expand into). (b) *No visible data* — total is non-zero but every non-zero bucket lies in `FUNNEL_DEFAULT_HIDDEN` and `st.session_state["_funnel_expanded"]` is `False`: show `st.info("All your positions are in hidden buckets. Click [expand] below to reveal them.")` and render the `[expand]` button directly under the info. (c) *Otherwise* render the chart; the `[expand]` button renders below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty and not yet expanded. Subheader renders in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications would see a subheader above a chart of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the `[expand]` button). |
 | Materials Readiness | If `ready + pending == 0`, show `st.info("Materials readiness will appear once you've added positions with required documents.")`. Subheader renders in both branches. |
 | Upcoming | If merged DataFrame is empty, show `st.info("No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`. |
 | Recommender Alerts | If `get_pending_recommenders()` returns empty, show `st.info("No pending recommender follow-ups.")`. |
@@ -911,8 +915,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 | Requirements tab | One `st.radio` per `REQUIREMENT_DOCS` entry; options = `REQUIREMENT_VALUES`; `format_func=REQUIREMENT_LABELS.get`; Save writes only `req_*` keys so `done_*` survives flips between states |
 | Materials tab | Live-filtered: only docs with `session_state[f"edit_{req_col}"] == "Yes"` render a checkbox; Save writes only `done_*` for visible docs (hidden `done_*` preserved) |
 | Notes tab | Single `st.text_area` inside `st.form("edit_notes_form")`; empty input persists as `""` not `NULL` |
-| Delete | `@st.dialog` confirmation dialog outside `st.form`; FK cascade removes applications, interviews, and recommenders atomically |
-| Delete button visibility | Only show Delete on Overview tab and it means the user has permission to delete the position |
+| Delete | Button rendered **below the edit panel** (outside the panel box), **visible only when the active tab is Overview**. Clicking opens an `@st.dialog` confirmation (outside `st.form`); on Confirm, `delete_position(id)` runs and the FK cascade removes the position's `applications`, `interviews`, and `recommenders` rows atomically. The button's scope is the whole position, not the active tab's data — hence the Overview-only placement, matching the tab where the user is reviewing the position as a whole. |
 
 **Selection-survival invariant.** Save on any tab, filter change that
 still includes the selected row, and dialog-Cancel must all preserve
