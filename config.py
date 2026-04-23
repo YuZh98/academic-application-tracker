@@ -96,11 +96,12 @@ FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
     ("Archived",  (STATUS_REJECTED, STATUS_DECLINED), "gray"),
 ]
 
-# Buckets hidden by default on the dashboard funnel. Users opt in via
-# per-bucket toggles above the chart; state persists in st.session_state
-# for the current session only. Default-hiding the terminal outcomes keeps
-# the dashboard focused on active work (DESIGN D24). Values must be labels
-# that exist in FUNNEL_BUCKETS — enforced below.
+# Buckets hidden by default on the dashboard funnel. Users reveal them
+# all at once via a single `[expand]` button rendered below the chart;
+# state persists as st.session_state["_funnel_expanded"] for the current
+# session only. Default-hiding the terminal outcomes keeps the dashboard
+# focused on active work (DESIGN D24). Values must be labels that exist
+# in FUNNEL_BUCKETS — enforced below.
 FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
 
 # Invariant (DESIGN §5.2 #5): flatten the raw-status tuples across all
@@ -118,8 +119,8 @@ assert sorted(_funnel_flat) == sorted(STATUS_VALUES), (
 )
 
 # Invariant (DESIGN §5.2 #6): FUNNEL_DEFAULT_HIDDEN must reference labels
-# that actually exist in FUNNEL_BUCKETS — otherwise a toggle for a
-# non-existent bucket would silently fail to surface.
+# that actually exist in FUNNEL_BUCKETS — otherwise a label could be
+# hidden by default with no corresponding bucket to reveal.
 _bucket_labels: set[str] = {label for label, _, _ in FUNNEL_BUCKETS}
 assert FUNNEL_DEFAULT_HIDDEN <= _bucket_labels, (
     "FUNNEL_DEFAULT_HIDDEN must reference labels that exist in FUNNEL_BUCKETS. "
