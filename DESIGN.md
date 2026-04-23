@@ -127,20 +127,8 @@ Exact pinned versions live in `requirements.txt`; the `Required ≥`
 column is the minimum known-working version and is the floor for any
 dependency upgrade policy.
 
-**Install:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install streamlit plotly pandas
-pip freeze > requirements.txt
-```
-
-**Run:**
-```bash
-source .venv/bin/activate
-streamlit run app.py
-# → http://localhost:8501
-```
+See [`docs/dev-notes/dev-setup.md`](docs/dev-notes/dev-setup.md) for
+the exact `venv` create / `pip install` / `streamlit run` commands.
 
 ### 3.1 Runtime assumptions
 
