@@ -5,7 +5,7 @@
 # is layered in over several tiers (see PHASE_4_GUIDELINES.md):
 #   T1 — app shell + 4 KPI cards + 🔄 refresh + empty-DB hero   ✅ done
 #   T2 — application funnel (Plotly bar + empty-state + columns wrap)  ✅ done
-#   T3 — materials readiness panel                              (next)
+#   T3 — materials readiness panel                              ✅ done
 #   T4 — upcoming timeline
 #   T5 — recommender alerts
 
@@ -168,3 +168,33 @@ with _left_col:
         # top-down — first STATUS_VALUES entry at the top, last at the bottom.
         _funnel_fig.update_yaxes(autorange="reversed")
         st.plotly_chart(_funnel_fig, key="funnel_chart")
+
+with _right_col:
+    # ── Materials Readiness (T3) ──────────────────────────────────────────────
+    # Two stacked st.progress bars — one for positions whose required docs
+    # are all done, one for positions still missing at least one. Readiness
+    # is active-pipeline-only by definition (see compute_materials_readiness),
+    # so a DB with only terminal-status rows returns 0/0 and we show the
+    # empty state. Denominator guarded via max(..., 1) per locked decision D5;
+    # strictly speaking unnecessary inside the else-branch (both counts are
+    # zero → we take the if-branch), but the explicit guard keeps the
+    # contract close to the code for a future reader.
+    #
+    # Subheader renders in BOTH branches so page height doesn't flicker when
+    # the first qualifying position lands (same stability pattern as the
+    # T2-B funnel subheader).
+    st.subheader("Materials Readiness")
+    _readiness = database.compute_materials_readiness()
+    _ready = _readiness["ready"]
+    _pending = _readiness["pending"]
+    if _ready + _pending == 0:
+        st.info(
+            "Materials readiness will appear once you've added positions "
+            "with required documents."
+        )
+    else:
+        _total = max(_ready + _pending, 1)
+        st.progress(_ready / _total, text=f"Ready to submit: {_ready}")
+        st.progress(_pending / _total, text=f"Still missing: {_pending}")
+        if st.button("→ Opportunities page", key="materials_readiness_cta"):
+            st.switch_page("pages/1_Opportunities.py")
