@@ -477,20 +477,11 @@ releases should never have to guess which migration to run.
 
 ### 6.4 Schema design decisions
 
-| Decision | Reason |
-|----------|--------|
-| Dates stored as ISO TEXT, not DATE type | SQLite has no native DATE type; ISO strings sort and compare correctly as TEXT; time math uses `datetime.date.fromisoformat` |
-| Boolean-state columns as INTEGER 0/1 (never TEXT `'Y'`/`'N'`) | Type-consistent; trivial SQL predicates (`WHERE col = 1`); applies to `done_*`, `confirmation_received`, `reminder_sent`, `confirmed` (on recommenders). See D20. |
-| Three-state columns as TEXT with full-word values | `req_*` stores `{"Yes", "Optional", "No"}`. Can't collapse to a boolean (three states); full words are self-descriptive in raw DB dumps; no storage penalty on TEXT. See D21. |
-| Dual-concern fields split into (flag, date) column pairs | Prevents type confusion: `confirmation_received INTEGER` + `confirmation_date TEXT`, `reminder_sent INTEGER` + `reminder_sent_date TEXT`. Never one column holding either a flag or a date. See D19. |
-| Summary flags that *could* be computed **are** computed, never stored | D3 applied consistently: `is_all_recs_submitted()` is a query helper, not a column — eliminates desync between recommenders and applications |
-| `status` TEXT uses bracketed sentinel values (`[SAVED]`, etc.) | D16 — visual enum marker in logs/DB dumps; avoids namespace collision with plain-English words |
-| `interviews` as its own sub-table (not flat columns) | Applications can have 3+ interviews (phone → committee → chalk talk → dean); flat columns cap at an unrealistic limit. See D18. |
-| `work_auth` is a three-value categorical + freetext `work_auth_note` | Keeps filter dropdowns simple while preserving posting-specific nuance. See D23. |
-| Separate `applications` table (not merged into `positions`) | D9 — different update cadence + concern |
-| `ON DELETE CASCADE` on all child tables | D8 — one delete cleans positions + applications + interviews + recommenders atomically |
-| Auto-create `applications` row on `add_position()` | D10 — every position has a matching row; no NULL-check overhead in joins |
-| `updated_at` on `positions` maintained by an `AFTER UPDATE` trigger | Enables "recently touched" sorts + stale-position detection without each writer having to remember to set it. See D25. |
+Storage decisions affecting this schema are recorded in [§10 Key
+Architectural Decisions](#10-key-architectural-decisions): D2, D3,
+D8, D9, D10, D11, D16, D18, D19, D20, D21, D22, D23, D25. Each entry
+in §10 gives the decision, its rationale, and the alternative that
+was rejected — this section intentionally does not restate them.
 
 ---
 
