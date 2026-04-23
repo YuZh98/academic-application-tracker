@@ -436,6 +436,34 @@ CREATE INDEX IF NOT EXISTS idx_positions_deadline ON positions(deadline_date);
 | `ON DELETE CASCADE` on both child tables | Deleting a position removes its application row and all recommender rows automatically |
 | Auto-create `applications` row on `add_position()` | Guarantees every position always has a matching row; avoids NULL-check overhead in queries |
 
+### 6.3 Data migrations
+
+Schema changes happen on app startup via `database.init_db()`, which is
+**idempotent** (safe to call on every run; `CREATE TABLE IF NOT EXISTS` +
+`ALTER TABLE ADD COLUMN` only for columns not already present).
+
+**What the auto-migration covers:**
+
+| Change | Handled automatically? |
+|--------|------------------------|
+| Append a new entry to `config.REQUIREMENT_DOCS` | ✅ `init_db()` adds `req_*` / `done_*` columns on next start |
+| Add a new vocabulary option (priority, source, etc.) | ✅ No schema change — only affects page dropdowns |
+| Add a new pipeline status | ✅ No schema change — status is a TEXT column |
+
+**What requires a manual migration:**
+
+| Change | Manual step |
+|--------|-------------|
+| Rename a status value (e.g., `[OPEN]` → `[SAVED]`) | One-shot `UPDATE positions SET status='[SAVED]' WHERE status='[OPEN]'`; also update `DEFAULT` clause in `init_db()` (C6 coupling) |
+| Rename `RESULT_DEFAULT` | `UPDATE applications SET result=...` + update DDL DEFAULT (C7 coupling) |
+| Add a new top-level column to `positions` | Add to `CREATE TABLE` **and** the `ALTER TABLE` migration loop — the current loop only covers `REQUIREMENT_DOCS`-derived columns |
+| Remove a column | Manual: SQLite needs table rebuild (`CREATE TABLE new AS SELECT ... FROM positions; DROP TABLE positions; ALTER TABLE new RENAME TO positions`) |
+
+**Migration discipline for v1+:** when a change lands, record it in
+`CHANGELOG.md` under the affected version with a `Migration:` note that gives
+the exact SQL to run against a pre-existing DB. A user upgrading should never
+have to guess.
+
 ---
 
 ## 7. Module Contracts
@@ -782,10 +810,12 @@ User updates response_type to "Offer" and saves
 > **Namespace note (added v1.1, 2026-04-23):** The `D1`–`D10` entries below are the
 > original v1.0 architectural decisions and retain their bare numbering.
 > Decisions made **during implementation phases** are namespaced by phase:
-> `P3-D1`, `P4-D1`, etc. (see `CLAUDE.md` / phase review docs).
-> Decisions made **from v1.1 forward** land in `docs/adr/` as
-> `ADR-NNNN` files (Michael-Nygard format). An entry should appear in only
-> one of these systems at a time; avoid cross-listing.
+> `P3-D1`, `P4-D1`, etc. (see `reviews/phase-*.md` / internal memory).
+> Decisions made **from v1.1 forward** land in
+> [`docs/adr/`](docs/adr/README.md) as `ADR-NNNN` files (Michael-Nygard format).
+> An entry should appear in only one of these systems at a time; avoid cross-listing.
+> See [`docs/adr/README.md`](docs/adr/README.md) for the ADR template and
+> when-to-write guidance.
 
 | ID | Decision | Rationale | Alternative considered |
 |----|----------|-----------|----------------------|
