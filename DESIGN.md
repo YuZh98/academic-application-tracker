@@ -635,40 +635,7 @@ values.
 
 **Purpose:** Answer "What do I do today?" in one glance.
 
-```
-╔════════════════════════════════════════════════════════════════╗
-║  Postdoc Tracker                                               ║
-╠══════════════╦══════════════╦══════════════╦═══════════════════╣
-║  12          ║  4           ║  2           ║  May 3 · MIT      ║
-║  Tracked ⓘ  ║  Applied     ║  Interview   ║  Next Interview   ║
-║              ║              ║              ║                   ║
-╠══════════════╩══════════════╩══════════════╩═══════════════════╣
-║                             ║                                  ║
-║  Application Funnel         ║   Materials Readiness            ║
-║                             ║                                  ║
-║  Saved       ████████  8    ║                                  ║
-║  Applied     ██████    4    ║  Ready to submit:  3             ║
-║  Interview   ████      2    ║  ███                             ║
-║  Offer       ██        1    ║                                  ║
-║  [expand]                   ║  Still missing:    5             ║
-║                             ║  █████                           ║
-║                             ║                                  ║
-║                             ║  [→ Opportunities page]          ║
-║                             ║                                  ║
-╠═════════════════════════════╩══════════════════════════════════╣
-║  Upcoming (next 30 days)                                       ║
-║                                                                ║
-║  Apr 24  Stanford BioStats   Saved      deadline    9d  🔴     ║
-║  May 3   Stanford BioStats   Applied    Interview  18d         ║
-║  May 15  MIT CSAIL           Saved      deadline   30d         ║
-║                                                                ║
-╠════════════════════════════════════════════════════════════════╣
-║  Recommender Alerts                                            ║
-║                                                                ║
-║  ⚠  Dr. Smith  →  Stanford, MIT CSAIL  (asked 14 days ago)     ║
-║  ✓  Dr. Jones  →  Stanford             (submitted Apr 20)      ║
-╚════════════════════════════════════════════════════════════════╝
-```
+Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dashboard).
 
 **Panel specifications:**
 
@@ -721,33 +688,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 
 **Purpose:** Capture and manage all positions.
 
-```
-╔════════════════════════════════════════════════════════════════╗
-║  Opportunities                                                 ║
-║                                                                ║
-║  ▼ Quick Add  ──────────────────────────────────────────────  ║
-║  │ Position Name*  │ Institute  │ Field  │ Deadline  │Priority║
-║  │ ______________ │ __________ │ ______ │ 📅 date   │ High ▼ ║
-║  │ Link: ___________________________ [ + Add Position ]       ║
-║  └─────────────────────────────────────────────────────────── ║
-║                                                                ║
-║  Filter: Status [All ▼]  Priority [All ▼]  Field [________]   ║
-║                                                                ║
-║  Position Name        Institute  Priority   Status    Due      ║
-║  ────────────────────────────────────────────────────────────  ║
-║  Stanford BioStats    Stanford   🟡 High   Applied   ——        ║
-║  MIT CSAIL Postdoc    MIT        🟡 High   Saved     May 15    ║
-║  ··· (click row to expand) ···                                 ║
-║                                                                ║
-║  ┌──── Stanford BioStats Postdoc  ·  Applied  ─────────────┐   ║
-║  │  [ Overview ] [ Requirements ] [ Materials ] [ Notes ]   │  ║
-║  │  ─────────────────────────────────────────────────────── │  ║
-║  │  (tab content — full edit form fields)                   │  ║
-║  │  [ Save Changes ]                                        │  ║
-║  └──────────────────────────────────────────────────────────┘  ║ 
-║  [ Delete ]                                                    ║  
-╚════════════════════════════════════════════════════════════════╝
-```
+Layout wireframe: [`docs/ui/wireframes.md#opportunities`](docs/ui/wireframes.md#opportunities).
 
 **Behaviour:**
 
@@ -777,31 +718,7 @@ details from users.
 **Purpose:** Track every position from submission to outcome, including
 the full interview sequence.
 
-```
-╔════════════════════════════════════════════════════════════════╗
-║  Applications                                                  ║
-║                                                                ║
-║  Filter: Status [Applied+ ▼]   Sort: [Deadline ▼]             ║
-║                                                                ║
-║  Position           Applied    Recs  Conf.  Response  Result   ║
-║  ──────────────────────────────────────────────────────────── ║
-║  Stanford BioStats  Apr 18     ✓     ✓      Interview  Pending ║
-║  MIT CSAIL          ——         ——    ——      ——         ——      ║
-║                                                                ║
-║  ┌──── Stanford BioStats Postdoc ──────────────────────────┐  ║
-║  │  Applied: Apr 18       All recs submitted: ✓            │  ║
-║  │  Confirmation: ✓  (received Apr 19)                     │  ║
-║  │  Response type: Interview Invite ▼  Date: Apr 22        │  ║
-║  │  ──────  Interviews  ──────                             │  ║
-║  │  1.  📅 May 3    Video    (notes)         [ Edit ]      │  ║
-║  │  2.  📅 May 17   Onsite   (notes)         [ Edit ]      │  ║
-║  │  [ + Add another interview ]                            │  ║
-║  │  ──────                                                  │  ║
-║  │  Result notify date: 📅 ——  Result: Pending ▼           │  ║
-║  │  Notes: ___________________________________  [ Save ]   │  ║
-║  └──────────────────────────────────────────────────────────┘  ║
-╚════════════════════════════════════════════════════════════════╝
-```
+Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#applications).
 
 **Behaviour:**
 - **Default filter** excludes positions with status `STATUS_SAVED` or `STATUS_CLOSED` — they are pre-application or withdrawn and have no application data worth showing.
@@ -817,28 +734,7 @@ the full interview sequence.
 
 **Purpose:** Track every letter across every position; surface who needs a reminder.
 
-```
-╔════════════════════════════════════════════════════════════════╗
-║  Recommenders                                                  ║
-║                                                                ║
-║  ── Pending Alerts ─────────────────────────────────────────  ║
-║  ⚠  Dr. Smith  (PhD Advisor)  ·  asked 14 days ago            ║
-║     → Stanford BioStats (due May 1)                           ║
-║     → MIT CSAIL Postdoc (due May 15)                          ║
-║     [ Compose reminder email ]                                 ║
-║                                                                ║
-║  ── All Recommenders ───────────────────────────────────────  ║
-║  Filter by position: [All ▼]   Filter by recommender: [All ▼] ║
-║                                                                ║
-║  Position         Recommender   Asked    Confirmed  Submitted  ║
-║  ──────────────────────────────────────────────────────────── ║
-║  Stanford Bio     Dr. Smith     Apr 10   ✓          ——         ║
-║  Stanford Bio     Dr. Jones     Apr 10   ✓          Apr 20 ✓   ║
-║  MIT CSAIL        Dr. Smith     Apr 12   ✓          ——         ║
-║                                                                ║
-║  [ + Add recommender for position ▼ ]                         ║
-╚════════════════════════════════════════════════════════════════╝
-```
+Layout wireframe: [`docs/ui/wireframes.md#recommenders`](docs/ui/wireframes.md#recommenders).
 
 **Behaviour:**
 - **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); the page groups by `recommender_name` so one recommender who owes N letters appears as a single card listing all N positions.
@@ -852,21 +748,7 @@ the full interview sequence.
 
 **Purpose:** Manual export trigger and file download.
 
-```
-╔════════════════════════════════════════════════════════════════╗
-║  Export                                                        ║
-║                                                                ║
-║  Markdown files are auto-exported after every data change.     ║
-║  Use this page to trigger a manual export or download files.   ║
-║                                                                ║
-║  [ Regenerate all markdown files ]                             ║
-║                                                                ║
-║  ── Download ───────────────────────────────────────────────  ║
-║  [ ⬇ OPPORTUNITIES.md ]   Last generated: <file mtime>         ║
-║  [ ⬇ PROGRESS.md ]        Last generated: <file mtime>         ║
-║  [ ⬇ RECOMMENDERS.md ]    Last generated: <file mtime>         ║
-╚════════════════════════════════════════════════════════════════╝
-```
+Layout wireframe: [`docs/ui/wireframes.md#export`](docs/ui/wireframes.md#export).
 
 ---
 
