@@ -1,5 +1,5 @@
 # System Design: Postdoc Application Tracker
-**Version:** 1.2 | **Updated:** 2026-04-23 | **Status:** v1 target design (authoritative)
+**Version:** 1.3 | **Updated:** 2026-04-23 | **Status:** v1 target design (authoritative)
 
 This document is the authoritative design specification. It describes
 **the target design for v1** (what the system will be at v1.0.0 release)
@@ -33,10 +33,11 @@ land as patch-style edits; structural changes bump the `Version:` line.
 ## 1. Purpose & Scope
 
 ### Problem
-A postdoc job search involves tracking 20–40 positions simultaneously across
-different institutions, each with unique deadlines, requirement checklists,
-recommendation letter logistics, and outcome timelines. Markdown files alone
-cannot answer the key daily question: **"What do I do today?"**
+A postdoc job search involves tracking dozens of positions simultaneously
+across different institutions, each with unique deadlines, requirement
+checklists, recommendation letter logistics, and outcome timelines.
+Markdown files alone cannot answer the key daily question: **"What do I
+do today?"**
 
 ### Solution
 A local, single-user web application that:
@@ -118,7 +119,7 @@ lazily inside each database write function.
 | Language | Python | 3.14 | Already available; familiar to stats/data users |
 | Environment | venv (`.venv/`) | stdlib | Zero extra tools; isolates packages; gitignored |
 | UI framework | Streamlit | 1.50 | Python-native; `width="stretch"` and `st.switch_page` require ≥ 1.50 |
-| Charts | Plotly (Graph Objects) | 5.22 | Used via `plotly.graph_objects.Figure` / `go.Bar`; interactive by default |
+| Charts | Plotly (Graph Objects) | 5.22 | Used via `plotly.graph_objects.Figure` / `go.Bar`; click events for future interactivity |
 | Data frames | pandas | 2.2 | Bridges SQLite rows ↔ Streamlit display widgets |
 | Database | SQLite via `sqlite3` | stdlib | No server; single file; standard SQL; gitignored |
 
@@ -141,6 +142,16 @@ streamlit run app.py
 # → http://localhost:8501
 ```
 
+### 3.1 Runtime assumptions
+
+| Assumption | Value | Notes |
+|------------|-------|-------|
+| Expected scale | 10²–10³ positions, 1–10 interviews each, 1–20 recommenders total | SQLite handles this comfortably; no performance tuning needed |
+| File encoding | UTF-8 everywhere | `postdoc.db` is binary; all markdown exports and `config.py` are UTF-8 |
+| Timezone | Local machine time | SQLite `date('now')` uses UTC by default; the app explicitly uses `datetime.date.today()` (local). For a single-user local app the user's timezone is implicit and consistent. |
+| Concurrency | One writer at a time (the Streamlit process) | SQLite's default serialization is sufficient; no multi-threading / multi-process writers |
+| Persistence | `postdoc.db` on local disk | Loss-protection via the committed markdown exports; cloud backup is a v2 concern (§12.5) |
+
 ---
 
 ## 4. File Structure
@@ -155,7 +166,7 @@ Postdoc/
 │
 ├── pages/
 │   ├── 1_Opportunities.py    Positions — quick-add, filter, table, edit, delete
-│   ├── 2_Applications.py     Progress tracking — submission, response, outcome
+│   ├── 2_Applications.py     Progress tracking — submission, response, interviews, outcome
 │   ├── 3_Recommenders.py     Letter tracking — grouped alerts, mailto link
 │   └── 4_Export.py           Manual export + file download
 │
@@ -192,7 +203,7 @@ Postdoc/
 |------|----------|--------|
 | `postdoc.db` | ❌ | Binary; personal data |
 | `.venv/` | ❌ | Local environment; platform-specific |
-| `.env`, `.env.*` | ❌ | Secrets |
+| `.env`, `.env.*` | ❌ | Secrets (reserved for v2 AI ingestion) |
 | `__pycache__/`, `*.pyc` | ❌ | Auto-generated |
 | `exports/*.md` | ✅ | **Committed** — human-readable backup of the DB |
 | `CLAUDE.md` | ❌ | Internal session memory |
@@ -223,26 +234,34 @@ STATUS_VALUES: list[str] = [
     "[APPLIED]",     # Application submitted
     "[INTERVIEW]",   # Interview stage reached
     "[OFFER]",       # Offer received
-    "[CLOSED]",      # Deadline passed; did not apply (user withdrew pre-application)
+    "[CLOSED]",      # Deadline passed or user withdrew pre-application
     "[REJECTED]",    # Rejection received after applying
-    "[DECLINED]",    # Offer turned down (by applicant)
+    "[DECLINED]",    # Offer turned down by applicant
 ]
 
-# Named aliases for specific pipeline stages. Page code references these
-# rather than positional indices or literal strings — keeps the anti-typo
-# guardrail in place (grep rule catches literal usage at merge time).
+# Named aliases for each pipeline stage. Page code references these
+# rather than positional indices or literal strings — keeps the
+# anti-typo guardrail in place (grep rule catches literal usage at
+# merge time). All seven statuses have aliases for symmetry.
 STATUS_SAVED     = STATUS_VALUES[0]   # "[SAVED]"
 STATUS_APPLIED   = STATUS_VALUES[1]   # "[APPLIED]"
 STATUS_INTERVIEW = STATUS_VALUES[2]   # "[INTERVIEW]"
 STATUS_OFFER     = STATUS_VALUES[3]   # "[OFFER]"
+STATUS_CLOSED    = STATUS_VALUES[4]   # "[CLOSED]"
+STATUS_REJECTED  = STATUS_VALUES[5]   # "[REJECTED]"
+STATUS_DECLINED  = STATUS_VALUES[6]   # "[DECLINED]"
 
 # Terminal statuses — positions in these states are excluded from "active"
-# queries (upcoming deadlines, materials readiness, application funnel
-# active-only calculations, etc.).
-TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
+# queries (upcoming deadlines, materials readiness, etc.).
+TERMINAL_STATUSES: list[str] = [STATUS_CLOSED, STATUS_REJECTED, STATUS_DECLINED]
 
-# Storage-to-color map. Values must be from the palette accepted by both
-# st.badge and Plotly marker_color (CSS color names are the safe overlap).
+# Storage-to-color map for **per-status surfaces** (status badge on the
+# Opportunities table, tooltip indicators, any place where a single raw
+# status value needs a color). Values are from the overlap of the
+# st.badge palette and Plotly marker_color CSS-color vocabulary.
+#
+# Funnel bar colors come from FUNNEL_BUCKETS, not this dict — the funnel
+# renders presentation buckets, not raw statuses.
 STATUS_COLORS: dict[str, str] = {
     "[SAVED]":     "blue",
     "[APPLIED]":   "orange",
@@ -253,11 +272,10 @@ STATUS_COLORS: dict[str, str] = {
     "[DECLINED]":  "gray",
 }
 
-# Storage-to-UI-label map. Storage retains square brackets (visual enum
-# sentinel; avoids namespace collision with plain-English words elsewhere
-# in the codebase); UI strips them via this dict. Every surface that
-# renders a status to the user MUST go through STATUS_LABELS — never
-# print the raw key.
+# Storage-to-UI-label map. Storage retains square brackets as a visual
+# enum sentinel; UI strips them via this dict. Every surface that
+# renders a status to a user MUST go through STATUS_LABELS — never
+# print a raw key.
 STATUS_LABELS: dict[str, str] = {
     "[SAVED]":     "Saved",
     "[APPLIED]":   "Applied",
@@ -269,39 +287,69 @@ STATUS_LABELS: dict[str, str] = {
 }
 
 # Presentation-layer groupings for the dashboard funnel.
-# Each entry: (UI label, tuple of raw STATUS_VALUES contributing to this bar).
-# The chart sums counts within each bucket. Order determines display order
-# on the chart (top-down when the y-axis is reversed).
+# Each entry: (UI label, tuple of raw STATUS_VALUES contributing to this
+# bar, bucket color).
 #
-# "Archived" groups [REJECTED] + [DECLINED] only — both are outcomes after
+# The chart sums counts within each bucket. Order = display order
+# (top-down when the y-axis is reversed).
+#
+# "Archived" groups [REJECTED] + [DECLINED] — both are outcomes after
 # engagement. [CLOSED] stays its own bucket because pre-application
-# withdrawal is a genuinely distinct state (see D17).
-FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...]]] = [
-    ("Saved",     ("[SAVED]",)),
-    ("Applied",   ("[APPLIED]",)),
-    ("Interview", ("[INTERVIEW]",)),
-    ("Offer",     ("[OFFER]",)),
-    ("Closed",    ("[CLOSED]",)),
-    ("Archived",  ("[REJECTED]", "[DECLINED]")),
+# withdrawal is a genuinely distinct state.
+#
+# Bucket colors live here (not in STATUS_COLORS) because the funnel
+# groups multiple raw statuses per bar; the bucket owns its color.
+FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
+    ("Saved",     ("[SAVED]",),                  "blue"),
+    ("Applied",   ("[APPLIED]",),                "orange"),
+    ("Interview", ("[INTERVIEW]",),              "violet"),
+    ("Offer",     ("[OFFER]",),                  "green"),
+    ("Closed",    ("[CLOSED]",),                 "gray"),
+    ("Archived",  ("[REJECTED]", "[DECLINED]"),  "gray"),
 ]
 
-# ── Controlled vocabularies ───────────────────────────────────────
+# Buckets hidden by default on the dashboard funnel. Users opt in via
+# per-bucket toggle checkboxes. Default-hiding terminal outcomes keeps
+# the dashboard focused on active work (D24). Values must be bucket
+# labels from FUNNEL_BUCKETS.
+FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
+
+# ── Position priority ─────────────────────────────────────────────
+# Subjective user judgment of fit / want. User sets at add-time and
+# can edit. Informs the Opportunities filter and attention-ordering.
+# Distinct from **urgency** (see dashboard thresholds below): priority
+# is subjective and stored; urgency is objective and computed.
 PRIORITY_VALUES: list[str] = ["High", "Medium", "Low", "Stretch"]
 
-WORK_AUTH_OPTIONS: list[str] = ["Any", "OPT", "J-1", "H1B", "No Sponsorship", "Ask"]
+# ── Work authorization ─────────────────────────────────────────────
+# Three-value categorical answering "Does the posting accept the
+# applicant's work authorization?":
+#   "Yes"     — posting explicitly welcomes OPT / international applicants
+#   "No"      — posting explicitly requires US citizenship or permanent residency
+#   "Unknown" — posting does not say; user has not investigated yet
+#
+# Complementary freetext column work_auth_note (on the positions table)
+# captures posting-specific detail ("green card required", "EU citizens
+# preferred", "STEM OPT extension accepted"). The categorical drives
+# filtering; the note preserves nuance without bloating the vocabulary.
+WORK_AUTH_OPTIONS: list[str] = ["Yes", "No", "Unknown"]
 
-FULL_TIME_OPTIONS: list[str] = ["Yes", "No", "Part-time"]
+# ── Full-time / part-time / contract ──────────────────────────────
+FULL_TIME_OPTIONS: list[str] = ["Full-time", "Part-time", "Contract"]
 
+# ── Where the posting was found ───────────────────────────────────
 SOURCE_OPTIONS: list[str] = [
     "Lab website", "AcademicJobsOnline", "HigherEdJobs",
     "LinkedIn", "Referral", "Conference", "Listserv", "Other",
 ]
 
+# ── Application response types ────────────────────────────────────
 RESPONSE_TYPES: list[str] = [
     "Acknowledgement", "Screening Call", "Interview Invite",
     "Rejection", "Offer", "Other",
 ]
 
+# ── Application outcome ───────────────────────────────────────────
 # RESULT_DEFAULT is the applications.result DEFAULT in the schema.
 # The schema DDL reads this constant via f-string, so renaming here
 # propagates to the CREATE TABLE clause automatically (see §6.2).
@@ -311,23 +359,28 @@ RESULT_VALUES: list[str] = [
     "Offer Accepted", "Offer Declined", "Rejected", "Withdrawn",
 ]
 
+# ── Recommender relationship types ────────────────────────────────
 RELATIONSHIP_TYPES: list[str] = [
     "PhD Advisor", "Committee Member", "Collaborator",
     "Postdoc Supervisor", "Department Faculty", "Other",
 ]
 
+# ── Interview format ──────────────────────────────────────────────
+# Vocabulary for the format column on the interviews sub-table.
+INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
+
 # ── Requirement document types ────────────────────────────────────
 # Canonical DB values for req_* columns. Order = display order on the
 # Requirements tab radio ("Required" leftmost as the common case).
-REQUIREMENT_VALUES: list[str] = ["Y", "Optional", "N"]
+REQUIREMENT_VALUES: list[str] = ["Yes", "Optional", "No"]
 
 # UI labels for each canonical value. Radios look up display text via
 # format_func=REQUIREMENT_LABELS.get so session_state keeps the
 # canonical DB value — no save-time translation needed.
 REQUIREMENT_LABELS: dict[str, str] = {
-    "Y":        "Required",
+    "Yes":      "Required",
     "Optional": "Optional",
-    "N":        "Not needed",
+    "No":       "Not needed",
 }
 
 # Each tuple: (db_req_column, db_done_column, display_label).
@@ -361,8 +414,13 @@ QUICK_ADD_FIELDS: list[str] = [
 EDIT_PANEL_TABS: list[str] = ["Overview", "Requirements", "Materials", "Notes"]
 
 # ── Dashboard display thresholds ──────────────────────────────────
-# Boundary semantics: inclusive on the lower-severity side.
-# A deadline 7 days away → "urgent"; a deadline 30 days away → "alert".
+# "Urgency" is **computed** from deadline_date at query time — it is
+# NOT stored. Distinct from "priority" (user's subjective fit).
+# Boundaries are inclusive on the narrower band:
+#   days-until-deadline ≤ DEADLINE_URGENT_DAYS → urgent  (flagged 🔴)
+#   days-until-deadline ≤ DEADLINE_ALERT_DAYS  → alert   (flagged 🟡)
+#   days-until-deadline >  DEADLINE_ALERT_DAYS → normal
+# A deadline exactly 7 days away is urgent (not alert).
 DEADLINE_ALERT_DAYS: int    = 30
 DEADLINE_URGENT_DAYS: int   = 7
 RECOMMENDER_ALERT_DAYS: int = 7
@@ -375,22 +433,25 @@ violation aborts app startup with a clear traceback — catches drift
 before any page renders:
 
 1. `TRACKER_PROFILE in VALID_PROFILES` — profile is a known value
-2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a color
+2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a per-status color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has a UI label
 4. `set(TERMINAL_STATUSES) <= set(STATUS_VALUES)` — terminals are a subset
-5. The multiset of `STATUS_VALUES` contained in all `FUNNEL_BUCKETS` tuples, flattened, equals `set(STATUS_VALUES)` and contains no duplicates — every status lives in exactly one bucket
-6. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label
-7. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
+5. The raw statuses across all `FUNNEL_BUCKETS` tuples, flattened, equal `set(STATUS_VALUES)` with no duplicates — every status lives in exactly one bucket
+6. `FUNNEL_DEFAULT_HIDDEN <= {label for label, _, _ in FUNNEL_BUCKETS}` — the hidden-by-default set references real bucket labels
+7. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label
+8. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
 
 ### 5.3 Extension recipes
 
 | Goal | What to edit |
 |------|--------------|
 | Add a new requirement document | Append one tuple to `REQUIREMENT_DOCS`. On next app start, `init_db()` adds `req_*` / `done_*` columns via the migration loop. No other file changes. |
-| Add a priority / source / response-type / relationship option | Append to the relevant list. Dropdowns pick it up on next render. No DB change — columns are plain TEXT. |
-| Add a new pipeline status | (1) Append to `STATUS_VALUES`; (2) add one entry each to `STATUS_COLORS` and `STATUS_LABELS`; (3) decide which `FUNNEL_BUCKETS` entry it belongs in (extend a tuple or add a new bucket); (4) if terminal, append to `TERMINAL_STATUSES`. No DDL change. |
-| Rename a pipeline status | Edit `STATUS_VALUES[i]`, the corresponding keys in `STATUS_COLORS` and `STATUS_LABELS`, any references in `FUNNEL_BUCKETS` and `TERMINAL_STATUSES`. Write a one-shot migration in `CHANGELOG.md` under the release: `UPDATE positions SET status = '<new>' WHERE status = '<old>'`. The schema `DEFAULT` clause is config-driven; no DDL edit needed if renaming `STATUS_VALUES[0]`. |
-| Switch the tracker profile | See §11 and §12.1. |
+| Add a priority / source / response-type / relationship / interview-format option | Append to the relevant list. Dropdowns pick it up on next render. No DB change — columns are plain TEXT. |
+| Add a new pipeline status | (1) Append to `STATUS_VALUES` and add the matching `STATUS_<name>` alias; (2) add one entry each to `STATUS_COLORS` and `STATUS_LABELS`; (3) decide which `FUNNEL_BUCKETS` entry it belongs in — extend an existing bucket's tuple or add a new 3-tuple `(label, (raw,...), color)` in the right display position; (4) if terminal, append to `TERMINAL_STATUSES`. No DDL change. |
+| Rename a pipeline status | Edit `STATUS_VALUES[i]`, the matching alias, and the keys in `STATUS_COLORS` / `STATUS_LABELS` / `FUNNEL_BUCKETS` / `TERMINAL_STATUSES`. Write a one-shot migration in `CHANGELOG.md` under the release: `UPDATE positions SET status = '<new>' WHERE status = '<old>'`. The schema `DEFAULT` clause is config-driven; no DDL edit needed if renaming `STATUS_VALUES[0]`. |
+| Hide or un-hide a funnel bucket by default | Edit `FUNNEL_DEFAULT_HIDDEN`. Values must be existing bucket labels. |
+| Change a dashboard threshold | Edit `DEADLINE_*` or `RECOMMENDER_ALERT_DAYS`. Import-time invariants catch inverted thresholds. |
+| Switch the tracker profile | See §12.1. |
 
 ---
 
@@ -402,8 +463,8 @@ architectural description of that DDL.
 ### 6.1 Entity-Relationship summary
 
 ```
-positions (1) ──< applications (1)      one-to-one
-positions (1) ──< recommenders (many)   one-to-many
+positions (1) ──< applications (1) ──< interviews (many)
+positions (1) ──< recommenders (many)
 ```
 
 ### 6.2 Tables
@@ -417,74 +478,106 @@ CREATE TABLE IF NOT EXISTS positions (
 
     -- Identity & metadata
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    status           TEXT    NOT NULL DEFAULT '[SAVED]',  -- from config.STATUS_VALUES[0]
-    priority         TEXT,
+    status           TEXT    NOT NULL DEFAULT '[SAVED]',   -- from config.STATUS_VALUES[0]
+    priority         TEXT,                                 -- from config.PRIORITY_VALUES
     created_at       TEXT    DEFAULT (date('now')),
+    updated_at       TEXT    DEFAULT (datetime('now')),    -- maintained by trigger
 
     -- Overview
     position_name    TEXT    NOT NULL,
     institute        TEXT,
     location         TEXT,
     field            TEXT,
-    deadline_date    TEXT,       -- ISO-8601 'YYYY-MM-DD' — drives all time math
-    deadline_note    TEXT,       -- Freetext context: "rolling after initial review"
+    deadline_date    TEXT,         -- ISO-8601 'YYYY-MM-DD' — drives all time math
+    deadline_note    TEXT,         -- Freetext: "rolling after initial review"
     stipend          TEXT,
-    work_auth        TEXT,
-    full_time        TEXT,
-    source           TEXT,
+    work_auth        TEXT,         -- from config.WORK_AUTH_OPTIONS (Yes/No/Unknown)
+    work_auth_note   TEXT,         -- Freetext detail (e.g., "green card required")
+    full_time        TEXT,         -- from config.FULL_TIME_OPTIONS
+    source           TEXT,         -- from config.SOURCE_OPTIONS
     link             TEXT,
 
     -- Details
     mentor           TEXT,
     point_of_contact TEXT,
-    portal_url       TEXT,       -- Submission portal URL (may differ from link)
+    portal_url       TEXT,         -- Submission portal URL (may differ from link)
     keywords         TEXT,
     description      TEXT,
     num_rec_letters  INTEGER,
     reference_code   TEXT,
     notes            TEXT
 
-    -- req_* TEXT DEFAULT 'N' and done_* INTEGER DEFAULT 0 pairs,
+    -- req_* TEXT DEFAULT 'No' and done_* INTEGER DEFAULT 0 pairs,
     -- one per entry in config.REQUIREMENT_DOCS, generated by init_db().
-    -- Values: req_* ∈ {'Y', 'Optional', 'N'}; done_* ∈ {0, 1}.
+    -- Values: req_* ∈ {'Yes', 'Optional', 'No'}; done_* ∈ {0, 1}.
 );
+
+-- Trigger: keep updated_at fresh on every row mutation.
+-- Relies on SQLite's default recursive_triggers = OFF — the inner
+-- UPDATE fires the trigger again in principle, but is suppressed by
+-- the default setting, preventing an infinite loop.
+CREATE TRIGGER IF NOT EXISTS positions_updated_at
+    AFTER UPDATE ON positions FOR EACH ROW
+BEGIN
+    UPDATE positions SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
 
 -- ── Table 2: applications ──────────────────────────────────────
 -- One row per position. Tracks submission, response, and outcome.
--- Automatically created when a position is added (all fields NULL).
+-- Automatically created when a position is added (all nullable fields NULL).
+--
+-- Interviews are normalized into a separate sub-table — see Table 3.
+-- all_recs_submitted is NOT stored; compute from recommenders via
+-- database.is_all_recs_submitted().
 CREATE TABLE IF NOT EXISTS applications (
-    position_id          INTEGER PRIMARY KEY,
-    applied_date         TEXT,
-    all_recs_submitted   TEXT,       -- 'Y' when all letters are in
-    confirmation_email   TEXT,       -- 'Y' or date string
-    response_date        TEXT,
-    response_type        TEXT,
-    interview1_date      TEXT,
-    interview2_date      TEXT,
-    result_notify_date   TEXT,
-    result               TEXT    DEFAULT 'Pending',   -- from config.RESULT_DEFAULT
-    notes                TEXT,
+    position_id            INTEGER PRIMARY KEY,
+    applied_date           TEXT,
+    confirmation_received  INTEGER DEFAULT 0,     -- 0 or 1
+    confirmation_date      TEXT,                   -- ISO, NULL if not yet received
+    response_date          TEXT,
+    response_type          TEXT,                   -- from config.RESPONSE_TYPES
+    result_notify_date     TEXT,
+    result                 TEXT    DEFAULT 'Pending',   -- from config.RESULT_DEFAULT
+    notes                  TEXT,
     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
 );
 
--- ── Table 3: recommenders ──────────────────────────────────────
+-- ── Table 3: interviews ────────────────────────────────────────
+-- One row per interview slot. An application can have arbitrarily many
+-- interviews (phone screen, committee, chalk talk, dean meeting, ...).
+-- Replaces the earlier flat interview1_date / interview2_date columns
+-- on the applications table (see D18).
+CREATE TABLE IF NOT EXISTS interviews (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id  INTEGER NOT NULL,
+    sequence        INTEGER NOT NULL,        -- 1, 2, 3, ... (display order)
+    scheduled_date  TEXT,                     -- ISO 'YYYY-MM-DD'
+    format          TEXT,                     -- from config.INTERVIEW_FORMATS
+    notes           TEXT,
+    UNIQUE (application_id, sequence),
+    FOREIGN KEY (application_id) REFERENCES applications(position_id) ON DELETE CASCADE
+);
+
+-- ── Table 4: recommenders ──────────────────────────────────────
 -- Many rows per position; one row per (position × recommender) pair.
 CREATE TABLE IF NOT EXISTS recommenders (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    position_id      INTEGER NOT NULL,
-    recommender_name TEXT,
-    relationship     TEXT,
-    asked_date       TEXT,
-    confirmed        TEXT,       -- 'Y' | 'N' | NULL (pending)
-    submitted_date   TEXT,
-    reminder_sent    TEXT,
-    notes            TEXT,
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id         INTEGER NOT NULL,
+    recommender_name    TEXT,
+    relationship        TEXT,                   -- from config.RELATIONSHIP_TYPES
+    asked_date          TEXT,
+    confirmed           INTEGER,                -- 0, 1, or NULL (pending response)
+    submitted_date      TEXT,
+    reminder_sent       INTEGER DEFAULT 0,      -- 0 or 1
+    reminder_sent_date  TEXT,                   -- ISO, NULL if none
+    notes               TEXT,
     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
 );
 
 -- ── Indices (queried most often by dashboard / filters) ───────
-CREATE INDEX IF NOT EXISTS idx_positions_status   ON positions(status);
-CREATE INDEX IF NOT EXISTS idx_positions_deadline ON positions(deadline_date);
+CREATE INDEX IF NOT EXISTS idx_positions_status      ON positions(status);
+CREATE INDEX IF NOT EXISTS idx_positions_deadline    ON positions(deadline_date);
+CREATE INDEX IF NOT EXISTS idx_interviews_application ON interviews(application_id);
 ```
 
 **DDL DEFAULTs are config-driven.** `init_db()` constructs the `CREATE
@@ -502,178 +595,130 @@ evolution happens in one of three shapes:
 
 | Change | Mechanism |
 |--------|-----------|
-| New entry in `config.REQUIREMENT_DOCS` | `ALTER TABLE positions ADD COLUMN req_<x> TEXT DEFAULT 'N'` + `ADD COLUMN done_<x> INTEGER DEFAULT 0`, guarded by a `PRAGMA table_info` existence check |
+| New entry in `config.REQUIREMENT_DOCS` | `ALTER TABLE positions ADD COLUMN req_<x> TEXT DEFAULT 'No'` + `ADD COLUMN done_<x> INTEGER DEFAULT 0`, guarded by a `PRAGMA table_info` existence check |
 | A brand-new table | `CREATE TABLE IF NOT EXISTS <name> (...)` in `init_db()` |
-| New entry in any vocabulary list (`SOURCE_OPTIONS`, `RESPONSE_TYPES`, etc.) | No DDL — columns are plain TEXT; dropdowns pick up new values on next render |
+| A brand-new trigger or index | `CREATE TRIGGER / INDEX IF NOT EXISTS` in `init_db()` |
+| New entry in any vocabulary list (`SOURCE_OPTIONS`, `RESPONSE_TYPES`, `INTERVIEW_FORMATS`, etc.) | No DDL — columns are plain TEXT; dropdowns pick up new values on next render |
+| New top-level columns on an existing table when config or schema adds them | `ALTER TABLE ... ADD COLUMN` guarded by `PRAGMA table_info`, parallel to the REQUIREMENT_DOCS loop |
 
 **Manual (requires a migration step, recorded in CHANGELOG):**
 
 | Change | Required step |
 |--------|---------------|
-| Rename a status value (e.g. `[OPEN]` → `[SAVED]`) | One-shot `UPDATE positions SET status = '<new>' WHERE status = '<old>'`. Schema DEFAULT is config-driven, so no DDL edit. |
+| Rename a status value | One-shot `UPDATE positions SET status = '<new>' WHERE status = '<old>'`. Schema DEFAULT is config-driven, so no DDL edit. |
 | Rename `RESULT_DEFAULT` | One-shot `UPDATE applications SET result = '<new>' WHERE result = '<old>'`. |
-| Add a new top-level (non-`req_*`/`done_*`) column to `positions` | Extend the `CREATE TABLE` clause **and** add an `ALTER TABLE ... ADD COLUMN` guarded by a `PRAGMA table_info` check — mirror the existing REQUIREMENT_DOCS loop. |
-| Remove a column | SQLite requires a table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM positions; DROP TABLE positions; ALTER TABLE new RENAME TO positions`. Document as a breaking change in CHANGELOG. |
+| Split a dual-purpose column | (a) `ALTER TABLE ... ADD COLUMN` for the new columns; (b) one-shot `UPDATE` translating the old column's values into the new columns; (c) leave the old column NULL until a follow-up release rebuilds the table to drop it. |
+| Normalize flat columns into a sub-table | (a) `CREATE TABLE` the new sub-table; (b) `INSERT INTO` copying old columns; (c) leave old columns NULL until a rebuild drops them; (d) update application code to read from the sub-table. |
+| Remove a column | SQLite requires a table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM <t>; DROP TABLE <t>; ALTER TABLE new RENAME TO <t>`. Breaking change — document in CHANGELOG. |
 
 **Migration discipline:** every schema or vocabulary change lands with a
 `Migration:` note in `CHANGELOG.md` under the release that introduces
 it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between
 releases should never have to guess which migration to run.
 
-### 6.4 Schema design notes
+### 6.4 Schema design decisions
 
 | Decision | Reason |
 |----------|--------|
-| `deadline_date` is ISO text, not a DATE column | SQLite has no native DATE type; ISO-8601 strings sort and compare correctly as TEXT |
-| `done_*` columns are `INTEGER 0/1` | SQLite has no BOOLEAN; materials readiness is computed at query time, not stored as a summary field |
-| Separate `applications` table (not merged into `positions`) | Different update cadence; `positions` = "what exists", `applications` = "what you did" |
-| `ON DELETE CASCADE` on both child tables | Deleting a position removes its application row and all recommender rows atomically |
-| Auto-create `applications` row on `add_position()` | Every position always has a matching row; no NULL-check overhead in joins |
+| Dates stored as ISO TEXT, not DATE type | SQLite has no native DATE type; ISO strings sort and compare correctly as TEXT; time math uses `datetime.date.fromisoformat` |
+| Boolean-state columns as INTEGER 0/1 (never TEXT `'Y'`/`'N'`) | Type-consistent; trivial SQL predicates (`WHERE col = 1`); applies to `done_*`, `confirmation_received`, `reminder_sent`, `confirmed` (on recommenders). See D20. |
+| Three-state columns as TEXT with full-word values | `req_*` stores `{"Yes", "Optional", "No"}`. Can't collapse to a boolean (three states); full words are self-descriptive in raw DB dumps; no storage penalty on TEXT. See D21. |
+| Dual-concern fields split into (flag, date) column pairs | Prevents type confusion: `confirmation_received INTEGER` + `confirmation_date TEXT`, `reminder_sent INTEGER` + `reminder_sent_date TEXT`. Never one column holding either a flag or a date. See D19. |
+| Summary flags that *could* be computed **are** computed, never stored | D3 applied consistently: `is_all_recs_submitted()` is a query helper, not a column — eliminates desync between recommenders and applications |
+| `status` TEXT uses bracketed sentinel values (`[SAVED]`, etc.) | D16 — visual enum marker in logs/DB dumps; avoids namespace collision with plain-English words |
+| `interviews` as its own sub-table (not flat columns) | Applications can have 3+ interviews (phone → committee → chalk talk → dean); flat columns cap at an unrealistic limit. See D18. |
+| `work_auth` is a three-value categorical + freetext `work_auth_note` | Keeps filter dropdowns simple while preserving posting-specific nuance. See D23. |
+| Separate `applications` table (not merged into `positions`) | D9 — different update cadence + concern |
+| `ON DELETE CASCADE` on all child tables | D8 — one delete cleans positions + applications + interviews + recommenders atomically |
+| Auto-create `applications` row on `add_position()` | D10 — every position has a matching row; no NULL-check overhead in joins |
+| `updated_at` on `positions` maintained by an `AFTER UPDATE` trigger | Enables "recently touched" sorts + stale-position detection without each writer having to remember to set it. See D25. |
 
 ---
 
 ## 7. Module Contracts
 
-### `database.py` — public API
+This section describes **what each module does and how to reach it**. Full
+function signatures (parameters, return types, detailed docstrings) live
+in the source as docstrings — they are the single source of implementation
+truth. DESIGN.md specifies the **roles, calling conventions, and
+load-bearing invariants** that cross module boundaries.
 
-```python
-from pathlib import Path
-from typing import Any
-import sqlite3
-import pandas as pd
+### `database.py`
 
-DB_PATH: Path                          # resolved relative to database.py location
+**Role.** All SQLite I/O. No Streamlit imports; no display logic.
+Reads and writes the SQLite database file only — other filesystem I/O
+belongs in `exports.py`. Readers return pandas DataFrames for
+multi-row queries and plain dicts for single-row lookups. Writers
+return the new row id (inserts) or `None` (updates, deletes).
 
-# ── Init ──────────────────────────────────────────────────────────
-def init_db() -> None:
-    """Create tables and indices if they don't exist. Safe to call on every start.
-    DDL DEFAULTs derive from config; req_*/done_* columns derive from
-    config.REQUIREMENT_DOCS with an idempotent ALTER TABLE migration loop
-    covering entries added after the initial CREATE."""
+**Public API (grouped by concern):**
 
-# ── Positions ─────────────────────────────────────────────────────
-def add_position(fields: dict[str, Any]) -> int:
-    """Insert a new position row and its blank applications row.
-    Returns the new position id. Calls exports.write_all()."""
+| Group | Functions |
+|-------|-----------|
+| Schema lifecycle | `init_db` |
+| Positions | `add_position`, `get_all_positions`, `get_position`, `update_position`, `delete_position` |
+| Applications | `get_application`, `upsert_application`, `is_all_recs_submitted` |
+| Interviews | `add_interview`, `get_interviews`, `update_interview`, `delete_interview` |
+| Recommenders | `add_recommender`, `get_recommenders`, `get_all_recommenders`, `update_recommender`, `delete_recommender` |
+| Dashboard queries | `count_by_status`, `get_upcoming_deadlines`, `get_upcoming_interviews`, `get_pending_recommenders`, `compute_materials_readiness` |
 
-def get_all_positions() -> pd.DataFrame:
-    """Return all positions ordered by deadline_date ASC, NULLs last."""
+**Load-bearing contracts:**
 
-def get_position(position_id: int) -> dict[str, Any]:
-    """Return a single position as a dict. Raises KeyError if not found."""
+1. **Exports after writes.** Every public write function calls
+   `exports.write_all()` as its last step, inside a try/except that
+   logs errors but does not re-raise. A write that succeeded in the DB
+   always reports success to its caller, even if markdown regeneration
+   failed. The import of `exports` inside each writer is deferred (not
+   at module top) to break the circular import.
 
-def update_position(position_id: int, fields: dict[str, Any]) -> None:
-    """Update provided fields on an existing position. Calls exports.write_all()."""
+2. **Pipeline auto-promotion.** Two writers can promote
+   `positions.status` as a side effect — `upsert_application` and
+   `add_interview`. Both accept a keyword argument
+   `propagate_status: bool = True`; when False, no pipeline side-effect
+   fires. The promotion rules R1/R2/R3 are documented in §9.3 and run
+   atomically inside the same transaction as the primary write.
 
-def delete_position(position_id: int) -> None:
-    """Delete position; applications + recommenders cascade.
-    Calls exports.write_all()."""
+3. **Idempotent init.** `init_db()` runs on every app start. It creates
+   tables, triggers, and indices with `IF NOT EXISTS`; it runs the
+   `REQUIREMENT_DOCS`-driven `ALTER TABLE ADD COLUMN` loop; it re-checks
+   all invariants. Safe to call any number of times.
 
-# ── Applications ──────────────────────────────────────────────────
-def get_application(position_id: int) -> dict[str, Any]:
-    """Return the application row as a dict.
-    Returns {} if no row exists (should not happen after add_position)."""
+4. **Sparse-dict returns.** Aggregation queries (`count_by_status`,
+   others) may omit zero-count keys. Callers fill missing keys with 0
+   before display.
 
-def upsert_application(
-    position_id: int,
-    fields: dict[str, Any],
-    *,
-    propagate_status: bool = True,
-) -> dict[str, Any]:
-    """INSERT or UPDATE the application row for a position.
+5. **Sort orders are part of the contract.** `get_all_positions` returns
+   rows ordered by `deadline_date ASC NULLS LAST`; `get_upcoming_*`
+   queries return chronological order; `get_all_recommenders` orders
+   by `recommender_name`. Tests and pages rely on these orderings.
 
-    When propagate_status is True (default), the pipeline-promotion rules
-    in §9.3 fire atomically within the same transaction as the application
-    upsert. Callers that are editing purely-application fields (e.g.
-    fixing a typo in notes) and don't want pipeline side-effects pass
-    propagate_status=False.
+### `exports.py`
 
-    Returns a dict:
-        {
-            "status_changed": bool,
-            "new_status":     str | None,   # the new positions.status if changed
-        }
-    so callers can surface a toast when a promotion fires.
+**Role.** Generate the three markdown backup files. Imports `database`
+and `config`; never imports Streamlit. Called only by `database.py`
+writers (via deferred import) and by the Export page's manual-trigger
+button.
 
-    Calls exports.write_all()."""
+**Public API:**
 
-# ── Recommenders ──────────────────────────────────────────────────
-def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
-    """Insert a new recommender row. Returns the new id. Calls exports.write_all()."""
+| Function | What it writes |
+|----------|----------------|
+| `write_all` | All three files below (calls the individual writers) |
+| `write_opportunities` | `exports/OPPORTUNITIES.md` from the positions table |
+| `write_progress` | `exports/PROGRESS.md` from positions JOIN applications JOIN interviews |
+| `write_recommenders` | `exports/RECOMMENDERS.md` from recommenders JOIN positions |
 
-def get_recommenders(position_id: int) -> pd.DataFrame:
-    """Return recommenders for one position, ordered by id ASC."""
+**Load-bearing contracts:**
 
-def get_all_recommenders() -> pd.DataFrame:
-    """Return all recommenders joined with position_name and institute,
-    ordered by recommender_name ASC, id ASC."""
+1. **Log-and-continue on failure.** Errors inside `write_all` are logged
+   but never propagate past its boundary. The DB write that triggered
+   the export has already succeeded, and the user should see "Saved"
+   — not a traceback. The Export page surfaces file mtimes so stale
+   backups become visible.
 
-def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
-    """Update fields on a recommender row. Calls exports.write_all()."""
-
-def delete_recommender(rec_id: int) -> None:
-    """Delete one recommender row. Calls exports.write_all()."""
-
-# ── Dashboard queries ─────────────────────────────────────────────
-def count_by_status() -> dict[str, int]:
-    """Return {raw_status_value: count}. Zero-count statuses are OMITTED
-    (sparse dict); callers fill missing keys with 0 before display.
-    Keys are the raw storage values (e.g. '[SAVED]'), not UI labels —
-    the presentation layer translates via config.STATUS_LABELS and groups
-    via config.FUNNEL_BUCKETS."""
-
-def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
-    """Return non-terminal positions with deadline_date in [today, today+days],
-    ordered by deadline_date ASC.
-    Excludes positions with status in config.TERMINAL_STATUSES."""
-
-def get_upcoming_interviews() -> pd.DataFrame:
-    """Return rows where interview1_date OR interview2_date is today or later,
-    joined with position_name and institute, ordered by
-    interview1_date ASC NULLS LAST, interview2_date ASC NULLS LAST.
-
-    Note: a row where only interview2_date is future (interview1 in the
-    past) is still included — callers that need the earliest future date
-    scan both columns per row."""
-
-def get_pending_recommenders(
-    days: int = config.RECOMMENDER_ALERT_DAYS,
-) -> pd.DataFrame:
-    """Return recommender rows with asked_date >= `days` ago and
-    submitted_date IS NULL, joined with position_name, institute, and
-    deadline_date, ordered by recommender_name ASC, deadline_date ASC NULLS LAST."""
-
-def compute_materials_readiness() -> dict[str, int]:
-    """Return {"ready": N, "pending": M} for active-pipeline positions.
-
-    Active = status in (config.STATUS_SAVED, STATUS_APPLIED, STATUS_INTERVIEW).
-    "Ready" = every doc with req_* = 'Y' also has done_* = 1.
-    Only positions with at least one required doc (req_* = 'Y') are
-    counted — a position with all docs 'N' contributes to neither
-    bucket."""
-```
-
-### `exports.py` — public API
-
-```python
-def write_all() -> None:
-    """Regenerate all three markdown export files. Called from every
-    database.py writer.
-
-    Errors are logged but do not propagate — a failed export must not
-    cause a successful DB write to surface as a UI error. Callers see
-    "Saved", even if the markdown regeneration failed; the missing
-    backup is visible on the Export page."""
-
-def write_opportunities() -> None:
-    """Generate exports/OPPORTUNITIES.md from the positions table."""
-
-def write_progress() -> None:
-    """Generate exports/PROGRESS.md from positions JOIN applications."""
-
-def write_recommenders() -> None:
-    """Generate exports/RECOMMENDERS.md from recommenders JOIN positions."""
-```
+2. **Stable markdown format.** Export formats are committed into
+   version control; changes to the output format are documented in
+   CHANGELOG alongside any change in the generator.
 
 ---
 
@@ -696,9 +741,8 @@ st.set_page_config(
 ```
 
 `layout="wide"` is essential: the app is data-heavy (tables, KPI grids,
-funnel chart, timeline). Default centered layout crams every view.
-`set_page_config` runs at the top of `app.py` and every `pages/*.py` —
-it is re-executed on every page switch.
+funnel chart, timeline). `set_page_config` runs at the top of `app.py`
+and every `pages/*.py` — it is re-executed on every page switch.
 
 #### Widget-key prefix conventions
 
@@ -710,7 +754,7 @@ reruns:
 | Quick-add form | `qa_` | `qa_position_name`, `qa_deadline_date` |
 | Edit panel (row-scoped) | `edit_` | `edit_position_name`, `edit_notes` |
 | Filter bar | `filter_` | `filter_status`, `filter_field` |
-| Internal sentinels | `_` prefix | `_edit_form_sid`, `_delete_target_id`, `_skip_table_reset` |
+| Internal sentinels | `_` prefix | `_edit_form_sid`, etc. |
 | Form ids | suffix `_form` | `edit_notes_form` (contains `edit_notes`) |
 
 **Form ids MUST NOT collide with any widget key inside the form.**
@@ -750,14 +794,15 @@ values.
 ║              ║              ║              ║                   ║
 ╠══════════════╩══════════════╩══════════════╩═══════════════════╣
 ║                                                                ║
-║  Application Funnel         ║  Materials Readiness            ║
+║  Application Funnel  ☐ Show Closed  ☐ Show Archived            ║
+║                             ║  Materials Readiness            ║
+║  Saved       ████████  8    ║                                 ║
+║  Applied     ██████    4    ║  Ready to submit:  3            ║
+║  Interview   ████      2    ║  ███                             ║
+║  Offer       ██        1    ║                                 ║
+║                             ║  Still missing:    5            ║
+║                             ║  █████                           ║
 ║                             ║                                 ║
-║  Saved       ████████  8    ║  Ready to submit:  3            ║
-║  Applied     ██████    4    ║  ███                             ║
-║  Interview   ████      2    ║                                 ║
-║  Offer       ██        1    ║  Still missing:    5            ║
-║  Closed      —         0    ║  █████                           ║
-║  Archived    ██        2    ║                                 ║
 ║                             ║  [→ Opportunities page]         ║
 ║                             ║                                 ║
 ╠═════════════════════════════╩═════════════════════════════════╣
@@ -775,10 +820,6 @@ values.
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-**Top bar:** Title only. No manual refresh button — Streamlit reruns on
-any widget interaction; for a single-user local app the cross-tab write
-case is rare enough that a refresh button is net cognitive noise (D13).
-
 **Panel specifications:**
 
 | Panel | Data source | Labels | Warn/flag trigger |
@@ -786,13 +827,20 @@ case is rare enough that a refresh button is net cognitive noise (D13).
 | KPI: Tracked | `count_by_status()` summed over `STATUS_SAVED + STATUS_APPLIED` | `st.metric(..., help="Saved + Applied — positions you're still actively pursuing")` | — |
 | KPI: Applied | `count_by_status().get(STATUS_APPLIED, 0)` | — | — |
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
-| KPI: Next Interview | `get_upcoming_interviews()` scanned per-cell for earliest FUTURE date across `interview1_date` + `interview2_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
-| Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per bucket in list order; y-axis reversed so the earliest pipeline stage sits on top; single-status buckets use `STATUS_COLORS[raw]`; the "Archived" bucket uses `"gray"` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
-| Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` calling `st.switch_page` | — | Empty state when `ready + pending == 0` |
+| KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
+| Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
+| Funnel toggles | One checkbox per `FUNNEL_DEFAULT_HIDDEN` bucket label (currently Closed + Archived); state persists via `st.session_state` keyed by `_funnel_show_<label>` | Checkbox labels match bucket labels | — |
+| Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
 | Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` by date; `st.dataframe(width="stretch")`, columns (Date, Label, Kind, Urgency); Status shown via `STATUS_LABELS[raw]`; Kind ∈ {"deadline", "interview"} | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS` |
-| Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings (the query filters for them) |
+| Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
 
-**Empty-DB hero:** When
+**Funnel visibility rules.** The funnel renders buckets in the order
+listed in `FUNNEL_BUCKETS`. A bucket is visible when **not** in
+`FUNNEL_DEFAULT_HIDDEN`, or when its show-toggle has been turned on by
+the user in the current session. Hiding the terminal buckets by default
+keeps the dashboard focused on active work (D24).
+
+**Empty-DB hero.** When
 
 ```python
 count_by_status().get(STATUS_SAVED, 0)
@@ -804,14 +852,13 @@ a bordered hero container above the KPI grid shows a welcome subheader,
 an explanatory paragraph, and a primary CTA button that
 `st.switch_page("pages/1_Opportunities.py")`. The KPI grid renders
 beneath the hero regardless. A DB holding only terminal-status rows
-(`[CLOSED]` / `[REJECTED]` / `[DECLINED]`) still triggers the hero —
-there is nothing actionable on the dashboard in that state.
+still triggers the hero — nothing actionable remains on the dashboard.
 
 **Empty-state branches** (each panel, when its relevant data is empty):
 
 | Panel | Empty-state behaviour |
 |-------|-----------------------|
-| Funnel | If `sum(count_by_status().values()) == 0` (no rows anywhere), show `st.info("Application funnel will appear once you've added positions.")`. A DB with only terminal-status rows still renders the chart. Subheader renders in both branches (page-height stability). |
+| Funnel | If `sum(count_by_status().values()) == 0` (no rows anywhere), show `st.info("Application funnel will appear once you've added positions.")`. A DB with only terminal-status rows still renders the chart (the Show-toggle reveals the inactive bars). Subheader + toggles render in both branches (page-height stability). |
 | Materials Readiness | If `ready + pending == 0`, show `st.info("Materials readiness will appear once you've added positions with required documents.")`. Subheader renders in both branches. |
 | Upcoming | If merged DataFrame is empty, show `st.info("No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`. |
 | Recommender Alerts | If `get_pending_recommenders()` returns empty, show `st.info("No pending recommender follow-ups.")`. |
@@ -853,35 +900,29 @@ there is nothing actionable on the dashboard in that state.
 
 | Element | Behaviour |
 |---------|-----------|
-| Quick-add | Exactly the 6 fields from `config.QUICK_ADD_FIELDS`; saves with `status = config.STATUS_VALUES[0]` (i.e. `[SAVED]`); auto-creates `applications` row. Whitespace-only `position_name` rejected with `st.error`; success → `st.toast`. |
+| Quick-add | Exactly the fields listed in `config.QUICK_ADD_FIELDS`; saves with `status = config.STATUS_VALUES[0]`; auto-creates `applications` row. Whitespace-only `position_name` rejected with `st.error`; success → `st.toast`. |
 | Filter: Status | `st.selectbox(["All"] + STATUS_VALUES, format_func=STATUS_LABELS.get)` — UI shows labels; filter compares raw values |
 | Filter: Priority | `st.selectbox(["All"] + PRIORITY_VALUES)` |
 | Filter: Field | `st.text_input`; substring match via `df["field"].str.contains(..., case=False, na=False, regex=False)` — literal match so `"C++"` doesn't crash pandas |
-| Table | `st.dataframe(width="stretch", on_select="rerun", selection_mode="single-row")`; sorted by `deadline_date ASC NULLS LAST`; Status column displays `STATUS_LABELS[raw]`; Due column carries an urgency column driven by `DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS` |
+| Table | `st.dataframe(width="stretch", on_select="rerun", selection_mode="single-row")`; sorted by `deadline_date ASC NULLS LAST`; Status column displays `STATUS_LABELS[raw]`; Due column carries an urgency badge driven by the DEADLINE thresholds |
 | Row click | Selects row; edit panel renders beneath using the **unfiltered** `df` for lookup (so narrowing the filter never dismisses an in-progress edit) |
-| Status selectbox (Overview tab) | Same format_func convention — display label, store raw |
-| Date inputs | `st.date_input()` everywhere dates are entered; stored as `.isoformat()` |
-| Requirements tab | One `st.radio` per `REQUIREMENT_DOCS` entry; options = `REQUIREMENT_VALUES`; `format_func=REQUIREMENT_LABELS.get`; Save writes only `req_*` keys so `done_*` survives Y↔N flips |
-| Materials tab | Live-filtered: only docs with `session_state[f"edit_{req_col}"] == 'Y'` render a checkbox; Save writes only `done_*` for visible docs (hidden `done_*` preserved) |
+| Overview tab | Pre-filled edit widgets for all overview columns; Status selectbox uses `format_func` convention; `work_auth` uses `WORK_AUTH_OPTIONS` selectbox + `work_auth_note` text_area below it |
+| Requirements tab | One `st.radio` per `REQUIREMENT_DOCS` entry; options = `REQUIREMENT_VALUES`; `format_func=REQUIREMENT_LABELS.get`; Save writes only `req_*` keys so `done_*` survives flips between states |
+| Materials tab | Live-filtered: only docs with `session_state[f"edit_{req_col}"] == "Yes"` render a checkbox; Save writes only `done_*` for visible docs (hidden `done_*` preserved) |
 | Notes tab | Single `st.text_area` inside `st.form("edit_notes_form")`; empty input persists as `""` not `NULL` |
-| Delete | `@st.dialog` confirmation dialog outside `st.form` (st.form only permits form_submit_button inside); FK cascade removes applications + recommenders atomically |
+| Delete | `@st.dialog` confirmation dialog outside `st.form`; FK cascade removes applications, interviews, and recommenders atomically |
 
-**Selection-survival invariant.** The following operations must NOT
-collapse the edit panel:
-- Save on any tab (post-save rerun)
-- Filter change that still includes the selected row
-- Dialog open → cancel
-
-Streamlit's `st.dataframe(on_select="rerun")` resets its event on
-data-change reruns; a one-shot `_skip_table_reset` flag set before
-`st.rerun()` in each Save path (and the dialog-Cancel path) preserves
-`selected_position_id` across the cycle.
+**Selection-survival invariant.** Save on any tab, filter change that
+still includes the selected row, and dialog-Cancel must all preserve
+`selected_position_id`. Implementation hides the state-management
+details from users.
 
 ---
 
 ### 8.3 `pages/2_Applications.py` — Progress
 
-**Purpose:** Track every position from submission to outcome.
+**Purpose:** Track every position from submission to outcome, including
+the full interview sequence.
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -896,9 +937,13 @@ data-change reruns; a one-shot `_skip_table_reset` flag set before
 ║                                                                ║
 ║  ┌──── Stanford BioStats Postdoc ──────────────────────────┐  ║
 ║  │  Applied: Apr 18       All recs submitted: ✓            │  ║
-║  │  Confirmation email: ✓                                  │  ║
+║  │  Confirmation: ✓  (received Apr 19)                     │  ║
 ║  │  Response type: Interview Invite ▼  Date: Apr 22        │  ║
-║  │  Interview 1: 📅 May 3     Interview 2: 📅 ——           │  ║
+║  │  ──────  Interviews  ──────                             │  ║
+║  │  1.  📅 May 3    Video    (notes)         [ Edit ]      │  ║
+║  │  2.  📅 May 17   Onsite   (notes)         [ Edit ]      │  ║
+║  │  [ + Add another interview ]                            │  ║
+║  │  ──────                                                  │  ║
 ║  │  Result notify date: 📅 ——  Result: Pending ▼           │  ║
 ║  │  Notes: ___________________________________  [ Save ]   │  ║
 ║  └──────────────────────────────────────────────────────────┘  ║
@@ -906,9 +951,12 @@ data-change reruns; a one-shot `_skip_table_reset` flag set before
 ```
 
 **Behaviour:**
-- **Default filter** excludes positions with status `[SAVED]` or `[CLOSED]` — they're pre-application or withdrawn and have no application data worth showing.
-- **Pipeline promotions** (application edits auto-advancing `positions.status`) fire inside `database.upsert_application(propagate_status=True)` — see §9.3. The page does NOT detect the transition or prompt the user; it just calls upsert, then reads the return dict and surfaces a `st.toast` if `status_changed` is True.
-- **Status selectbox** (read-only here; this page edits application, not pipeline) shows `STATUS_LABELS[raw]`.
+- **Default filter** excludes positions with status `[SAVED]` or `[CLOSED]` — they are pre-application or withdrawn and have no application data worth showing.
+- **"All recs submitted"** column is a live computation via `database.is_all_recs_submitted(position_id)`; no stored summary.
+- **"Confirmation"** column reads `confirmation_received` (flag) and displays its `confirmation_date` (if set) as a tooltip.
+- **Interviews** are edited as a list: one row per `interviews` record, ordered by `sequence`. Each row has `scheduled_date`, `format`, `notes`. Add appends a new interview with the next `sequence`. Delete removes one row (FK from `applications`).
+- **Pipeline promotions** fire inside `database.upsert_application(propagate_status=True)` and `database.add_interview(propagate_status=True)` — see §9.3. The page does NOT detect transitions; it just calls the writer and reads the returned promotion indicator to surface a `st.toast`.
+- **Status selectbox** (read-only here; this page edits applications, not the pipeline) shows `STATUS_LABELS[raw]`.
 
 ---
 
@@ -940,10 +988,10 @@ data-change reruns; a one-shot `_skip_table_reset` flag set before
 ```
 
 **Behaviour:**
-- **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); the page groups by `recommender_name` so one recommender who owes 3 letters appears as a single card listing all 3 positions.
-- **Compose reminder email:** opens a `mailto:` URL with subject pre-filled ("Following up: letters for N postdoc applications") and body listing the position names + deadlines. No outbound email integration — the OS hands off to the user's mail client.
+- **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); the page groups by `recommender_name` so one recommender who owes N letters appears as a single card listing all N positions.
+- **Compose reminder email:** opens a `mailto:` URL with subject pre-filled (e.g. "Following up: letters for N postdoc applications") and body listing the position names + deadlines. No outbound email integration — the OS hands off to the user's mail client.
 - **Add-recommender form:** position dropdown shows `position_name` + institute; IDs never surface to the user.
-- **Inline edit:** clicking a row in the "All Recommenders" table opens inline fields for `asked_date`, `confirmed`, `submitted_date`, `reminder_sent`, `notes`.
+- **Inline edit** for each row: `asked_date`, `confirmed` (0/1/NULL), `submitted_date`, `reminder_sent` + `reminder_sent_date`, `notes`.
 
 ---
 
@@ -977,8 +1025,8 @@ data-change reruns; a one-shot `_skip_table_reset` flag set before
 User fills 6 fields → st.form_submit_button
   → database.add_position(fields)
       → INSERT INTO positions (... status = config.STATUS_VALUES[0] ...)
-      → INSERT INTO applications (position_id, all NULLs)
-      → exports.write_all()          (logged-and-continue on failure)
+      → INSERT INTO applications (position_id, default columns)
+      → exports.write_all()          (log-and-continue on failure)
   → st.toast("Added ...")
   → st.rerun()
   → table refreshes with the new row
@@ -989,8 +1037,7 @@ User fills 6 fields → st.form_submit_button
 ```
 app.py runs (fresh or on rerun)
   → st.set_page_config(layout="wide", ...)
-  → database.init_db()   (no-op on existing tables; ALTER loops run if
-                           config.REQUIREMENT_DOCS grew)
+  → database.init_db()   (idempotent; ALTER loops run if config grew)
   → database.count_by_status()             → KPI math + Funnel (via FUNNEL_BUCKETS)
   → database.compute_materials_readiness() → Readiness panel
   → database.get_upcoming_deadlines()   ┐
@@ -998,45 +1045,45 @@ app.py runs (fresh or on rerun)
   → database.get_pending_recommenders() → Alerts panel (grouped by recommender)
 ```
 
-### 9.3 Pipeline auto-promotion (application edits)
+### 9.3 Pipeline auto-promotion
 
 **The cascade is fully owned by `database.py`. Pages are display-only
 (D12).**
 
-`upsert_application(position_id, fields, *, propagate_status=True)`
-runs the following rules atomically within the same transaction as the
-application UPDATE:
+Two writers can promote `positions.status` as a side effect — both
+accept a keyword argument `propagate_status: bool = True`; when False,
+no pipeline promotion fires.
 
-| # | Condition detected on the effective post-upsert row | Cascade |
-|---|------------------------------------------------------|---------|
-| R1 | `applied_date` transitions from NULL to a non-NULL value | `UPDATE positions SET status = '[APPLIED]' WHERE id = ? AND status = '[SAVED]'` |
-| R2 | `interview1_date` OR `interview2_date` transitions from NULL to non-NULL | `UPDATE positions SET status = '[INTERVIEW]' WHERE id = ? AND status = '[APPLIED]'` |
-| R3 | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '[OFFER]' WHERE id = ?` (unconditional — Offer overrides earlier stages) |
+| # | Trigger (in which writer) | Condition | Cascade |
+|---|--------------------------|-----------|---------|
+| R1 | `upsert_application` | `applied_date` transitions from NULL to non-NULL | `UPDATE positions SET status = '[APPLIED]' WHERE id = ? AND status = '[SAVED]'` |
+| R2 | `add_interview` | After the insert, this application has exactly one interview row (the just-inserted one) | `UPDATE positions SET status = '[INTERVIEW]' WHERE id = ? AND status = '[APPLIED]'` |
+| R3 | `upsert_application` | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '[OFFER]' WHERE id = ?` (unconditional — Offer overrides earlier stages) |
 
-Rules fire in listed order. R1 and R2 are **guarded** — they only
-promote from the immediately-previous stage, so a backward edit (e.g.
-clearing an interview date on a position already at `[OFFER]`) does
-not regress the pipeline. R3 is **unconditional** — receiving an Offer
-always lands the position at `[OFFER]` regardless of prior stage.
+R1 and R2 are **guarded** — they only promote from the immediately-
+previous stage. A backward edit (e.g. deleting an interview from a
+position already at `[OFFER]`) does not regress the pipeline. R3 is
+**unconditional** — receiving an Offer always lands at `[OFFER]`
+regardless of prior stage.
 
-If both R1 and R3 fire on the same upsert, R3 wins (applied later and
-unconditional). The combined effect equals `[SAVED]` → `[OFFER]` in one
-transaction.
+If R1 and R3 fire from the same `upsert_application` call, R3 wins
+(evaluated last, unconditional). The combined effect equals
+`[SAVED] → [OFFER]` in one transaction.
 
-`upsert_application` returns `{"status_changed": bool, "new_status": str | None}`
-so the page can surface a `st.toast` when a promotion fires
-(e.g. `"Promoted to Offer"`).
+Each writer that can promote returns an indicator
+`{"status_changed": bool, "new_status": str | None}` so callers can
+surface a toast when a promotion fires.
 
-Callers opt out with `propagate_status=False` for edits that should not
-move the pipeline (e.g. correcting a typo in application notes). The
-Applications page always calls with the default; Recommenders and the
-quick-add path never touch this function.
+Callers opt out with `propagate_status=False` for edits that should
+not move the pipeline (e.g. correcting a typo in application notes).
+The Applications page always calls with the default; Recommenders and
+the quick-add path never touch these functions.
 
 **Rationale for locating the cascade in `database.py`:**
-- Atomicity — a failed propagation rolls back the application update too
+- Atomicity — a failed propagation rolls back the primary write too
 - Testable without an AppTest harness (pure database + config)
 - Keeps pages display-only per GUIDELINES §2
-- If a future page (or export batch job) writes applications, the cascade fires uniformly without each caller reimplementing it
+- Uniform firing whether the caller is a page, a CLI, an exporter, or a future background job
 
 ### 9.4 Deleting a position
 
@@ -1046,17 +1093,16 @@ User clicks Delete on Overview tab
   → User clicks Confirm
       → database.delete_position(id)
           → DELETE FROM positions WHERE id = ?
-             (applications + recommenders cascade via ON DELETE CASCADE)
+             (applications + interviews + recommenders cascade via
+              ON DELETE CASCADE)
           → exports.write_all()
       → st.toast("Deleted ...")
-      → session_state cleanup (paired: selected_position_id, _edit_form_sid,
-        _delete_target_id, _delete_target_name)
+      → session-state cleanup (selected row + dialog pending flags)
       → st.rerun() → edit panel collapses
 ```
 
-Cancel clears only the `_delete_target_*` pair, preserving
-`selected_position_id` via the `_skip_table_reset` one-shot so the user
-returns to the same edit context.
+Cancel preserves the current edit context (selected row and its tab
+state) so the user returns where they were.
 
 ### 9.5 Export pipeline
 
@@ -1068,10 +1114,10 @@ Any database.py writer ends with:
       → write_recommenders()   → exports/RECOMMENDERS.md
 ```
 
-A failure in any `write_*` is caught at `write_all()` boundary, logged,
-and swallowed — the DB write has already succeeded, so the user should
-see "Saved", not a traceback. The Export page surfaces the file mtimes
-so a user notices if backups stopped regenerating.
+A failure in any `write_*` is caught at the `write_all` boundary,
+logged, and swallowed — the DB write has already succeeded, so the
+user should see "Saved", not a traceback. The Export page surfaces the
+file mtimes so a user notices if backups stop regenerating.
 
 ---
 
@@ -1087,18 +1133,26 @@ in each row.
 | D3 | `done_*` columns are `INTEGER 0/1`; readiness is computed | Avoids stale summary fields; single source of truth | Stored `materials_ready` — desynchronizes |
 | D4 | `exports.write_all()` called inside every `database.py` writer | Markdown always current; no manual sync step | On-demand export only — backup lags after every write |
 | D5 | Internal IDs; UI shows `position_name + institute` | Users never see or manage database IDs | User-managed codes (P001) — error-prone, sync burden |
-| D6 | Quick-add is exactly 6 fields | Capture must cost < 30 seconds; enrichment later | Full form on add — positions get lost at discovery time |
+| D6 | Quick-add captures minimal essentials (see `config.QUICK_ADD_FIELDS`) | Capture must cost < 30 seconds; enrichment later | Full form on add — positions get lost at discovery time |
 | D7 | Status via `st.selectbox(STATUS_VALUES, format_func=STATUS_LABELS.get)` | Prevents typo corruption; UI label decoupled from storage | Freetext — undetectable corruption |
-| D8 | `ON DELETE CASCADE` on child tables | One delete cleans three tables atomically | Manual multi-table delete — easy to orphan rows |
+| D8 | `ON DELETE CASCADE` on all child tables | One delete cleans every dependent row atomically | Manual multi-table delete — easy to orphan rows |
 | D9 | Separate `applications` table | Different update cadence + concern from positions | Single wide table — harder to query, harder to reason about |
 | D10 | Auto-create `applications` row on `add_position()` | Every position always has a matching row | Create on first update — requires NULL handling everywhere |
 | D11 | Presentation/storage split via `STATUS_LABELS` + `FUNNEL_BUCKETS` | Cheap UI renames (no schema migration); presentation grouping is reversible at-will | Rename storage values — requires DB migration for every naming tweak |
-| D12 | Cross-table cascade lives in `database.upsert_application` | Atomic, testable, pages stay display-only | Page-level detect-and-prompt — leaks business logic into UI; loses atomicity |
-| D13 | No 🔄 Refresh button on the dashboard top bar | Streamlit reruns on any interaction; single-user local app rarely has cross-tab writes; fewer buttons = less clutter | Manual refresh button — cognitive noise for the common case |
+| D12 | Cross-table cascade lives in `database.py` writers | Atomic, testable, pages stay display-only | Page-level detect-and-prompt — leaks business logic into UI; loses atomicity |
+| D13 | No 🔄 Refresh button on the dashboard top bar | Streamlit reruns on any interaction; single-user local app rarely has cross-tab writes | Manual refresh button — cognitive noise for the common case |
 | D14 | `st.set_page_config(layout="wide", ...)` on every page | Data-heavy views need horizontal room | Default centered layout — ~750px cramps every page |
 | D15 | `TRACKER_PROFILE` validated at import time against `VALID_PROFILES` | Cheap forward-compat hook for v2 profile variants; catches typos now | Hardcode `"postdoc"` — no v2 extension point |
-| D16 | Bracketed status storage values (`"[SAVED]"` etc.) + bracket-stripped UI labels | Visual enum sentinel in logs/DB; `STATUS_LABELS` delivers clean UI | Raw labels in storage — harder to grep; conflicts with freetext "Saved" elsewhere |
+| D16 | Bracketed status storage values + bracket-stripped UI labels | Visual enum sentinel in logs/DB; `STATUS_LABELS` delivers clean UI | Raw labels in storage — harder to grep; conflicts with freetext "Saved" elsewhere |
 | D17 | Archived = `[REJECTED]` + `[DECLINED]` on the dashboard funnel only; `[CLOSED]` stays its own bar | Rejection + declined-offer are both outcomes after engagement; CLOSED is pre-engagement withdrawal — a genuinely different state | Group all three terminals — loses semantic distinction |
+| D18 | `interviews` sub-table instead of flat `interview1_date`/`interview2_date` columns | Real applications have 3+ interviews (phone → committee → chalk talk → dean); a flat cap is an arbitrary cliff | Flat columns — capped the data model at an unrealistic limit |
+| D19 | Dual-concern columns split into `(flag, date)` pairs | Type-consistent; predicates are simple; no column holds either a flag or a date | Single TEXT column storing `'Y'` or a date string — type-ambiguous, hard to query |
+| D20 | Boolean-state columns as `INTEGER 0/1` (never TEXT `'Y'`/`'N'`) | Consistent, grep-friendly, trivial SQL predicates | TEXT `'Y'`/`'N'` — mixes with `req_*`'s three-state TEXT and confuses readers |
+| D21 | Three-state requirement columns use full words `"Yes"`/`"Optional"`/`"No"` | Consistent with D20's full-word philosophy; self-descriptive in raw dumps; no storage penalty on TEXT | `"Y"`/`"Optional"`/`"N"` — mixed length, inconsistent, harder to read |
+| D22 | `work_auth` three-value categorical + `work_auth_note` freetext | Categorical keeps filters simple; freetext preserves posting-specific nuance (e.g. "green card only") | Many-value enum — unused detail; or freetext only — not filterable |
+| D23 | Summary flags that could be computed **are** computed, never stored | D3 applied consistently — `is_all_recs_submitted()` is a query helper, not a column | Store `all_recs_submitted` — desynchronizes with the recommenders table |
+| D24 | Terminal funnel buckets default-hidden, user opts in | Dashboard focuses on active work; rejection/close counts are available on-demand, not in the face of a user who doesn't want them there | Always show all buckets — demoralizing and noisy |
+| D25 | `positions.updated_at` maintained by an `AFTER UPDATE` trigger | Every write touches the timestamp without requiring each writer to remember it | Explicit update in each writer — easy to forget on the next writer added |
 
 ---
 
@@ -1114,31 +1168,35 @@ in each row.
 4. The Requirements tab, Materials tab, materials readiness query, and markdown export pick it up without further code changes.
 
 ### Add a new vocabulary option
-1. Append to the relevant list (`WORK_AUTH_OPTIONS`, `SOURCE_OPTIONS`, `RESPONSE_TYPES`, `RESULT_VALUES`, `RELATIONSHIP_TYPES`).
+1. Append to the relevant list (`WORK_AUTH_OPTIONS`, `SOURCE_OPTIONS`, `RESPONSE_TYPES`, `RESULT_VALUES`, `RELATIONSHIP_TYPES`, `INTERVIEW_FORMATS`, etc.).
 2. Selectboxes pick the new value up on next render.
 3. No DB change — column is plain TEXT.
 
 ### Add a new pipeline status
-1. Append to `STATUS_VALUES`.
+1. Append to `STATUS_VALUES` and add the matching `STATUS_<name>` alias.
 2. Add one entry each to `STATUS_COLORS` and `STATUS_LABELS`.
-3. Decide which `FUNNEL_BUCKETS` entry it belongs in — extend an existing tuple or add a new bucket in the right display position.
-4. If terminal (no downstream pipeline stage), append to `TERMINAL_STATUSES`.
-5. No DB change; status column is TEXT.
+3. Decide which `FUNNEL_BUCKETS` entry it belongs in — extend an existing bucket's tuple or add a new `(label, (raw,...), color)` 3-tuple in the right display position.
+4. If the new status should be hidden by default on the funnel, add its bucket label to `FUNNEL_DEFAULT_HIDDEN`.
+5. If terminal (no downstream pipeline stage), append to `TERMINAL_STATUSES`.
+6. No DB change; status column is TEXT.
 
 ### Rename a pipeline status
-1. Edit `STATUS_VALUES[i]`, the matching keys in `STATUS_COLORS` and `STATUS_LABELS`, and any references in `FUNNEL_BUCKETS` / `TERMINAL_STATUSES`.
+1. Edit `STATUS_VALUES[i]`, the matching `STATUS_<name>` alias, and the keys in `STATUS_COLORS` / `STATUS_LABELS` / `FUNNEL_BUCKETS` / `TERMINAL_STATUSES`.
 2. Write a `Migration:` note in `CHANGELOG.md` with the one-shot SQL:
    ```sql
    UPDATE positions SET status = '<new>' WHERE status = '<old>';
    ```
 3. Schema DDL is config-driven (`DEFAULT` reads `config.STATUS_VALUES[0]`), so renaming the first status value propagates without DDL edits.
 
+### Add a new interview format
+1. Append to `INTERVIEW_FORMATS`.
+2. The Applications page's interview-row dropdown picks it up on next render.
+
 ### Switch the tracker profile
 See §12.1. v1 supports `"postdoc"` only; the hook to add another is in place but not wired.
 
 ### Change a dashboard threshold
-Edit `DEADLINE_ALERT_DAYS` / `DEADLINE_URGENT_DAYS` / `RECOMMENDER_ALERT_DAYS` in `config.py`. The import-time invariant
-(`DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS`) catches inverted thresholds on next import.
+Edit `DEADLINE_ALERT_DAYS` / `DEADLINE_URGENT_DAYS` / `RECOMMENDER_ALERT_DAYS` in `config.py`. The import-time invariants catch inverted thresholds on next import.
 
 ---
 
@@ -1151,8 +1209,8 @@ but are not implemented in v1.
 ### 12.1 General job tracker — profile expansion
 
 The tracker is designed so reskinning to a different job context
-requires **editing `config.py` only**. v1 keeps `VALID_PROFILES =
-{"postdoc"}`.
+requires **editing `config.py` only**. v1 keeps
+`VALID_PROFILES = {"postdoc"}`.
 
 A v2 multi-profile expansion:
 
@@ -1185,8 +1243,8 @@ rows with a "Restore" button. An `st.toast(..., icon="🗑️")` with a
 5-second Undo action handles the grace period.
 
 FK cascade semantics change slightly: cascading deletes still fire on
-hard-delete only. Soft-delete leaves applications + recommenders rows
-intact but hidden alongside their parent position.
+hard-delete only. Soft-delete leaves applications, interviews, and
+recommenders rows intact but hidden alongside their parent position.
 
 ### 12.3 File attachments on Materials
 
@@ -1201,7 +1259,7 @@ clean orphaned files.
 Paste a job-posting URL or free-form description; an LLM extracts
 fields and pre-fills the quick-add form. Requires:
 - A new module (`ai_ingest.py`) with a narrow public API: `extract_fields(source: str) -> dict[str, Any]`
-- API key handling via `.env` (already gitignored)
+- API key handling via `.env` — the `.env*` gitignore rule reserved from v1 covers the secrets; the runtime will need `python-dotenv` added to `requirements.txt` when this lands
 - Careful prompt discipline (structured output schema matching `QUICK_ADD_FIELDS`)
 
 v1's quick-add should accept a `prefill: dict` parameter shape (a
@@ -1230,3 +1288,4 @@ reads and applies it on next render, then clears.
 - **Application timeline chart** — histogram of `applied_date` clustering around deadlines
 - **Offer details sub-table** — new `offers` table FK'd from `applications` (start date, salary notes, decision deadline)
 - **Application goals** — `settings` table storing a target count and deadline; dashboard surfaces progress
+- **Interview-velocity metric** — avg. days from `applied_date` to first `interviews.scheduled_date`, segmented by `source`
