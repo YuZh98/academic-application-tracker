@@ -46,10 +46,16 @@ STATUS_COLORS: dict[str, str] = {
 # a *specific* status (e.g. the dashboard's per-bucket KPI counts) references
 # these rather than hardcoding the literal — keeps the anti-typo guardrail in
 # place without forcing positional-index access into STATUS_VALUES. Added in
-# Phase 4 T1-C for app.py's Tracked / Applied / Interview counters.
-STATUS_OPEN:      str = STATUS_VALUES[0]  # "[OPEN]"
+# Phase 4 T1-C for app.py's Tracked / Applied / Interview counters; extended
+# in the v1.1 doc refactor (F2 / F4 fix) so FUNNEL_BUCKETS below can be
+# defined without literals.
+STATUS_OPEN:      str = STATUS_VALUES[0]  # "[OPEN]" — will rename to STATUS_SAVED in deferred refactor
 STATUS_APPLIED:   str = STATUS_VALUES[1]  # "[APPLIED]"
 STATUS_INTERVIEW: str = STATUS_VALUES[2]  # "[INTERVIEW]"
+STATUS_OFFER:     str = STATUS_VALUES[3]  # "[OFFER]"
+STATUS_CLOSED:    str = STATUS_VALUES[4]  # "[CLOSED]"
+STATUS_REJECTED:  str = STATUS_VALUES[5]  # "[REJECTED]"
+STATUS_DECLINED:  str = STATUS_VALUES[6]  # "[DECLINED]"
 
 # Terminal statuses — positions in these states are done and excluded from
 # actionable views (upcoming deadlines, materials readiness, etc.).
@@ -65,6 +71,59 @@ assert set(STATUS_VALUES) == set(STATUS_COLORS), (
 assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
     "TERMINAL_STATUSES must only contain values defined in STATUS_VALUES. "
     f"Unknown: {set(TERMINAL_STATUSES) - set(STATUS_VALUES)}"
+)
+
+# ── Funnel buckets (dashboard presentation layer) ─────────────────────────────
+# Presentation-layer grouping of raw statuses into dashboard-funnel bars.
+# Each entry: (UI label, tuple of raw STATUS_VALUES contributing to this bar,
+# bucket color). Order = display order (top-down when the y-axis is reversed).
+# The bucket owns its color because a bucket can aggregate multiple raw
+# statuses — STATUS_COLORS[raw] is a per-status concern (badges, tooltips).
+#
+# "Archived" groups rejection + declined-offer — both are outcomes after
+# engagement. "Closed" stays its own bucket because pre-application
+# withdrawal is a genuinely distinct state (DESIGN D17).
+#
+# Raw statuses are referenced via the named aliases above so the bucket
+# layout survives a STATUS_VALUES reorder or rename (including the
+# deferred [OPEN]→[SAVED] refactor) without editing this table.
+FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
+    ("Saved",     (STATUS_OPEN,),                     "blue"),
+    ("Applied",   (STATUS_APPLIED,),                  "orange"),
+    ("Interview", (STATUS_INTERVIEW,),                "violet"),
+    ("Offer",     (STATUS_OFFER,),                    "green"),
+    ("Closed",    (STATUS_CLOSED,),                   "gray"),
+    ("Archived",  (STATUS_REJECTED, STATUS_DECLINED), "gray"),
+]
+
+# Buckets hidden by default on the dashboard funnel. Users opt in via
+# per-bucket toggles above the chart; state persists in st.session_state
+# for the current session only. Default-hiding the terminal outcomes keeps
+# the dashboard focused on active work (DESIGN D24). Values must be labels
+# that exist in FUNNEL_BUCKETS — enforced below.
+FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
+
+# Invariant (DESIGN §5.2 #5): flatten the raw-status tuples across all
+# FUNNEL_BUCKETS entries; the result must be a multiset-equal permutation
+# of STATUS_VALUES. This asserts two facts at once — every raw status
+# appears in some bucket, AND no status appears in more than one bucket.
+# A violation means either a new status was added to STATUS_VALUES without
+# placing it in a bucket, or a status was duplicated across buckets.
+_funnel_flat: list[str] = [raw for _, raws, _ in FUNNEL_BUCKETS for raw in raws]
+assert sorted(_funnel_flat) == sorted(STATUS_VALUES), (
+    "FUNNEL_BUCKETS raw-status coverage must equal STATUS_VALUES as a multiset "
+    "(each status in exactly one bucket, nothing missing, nothing duplicated). "
+    f"Flattened buckets: {sorted(_funnel_flat)!r}. "
+    f"STATUS_VALUES:     {sorted(STATUS_VALUES)!r}."
+)
+
+# Invariant (DESIGN §5.2 #6): FUNNEL_DEFAULT_HIDDEN must reference labels
+# that actually exist in FUNNEL_BUCKETS — otherwise a toggle for a
+# non-existent bucket would silently fail to surface.
+_bucket_labels: set[str] = {label for label, _, _ in FUNNEL_BUCKETS}
+assert FUNNEL_DEFAULT_HIDDEN <= _bucket_labels, (
+    "FUNNEL_DEFAULT_HIDDEN must reference labels that exist in FUNNEL_BUCKETS. "
+    f"Unknown: {FUNNEL_DEFAULT_HIDDEN - _bucket_labels}"
 )
 
 # ── Controlled vocabularies ───────────────────────────────────────────────────
