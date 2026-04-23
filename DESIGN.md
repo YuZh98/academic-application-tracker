@@ -790,32 +790,32 @@ values.
 ║  Postdoc Tracker                                               ║
 ╠══════════════╦══════════════╦══════════════╦═══════════════════╣
 ║  12          ║  4           ║  2           ║  May 3 · MIT      ║
-║  Tracked ⓘ   ║  Applied     ║  Interview   ║  Next Interview   ║
+║  Tracked ⓘ  ║  Applied     ║  Interview   ║  Next Interview   ║
 ║              ║              ║              ║                   ║
 ╠══════════════╩══════════════╩══════════════╩═══════════════════╣
-║                                                                ║
-║  Application Funnel  ☐ Show Closed  ☐ Show Archived            ║
-║                             ║  Materials Readiness            ║
-║  Saved       ████████  8    ║                                 ║
-║  Applied     ██████    4    ║  Ready to submit:  3            ║
+║                             ║                                  ║
+║  Application Funnel         ║   Materials Readiness            ║
+║                             ║                                  ║
+║  Saved       ████████  8    ║                                  ║
+║  Applied     ██████    4    ║  Ready to submit:  3             ║
 ║  Interview   ████      2    ║  ███                             ║
-║  Offer       ██        1    ║                                 ║
-║                             ║  Still missing:    5            ║
+║  Offer       ██        1    ║                                  ║
+║  [expand]                   ║  Still missing:    5             ║
 ║                             ║  █████                           ║
-║                             ║                                 ║
-║                             ║  [→ Opportunities page]         ║
-║                             ║                                 ║
-╠═════════════════════════════╩═════════════════════════════════╣
+║                             ║                                  ║
+║                             ║  [→ Opportunities page]          ║
+║                             ║                                  ║
+╠═════════════════════════════╩══════════════════════════════════╣
 ║  Upcoming (next 30 days)                                       ║
 ║                                                                ║
-║  Apr 24  Stanford BioStats   Saved      deadline    9d  🔴    ║
-║  May 3   Stanford BioStats   Applied    Interview  18d        ║
-║  May 15  MIT CSAIL           Saved      deadline   30d        ║
+║  Apr 24  Stanford BioStats   Saved      deadline    9d  🔴     ║
+║  May 3   Stanford BioStats   Applied    Interview  18d         ║
+║  May 15  MIT CSAIL           Saved      deadline   30d         ║
 ║                                                                ║
 ╠════════════════════════════════════════════════════════════════╣
 ║  Recommender Alerts                                            ║
 ║                                                                ║
-║  ⚠  Dr. Smith  →  Stanford, MIT CSAIL  (asked 14 days ago)    ║
+║  ⚠  Dr. Smith  →  Stanford, MIT CSAIL  (asked 14 days ago)     ║
 ║  ✓  Dr. Jones  →  Stanford             (submitted Apr 20)      ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
@@ -882,17 +882,18 @@ still triggers the hero — nothing actionable remains on the dashboard.
 ║  Filter: Status [All ▼]  Priority [All ▼]  Field [________]   ║
 ║                                                                ║
 ║  Position Name        Institute  Priority   Status    Due      ║
-║  ──────────────────────────────────────────────────────────── ║
+║  ────────────────────────────────────────────────────────────  ║
 ║  Stanford BioStats    Stanford   🟡 High   Applied   ——        ║
 ║  MIT CSAIL Postdoc    MIT        🟡 High   Saved     May 15    ║
 ║  ··· (click row to expand) ···                                 ║
 ║                                                                ║
-║  ┌──── Stanford BioStats Postdoc  ·  Applied  ─────────────┐  ║
+║  ┌──── Stanford BioStats Postdoc  ·  Applied  ─────────────┐   ║
 ║  │  [ Overview ] [ Requirements ] [ Materials ] [ Notes ]   │  ║
 ║  │  ─────────────────────────────────────────────────────── │  ║
 ║  │  (tab content — full edit form fields)                   │  ║
-║  │                            [ Save Changes ] [ Delete ]   │  ║
-║  └──────────────────────────────────────────────────────────┘  ║
+║  │  [ Save Changes ]                                        │  ║
+║  └──────────────────────────────────────────────────────────┘  ║ 
+║  [ Delete ]                                                    ║  
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
@@ -911,6 +912,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 | Materials tab | Live-filtered: only docs with `session_state[f"edit_{req_col}"] == "Yes"` render a checkbox; Save writes only `done_*` for visible docs (hidden `done_*` preserved) |
 | Notes tab | Single `st.text_area` inside `st.form("edit_notes_form")`; empty input persists as `""` not `NULL` |
 | Delete | `@st.dialog` confirmation dialog outside `st.form`; FK cascade removes applications, interviews, and recommenders atomically |
+| Delete button visibility | Only show Delete on Overview tab and it means the user has permission to delete the position |
 
 **Selection-survival invariant.** Save on any tab, filter change that
 still includes the selected row, and dialog-Cancel must all preserve
