@@ -1030,8 +1030,8 @@ class TestOverviewTabWidgets:
 
 # ── Requirements tab widgets (T4-D) ───────────────────────────────────────────
 # The Requirements tab renders one st.radio per entry in
-# config.REQUIREMENT_DOCS. Values are canonical DB strings ('Y', 'Optional',
-# 'N'); labels come from config.REQUIREMENT_LABELS via format_func so
+# config.REQUIREMENT_DOCS. Values are canonical DB strings ('Yes', 'Optional',
+# 'No'); labels come from config.REQUIREMENT_LABELS via format_func so
 # session_state always holds the canonical value — no save-time translation.
 #
 # Widget key convention: "edit_" + req_col (e.g. "edit_req_cv").
@@ -1074,18 +1074,18 @@ class TestRequirementsTabWidgets:
         # Exercise all three vocabulary tiers so we catch one-way mappings.
         database.add_position({
             "position_name":        "Stanford BioStats",
-            "req_cv":               "Y",
-            "req_cover_letter":     "Y",
+            "req_cv":               "Yes",
+            "req_cover_letter":     "Yes",
             "req_writing_sample":   "Optional",
-            "req_teaching_statement": "N",
+            "req_teaching_statement": "No",
         })
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        assert at.radio(key=_req_key("req_cv")).value             == "Y"
-        assert at.radio(key=_req_key("req_cover_letter")).value   == "Y"
+        assert at.radio(key=_req_key("req_cv")).value             == "Yes"
+        assert at.radio(key=_req_key("req_cover_letter")).value   == "Yes"
         assert at.radio(key=_req_key("req_writing_sample")).value == "Optional"
-        assert at.radio(key=_req_key("req_teaching_statement")).value == "N"
+        assert at.radio(key=_req_key("req_teaching_statement")).value == "No"
 
     def test_radio_options_display_config_labels_in_order(self, db):
         """Every radio must expose the three tiers in config order, shown via
@@ -1108,11 +1108,11 @@ class TestRequirementsTabWidgets:
                 f"  Got:      {options}"
             )
 
-    def test_null_req_falls_back_to_N(self, db):
+    def test_null_req_falls_back_to_no(self, db):
         """Defensive coercion (F2 analog): an unknown or None req_* value
         must not crash the page and must not put an out-of-options value
-        into the radio's session_state — fall back to 'N' (schema default)."""
-        database.add_position({"position_name": "Alpha"})  # req_* defaults → 'N'
+        into the radio's session_state — fall back to 'No' (schema default)."""
+        database.add_position({"position_name": "Alpha"})  # req_* defaults → 'No'
         # Manually corrupt one req_* column to simulate an unknown value
         # (e.g. from a future migration or sqlite3 CLI edit).
         import sqlite3
@@ -1125,23 +1125,23 @@ class TestRequirementsTabWidgets:
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page raised on unknown req_* value: {at.exception}"
-        assert at.radio(key=_req_key("req_cv")).value == "N", (
-            "Unknown req_* value must coerce to 'N' (schema default), "
+        assert at.radio(key=_req_key("req_cv")).value == "No", (
+            "Unknown req_* value must coerce to 'No' (schema default), "
             f"got {at.radio(key=_req_key('req_cv')).value!r}"
         )
 
     def test_widgets_update_on_selection_change(self, db):
         """Widget-value-trap regression guard on the req_* path: switching
         rows must re-seed the req_* widgets, not stick on the first."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
-        database.add_position({"position_name": "Beta",  "req_cv": "N"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
+        database.add_position({"position_name": "Beta",  "req_cv": "No"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         first = at.radio(key=_req_key("req_cv")).value
         _select_row(at, 1)
         second = at.radio(key=_req_key("req_cv")).value
-        assert {first, second} == {"Y", "N"}, (
+        assert {first, second} == {"Yes", "No"}, (
             f"Selection change must re-seed req_cv; got {first!r} → {second!r}"
         )
         assert first != second, (
@@ -1176,17 +1176,17 @@ class TestRequirementsTabWidgets:
                            for v in config.REQUIREMENT_VALUES]
         assert list(at.radio(key=_req_key("req_portfolio")).options) \
             == expected_labels
-        # And its default value (from the migration's DEFAULT 'N') should
-        # land in session_state as 'N' after the pre-seed coercion — this
+        # And its default value (from the migration's DEFAULT 'No') should
+        # land in session_state as 'No' after the pre-seed coercion — this
         # IS the canonical-value half of the contract.
-        assert at.radio(key=_req_key("req_portfolio")).value == "N"
+        assert at.radio(key=_req_key("req_portfolio")).value == "No"
 
 
 # ── Materials tab widgets (T4-E) ──────────────────────────────────────────────
 # The Materials tab is state-driven: it renders one st.checkbox per done_*
-# column ONLY for documents whose req_* is 'Y' (matching the readiness
+# column ONLY for documents whose req_* is 'Yes' (matching the readiness
 # definition in database.py ~line 404 — "A position is 'ready' if every
-# document where req_* = 'Y' has done_* = 1"). The source of truth for
+# document where req_* = 'Yes' has done_* = 1"). The source of truth for
 # "is this required?" is session_state["edit_{req_col}"], not the raw DB
 # value, so a user toggling a Requirements-tab radio sees the Materials
 # tab update on the next rerun.
@@ -1218,23 +1218,23 @@ class TestMaterialsTabWidgets:
 
     def test_no_materials_widgets_without_selection(self, db):
         """No done_* checkbox may render before a row is selected."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = _run_page()
         assert len(at.checkbox) == 0, (
             f"Expected 0 checkboxes before selection, got {len(at.checkbox)}"
         )
 
     def test_empty_state_when_no_required_docs(self, db):
-        """With all req_* = 'N' (the schema default), the Materials tab must
+        """With all req_* = 'No' (the schema default), the Materials tab must
         show an info hint directing the user to the Requirements tab — rendering
         zero checkboxes would be a silent dead-end UI."""
-        database.add_position({"position_name": "Alpha"})   # all req_* default 'N'
+        database.add_position({"position_name": "Alpha"})   # all req_* default 'No'
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         # No done_* checkboxes must render.
         assert len(at.checkbox) == 0, (
-            f"With all req_* = 'N', no Materials checkboxes should render; "
+            f"With all req_* = 'No', no Materials checkboxes should render; "
             f"got {len(at.checkbox)}"
         )
         # An info hint must be present — substring match on "Requirements tab"
@@ -1246,21 +1246,21 @@ class TestMaterialsTabWidgets:
         )
 
     def test_only_required_doc_checkboxes_shown(self, db):
-        """With req_cv='Y' and everything else 'N', exactly one checkbox
+        """With req_cv='Yes' and everything else 'No', exactly one checkbox
         (done_cv) must render — not zero, not len(REQUIREMENT_DOCS)."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         # done_cv is the only one required → exactly one checkbox rendered.
         assert _checkbox_rendered(at, _done_key("done_cv")), (
-            "done_cv checkbox must render when req_cv == 'Y'"
+            "done_cv checkbox must render when req_cv == 'Yes'"
         )
         for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
             if done_col == "done_cv":
                 continue
             assert not _checkbox_rendered(at, _done_key(done_col)), (
-                f"{done_col} checkbox should be hidden when its req_* is 'N'"
+                f"{done_col} checkbox should be hidden when its req_* is 'No'"
             )
         # Tight bound: no other page checkboxes exist today.
         assert len(at.checkbox) == 1, (
@@ -1271,11 +1271,11 @@ class TestMaterialsTabWidgets:
         """Pre-seed must translate done_* INTEGER (0/1) to bool correctly."""
         database.add_position({
             "position_name":   "Stanford BioStats",
-            "req_cv":          "Y",
+            "req_cv":          "Yes",
             "done_cv":          1,
-            "req_cover_letter": "Y",
+            "req_cover_letter": "Yes",
             "done_cover_letter": 0,
-            "req_transcripts":  "Y",
+            "req_transcripts":  "Yes",
             # done_transcripts omitted → schema default 0
         })
         at = AppTest.from_file(PAGE)
@@ -1288,7 +1288,7 @@ class TestMaterialsTabWidgets:
         assert bool(at.checkbox(key=_done_key("done_transcripts")).value) is False
 
     def test_toggling_requirement_hides_checkbox(self, db):
-        """State-driven behaviour: when the user flips req_cv from 'Y' to 'N'
+        """State-driven behaviour: when the user flips req_cv from 'Yes' to 'No'
         on the Requirements tab, the done_cv checkbox on the Materials tab
         must disappear on the next rerun.
 
@@ -1297,17 +1297,17 @@ class TestMaterialsTabWidgets:
         live widget state (_edit_form_sid only reseeds on selection change
         — a DB-only update would not re-trigger the pre-seed). This is the
         faithful test of state-driven design."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         assert _checkbox_rendered(at, _done_key("done_cv"))   # precondition
         # Simulate the user flipping the req_cv radio to "Not needed".
-        at.session_state["edit_req_cv"] = "N"
+        at.session_state["edit_req_cv"] = "No"
         at.run()
         assert not at.exception, f"Page raised on req toggle: {at.exception}"
         assert not _checkbox_rendered(at, _done_key("done_cv")), (
-            "Toggling edit_req_cv → 'N' must hide the done_cv checkbox"
+            "Toggling edit_req_cv → 'No' must hide the done_cv checkbox"
         )
 
     def test_optional_docs_are_hidden(self, db):
@@ -1329,9 +1329,9 @@ class TestMaterialsTabWidgets:
         """Widget-value-trap regression guard on the done_* path: selecting a
         different row must re-seed the done_* widgets with that row's values."""
         database.add_position({"position_name": "Alpha",
-                               "req_cv": "Y", "done_cv": 1})
+                               "req_cv": "Yes", "done_cv": 1})
         database.add_position({"position_name": "Beta",
-                               "req_cv": "Y", "done_cv": 0})
+                               "req_cv": "Yes", "done_cv": 0})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
@@ -1694,10 +1694,10 @@ class TestOverviewSave:
 # Critical contract: Requirements Save NEVER writes done_* columns. The payload
 # is built from config.REQUIREMENT_DOCS → req_col only, so update_position's
 # parameterised UPDATE leaves the done_* columns of the row untouched. Flipping
-# req_cv from 'Y' to 'N' preserves done_cv — the user's "I've prepared the CV"
+# req_cv from 'Yes' to 'No' preserves done_cv — the user's "I've prepared the CV"
 # status is independent of whether any given position requires it right now.
 # DESIGN.md §6: Materials is checkbox-only; the readiness computation hides
-# rows where req_* != 'Y' but the underlying value is preserved.
+# rows where req_* != 'Yes' but the underlying value is preserved.
 
 REQUIREMENTS_SUBMIT_KEY = "edit_requirements_submit"
 
@@ -1744,14 +1744,14 @@ class TestRequirementsSave:
         """Critical contract pin: Requirements Save must NOT touch done_*
         columns. The user's "I've prepared the CV" status is independent of
         whether any given position currently requires a CV. Flipping
-        req_cv from 'Y' → 'N' and saving MUST leave done_cv == 1 in the DB.
+        req_cv from 'Yes' → 'No' and saving MUST leave done_cv == 1 in the DB.
 
         Rationale (DESIGN.md + user decision 2026-04-20): if req_cv later
-        flips back to 'Y', the Materials tab should again show 'CV: done'
+        flips back to 'Yes', the Materials tab should again show 'CV: done'
         without the user having to re-tick — the CV didn't un-prepare itself."""
         database.add_position({
             "position_name": "Alpha",
-            "req_cv":        "Y",
+            "req_cv":        "Yes",
             "done_cv":       1,
         })
         at = AppTest.from_file(PAGE)
@@ -1760,15 +1760,15 @@ class TestRequirementsSave:
         sid = at.session_state["selected_position_id"]
 
         # Flip req_cv to N.
-        at.radio(key=_req_key("req_cv")).set_value("N")
+        at.radio(key=_req_key("req_cv")).set_value("No")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception}"
         row = database.get_position(sid)
-        assert row["req_cv"] == "N", (
-            f"req_cv should have flipped to 'N', got {row['req_cv']!r}"
+        assert row["req_cv"] == "No", (
+            f"req_cv should have flipped to 'No', got {row['req_cv']!r}"
         )
         assert row["done_cv"] == 1, (
             f"done_cv MUST be preserved across a req flip (user-confirmed "
@@ -1789,7 +1789,7 @@ class TestRequirementsSave:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
@@ -1817,7 +1817,7 @@ class TestRequirementsSave:
         at.run()
         _select_row(at, 0)
         sid_before = at.session_state["selected_position_id"]
-        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
@@ -1842,7 +1842,7 @@ class TestRequirementsSave:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
@@ -1861,7 +1861,7 @@ class TestRequirementsSave:
 # ── Materials tab Save (T5-C) ────────────────────────────────────────────────
 # The Materials form persists done_* columns via database.update_position.
 # Critical contract: the payload contains done_* keys ONLY for docs whose
-# matching req_* is currently 'Y' on the LIVE session_state (the state-driven
+# matching req_* is currently 'Yes' on the LIVE session_state (the state-driven
 # visibility pinned by T4-E). Any done_* for a non-visible doc is NEVER in the
 # payload, so the user's prepared-documents history survives a req Y→N flip
 # on this tab exactly as it does on the Requirements tab (T5-B contract,
@@ -1877,17 +1877,17 @@ MATERIALS_SUBMIT_KEY = "edit_materials_submit"
 class TestMaterialsSave:
 
     def test_save_persists_only_visible_done_fields(self, db):
-        """Round-trip: with two req_* = 'Y' and the rest = 'N', tick the two
+        """Round-trip: with two req_* = 'Yes' and the rest = 'No', tick the two
         visible checkboxes, click Save → the DB has done_* = 1 for the two
         visible docs and the hidden done_* columns are left at their prior DB
         values (here, 0 by schema default)."""
         # Pick the first two REQUIREMENT_DOCS entries as the 'required' pair;
-        # the remainder stay at the schema-default 'N' / 0.
+        # the remainder stay at the schema-default 'No' / 0.
         visible = config.REQUIREMENT_DOCS[:2]
         hidden  = config.REQUIREMENT_DOCS[2:]
         seed: dict[str, Any] = {"position_name": "Alpha"}
         for req_col, _done_col, _label in visible:
-            seed[req_col] = "Y"
+            seed[req_col] = "Yes"
         sid = database.add_position(seed)
 
         at = AppTest.from_file(PAGE)
@@ -1910,7 +1910,7 @@ class TestMaterialsSave:
             )
         for _req_col, done_col, _label in hidden:
             assert row[done_col] == 0, (
-                f"{done_col} is hidden (req != 'Y') and must not be in the "
+                f"{done_col} is hidden (req != 'Yes') and must not be in the "
                 f"payload; schema default 0 must be preserved, got "
                 f"{row[done_col]!r}"
             )
@@ -1923,29 +1923,29 @@ class TestMaterialsSave:
     def test_save_preserves_done_fields_hidden_by_req_n(self, db):
         """Critical contract pin (mirror of T5-B's done_* preservation, from
         the Materials side): saving Materials MUST NOT touch any done_* whose
-        req_* is currently not 'Y'. Seed done_cv=1 while req_cv='N'; flip
-        req_research_statement to 'Y' live, tick that checkbox, save —
+        req_* is currently not 'Yes'. Seed done_cv=1 while req_cv='No'; flip
+        req_research_statement to 'Yes' live, tick that checkbox, save —
         done_cv must still be 1 in the DB. Prevents a regression where the
         page loops over ALL REQUIREMENT_DOCS and overwrites hidden done_*
         with their (possibly stale) seeded bool value."""
         sid = database.add_position({
             "position_name":            "Alpha",
-            "req_cv":                   "N",
+            "req_cv":                   "No",
             "done_cv":                  1,   # prepared earlier; currently hidden
-            "req_research_statement":   "N",
+            "req_research_statement":   "No",
             "done_research_statement":  0,
         })
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
 
-        # Flip req_research_statement to 'Y' live via session_state directly —
+        # Flip req_research_statement to 'Yes' live via session_state directly —
         # the Requirements-tab radio is inside st.form("edit_requirements") so
         # widget values there do not commit to session_state until that form
         # is submitted. Writing session_state is how T4-E's
         # test_toggling_requirement_hides_checkbox drives the same
         # state-driven visibility.
-        at.session_state[_req_key("req_research_statement")] = "Y"
+        at.session_state[_req_key("req_research_statement")] = "Yes"
         _keep_selection(at, 0)
         at.run()
 
@@ -1963,9 +1963,9 @@ class TestMaterialsSave:
         )
         assert row["done_cv"] == 1, (
             f"done_cv MUST be preserved across a Materials save when its "
-            f"req_cv is 'N' (user-confirmed contract 2026-04-20); got "
+            f"req_cv is 'No' (user-confirmed contract 2026-04-20); got "
             f"{row['done_cv']!r}. If this fails, the Materials-save payload "
-            f"is writing done_* for docs whose req_* != 'Y' — it must only "
+            f"is writing done_* for docs whose req_* != 'Yes' — it must only "
             f"include done_* for visible docs."
         )
 
@@ -1973,7 +1973,7 @@ class TestMaterialsSave:
         """Mirror the F1 failure contract on the Materials path: a raising
         update_position must surface a friendly st.error without re-raising.
         """
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
 
         def _boom(_position_id, _fields):
             raise RuntimeError("db unavailable")
@@ -2005,7 +2005,7 @@ class TestMaterialsSave:
         """After Materials save, the edit panel must re-render for the SAME
         position — selected_position_id must survive the post-save rerun via
         the T5-A _skip_table_reset one-shot."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
@@ -2027,14 +2027,14 @@ class TestMaterialsSave:
         )
         # Panel still rendered: the Materials checkbox is still there.
         assert _checkbox_rendered(at, _done_key("done_cv")), (
-            "Materials checkbox must still render after save (req_cv is 'Y')"
+            "Materials checkbox must still render after save (req_cv is 'Yes')"
         )
 
     def test_save_toast_survives_rerun(self, db):
         """Regression guard for the Tier-1 st.success-clobber bug on the
         Materials path: st.toast must still be in at.toast after the post-save
         rerun completes."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)

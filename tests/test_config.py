@@ -338,6 +338,42 @@ def test_invariant_8_fires_on_inverted_thresholds():
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Sub-task 2 (v1.3 alignment) — DESIGN.md §5.1 / D21
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIREMENT_VALUES migrated from short codes (Y/Optional/N) to full words
+# (Yes/Optional/No). DESIGN decision D21 ties this to D20's "full-word"
+# philosophy — consistent, self-descriptive in raw dumps, no storage penalty.
+
+def test_requirement_values_spec_values():
+    """DESIGN §5.1: REQUIREMENT_VALUES = ['Yes', 'Optional', 'No'] (D21).
+
+    Display order is 'Required'-first because that is the common case the
+    reviewing user hits first on the Requirements tab; config.py pins the
+    canonical DB values, REQUIREMENT_LABELS maps them to the UI strings."""
+    assert config.REQUIREMENT_VALUES == ["Yes", "Optional", "No"]
+
+
+def test_requirement_labels_spec_values():
+    """DESIGN §5.1: UI labels for each canonical value. st.radio uses
+    format_func=REQUIREMENT_LABELS.get so session_state holds the canonical
+    DB value (no save-time translation)."""
+    assert config.REQUIREMENT_LABELS == {
+        "Yes":      "Required",
+        "Optional": "Optional",
+        "No":       "Not needed",
+    }
+
+
+def test_invariant_7_requirement_labels_keys_equal_values():
+    """DESIGN §5.2 invariant #7: every req value has a label, no extras."""
+    assert set(config.REQUIREMENT_LABELS) == set(config.REQUIREMENT_VALUES), (
+        "REQUIREMENT_LABELS must have exactly one entry per REQUIREMENT_VALUES. "
+        f"missing={set(config.REQUIREMENT_VALUES) - set(config.REQUIREMENT_LABELS)!r}, "
+        f"extra={set(config.REQUIREMENT_LABELS) - set(config.REQUIREMENT_VALUES)!r}"
+    )
+
+
 # ── Fresh import exercises every module-level assertion ──────────────────────
 
 def test_config_reimports_cleanly():
