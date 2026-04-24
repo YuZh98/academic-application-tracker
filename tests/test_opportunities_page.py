@@ -748,17 +748,43 @@ class TestRowSelection:
 
 
 # ── Edit-panel shell (T4-B) ───────────────────────────────────────────────────
-# When a row is selected, the page renders a subheader + st.tabs(...) below
-# the table. The tabs are empty in T4-B — T4-C–F fill the bodies.
+# When a row is selected, the page renders a subheader + tab selector below
+# the table. Tab bodies hold Overview / Requirements / Materials / Notes.
+#
+# v1.3 Sub-task 13 (DESIGN §8.2): the tab selector is a config-driven
+# `st.radio(horizontal=True, label_visibility="collapsed",
+# key="_active_edit_tab")` — NOT `st.tabs(...)`. The swap is load-bearing:
+# DESIGN §8.2 places the Delete button *outside* the tab container, visible
+# only when the active tab is Overview; `st.tabs` in Streamlit 1.56 has no
+# public active-tab API (the `key=` kwarg is accepted but does not populate
+# session_state), so we use st.radio whose active value lives in
+# session_state["_active_edit_tab"] and can gate the Delete button below.
+
+TAB_SELECTOR_KEY = "_active_edit_tab"
+
+
+def _tab_selector_rendered(at: AppTest) -> bool:
+    """True iff the edit-panel tab selector (st.radio key=_active_edit_tab)
+    is present on the rendered page.
+
+    AppTest's `at.radio(key=...)` raises KeyError when no such widget exists,
+    so this helper wraps the try/except for readability. Mirrors the
+    `_checkbox_rendered` pattern used by TestMaterialsTabWidgets."""
+    try:
+        at.radio(key=TAB_SELECTOR_KEY)
+        return True
+    except KeyError:
+        return False
+
 
 class TestEditPanelShell:
 
-    def test_no_tabs_when_no_selection(self, db):
-        """Tabs must not render unless a row is selected."""
+    def test_no_tab_selector_when_no_selection(self, db):
+        """The edit-panel tab selector must not render unless a row is selected."""
         database.add_position({"position_name": "Alpha"})
         at = _run_page()
-        assert len(at.tabs) == 0, (
-            f"Expected 0 tabs without selection, got {len(at.tabs)}"
+        assert not _tab_selector_rendered(at), (
+            "Expected no edit-panel tab selector without selection"
         )
 
     def test_no_subheader_when_no_selection(self, db):
@@ -769,40 +795,60 @@ class TestEditPanelShell:
             f"Expected 0 subheaders without selection, got {len(at.subheader)}"
         )
 
-    def test_four_tabs_appear_when_row_selected(self, db):
-        """Selecting a row must render exactly 4 tabs (Overview / Req / Mat / Notes)."""
+    def test_four_tab_options_when_row_selected(self, db):
+        """Selecting a row must render the tab selector with exactly 4 options
+        (Overview / Requirements / Materials / Notes)."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page raised after selection: {at.exception}"
-        assert len(at.tabs) == 4, (
-            f"Expected 4 tabs after selection, got {len(at.tabs)}"
+        assert _tab_selector_rendered(at), (
+            "Expected edit-panel tab selector to render after row selection"
+        )
+        options = list(at.radio(key=TAB_SELECTOR_KEY).options)
+        assert len(options) == 4, (
+            f"Expected 4 tab options after selection, got {len(options)}: {options}"
         )
 
     def test_tab_labels_match_config(self, db):
-        """Tab labels must come from config.EDIT_PANEL_TABS (proves config-drive)."""
+        """Tab-selector labels must come from config.EDIT_PANEL_TABS (proves config-drive)."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        labels = [t.label for t in at.tabs]
+        labels = list(at.radio(key=TAB_SELECTOR_KEY).options)
         assert labels == config.EDIT_PANEL_TABS, (
             f"Tab labels must match config.EDIT_PANEL_TABS.\n"
             f"  Expected: {config.EDIT_PANEL_TABS}\n"
             f"  Got:      {labels}"
         )
 
-    def test_tabs_disappear_when_deselected(self, db):
-        """Deselecting the row must unrender the edit panel (tabs + subheader)."""
+    def test_default_active_tab_is_first_config_entry(self, db):
+        """Without user interaction, the active tab must default to
+        config.EDIT_PANEL_TABS[0] (Overview) — Streamlit's native st.radio
+        default-index-0 behaviour, pinned here so a future default-changing
+        refactor shows up loudly."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        assert len(at.tabs) == 4   # precondition
+        assert at.radio(key=TAB_SELECTOR_KEY).value == config.EDIT_PANEL_TABS[0], (
+            f"Default active tab must be config.EDIT_PANEL_TABS[0]="
+            f"{config.EDIT_PANEL_TABS[0]!r}; got "
+            f"{at.radio(key=TAB_SELECTOR_KEY).value!r}"
+        )
+
+    def test_tabs_disappear_when_deselected(self, db):
+        """Deselecting the row must unrender the edit panel (tab selector + subheader)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _tab_selector_rendered(at)   # precondition
         _deselect_row(at)
-        assert len(at.tabs) == 0, (
-            "Deselection should unrender tabs"
+        assert not _tab_selector_rendered(at), (
+            "Deselection should unrender the tab selector"
         )
         assert len(at.subheader) == 0, (
             "Deselection should unrender the subheader"
@@ -850,7 +896,9 @@ class TestEditPanelShell:
         assert "_edit_form_sid" not in at.session_state, (
             "Sentinel must be cleared alongside the stale sid"
         )
-        assert len(at.tabs) == 0, "Edit panel must not render for a stale sid"
+        assert not _tab_selector_rendered(at), (
+            "Edit panel (tab selector) must not render for a stale sid"
+        )
 
 
 # ── Overview tab widgets (T4-C) ───────────────────────────────────────────────
@@ -2759,3 +2807,314 @@ class TestPreSeedNaNCoercion:
         assert _safe_str("") == ""
         assert _safe_str("hello") == "hello"
         assert _safe_str(42) == "42"
+
+
+# ── Sub-task 13: DESIGN §8.0 + §8.2 alignment ────────────────────────────────
+# Contract tests for the v1.3 alignment pass on pages/1_Opportunities.py:
+#
+#   • §8.0 page-config: st.set_page_config(layout="wide", ...) is the first
+#     Streamlit call on every page. Pinned via source-grep (AppTest does not
+#     surface set_page_config in the element tree — same precedent as
+#     test_app_page.py::TestT1AEmptyDbLayout::test_page_config_sets_wide_layout).
+#
+#   • §8.0 Status label convention: selectboxes use format_func=STATUS_LABELS.get
+#     (or an "All"-aware wrapper for the filter). UI shows labels, storage holds
+#     raw bracketed values.
+#
+#   • §8.2 Materials-tab predicate: visibility filter uses == "Yes" (the
+#     canonical REQUIREMENT_VALUES entry for a required doc). Pinned here so
+#     the DESIGN-contract is enforced regardless of vocabulary rewrites.
+#
+#   • §8.2 Delete-button placement: button renders BELOW the tab container
+#     (outside the panel box), visible ONLY when the active tab is Overview.
+#     Pin the tab-sensitivity by driving at.radio(key=_active_edit_tab)
+#     through each of the four EDIT_PANEL_TABS and asserting Delete-button
+#     presence/absence accordingly.
+
+
+class TestPageConfigSetsWideLayout:
+    """Source-grep pin for DESIGN §8.0 + D14."""
+
+    def test_page_config_sets_wide_layout(self, db):
+        """DESIGN §8.0 requires `st.set_page_config(layout="wide", ...)` on
+        every page — the app is data-heavy (positions table + edit panel)
+        and needs horizontal room.
+
+        AppTest does not surface set_page_config in the element tree (the
+        call is consumed by the page-setup phase before widgets render),
+        so the contract is pinned at the source level — same precedent as
+        test_app_page.py::TestT1AEmptyDbLayout::test_page_config_sets_wide_layout.
+        Checking for the three keyword bindings together prevents a
+        partially-correct call (layout only, title only, …) from silently
+        passing.
+        """
+        import pathlib
+        src = pathlib.Path("pages/1_Opportunities.py").read_text(encoding="utf-8")
+        assert "st.set_page_config(" in src, (
+            "pages/1_Opportunities.py must call st.set_page_config(...) per DESIGN §8.0."
+        )
+        assert 'page_title="Postdoc Tracker"' in src, (
+            'set_page_config must bind page_title="Postdoc Tracker" per DESIGN §8.0.'
+        )
+        assert 'page_icon="📋"' in src, (
+            'set_page_config must bind page_icon="📋" per DESIGN §8.0.'
+        )
+        assert 'layout="wide"' in src, (
+            'set_page_config must bind layout="wide" per DESIGN §8.0 / D14.'
+        )
+
+
+class TestFilterStatusFormatFunc:
+    """DESIGN §8.0 + §8.2: filter_status selectbox shows display labels while
+    storing raw bracketed values. The "All" sentinel passes through unchanged
+    (STATUS_LABELS.get("All", "All") returns "All" by default).
+
+    AppTest surfaces .options as the format_func-applied display strings (per
+    TestRequirementsTabWidgets::test_radio_options_display_config_labels_in_order
+    precedent) and .value as the underlying raw option — so checking both
+    pins the storage/display split in a single test class.
+    """
+
+    def test_filter_status_options_display_labels(self, db):
+        """The filter_status selectbox's .options must be ["All"] + the
+        config.STATUS_LABELS[v] for each v in config.STATUS_VALUES — NOT
+        the raw bracketed values. A format_func that returns None on the
+        "All" sentinel (vanilla `STATUS_LABELS.get`) would leak `None` into
+        the rendered option list, so the implementation MUST wrap with a
+        default that passes "All" through. This test catches that regression.
+        """
+        at = _run_page()
+        options = list(at.selectbox(key="filter_status").options)
+        expected = ["All"] + [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        assert options == expected, (
+            f"filter_status options must be display labels via format_func "
+            f"(with 'All' passthrough).\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_filter_status_value_stays_raw_on_select(self, db):
+        """After selecting a specific status via the UI, the selectbox's
+        .value must be the raw storage string (brackets included) — the
+        filter predicate downstream compares raw values to df["status"]."""
+        database.add_position({"position_name": "Alpha", "status": "[APPLIED]"})
+        at = _run_page()
+        at.selectbox(key="filter_status").select(config.STATUS_APPLIED)
+        at.run()
+        assert not at.exception
+        assert at.selectbox(key="filter_status").value == config.STATUS_APPLIED, (
+            f"filter_status must store the raw status value (brackets included) "
+            f"so filter predicates compare storage keys; got "
+            f"{at.selectbox(key='filter_status').value!r}"
+        )
+
+    def test_filter_status_round_trip_filters_correctly(self, db):
+        """End-to-end: selecting the display-labelled status must narrow the
+        table to rows with the corresponding raw status — storage/display
+        split works transparently."""
+        database.add_position({"position_name": "Saved Row"})                       # [SAVED] by default
+        database.add_position({"position_name": "Applied Row", "status": config.STATUS_APPLIED})
+        at = _run_page()
+        at.selectbox(key="filter_status").select(config.STATUS_APPLIED)
+        at.run()
+        assert not at.exception
+        # One row after filtering to Applied.
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected exactly 1 applied row after filter, got: "
+            f"{at.caption[0].value!r}"
+        )
+
+
+class TestEditStatusFormatFunc:
+    """DESIGN §8.0 + §8.2: the Overview form's Status selectbox shows display
+    labels (format_func=config.STATUS_LABELS.get) while storing raw bracketed
+    values — mirrors the filter_status contract, minus the "All" sentinel.
+    """
+
+    def test_edit_status_options_display_labels(self, db):
+        """The edit_status selectbox's .options must be the ordered
+        config.STATUS_LABELS[v] for each v in config.STATUS_VALUES — NOT
+        the raw bracketed values."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        expected = [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        assert options == expected, (
+            f"edit_status options must be display labels via format_func.\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_edit_status_value_stays_raw_on_select(self, db):
+        """After selecting a specific status on the Overview form, the
+        selectbox's .value must be the raw storage string — the Save
+        handler writes the raw value into positions.status."""
+        database.add_position({"position_name": "Alpha", "status": config.STATUS_SAVED})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.selectbox(key=EDIT_KEYS["status"]).select(config.STATUS_APPLIED)
+        at.run()
+        assert not at.exception
+        assert at.selectbox(key=EDIT_KEYS["status"]).value == config.STATUS_APPLIED, (
+            f"edit_status must store the raw status value (brackets included) "
+            f"so Save writes the storage key; got "
+            f"{at.selectbox(key=EDIT_KEYS['status']).value!r}"
+        )
+
+
+class TestMaterialsFilterPredicateIsYes:
+    """DESIGN §8.2 Materials-tab row: visibility filter is `session_state[
+    f"edit_{req_col}"] == "Yes"`. Pinned here independent of Sub-task 2's
+    own migration tests — this is the DESIGN-contract anchor for "Materials
+    shows a doc iff its requirement is marked Required"."""
+
+    def test_materials_tab_shows_only_docs_required_via_yes(self, db):
+        """Seed a position with mixed req_* values (Yes / Optional / No)
+        and assert the Materials tab renders checkboxes ONLY for the ones
+        whose session_state value is 'Yes'."""
+        database.add_position({
+            "position_name":       "Alpha",
+            "req_cv":              "Yes",        # visible
+            "req_cover_letter":    "Optional",   # hidden
+            "req_transcripts":     "No",         # hidden
+            "req_writing_sample":  "Yes",        # visible
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Switch to Materials tab so its body renders.
+        at.radio(key=TAB_SELECTOR_KEY).set_value("Materials")
+        at.run()
+        assert not at.exception, f"Page raised after tab switch: {at.exception}"
+        # CV + Writing Sample visible (req == "Yes"); Cover Letter (Optional)
+        # and Transcripts (No) hidden. _checkbox_rendered is defined earlier
+        # in the test module for exactly this kind of conditional-widget check.
+        assert _checkbox_rendered(at, "edit_done_cv"), (
+            "req_cv='Yes' must render a Materials-tab checkbox"
+        )
+        assert _checkbox_rendered(at, "edit_done_writing_sample"), (
+            "req_writing_sample='Yes' must render a Materials-tab checkbox"
+        )
+        assert not _checkbox_rendered(at, "edit_done_cover_letter"), (
+            "req_cover_letter='Optional' must NOT render a Materials-tab checkbox "
+            "(predicate is strictly == 'Yes' per DESIGN §8.2)"
+        )
+        assert not _checkbox_rendered(at, "edit_done_transcripts"), (
+            "req_transcripts='No' must NOT render a Materials-tab checkbox"
+        )
+
+
+# ── Delete-button tab-sensitivity (DESIGN §8.2) ──────────────────────────────
+# DESIGN §8.2 Delete row: "Button rendered below the edit panel (outside the
+# panel box), visible only when the active tab is Overview." Pre-Sub-task-13
+# the Delete button lived inside `with tabs[0]:` — the user never saw it
+# on non-Overview tabs (Streamlit's tab CSS hid it) but the button was still
+# in the DOM and clickable via AppTest regardless of active tab. Sub-task 13
+# moves the button BELOW the tab selector and gates its render on
+# session_state["_active_edit_tab"] == "Overview", matching DESIGN's intent:
+# the button's scope is the whole position, so it only shows up on the tab
+# where the user reviews the position as a whole.
+
+def _delete_button_rendered(at: AppTest) -> bool:
+    """True iff the Overview Delete button (key=edit_delete) is on the page.
+
+    Mirrors _tab_selector_rendered / _checkbox_rendered — AppTest raises
+    KeyError for absent widget lookups, so the helper wraps the try/except."""
+    try:
+        at.button(key=DELETE_BUTTON_KEY)
+        return True
+    except KeyError:
+        return False
+
+
+class TestDeleteButtonTabSensitivity:
+
+    def test_delete_visible_when_active_tab_is_overview(self, db):
+        """With default tab selection (Overview, the first EDIT_PANEL_TABS
+        entry and the st.radio default), the Delete button must render
+        beneath the tab selector."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception
+        # Precondition: default active tab is Overview.
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Overview", (
+            "Precondition: initial active tab should default to 'Overview'"
+        )
+        assert _delete_button_rendered(at), (
+            "Delete button must render when active tab is Overview "
+            "(DESIGN §8.2)"
+        )
+
+    def test_delete_absent_when_active_tab_is_requirements(self, db):
+        """Switching to Requirements via the tab selector must remove the
+        Delete button from the page — the button's scope is the whole
+        position, not the tab's data, so it only belongs on Overview."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=TAB_SELECTOR_KEY).set_value("Requirements")
+        at.run()
+        assert not at.exception, f"Page raised after switch to Requirements: {at.exception}"
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Requirements"
+        assert not _delete_button_rendered(at), (
+            "Delete button must NOT render when active tab is Requirements "
+            "(DESIGN §8.2 — Delete is Overview-only)"
+        )
+
+    def test_delete_absent_when_active_tab_is_materials(self, db):
+        """Switching to Materials via the tab selector must remove the
+        Delete button from the page."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=TAB_SELECTOR_KEY).set_value("Materials")
+        at.run()
+        assert not at.exception, f"Page raised after switch to Materials: {at.exception}"
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Materials"
+        assert not _delete_button_rendered(at), (
+            "Delete button must NOT render when active tab is Materials "
+            "(DESIGN §8.2 — Delete is Overview-only)"
+        )
+
+    def test_delete_absent_when_active_tab_is_notes(self, db):
+        """Switching to Notes via the tab selector must remove the Delete
+        button from the page."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.radio(key=TAB_SELECTOR_KEY).set_value("Notes")
+        at.run()
+        assert not at.exception, f"Page raised after switch to Notes: {at.exception}"
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Notes"
+        assert not _delete_button_rendered(at), (
+            "Delete button must NOT render when active tab is Notes "
+            "(DESIGN §8.2 — Delete is Overview-only)"
+        )
+
+    def test_delete_reappears_when_returning_to_overview(self, db):
+        """Round-trip: user switches away from Overview (Delete hides), then
+        back (Delete reappears). Pins both directions of the gating."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Away
+        at.radio(key=TAB_SELECTOR_KEY).set_value("Notes")
+        at.run()
+        assert not _delete_button_rendered(at)   # precondition
+        # Back
+        at.radio(key=TAB_SELECTOR_KEY).set_value("Overview")
+        at.run()
+        assert not at.exception
+        assert _delete_button_rendered(at), (
+            "Delete button must render again when user returns to Overview"
+        )
