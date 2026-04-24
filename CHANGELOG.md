@@ -305,6 +305,74 @@ finally surface both to the user. DESIGN.md v1.3 §6.2 + §8.2 + D22.
   — the inline comment at that test already documented bumping
   this count explicitly for exactly this case.
 
+### Changed — v1.3 alignment Sub-task 8 (branch `feature/align-v1.3`)
+
+Sub-task 8 normalizes the two flat interview date columns on
+`applications` into a proper `interviews` sub-table so a position can
+carry arbitrarily many interviews. DESIGN.md v1.3 §6.2 + §6.3 + §7 +
+D18. Scope expanded beyond the originally stated `database.py` /
+`tests/test_database.py` / `CHANGELOG.md` to also touch `app.py` +
+`tests/test_app_page.py` — the rewritten `get_upcoming_interviews`
+changes its column contract (row-per-interview with a single
+`scheduled_date` column, instead of row-per-position with flat
+`interview1_date` / `interview2_date` columns), which the dashboard
+Next-Interview KPI consumes.
+
+- **`database.py — init_db()`**: samples `sqlite_master` for
+  `interviews` BEFORE the `CREATE TABLE IF NOT EXISTS`; runs the
+  one-shot copy-then-NULL-clear migration only on the "didn't
+  exist pre-create" path (the "migrate-once gate"). Adds
+  `idx_interviews_application` index per §6.2.
+- **`database.py`** — new CRUD section between Applications and
+  Recommenders, matching DESIGN §7's grouping:
+  - `add_interview(application_id, fields, *, propagate_status=True)
+    → {"id", "status_changed", "new_status"}`. Auto-assigns
+    `sequence` via `COALESCE(MAX(sequence), 0) + 1` when the caller
+    omits it; explicit `sequence` in `fields` is used verbatim and
+    the `UNIQUE(application_id, sequence)` constraint catches
+    collisions. The cascade body (R2 from §9.3) is deferred to
+    Sub-task 9 — `status_changed` always reads `False` today and
+    the keyword-only `propagate_status` kwarg is in place purely
+    for API stability across the two sub-tasks. `fields` is
+    defensively copied before the auto-sequence injection so the
+    caller's dict is never mutated.
+  - `get_interviews(application_id) -> DataFrame` ordered by
+    `sequence ASC`.
+  - `update_interview(interview_id, fields) -> None` — empty-fields
+    no-op to match the other update_* conventions.
+  - `delete_interview(interview_id) -> None`.
+- **`database.py`** — `get_upcoming_interviews()` rewritten to JOIN
+  interviews → applications → positions, filter
+  `scheduled_date >= today`, order `scheduled_date ASC, sequence ASC`
+  (sequence is the stable tiebreaker when two interviews share a
+  date). Result columns: `interview_id, application_id, sequence,
+  scheduled_date, format, position_id, position_name, institute`.
+  Row-per-interview shape replaces the prior row-per-position shape
+  — this is the load-bearing change for D18.
+- **`app.py — _next_interview_display()`**: single-column scan of
+  `scheduled_date` replaces the dual-column scan over
+  `interview1_date` / `interview2_date`. Functionally equivalent
+  semantics (earliest future date wins, institute paired with
+  winner), simpler code. Header comment + docstring updated.
+- **`tests/test_database.py`** — seven new test classes covering
+  the full vertical: `TestInterviewsSchema` (5), `TestAddInterview`
+  (9 incl. the `inspect.signature` pin on `propagate_status`),
+  `TestGetInterviews` (3), `TestUpdateInterview` (3),
+  `TestDeleteInterview` (2), `TestInterviewsCascade` (1 — full
+  FK-chain transitive cascade), `TestInterviewsMigration` (6 — pins
+  the migrate-once gate, legacy NULL-clear, sequence-1/2 copy
+  assignments, NULL-in-NULL-out, and strict idempotence across a
+  second `init_db()`). `TestGetUpcomingInterviews` rewritten from
+  six `upsert_application`-based seeds to seven `add_interview`-
+  based seeds incl. the new `test_returns_row_per_interview`
+  D18-shape pin.
+- **`tests/test_app_page.py — TestT1DNextInterviewKpi`** — five
+  tests rewritten to seed interviews via `add_interview`; the old
+  `test_interview2_date_beats_another_rows_interview1` becomes
+  `test_later_interview_on_same_position_does_not_override`
+  (equivalent semantic under row-per-interview shape); class
+  docstring rewritten for the new column contract.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -467,6 +535,59 @@ those would need manual translation; no auto-migration runs),
 the `work_auth_note` column is still added cleanly by this
 step — translating the old `work_auth` enum values is an
 independent manual action.
+
+**Sub-task 8** — schema normalization (new `interviews` sub-table
+replacing `applications.interview1_date` / `interview2_date`).
+`init_db()` runs this automatically on the first app start after
+upgrade; a user does not need to execute anything manually. For
+the record, the equivalent SQL executed is:
+
+```sql
+-- (a) New sub-table (see DESIGN §6.2 for the full column spec).
+CREATE TABLE IF NOT EXISTS interviews (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id  INTEGER NOT NULL,
+    sequence        INTEGER NOT NULL,
+    scheduled_date  TEXT,
+    format          TEXT,
+    notes           TEXT,
+    UNIQUE (application_id, sequence),
+    FOREIGN KEY (application_id) REFERENCES applications(position_id)
+        ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_interviews_application
+    ON interviews(application_id);
+
+-- (b) One-shot copy of legacy flat columns into the sub-table.
+--     Only rows whose source date is non-NULL contribute.
+INSERT INTO interviews (application_id, sequence, scheduled_date)
+    SELECT position_id, 1, interview1_date
+      FROM applications WHERE interview1_date IS NOT NULL;
+INSERT INTO interviews (application_id, sequence, scheduled_date)
+    SELECT position_id, 2, interview2_date
+      FROM applications WHERE interview2_date IS NOT NULL;
+
+-- (c) NULL-clear the legacy columns (DESIGN §6.3 step c).
+--     Physical columns stay in CREATE TABLE applications until
+--     a future rebuild drops them.
+UPDATE applications
+   SET interview1_date = NULL,
+       interview2_date = NULL
+ WHERE interview1_date IS NOT NULL
+    OR interview2_date IS NOT NULL;
+```
+
+Idempotence is implemented via a **migrate-once gate** rather than
+by per-statement guards: `init_db()` samples `sqlite_master` BEFORE
+the `CREATE TABLE IF NOT EXISTS interviews` and only runs steps
+(b) + (c) on the first call (when interviews was absent
+pre-create). Subsequent calls find interviews already present and
+skip the copy entirely — no INSERT OR IGNORE, no WHERE IS NULL
+re-checks. A dev DB that somehow has an interviews table but
+un-cleared legacy data (hand-built, partial failed migration) is
+out of scope for the auto-path; recover with a one-time manual run
+of steps (b) + (c). No rebuild, no data loss, no downtime on the
+normal v1.2 → v1.3 upgrade.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 
