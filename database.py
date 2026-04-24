@@ -390,26 +390,144 @@ def get_application(position_id: int) -> dict:
     return dict(row)
 
 
-def upsert_application(position_id: int, fields: dict[str, Any]) -> None:
-    """INSERT or UPDATE the application row for a position.
-    applications.position_id is the primary key — ON CONFLICT handles the upsert.
-    Calls exports.write_all()."""
+def upsert_application(
+    position_id: int,
+    fields: dict[str, Any],
+    *,
+    propagate_status: bool = True,
+) -> dict[str, Any]:
+    """INSERT or UPDATE the application row for a position; optionally
+    run the R1 / R3 pipeline auto-promotion cascades.
+
+    applications.position_id is the primary key — ON CONFLICT handles
+    the upsert.
+
+    Cascade (DESIGN §9.3, gated on `propagate_status=True`):
+      R1 — `applied_date` transitions from NULL to non-NULL:
+           UPDATE positions SET status = STATUS_APPLIED
+             WHERE id = ? AND status = STATUS_SAVED
+      R3 — incoming `response_type == "Offer"`:
+           UPDATE positions SET status = STATUS_OFFER
+             WHERE id = ? AND status NOT IN TERMINAL_STATUSES
+
+    Both cascades run inside the same transaction as the primary
+    upsert, so an exception anywhere rolls the whole call back
+    atomically (the `_connect()` context manager's except clause
+    handles rollback).
+
+    Returns ``{"status_changed": bool, "new_status": str | None}``.
+    `status_changed` compares the STATUS STRING pre vs post, not
+    whether an UPDATE executed — so the STATUS_OFFER self-assignment
+    that happens when R3 re-fires on an already-OFFER row is correctly
+    reported as "no change". An empty `fields` dict is a no-op and
+    still returns the indicator shape (with both keys falsy) so
+    callers can unpack the return unconditionally.
+
+    Calls exports.write_all() on success."""
+    # Empty-fields early return: no primary write, no cascade, but
+    # still hand the caller the indicator shape so they don't need a
+    # try/except around `.get("status_changed")`.
     if not fields:
-        return
+        return {"status_changed": False, "new_status": None}
+
     cols = ", ".join(["position_id"] + list(fields.keys()))
     placeholders = ", ".join(["?"] * (1 + len(fields)))
     set_clause = ", ".join(f"{k} = excluded.{k}" for k in fields)
     vals = [position_id] + list(fields.values())
 
     with _connect() as conn:
+        # Pre-state reads — capture applied_date for R1's NULL→non-NULL
+        # transition test and status for the indicator diff. Missing
+        # applications row (shouldn't happen post-add_position) reads as
+        # None. The reads sit inside the same transaction as the writes
+        # below so the snapshot they see is consistent with the writes.
+        cur = conn.execute(
+            "SELECT applied_date FROM applications WHERE position_id = ?",
+            (position_id,),
+        )
+        pre_app = cur.fetchone()
+        pre_applied_date = pre_app["applied_date"] if pre_app else None
+
+        cur = conn.execute(
+            "SELECT status FROM positions WHERE id = ?",
+            (position_id,),
+        )
+        pre_pos = cur.fetchone()
+        pre_status = pre_pos["status"] if pre_pos else None
+
+        # Primary write.
         conn.execute(
             f"""INSERT INTO applications ({cols}) VALUES ({placeholders})
                 ON CONFLICT(position_id) DO UPDATE SET {set_clause}""",
             vals,
         )
 
+        if propagate_status:
+            # R1: applied_date NULL→set on a STATUS_SAVED position.
+            # Scoped to the transition, not every touch of the column —
+            # so a later upsert that updates applied_date to a new
+            # value leaves status alone (position has already moved on
+            # in the pipeline via its prior R1).
+            new_applied_date = fields.get("applied_date")
+            if pre_applied_date is None and new_applied_date is not None:
+                conn.execute(
+                    "UPDATE positions SET status = ? "
+                    "WHERE id = ? AND status = ?",
+                    (config.STATUS_APPLIED, position_id, config.STATUS_SAVED),
+                )
+
+            # R3: incoming response_type == "Offer". Terminal guard in
+            # the WHERE clause blocks regression; the self-assignment
+            # that runs when pre status IS already STATUS_OFFER is
+            # harmless (pre == post, so status_changed reads False).
+            if fields.get("response_type") == "Offer":
+                terminal = tuple(config.TERMINAL_STATUSES)
+                placeholder_list = ", ".join("?" * len(terminal))
+                conn.execute(
+                    f"UPDATE positions SET status = ? "
+                    f"WHERE id = ? AND status NOT IN ({placeholder_list})",
+                    (config.STATUS_OFFER, position_id, *terminal),
+                )
+
+        # Post-state read for the indicator. Same connection →
+        # reads the just-updated row inside the still-open transaction.
+        cur = conn.execute(
+            "SELECT status FROM positions WHERE id = ?",
+            (position_id,),
+        )
+        post_pos = cur.fetchone()
+        post_status = post_pos["status"] if post_pos else None
+
     import exports as _exports  # deferred: avoids circular import
     _exports.write_all()
+
+    if post_status != pre_status:
+        return {"status_changed": True, "new_status": post_status}
+    return {"status_changed": False, "new_status": None}
+
+
+def is_all_recs_submitted(position_id: int) -> bool:
+    """Return True iff every recommender on this position has submitted.
+
+    "Submitted" means `submitted_date` is non-NULL and non-empty — the
+    page can legitimately write ``""`` when the user clears the field
+    (matches the Notes-tab round-trip contract), and both NULL and ``""``
+    represent "no submission yet" from the user's perspective.
+
+    A position with zero recommenders returns **True** (vacuous truth):
+    there is nothing outstanding. D23 frames this as a query helper
+    replacing a stored summary column — vacuous truth makes the helper
+    compose cleanly with aggregators that want "all done?" semantics
+    without a special case for the no-recs row."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "SELECT COUNT(*) AS pending FROM recommenders "
+            "WHERE position_id = ? "
+            "  AND (submitted_date IS NULL OR submitted_date = '')",
+            (position_id,),
+        )
+        pending = cur.fetchone()["pending"]
+    return pending == 0
 
 
 # ── Interviews ────────────────────────────────────────────────────────────────
@@ -436,15 +554,20 @@ def add_interview(
     constraint catches collisions with IntegrityError.
 
     Returns ``{"id": <new row id>, "status_changed": bool,
-    "new_status": str | None}``. The cascade indicator follows
-    DESIGN §9.3 — Sub-task 9 fills in the R2 body (`UPDATE positions
-    SET status = STATUS_INTERVIEW WHERE id = application_id
-    AND status = STATUS_APPLIED`) conditioned on `propagate_status`.
-    For Sub-task 8 the cascade is deferred, so status_changed always
-    reads False regardless of the kwarg. The keyword-only kwarg is in
-    place now to lock the API across the two sub-tasks (callers can
-    pass `propagate_status=False` today and get the same behaviour
-    they will get once Sub-task 9 lands).
+    "new_status": str | None}``.
+
+    Cascade (DESIGN §9.3, gated on `propagate_status=True`):
+      R2 — any successful interview insert:
+           UPDATE positions SET status = STATUS_INTERVIEW
+             WHERE id = application_id AND status = STATUS_APPLIED
+
+    Status guard alone delivers the correct semantics (DESIGN §9.3
+    narrative): the first interview on a STATUS_APPLIED position
+    promotes; subsequent interviews on a STATUS_INTERVIEW position are
+    no-ops; STATUS_OFFER / terminals are not regressed. The cascade
+    runs inside the same transaction as the primary INSERT so a
+    cascade-level failure rolls the interviews row back along with
+    the status update.
 
     Calls exports.write_all() on success."""
     # Don't mutate the caller's dict — auto-sequence injection below
@@ -452,6 +575,15 @@ def add_interview(
     fields = dict(fields)
 
     with _connect() as conn:
+        # Pre-state status for the indicator diff. Read inside the
+        # transaction for consistency with the post-state read below.
+        cur = conn.execute(
+            "SELECT status FROM positions WHERE id = ?",
+            (application_id,),
+        )
+        pre_pos = cur.fetchone()
+        pre_status = pre_pos["status"] if pre_pos else None
+
         if "sequence" not in fields:
             cur = conn.execute(
                 "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq "
@@ -470,15 +602,35 @@ def add_interview(
         )
         new_id: int = cur.lastrowid
 
+        if propagate_status:
+            # R2: count-free per DESIGN §9.3. The status guard alone
+            # handles all edge cases — no need to SELECT COUNT(*) from
+            # interviews here. A back-edit to STATUS_APPLIED retaining
+            # existing interviews still promotes correctly on the next
+            # add_interview, which the count-based variant would miss.
+            conn.execute(
+                "UPDATE positions SET status = ? "
+                "WHERE id = ? AND status = ?",
+                (config.STATUS_INTERVIEW, application_id, config.STATUS_APPLIED),
+            )
+
+        # Post-state read (same transaction, sees the R2 update).
+        cur = conn.execute(
+            "SELECT status FROM positions WHERE id = ?",
+            (application_id,),
+        )
+        post_pos = cur.fetchone()
+        post_status = post_pos["status"] if post_pos else None
+
     import exports as _exports  # deferred: avoids circular import
     _exports.write_all()
 
-    # Sub-task 9 target: gate the following UPDATE on propagate_status
-    # and return the actual status_changed / new_status. For now the
-    # indicator keys exist with their no-cascade defaults so callers
-    # can read them today without a try/except. `propagate_status` is
-    # consumed here only to satisfy the signature contract.
-    _ = propagate_status
+    if post_status != pre_status:
+        return {
+            "id":             new_id,
+            "status_changed": True,
+            "new_status":     post_status,
+        }
     return {
         "id":             new_id,
         "status_changed": False,
@@ -696,7 +848,8 @@ def compute_materials_readiness() -> dict[str, int]:
 
     A position is "ready" if every document where req_* = 'Yes' has done_* = 1.
     Only positions with at least one required document (req_* = 'Yes') are counted.
-    Active = status in ([SAVED], [APPLIED], [INTERVIEW]).
+    Active = status in (STATUS_SAVED, STATUS_APPLIED, STATUS_INTERVIEW) —
+    the tuple is sourced from config aliases at call time.
 
     SQL uses f-strings for column names only — column names come from config
     constants, never from user input (documented in GUIDELINES.md §DB access)."""
@@ -707,7 +860,16 @@ def compute_materials_readiness() -> dict[str, int]:
         f"({req} != 'Yes' OR {done} = 1)"
         for req, done, _ in config.REQUIREMENT_DOCS
     )
-    active_statuses = ("[SAVED]", "[APPLIED]", "[INTERVIEW]")
+    # Sub-task 9 / TASKS.md C1: the active-statuses set is sourced from
+    # config aliases rather than hardcoded literals, so a future rename
+    # of the stage-0/1/2 status values flows through automatically. The
+    # read happens at call time (not module load), which is what makes
+    # the sentinel test in TestComputeMaterialsReadiness satisfiable.
+    active_statuses = (
+        config.STATUS_SAVED,
+        config.STATUS_APPLIED,
+        config.STATUS_INTERVIEW,
+    )
     status_placeholders = ", ".join("?" * len(active_statuses))
 
     with _connect() as conn:
