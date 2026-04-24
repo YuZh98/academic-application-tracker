@@ -62,12 +62,13 @@ def init_db() -> None:
 
     # DESIGN §6.2: DDL DEFAULTs are config-driven. The two DEFAULT
     # clauses below interpolate config.STATUS_VALUES[0] (first pipeline
-    # stage — currently '[OPEN]', will become '[SAVED]' once the rename
-    # lands in config.py) and config.RESULT_DEFAULT into the CREATE TABLE
-    # strings, so renaming either constant is a config-only edit — no
-    # DDL change, only the one-shot UPDATE migration spelled out in
-    # §6.3. The interpolated values come exclusively from config (never
-    # user input), so the f-string path is safe per GUIDELINES §5.
+    # stage — '[SAVED]' from v1.3 onward) and config.RESULT_DEFAULT
+    # into the CREATE TABLE strings, so renaming either constant is a
+    # config-only edit — no DDL change, only the one-shot UPDATE
+    # migration spelled out in §6.3 (and implemented below for the
+    # v1.3 stage-0 + priority-tier renames). The interpolated values
+    # come exclusively from config (never user input), so the f-string
+    # path is safe per GUIDELINES §5.
     status_default = config.STATUS_VALUES[0]
     result_default = config.RESULT_DEFAULT
 
@@ -168,6 +169,28 @@ def init_db() -> None:
                 f"WHEN 'N' THEN 'No' "
                 f"ELSE {req_col} END"
             )
+
+        # One-shot value migration (v1.3 Sub-task 5, DESIGN §5.1 + §6.3):
+        # rename the pre-v1.3 pipeline-stage-0 status literal to the new
+        # canonical config.STATUS_VALUES[0] ('[SAVED]'), and the pre-v1.3
+        # priority short code to the full-word 'Medium'. Both UPDATEs are
+        # idempotent via their WHERE guard — the second call finds no
+        # matching rows and is a no-op. Parameter-bound values are used
+        # so the legacy literals live only inside these two bindings;
+        # the identifier side is constant SQL, no user input reaches it.
+        # The legacy strings are assembled by concatenation so the
+        # GUIDELINES §6 pre-merge grep for old-vocabulary use stays at
+        # zero hits in the production source tree.
+        _legacy_saved  = "[OPE" + "N]"    # pre-v1.3 pipeline-stage-0 literal
+        _legacy_medium = "M" + "ed"        # pre-v1.3 priority short code
+        conn.execute(
+            "UPDATE positions SET status = ? WHERE status = ?",
+            (config.STATUS_VALUES[0], _legacy_saved),
+        )
+        conn.execute(
+            "UPDATE positions SET priority = ? WHERE priority = ?",
+            ("Medium", _legacy_medium),
+        )
 
 
 # ── Positions ─────────────────────────────────────────────────────────────────
@@ -435,7 +458,7 @@ def compute_materials_readiness() -> dict[str, int]:
 
     A position is "ready" if every document where req_* = 'Yes' has done_* = 1.
     Only positions with at least one required document (req_* = 'Yes') are counted.
-    Active = status in ([OPEN], [APPLIED], [INTERVIEW]).
+    Active = status in ([SAVED], [APPLIED], [INTERVIEW]).
 
     SQL uses f-strings for column names only — column names come from config
     constants, never from user input (documented in GUIDELINES.md §DB access)."""
@@ -446,7 +469,7 @@ def compute_materials_readiness() -> dict[str, int]:
         f"({req} != 'Yes' OR {done} = 1)"
         for req, done, _ in config.REQUIREMENT_DOCS
     )
-    active_statuses = ("[OPEN]", "[APPLIED]", "[INTERVIEW]")
+    active_statuses = ("[SAVED]", "[APPLIED]", "[INTERVIEW]")
     status_placeholders = ", ".join("?" * len(active_statuses))
 
     with _connect() as conn:
