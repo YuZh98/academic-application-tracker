@@ -31,3 +31,9 @@ postdoc.db
 
 # Claude Code internal state
 .claude/
+
+# Internal working memory (not public-repo material, gitignored from v1.1).
+# The files remain on disk locally — they just aren't tracked.
+# See DESIGN.md §4 File Structure and CHANGELOG.md's v1.1 doc refactor entry.
+CLAUDE.md
+PHASE_*_GUIDELINES.md
