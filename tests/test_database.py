@@ -331,6 +331,34 @@ class TestInitDb:
             f"Before: {ts_before!r}, after: {ts_after!r}"
         )
 
+    def test_noop_restart_does_not_bump_updated_at(self, db):
+        """DESIGN §6.2 + D25 regression pin: a second init_db() on an
+        already-migrated DB must not advance updated_at for any row. D25
+        frames updated_at as "last row mutation", not "last app startup"
+        — so idempotent migration UPDATEs must be scoped (WHERE guard)
+        to rows actually needing migration. A CASE-ELSE-passthrough with
+        no WHERE clause fires the positions_updated_at trigger for every
+        row on every init_db() call (SQLite AFTER UPDATE triggers run on
+        every matched row regardless of whether the new value equals the
+        old), silently rewriting updated_at to "last app startup".
+
+        The 2.1 s sleep crosses SQLite's 1-second datetime('now')
+        granularity — without it a buggy implementation could hide
+        inside one clock second (same pattern as
+        test_update_position_refreshes_updated_at's 1.1 s sleep)."""
+        pos_id = database.add_position(make_position())
+        ts_before = database.get_position(pos_id)["updated_at"]
+
+        time.sleep(2.1)
+        database.init_db()
+        ts_after = database.get_position(pos_id)["updated_at"]
+
+        assert ts_after == ts_before, (
+            "A second init_db() on an already-migrated DB must be a no-op "
+            f"for updated_at. Before: {ts_before!r}, after: {ts_after!r}. "
+            "See DESIGN §6.2 + D25."
+        )
+
     def test_migration_adds_updated_at_to_pre_v1_3_positions(self, tmp_path, monkeypatch):
         """Sub-task 6 / DESIGN §6.3: pre-v1.3 DBs whose positions table was
         created without updated_at must pick up the column + trigger on the
