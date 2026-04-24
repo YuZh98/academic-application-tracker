@@ -705,6 +705,125 @@ row, which also enumerates this pattern).
     depending on whether other rows in the same column forced
     the dtype to float).
 
+### Changed — v1.3 alignment Sub-task 12 (branch `feature/align-v1.3`)
+
+Sub-task 12 aligns `app.py` with DESIGN.md v1.3 §8.0 (cross-page
+conventions) + §8.1 (dashboard panel specifications + funnel visibility
+rules + empty-state branches). Pure display-layer change — no schema,
+no new database queries, no config edits.
+
+- **`app.py` `st.set_page_config(…)`** added as the FIRST Streamlit
+  call per DESIGN §8.0 + D14: `page_title="Postdoc Tracker"`,
+  `page_icon="📋"`, `layout="wide"`. Data-heavy views (KPI grid,
+  funnel, timeline) need horizontal room; the default centered layout
+  cramps at ~750px. Placed immediately after imports, before
+  `database.init_db()`, so it precedes every other `st.*` call.
+- **`app.py` top-bar 🔄 Refresh button removed** per DESIGN D13.
+  Streamlit reruns on any widget interaction; a manual refresh is
+  cognitive noise for a single-user local app. The `st.columns([6, 1])`
+  title/refresh wrap is replaced with a plain `st.title("Postdoc
+  Tracker")` — no more half-empty column on the right. The pre-v1.3
+  C3-locked decision is explicitly superseded by D13.
+- **`app.py` Tracked KPI gains the locked help-tooltip string** per
+  DESIGN §8.1: `help="Saved + Applied — positions you're still
+  actively pursuing"`. Hovering the metric explains the arithmetic so
+  the reader doesn't have to guess what "tracked" means. AppTest
+  surfaces the tooltip at `metric.proto.help` (probed before writing
+  the pin test).
+- **`app.py` Application Funnel rewritten to be `FUNNEL_BUCKETS`-
+  driven** per DESIGN §8.1 + D11 + D17:
+  - Per-bucket counts are computed by summing `count_by_status()` over
+    each bucket's raw-status tuple. The only multi-status bucket today
+    is "Archived" (= `[REJECTED]` + `[DECLINED]`, D17); other buckets
+    map one-to-one, so the change is a behavioural no-op on every
+    non-archived row and correctly aggregates archived rows.
+  - y-axis labels are the bucket LABELS (UI strings like "Saved" /
+    "Applied" / …), not the raw `STATUS_VALUES` sentinels
+    (`"[SAVED]"` / `"[APPLIED]"` / …). The presentation/storage split
+    per D11 + D16 — storage keeps bracketed enum sentinels, the UI
+    renders the clean labels. The y-axis is still reversed so the
+    first visible bucket sits at the top (pipeline reads top-down).
+  - Bar colors come from `FUNNEL_BUCKETS[i][2]`, not from
+    `STATUS_COLORS`. The bucket OWNS its color because a bucket can
+    aggregate multiple raw statuses — `STATUS_COLORS` is for
+    per-status surfaces (Opportunities-table badges, tooltips).
+  - Visible buckets = `FUNNEL_BUCKETS` entries whose label is NOT in
+    `FUNNEL_DEFAULT_HIDDEN`, OR every bucket when the user has clicked
+    `[expand]`. A visible bucket with zero count renders as a
+    zero-width bar — keeps the chart shape stable as the pipeline
+    fills up.
+- **`app.py` single `[expand]` button + session flag** replacing the
+  pre-v1.3 per-bucket checkbox model (DESIGN §8.1 + D24). Button
+  label is literally `"[expand]"` (brackets included). Clicking fires
+  a bound `_expand_funnel` callback via `on_click=` that flips
+  `st.session_state["_funnel_expanded"]` to `True`; callbacks run
+  BEFORE the next script rerun, so the funnel branches evaluate with
+  expanded=True on the very first post-click render. No `st.rerun()`
+  is needed and the pre-v1.3 "double rerun" gotcha is avoided. The
+  flag is one-way (no collapse in v1).
+- **`app.py` three-branch funnel empty-state matrix** per DESIGN
+  §8.1, evaluated in order:
+  - **(a)** `total == 0` — no positions at all. Render
+    `st.info("Application funnel will appear once you've added
+    positions.")` and SUPPRESS the `[expand]` button (nothing to
+    expand into).
+  - **(b)** total > 0, `_funnel_expanded is False`, every
+    default-visible bucket has count 0. Render
+    `st.info("All your positions are in hidden buckets. Click
+    [expand] below to reveal them.")` followed by the `[expand]`
+    button. Terminal-only DBs (every position in Closed / Archived)
+    land here — this is the v1.3 REPLACEMENT for the pre-Sub-task-12
+    "Option C: terminal-only DB still renders the figure" behaviour.
+  - **(c)** otherwise. Render the chart; `[expand]` button below iff
+    `FUNNEL_DEFAULT_HIDDEN` is non-empty AND not yet expanded. After
+    click, the button no longer renders (since "not yet expanded"
+    flips to False). Subheader renders in all three branches for
+    page-height stability.
+- **`tests/test_app_page.py`** — 59 tests on `app.py`; +11 new
+  versus the pre-Sub-task-12 count of 48 (before: 43 were in the
+  file and we had 5 unrelated other counts; net +11 on this file).
+  Breakdown:
+  - `TestT1AppShell` +1 (`test_page_config_sets_wide_layout` —
+    source-level grep since AppTest doesn't surface set_page_config).
+  - `TestT1CKpiCountsAndRefresh` → renamed `TestT1CKpiCounts`; the
+    two refresh-button tests are gone and replaced with
+    `test_refresh_button_absent` + `test_tracked_kpi_help_tooltip`
+    (pin `metric.proto.help` against the locked string). Net: 0.
+  - `TestT2AFunnelBar` — four tests renamed (one-bar-per-VISIBLE-
+    BUCKET-in-order; x-values SUM bucket raw statuses; colors from
+    FUNNEL_BUCKETS[i][2]; missing buckets render as zero-width bars).
+    Each assertion is now bucket-aware and re-computes the expected
+    visible-bucket list dynamically from config rather than hard-
+    coding the 7-status STATUS_VALUES list. Net: 0.
+  - `TestT2BFunnelEmptyState` — reshaped to the three-branch matrix.
+    `EMPTY_COPY` → `EMPTY_COPY_A`; new `EMPTY_COPY_B` constant. New
+    tests: `test_empty_db_fires_branch_a`,
+    `test_branch_a_empty_copy_is_spec_exact`,
+    `test_all_hidden_bucket_data_fires_branch_b`,
+    `test_branch_b_empty_copy_is_spec_exact`,
+    `test_single_open_position_fires_branch_c`,
+    `test_mixed_visible_and_hidden_data_fires_branch_c`,
+    `test_subheader_renders_in_all_branches`. The pre-v1.3
+    `test_terminal_only_db_still_renders_figure` is GONE — its
+    behaviour is explicitly inverted in v1.3 (terminal-only DB now
+    fires branch (b), not the chart). Net: +2.
+  - `TestT2CFunnelLayout.test_empty_state_info_renders_inside_left_
+    column` — pointer update only: references `EMPTY_COPY_A` instead
+    of the removed `EMPTY_COPY`.
+  - `TestT2DFunnelExpand` — NEW class, 8 tests:
+    `test_expand_button_renders_in_branch_c_by_default`,
+    `test_expand_button_absent_in_branch_a`,
+    `test_expand_button_present_in_branch_b`,
+    `test_funnel_expanded_defaults_false`,
+    `test_clicking_expand_sets_session_state_true`,
+    `test_clicking_expand_reveals_all_buckets_on_chart` (the
+    load-bearing behavioural pin — seeds visible + both hidden
+    buckets, asserts pre-click y-axis excludes hidden labels and
+    post-click y-axis matches every `FUNNEL_BUCKETS` label in order),
+    `test_expand_button_hides_after_click`,
+    `test_clicking_expand_from_branch_b_renders_chart`. Net: +8.
+  - Unrelated T1-D / T1-E / T3 classes untouched.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -1100,6 +1219,16 @@ stranded `recommenders_new` (hand-built, partial failed migration)
 is out of scope for the auto-path. Recover manually: inspect both
 tables, decide which carries the truth, DROP the stale one, RENAME
 the live one to `recommenders`, and restart.
+
+**Sub-task 12** requires no migration — the entire change is
+display-layer (`app.py` only). No schema edit, no new database
+queries, no config rename. A user upgrading to the new `app.py`
+sees the wide layout, the removed 🔄 Refresh button, the Tracked
+help-tooltip, and the `FUNNEL_BUCKETS`-aggregated funnel bars on
+the next page load. Existing DBs round-trip transparently. The
+session flag `st.session_state["_funnel_expanded"]` is
+session-scoped and defaults to False — no persistence to disk, no
+"migration" of prior sessions needed.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

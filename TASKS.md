@@ -173,6 +173,39 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       matrix + FK CASCADE + AUTOINCREMENT + idempotence. 417 tests
       green. CHANGELOG Migration note records the full rebuild SQL
       + translation caveats.
+- [x] Sub-task 12: `app.py` alignment with DESIGN §8.0 + §8.1.
+      Adds `st.set_page_config(page_title="Postdoc Tracker",
+      page_icon="📋", layout="wide")` as the first Streamlit call
+      (D14); removes the top-bar 🔄 Refresh button per D13;
+      Tracked KPI gains the locked help-tooltip `help="Saved +
+      Applied — positions you're still actively pursuing"`. Funnel
+      rewritten to be `FUNNEL_BUCKETS`-driven — per-bucket sums
+      via `count_by_status().get(raw, 0)` over each bucket's raw-
+      status tuple; y-axis labels from `FUNNEL_BUCKETS[i][0]`
+      (bucket LABEL, not the bracketed raw status); bar colors
+      from `FUNNEL_BUCKETS[i][2]` (bucket-level, aggregation-
+      aware; separate from `STATUS_COLORS` which is for
+      per-status surfaces). Single `[expand]` button + session
+      flag `st.session_state["_funnel_expanded"]` replace the
+      pre-v1.3 per-bucket checkbox model (D24); `on_click`
+      callback flips the flag BEFORE the next rerun so the funnel
+      branches re-evaluate with expanded=True on the very first
+      post-click render. Three-branch empty-state matrix per
+      DESIGN §8.1: (a) `total == 0` → info + NO [expand] button,
+      (b) total > 0 + not expanded + all visible buckets zero →
+      EMPTY_COPY_B + [expand] recovery button (terminal-only DB
+      now lands HERE — v1.3 replacement for the pre-Sub-task-12
+      Option-C "terminal-only DB still renders figure" behaviour),
+      (c) chart + [expand] when FUNNEL_DEFAULT_HIDDEN is
+      non-empty and not yet expanded. Subheader renders in all
+      three branches for page-height stability. Scope: `app.py` +
+      `tests/test_app_page.py`. Pure display-layer change — no
+      schema, no new queries, no config edit; CHANGELOG Migration
+      entry records "no migration required". 11 new tests on
+      test_app_page.py (page-config source-grep pin + help
+      tooltip pin + bucket-level funnel coverage + three-branch
+      empty-state pins + TestT2DFunnelExpand with 8 toggle tests).
+      428 tests green on branch.
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -208,12 +241,22 @@ deferred. All require separate approval before execution.
       — shipped as v1.3 alignment Sub-task 5
 - [x] Rename `PRIORITY_VALUES` `"Med"` → `"Medium"` + migration
       — shipped as v1.3 alignment Sub-task 5
-- [ ] Add `config.STATUS_LABELS` (presentation-layer UI strings) +
-      `ARCHIVED_BUCKET` grouping of `TERMINAL_STATUSES` on the funnel
-- [ ] Delete the 🔄 Refresh button from `app.py`
-- [ ] `st.set_page_config(layout="wide", page_title="Postdoc Tracker", page_icon="📋")` on `app.py`
+- [x] Add `config.STATUS_LABELS` (presentation-layer UI strings) +
+      Archived bucket grouping of `[REJECTED]` + `[DECLINED]` on the funnel
+      — STATUS_LABELS shipped as Sub-task 1; funnel's Archived bucket
+      is `FUNNEL_BUCKETS[5] = ("Archived", (STATUS_REJECTED, STATUS_DECLINED),
+      "gray")` (D17 — `[CLOSED]` stays its own bucket), wired into
+      `app.py` as v1.3 alignment Sub-task 12.
+- [x] Delete the 🔄 Refresh button from `app.py`
+      — shipped as v1.3 alignment Sub-task 12 (per DESIGN D13).
+- [~] `st.set_page_config(layout="wide", page_title="Postdoc Tracker", page_icon="📋")` on `app.py`
       and every `pages/*.py`
-- [ ] Tooltip on "Tracked" KPI via `st.metric(..., help="...")`
+      — `app.py` done as v1.3 alignment Sub-task 12; `pages/1_Opportunities.py`
+      alignment pending (landing target: later sub-task focused on the
+      page's work_auth/format_func/DELETE-button relocation triage).
+- [x] Tooltip on "Tracked" KPI via `st.metric(..., help="...")`
+      — shipped as v1.3 alignment Sub-task 12. Locked copy:
+      `"Saved + Applied — positions you're still actively pursuing"`.
 
 ### Phase 4 T4 — Upcoming timeline (~2.5 hr, 2 sessions)
 
@@ -243,4 +286,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–11 shipped; branch push + PR open is the last remaining step)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–12 shipped; branch push + PR open is the last remaining step)_
