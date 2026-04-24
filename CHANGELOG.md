@@ -476,6 +476,95 @@ DESIGN.md v1.3 §9.3 + §7 + D12 + D23.
   because the seed's STATUS_SAVED pre-state doesn't trip R2's
   STATUS_APPLIED guard, not because the cascade body is absent).
 
+### Changed — v1.3 alignment Sub-task 10 (branch `feature/align-v1.3`)
+
+Sub-task 10 splits the pre-v1.3 dual-purpose
+`applications.confirmation_email TEXT` column into
+`confirmation_received INTEGER DEFAULT 0` + `confirmation_date TEXT`
+per DESIGN.md v1.3 §6.2 + D19 + D20. D19 frames the original column
+as type-ambiguous ("stored either `'Y'` or a date string"); D20
+pins boolean-state columns at `INTEGER 0/1` rather than `TEXT
+'Y'/'N'`. The legacy column stays physically in place until the
+v1.0-rc rebuild drops it (DESIGN §6.3 step c "leave old columns
+NULL until a rebuild drops them" — same retention as the
+Sub-task 8 `interview1_date` / `interview2_date` pair).
+
+- **`database.py` CREATE TABLE applications** adds the new columns
+  right after `confirmation_email`:
+  ```
+  confirmation_received INTEGER DEFAULT 0,    -- 0 or 1
+  confirmation_date     TEXT,                 -- ISO, NULL if none
+  ```
+  Inline comment block above the DDL records the split's rationale
+  and the deferred physical drop so a future reader does not
+  mistake the retained column for current schema.
+- **`database.init_db()` migration block** (placed immediately after
+  the Sub-task 8 interviews migration, so applications-table changes
+  stay grouped):
+  - Samples `PRAGMA table_info(applications)` once; captures the
+    pre-ALTER column set.
+  - PRAGMA-guarded `ALTER TABLE applications ADD COLUMN` for each
+    new column — absent ⇒ add, present ⇒ skip. SQLite's
+    "Cannot add a column with non-constant default" error (hit in
+    Sub-task 6 for `updated_at`) does not apply here: the INTEGER
+    DEFAULT 0 is a constant expression; the TEXT column has no
+    DEFAULT at all.
+  - **Migrate-once gate** (Sub-task 8 pattern): the one-shot UPDATE
+    block only fires when either new column was absent pre-ALTER.
+    A rerun on an already-migrated DB finds both columns present
+    and skips the translation entirely — no re-translation of any
+    legacy value, no overwrite of user-entered data. The logic is
+    tighter than a per-row WHERE guard and lets the UPDATEs stay
+    simple.
+  - One-shot translation — two disjoint UPDATEs:
+    - **Date-shaped legacy values** (via SQLite
+      `GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`, which
+      matches exactly the 10-character ISO date shape and nothing
+      else): set `confirmation_received = 1, confirmation_date =
+      confirmation_email`.
+    - **Flag-only legacy values** (`confirmation_email = 'Y'`):
+      set `confirmation_received = 1`; `confirmation_date` stays
+      NULL (the legacy 'Y' shape had no date).
+    NULL, `''`, legacy `'N'`, or any other freetext value falls
+    through both WHERE clauses — the new columns stay at their
+    DEFAULTs (`received = 0`, `date = NULL`). This is correct: those
+    shapes represent "no confirmation data," and the migration does
+    not guess beyond the two shapes D19 names.
+- **No application-code change** in `upsert_application` or any
+  other writer. The function is schema-agnostic (accepts any fields
+  dict and routes it into `INSERT … ON CONFLICT DO UPDATE SET`), so
+  the split is transparent once the DDL exists. No caller in
+  `app.py` / `pages/` / `tests/` writes to `confirmation_email`
+  (verified via grep before the sub-task); new writes will land on
+  the split pair when the Applications page UI lands in Phase 5.
+- **`tests/test_database.py`** — 10 new tests:
+  - `TestInitDb.test_applications_has_confirmation_received_column_with_zero_default`
+    and `…_confirmation_date_column_nullable` — column-spec pins
+    via `PRAGMA table_info`; mirror the Sub-task 6/7 precedent.
+  - `TestUpsertApplication.test_writes_confirmation_received_and_date_roundtrip`
+    — round-trip of both flag-only and flag+date upserts; also pins
+    that the legacy `confirmation_email` stays NULL (no caller
+    writes to it post-split).
+  - New class `TestConfirmationSplitMigration` mirrors the Sub-task
+    8 `TestInterviewsMigration` migrate-once-gate pattern: seeds a
+    pre-v1.3 DB via `tmp_path` + monkeypatched `DB_PATH`, inserts
+    one row with a legacy `confirmation_email` value, calls
+    `init_db()`, inspects the new columns. Seven cases cover the
+    full translation matrix — `'Y'` → received-only, date-shaped
+    → both fields, NULL / empty / `'N'` → defaults, fresh-DB
+    defaults contract, idempotence on second `init_db()`.
+  - Shared seed helper `_seed_pre_v1_3_applications` includes
+    `interview1_date` / `interview2_date` / `confirmation_email`
+    together so `init_db()` runs ALL applicable migrations
+    cleanly (Sub-task 8 first, Sub-task 10 next).
+- **`tests/test_database.py`** — Sub-task 8 seed touch-up:
+  `TestInterviewsMigration._seed_pre_v1_3_applications` gains a
+  `confirmation_email TEXT` column so the realistic pre-v1.3 DB
+  shape now round-trips cleanly through the Sub-task 10 migration
+  block (which references `confirmation_email` in its UPDATE
+  WHERE clauses). Pure seed realism — no change to the Sub-task
+  8 test focus.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -698,6 +787,67 @@ alias swap are all pure behavioural / refactor changes. Existing
 applications / interviews / recommenders rows persist untouched;
 `upsert_application` and `add_interview` return a dict now instead
 of `None`, but existing callers ignored the return value.
+
+**Sub-task 10** — schema migration splitting the dual-purpose
+`applications.confirmation_email` TEXT column into
+`confirmation_received INTEGER DEFAULT 0` + `confirmation_date TEXT`.
+`init_db()` runs this automatically on the first app start after
+upgrade; a user does not need to execute anything manually. For
+the record, the equivalent SQL executed is:
+
+```sql
+-- (a) Add the two new columns. Each ALTER is guarded by
+--     PRAGMA table_info (absent ⇒ add, present ⇒ skip) so a
+--     rerun is a strict no-op.
+ALTER TABLE applications
+    ADD COLUMN confirmation_received INTEGER DEFAULT 0;
+ALTER TABLE applications
+    ADD COLUMN confirmation_date TEXT;
+
+-- (b) One-shot translation of the two legitimate legacy shapes.
+--     Gated by a migrate-once flag (either new column absent
+--     pre-ALTER ⇒ run the UPDATEs; both present ⇒ skip).
+--
+--     Date-shaped legacy values: the 10-character ISO date
+--     pattern captured via SQLite GLOB character classes.
+--     Anything not matching this shape — including 'Y', '',
+--     NULL, legacy 'N', or freetext — falls through.
+UPDATE applications
+   SET confirmation_received = 1,
+       confirmation_date     = confirmation_email
+ WHERE confirmation_email GLOB
+       '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
+
+--     Flag-only legacy values: 'Y' sets the flag; the date
+--     stays NULL because the old column never recorded one
+--     alongside the 'Y' sentinel.
+UPDATE applications
+   SET confirmation_received = 1
+ WHERE confirmation_email = 'Y';
+
+-- (c) The physical `confirmation_email` column stays in the
+--     applications CREATE TABLE DDL per DESIGN §6.3 step (c)
+--     "leave old columns NULL until a rebuild drops them".
+--     No caller writes to it post-split; the column is dead
+--     weight but preserved to avoid a table-rebuild migration
+--     this release. Scheduled for physical drop in v1.0-rc.
+```
+
+Idempotence follows the Sub-task 8 **migrate-once gate** shape:
+the one-shot UPDATE block only fires when either new column was
+absent pre-ALTER. A second `init_db()` call finds both columns
+already present and skips the UPDATEs entirely — no
+re-translation of any legacy value, no overwrite of user-entered
+data that happens to look like the legacy shapes. Values that fall
+through both WHERE clauses (NULL, `''`, legacy `'N'`, freetext)
+leave the new columns at their DEFAULTs (received=0, date=NULL);
+this matches "no confirmation data" and avoids guessing beyond the
+two shapes D19 names.
+
+A dev DB that somehow has the new columns but legacy values still
+in `confirmation_email` (hand-built, partial failed migration) is
+out of scope for the auto-path; recover with a one-time manual run
+of the two UPDATEs above.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

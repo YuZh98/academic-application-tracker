@@ -20,7 +20,7 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–9 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+Sub-tasks 1–10 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
 migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
 DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
 `config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
@@ -33,17 +33,21 @@ D22, the new `interviews` sub-table + CRUD + migrate-once one-shot
 copy from `applications.interview1_date`/`interview2_date` + row-per-
 interview rewrite of `get_upcoming_interviews` per §6.2 + D18 with
 `app.py._next_interview_display` migrated to single-`scheduled_date`
-scan, and the R1/R2/R3 pipeline auto-promotion cascade wired across
+scan, the R1/R2/R3 pipeline auto-promotion cascade wired across
 `upsert_application` + `add_interview` with atomic rollback,
 `is_all_recs_submitted` helper, and `compute_materials_readiness` alias
-swap per §9.3 + §7 + D12 + D23). 389 tests green · zero deprecation
+swap per §9.3 + §7 + D12 + D23, and the `applications.confirmation_email`
+TEXT split into `confirmation_received INTEGER DEFAULT 0` +
+`confirmation_date TEXT` per §6.2 + §6.3 + D19 + D20 with PRAGMA-guarded
+`ALTER ADD COLUMN` + migrate-once gate running GLOB-based translation
+for ISO-date values and a `'Y'`-only flag UPDATE — physical drop of the
+legacy column deferred to v1.0-rc). 399 tests green · zero deprecation
 warnings.
 
-**Next up:** remaining v1.3 alignment items (confirmation_email split
-→ `confirmation_received INTEGER` + `confirmation_date TEXT`;
-`recommenders.reminder_sent` TEXT → INTEGER flag + `reminder_sent_date
-TEXT` split; `recommenders.confirmed` TEXT → INTEGER 0/1/NULL), then
-Phase 4 Tier 4 (Upcoming timeline).
+**Next up:** remaining v1.3 alignment items (`recommenders.reminder_sent`
+TEXT → INTEGER flag + `reminder_sent_date TEXT` split;
+`recommenders.confirmed` TEXT → INTEGER 0/1/NULL), then Phase 4 Tier 4
+(Upcoming timeline).
 
 ---
 
