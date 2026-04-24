@@ -3020,6 +3020,83 @@ class TestEditStatusFormatFunc:
         )
 
 
+class TestStatusColumnDisplaysLabels:
+    """DESIGN §8.0 + §8.2: the positions table's Status column must render
+    `config.STATUS_LABELS[raw]` ("Saved", "Applied", ...), never the raw
+    bracketed storage value ("[SAVED]", "[APPLIED]", ...). The raw
+    `status` column stays on the underlying df for selection plumbing
+    (row-index → id) but is never shown to the user — DESIGN §8.0:
+    "Pages never render a raw status value".
+
+    Implemented by deriving `df_display["status_label"] = df_display[
+    "status"].map(config.STATUS_LABELS)` and swapping `status` →
+    `status_label` in both `display_cols` (column_order) and
+    `column_config`. AppTest surfaces `st.dataframe(..., column_order=...)`
+    as `at.dataframe[0].proto.column_order`, so we pin the displayed set
+    directly; cell values come from `at.dataframe[0].value`.
+    """
+
+    def test_status_label_is_in_display_order_not_raw_status(self, db):
+        """Displayed columns must include `status_label` and must NOT
+        include raw `status`. Pins DESIGN §8.0's "UI never renders raw
+        storage values" contract at the column-order level so a silent
+        revert to the raw column on a future edit trips the test."""
+        database.add_position({"position_name": "Pin"})
+        at = _run_page()
+        order = list(at.dataframe[0].proto.column_order)
+        assert "status_label" in order, (
+            f"Displayed columns must include 'status_label' per DESIGN §8.2 "
+            f"('Status column displays STATUS_LABELS[raw]'); got {order}"
+        )
+        assert "status" not in order, (
+            f"Displayed columns must NOT include raw 'status' per DESIGN §8.0 "
+            f"('Pages never render a raw status value'); got {order}"
+        )
+
+    def test_status_label_column_values_are_human_labels(self, db):
+        """For a position stored with status='[APPLIED]', the rendered
+        `status_label` cell must equal STATUS_LABELS['[APPLIED]'] ==
+        'Applied' — never the raw bracketed form. The negative pin on
+        the bracketed value catches a future regression where someone
+        aliases `status_label` back to `status`."""
+        database.add_position(
+            {"position_name": "LabelPin", "status": config.STATUS_APPLIED}
+        )
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "LabelPin"]
+        assert len(row) == 1, f"Expected one row for LabelPin, got {len(row)}"
+        cell = row["status_label"].iloc[0]
+        expected = config.STATUS_LABELS[config.STATUS_APPLIED]
+        assert cell == expected, (
+            f"status_label must equal STATUS_LABELS[{config.STATUS_APPLIED!r}] "
+            f"({expected!r}); got {cell!r}"
+        )
+        assert cell != config.STATUS_APPLIED, (
+            f"status_label must not equal the raw bracketed storage value "
+            f"{config.STATUS_APPLIED!r} — DESIGN §8.0 forbids raw values in UI."
+        )
+
+    @pytest.mark.parametrize("raw_status", config.STATUS_VALUES)
+    def test_status_label_covers_every_status_value(self, db, raw_status):
+        """Parametrized over every entry in config.STATUS_VALUES: each
+        raw status must map to its labelled form in the rendered
+        `status_label` column. Config invariant #3 covers the map
+        itself; this pins the page-side wiring so a new pipeline stage
+        cannot ship without its column_label surface."""
+        pos_name = f"Pin-{raw_status}"
+        database.add_position({"position_name": pos_name, "status": raw_status})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == pos_name]
+        assert len(row) == 1
+        expected = config.STATUS_LABELS[raw_status]
+        assert row["status_label"].iloc[0] == expected, (
+            f"status_label for raw={raw_status!r} must be {expected!r}; "
+            f"got {row['status_label'].iloc[0]!r}"
+        )
+
+
 class TestMaterialsFilterPredicateIsYes:
     """DESIGN §8.2 Materials-tab row: visibility filter is `session_state[
     f"edit_{req_col}"] == "Yes"`. Pinned here independent of Sub-task 2's
