@@ -519,6 +519,65 @@ class TestInitDb:
         assert legacy_row_after["work_auth"] == "Yes"
         assert legacy_row_after["work_auth_note"] is None
 
+    def test_applications_has_confirmation_received_column_with_zero_default(self, db):
+        """Sub-task 10 / DESIGN §6.2 + D19 + D20: applications.confirmation_received
+        must be INTEGER with DEFAULT 0 (0/1 flag). Half of the split from the
+        pre-v1.3 dual-purpose `confirmation_email` TEXT column, which stored
+        either 'Y' (flag semantics) or a date string (date semantics); D19
+        fixes that type ambiguity by breaking the single column into a
+        (flag, date) pair so predicates are simple and no column holds
+        either-shape data."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(applications)").fetchall()
+
+        received = next(
+            (r for r in cols if r["name"] == "confirmation_received"), None
+        )
+        assert received is not None, (
+            "applications.confirmation_received must be defined in the CREATE "
+            f"TABLE DDL. Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert received["type"] == "INTEGER", (
+            "applications.confirmation_received type must be INTEGER (D20 — "
+            "boolean-state columns as INTEGER 0/1, never TEXT Y/N); "
+            f"got {received['type']!r}"
+        )
+        assert received["dflt_value"] == "0", (
+            "applications.confirmation_received DEFAULT must be 0 — fresh "
+            "rows start in the 'not yet received' state, matching the "
+            "DESIGN §6.2 DDL. "
+            f"Got dflt_value={received['dflt_value']!r}"
+        )
+
+    def test_applications_has_confirmation_date_column_nullable(self, db):
+        """Sub-task 10 / DESIGN §6.2 + D19: applications.confirmation_date
+        must be plain TEXT (NULL-able, no DEFAULT). Partners the
+        confirmation_received flag — date is populated iff the user
+        actually recorded a receipt date; NULL means "received flag only"
+        or "not yet received" (the flag disambiguates). DESIGN's inline
+        comment spells this out: 'ISO, NULL if not yet received'."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(applications)").fetchall()
+
+        date_col = next(
+            (r for r in cols if r["name"] == "confirmation_date"), None
+        )
+        assert date_col is not None, (
+            "applications.confirmation_date must be defined in the CREATE "
+            f"TABLE DDL. Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert date_col["type"] == "TEXT", (
+            "applications.confirmation_date type must be TEXT (ISO YYYY-MM-DD "
+            "strings, matching the rest of the date-column convention); "
+            f"got {date_col['type']!r}"
+        )
+        assert date_col["dflt_value"] is None, (
+            "applications.confirmation_date must not carry a DEFAULT — NULL "
+            "is the honest 'no date recorded yet' state and keeps the "
+            "column semantics independent of the received flag. "
+            f"Got dflt_value={date_col['dflt_value']!r}"
+        )
+
 
 # ── add_position / get_position ───────────────────────────────────────────────
 
@@ -752,6 +811,38 @@ class TestUpsertApplication:
         database.upsert_application(pos_id, {"result": "Rejected"})
         app = database.get_application(pos_id)
         assert app["applied_date"] == "2026-04-10"   # still set
+
+    def test_writes_confirmation_received_and_date_roundtrip(self, db):
+        """Sub-task 10 / DESIGN §6.2 + D19: upsert_application accepts the
+        new `confirmation_received` flag and `confirmation_date` columns
+        and they round-trip via get_application(). The legacy
+        confirmation_email TEXT column is physically retained until the
+        v1.0-rc rebuild drops it (DESIGN §6.3 "leave until a rebuild"),
+        but no caller — including this test — writes to it; new writes
+        land exclusively in the split pair."""
+        pos_id = database.add_position(make_position())
+
+        # Flag-only: receipt acknowledged but no date recorded.
+        database.upsert_application(pos_id, {"confirmation_received": 1})
+        app = database.get_application(pos_id)
+        assert app["confirmation_received"] == 1
+        assert app["confirmation_date"] is None
+
+        # Flag + date: mirrors the common case of a dated receipt.
+        database.upsert_application(pos_id, {
+            "confirmation_received": 1,
+            "confirmation_date":     "2026-04-12",
+        })
+        app = database.get_application(pos_id)
+        assert app["confirmation_received"] == 1
+        assert app["confirmation_date"]     == "2026-04-12"
+
+        # Legacy column stays NULL — no caller (incl. this one) writes to it.
+        assert app["confirmation_email"] is None, (
+            "upsert_application must not populate the legacy "
+            "confirmation_email column; it is scheduled for physical "
+            f"drop in v1.0-rc. Got {app['confirmation_email']!r}"
+        )
 
 
 # ── upsert_application cascade R1 + R3 ────────────────────────────────────────
@@ -1919,6 +2010,232 @@ class TestInterviewsMigration:
             "Second init_db() must not duplicate migrated rows; "
             f"got sequences {[r['sequence'] for r in rows]!r}"
         )
+
+
+# ── confirmation_email split → confirmation_received + confirmation_date ──────
+# Sub-task 10 / DESIGN §6.2 + §6.3 + D19: the pre-v1.3 applications table
+# carried one TEXT column `confirmation_email` that stored either:
+#   - 'Y'  (flag-only semantics — "a confirmation was received, no date")
+#   - a date-shaped string 'YYYY-MM-DD' (date-present semantics)
+# Anything else (NULL, '', legacy 'N', freetext) means no receipt.
+#
+# The split translates those two legitimate shapes into the
+# (confirmation_received INTEGER, confirmation_date TEXT) pair so
+# predicates are simple and no column holds either-shape data.
+# Mirrors TestInterviewsMigration's migrate-once gate pattern:
+# init_db() samples the applications table BEFORE the ALTER ADD COLUMN,
+# and runs the one-shot UPDATE only when the new columns are absent
+# pre-ALTER. Subsequent init_db() calls find them already present and
+# skip the translation entirely. DESIGN §6.3 step (c) applies: the
+# physical confirmation_email column stays in place (NULL-cleared is
+# not required for a flag/date split since we don't round-trip through
+# it) until the v1.0-rc rebuild drops it.
+
+class TestConfirmationSplitMigration:
+    """Sub-task 10 / DESIGN §6.3 split-a-dual-purpose-column pattern.
+    Pre-v1.3 DBs have applications.confirmation_email as a single TEXT
+    column storing either 'Y' (flag) or a date string. init_db() adds
+    confirmation_received INTEGER DEFAULT 0 + confirmation_date TEXT
+    on first seeing the upgrade, then runs a one-shot UPDATE that
+    translates the two legitimate legacy shapes. Migrate-once gate:
+    the migration body only fires when the new columns were absent
+    pre-ALTER, so a re-run on an already-migrated DB is a no-op."""
+
+    def _seed_pre_v1_3_applications(self, tmp_path, monkeypatch,
+                                      confirmation_email_value=None):
+        """Build a minimal pre-v1.3 DB: positions + applications carrying
+        the legacy `confirmation_email` TEXT column (but NO
+        confirmation_received / confirmation_date). Inserts one row with
+        the requested legacy value. Callers run database.init_db() and
+        inspect the new columns.
+
+        Mirrors the Sub-task 8 TestInterviewsMigration seed shape.
+        deadline_date is required on positions so idx_positions_deadline
+        CREATE in init_db() does not fail."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT
+                )
+            """)
+            # A realistic pre-v1.3 applications table: carries the legacy
+            # `confirmation_email` TEXT column (this sub-task's target) AND
+            # the flat `interview1_date` / `interview2_date` columns that
+            # Sub-task 8 normalized. Both sets of legacy columns exist
+            # together in a genuine pre-v1.3 DB, so the seed must too:
+            # init_db() runs ALL applicable migrations on the first call
+            # (Sub-task 8 interviews-sub-table, then Sub-task 10 split)
+            # and the Sub-task 8 copy SELECTs `interview1_date` from
+            # applications — blowing up if the column is absent.
+            conn.execute("""
+                CREATE TABLE applications (
+                    position_id        INTEGER PRIMARY KEY,
+                    applied_date       TEXT,
+                    confirmation_email TEXT,
+                    interview1_date    TEXT,
+                    interview2_date    TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute(
+                "INSERT INTO positions (position_name) VALUES ('LegacyPosition')"
+            )
+            conn.execute(
+                "INSERT INTO applications "
+                "(position_id, confirmation_email) VALUES (1, ?)",
+                (confirmation_email_value,),
+            )
+
+    def test_migration_copies_Y_flag_sets_received_only(self, tmp_path, monkeypatch):
+        """Legacy 'Y' value is the flag-only path: set
+        confirmation_received = 1, leave confirmation_date NULL. No date
+        was ever recorded for this shape — the old column's flag
+        semantics gave "received, don't know when"."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value="Y"
+        )
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row["confirmation_received"] == 1, (
+            "Legacy 'Y' must translate to confirmation_received=1; "
+            f"got {row['confirmation_received']!r}"
+        )
+        assert row["confirmation_date"] is None, (
+            "Legacy 'Y' has no date attached — confirmation_date must "
+            f"stay NULL; got {row['confirmation_date']!r}"
+        )
+
+    def test_migration_copies_date_string_to_both_fields(self, tmp_path, monkeypatch):
+        """A legacy date-shaped string (YYYY-MM-DD) carries both
+        semantics: the receipt happened (flag=1) AND it happened on
+        that date (confirmation_date=value). The date-shaped match
+        runs via SQLite GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]',
+        which matches exactly 10 characters of the ISO shape and
+        nothing else — e.g. 'not-a-date' does not match."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value="2026-01-15"
+        )
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row["confirmation_received"] == 1
+        assert row["confirmation_date"]     == "2026-01-15"
+
+    def test_migration_skips_null_legacy_value(self, tmp_path, monkeypatch):
+        """NULL in confirmation_email means "no data" — both new
+        columns must stay at their defaults (received=0, date=NULL).
+        This is the common case for v1.2 rows whose users never
+        touched the confirmation field."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value=None
+        )
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row["confirmation_received"] == 0, (
+            "NULL legacy value must leave confirmation_received at "
+            f"DEFAULT 0; got {row['confirmation_received']!r}"
+        )
+        assert row["confirmation_date"] is None
+
+    def test_migration_skips_empty_string_legacy_value(self, tmp_path, monkeypatch):
+        """Empty string is a variant of "no data" (the Notes-tab
+        round-trip contract writes '' for cleared TEXT cells). Must
+        also leave the new columns at their defaults — it is neither
+        'Y' nor a date-shaped string, and ambiguous-empty is the same
+        semantics as NULL for this column."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value=""
+        )
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row["confirmation_received"] == 0
+        assert row["confirmation_date"]     is None
+
+    def test_migration_skips_other_legacy_values(self, tmp_path, monkeypatch):
+        """Any legacy value that is neither 'Y' nor a date-shaped
+        string is out of the D19 translation scope — could be a
+        typo, a short freetext note, or a pre-v1.0 'N' sentinel.
+        The migration must leave the new columns at their defaults
+        rather than guess."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value="N"
+        )
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row["confirmation_received"] == 0, (
+            "Out-of-scope legacy value must leave confirmation_received "
+            f"at DEFAULT 0; got {row['confirmation_received']!r}"
+        )
+        assert row["confirmation_date"] is None
+
+    def test_fresh_applications_row_has_zero_defaults(self, db):
+        """A fresh DB (init_db() on an empty DB via the `db` fixture)
+        creates the applications table via the v1.3 CREATE TABLE DDL,
+        and every new applications row from add_position() must come
+        up with confirmation_received=0 / confirmation_date=NULL per
+        the DDL DEFAULTs. Pins the CREATE TABLE contract alongside
+        the two `TestInitDb` column-spec tests."""
+        pos_id = database.add_position(make_position())
+        app = database.get_application(pos_id)
+        assert app["confirmation_received"] == 0
+        assert app["confirmation_date"]     is None
+
+    def test_migration_is_idempotent(self, tmp_path, monkeypatch):
+        """Migrate-once gate: first init_db() adds the two columns and
+        runs the one-shot UPDATE translating 'Y' + date strings;
+        second init_db() finds the new columns already present and
+        must skip the UPDATE entirely. The test seeds a date-shaped
+        legacy value so there is something to translate; after the
+        second init_db(), the row's new-column values must be
+        unchanged (not a re-translation of a now-stale
+        confirmation_email cell, and not accidentally zeroed)."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value="2026-01-15"
+        )
+        database.init_db()
+
+        with database._connect() as conn:
+            row_first = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row_first["confirmation_received"] == 1
+        assert row_first["confirmation_date"]     == "2026-01-15"
+
+        database.init_db()  # second call must be a no-op for this branch
+
+        with database._connect() as conn:
+            row_second = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row_second["confirmation_received"] == row_first["confirmation_received"]
+        assert row_second["confirmation_date"]     == row_first["confirmation_date"]
 
 
 # ── get_upcoming_interviews ───────────────────────────────────────────────────
