@@ -51,9 +51,13 @@ def init_db() -> None:
     config constants, never from user input, so this is safe."""
 
     # Build req/done column definitions from config.
+    # req_* DEFAULT 'No' matches config.REQUIREMENT_VALUES[-1] (full-word
+    # form, D21). Pre-v1.3 schemas used the short-code default; the
+    # one-shot UPDATE migration below translates any lingering short-code
+    # rows in place.
     req_done_cols = ""
     for req_col, done_col, _ in config.REQUIREMENT_DOCS:
-        req_done_cols += f",\n    {req_col:<30} TEXT    DEFAULT 'N'"
+        req_done_cols += f",\n    {req_col:<30} TEXT    DEFAULT 'No'"
         req_done_cols += f",\n    {done_col:<30} INTEGER DEFAULT 0"
 
     with _connect() as conn:
@@ -130,12 +134,29 @@ def init_db() -> None:
         for req_col, done_col, _ in config.REQUIREMENT_DOCS:
             if req_col not in existing_cols:
                 conn.execute(
-                    f"ALTER TABLE positions ADD COLUMN {req_col} TEXT DEFAULT 'N'"
+                    f"ALTER TABLE positions ADD COLUMN {req_col} TEXT DEFAULT 'No'"
                 )
             if done_col not in existing_cols:
                 conn.execute(
                     f"ALTER TABLE positions ADD COLUMN {done_col} INTEGER DEFAULT 0"
                 )
+
+        # One-shot value migration (v1.3, DESIGN §6.3 + D21): translate any
+        # pre-v1.3 short-code req_* values to the full-word form in place.
+        # Idempotent by construction — the ELSE branch passes 'Optional'
+        # and any already-migrated 'Yes'/'No' values through unchanged, so
+        # rerunning on a migrated DB is a no-op. The f-string builds column
+        # identifiers only; the substituted `req_col` comes from
+        # config.REQUIREMENT_DOCS (never user input), matching the safety
+        # argument documented on compute_materials_readiness.
+        for req_col, _done_col, _ in config.REQUIREMENT_DOCS:
+            conn.execute(
+                f"UPDATE positions SET {req_col} = "
+                f"CASE {req_col} "
+                f"WHEN 'Y' THEN 'Yes' "
+                f"WHEN 'N' THEN 'No' "
+                f"ELSE {req_col} END"
+            )
 
 
 # ── Positions ─────────────────────────────────────────────────────────────────
@@ -401,17 +422,17 @@ def get_pending_recommenders(days: int = config.RECOMMENDER_ALERT_DAYS) -> pd.Da
 def compute_materials_readiness() -> dict[str, int]:
     """Return {"ready": N, "pending": M} for active positions.
 
-    A position is "ready" if every document where req_* = 'Y' has done_* = 1.
-    Only positions with at least one required document (req_* = 'Y') are counted.
+    A position is "ready" if every document where req_* = 'Yes' has done_* = 1.
+    Only positions with at least one required document (req_* = 'Yes') are counted.
     Active = status in ([OPEN], [APPLIED], [INTERVIEW]).
 
     SQL uses f-strings for column names only — column names come from config
     constants, never from user input (documented in GUIDELINES.md §DB access)."""
     has_any_req = " OR ".join(
-        f"{req} = 'Y'" for req, _, _ in config.REQUIREMENT_DOCS
+        f"{req} = 'Yes'" for req, _, _ in config.REQUIREMENT_DOCS
     )
     all_done = " AND ".join(
-        f"({req} != 'Y' OR {done} = 1)"
+        f"({req} != 'Yes' OR {done} = 1)"
         for req, done, _ in config.REQUIREMENT_DOCS
     )
     active_statuses = ("[OPEN]", "[APPLIED]", "[INTERVIEW]")

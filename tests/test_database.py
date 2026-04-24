@@ -82,6 +82,52 @@ class TestInitDb:
         assert pos["position_name"] == "BioStats Postdoc"
         assert pos["req_portfolio"] == "No"   # default for new column
 
+    def test_migration_rewrites_legacy_req_short_codes(self, db):
+        """Sub-task 2 / D21: pre-v1.3 short-code req_* values ('Y'/'N') must
+        be rewritten in place to the full-word form on next init_db(). The
+        fixture already called init_db() once, so we simulate a legacy-state
+        DB by writing short codes via raw SQL (bypassing the page and
+        add_position, which both route through the new vocabulary), then
+        re-run init_db() and assert every flavour is translated correctly:
+
+          - 'Y' → 'Yes'
+          - 'N' → 'No'
+          - 'Optional' stays 'Optional' (ELSE branch of the CASE)
+
+        Also pins idempotence: a second init_db() on the already-migrated
+        row leaves the 'Yes' / 'No' / 'Optional' values untouched."""
+        pos_id = database.add_position(make_position())
+        # Overwrite three req_* columns with legacy values via raw SQL so
+        # the test setup faithfully mirrors a pre-v1.3 DB on disk.
+        with database._connect() as conn:
+            conn.execute(
+                "UPDATE positions SET req_cv = 'Y', "
+                "req_cover_letter = 'N', "
+                "req_transcripts = 'Optional' "
+                "WHERE id = ?",
+                (pos_id,),
+            )
+
+        database.init_db()
+
+        pos = database.get_position(pos_id)
+        assert pos["req_cv"] == "Yes", (
+            f"Legacy 'Y' must migrate to 'Yes'; got {pos['req_cv']!r}"
+        )
+        assert pos["req_cover_letter"] == "No", (
+            f"Legacy 'N' must migrate to 'No'; got {pos['req_cover_letter']!r}"
+        )
+        assert pos["req_transcripts"] == "Optional", (
+            f"'Optional' must pass through unchanged; got {pos['req_transcripts']!r}"
+        )
+
+        # Idempotence: second init_db() on the migrated row is a no-op.
+        database.init_db()
+        pos = database.get_position(pos_id)
+        assert pos["req_cv"] == "Yes"
+        assert pos["req_cover_letter"] == "No"
+        assert pos["req_transcripts"] == "Optional"
+
 
 # ── add_position / get_position ───────────────────────────────────────────────
 

@@ -413,17 +413,18 @@ if "selected_position_id" in st.session_state:
             # Same F2-style coercion as priority/status: if a column holds
             # an unknown string (future migration, raw SQL edit) or is
             # missing from the row (e.g. during a migration-in-progress
-            # test), fall back to 'N' — the schema default.
+            # test), fall back to 'No' — the schema default (DESIGN §5.1
+            # + D21 Yes/Optional/No vocabulary).
             for req_col, done_col, _label in config.REQUIREMENT_DOCS:
                 v = r[req_col] if req_col in r.index else None
-                safe_v = v if v in config.REQUIREMENT_VALUES else "N"
+                safe_v = v if v in config.REQUIREMENT_VALUES else "No"
                 st.session_state[f"edit_{req_col}"] = safe_v
 
                 # T4-E: pre-seed one bool per done_* column for the Materials
                 # checkboxes. done_* is INTEGER 0/1; anything else (None,
                 # unexpected values) coerces to False. The checkbox itself
                 # is only rendered by the Materials tab when its req_* is
-                # 'Y' — but we seed unconditionally so switching a
+                # 'Yes' — but we seed unconditionally so switching a
                 # requirement on mid-edit doesn't flash an unseeded checkbox.
                 d = r[done_col] if done_col in r.index else 0
                 st.session_state[f"edit_{done_col}"] = (d == 1)
@@ -572,8 +573,8 @@ if "selected_position_id" in st.session_state:
             # T5-B: critical contract — the payload is built from req_col
             # keys ONLY. done_* columns are NEVER written by this save path,
             # so the user's prepared-documents state (done_cv, done_transcripts,
-            # ...) is preserved across any req_* flip Y↔Optional↔N. If the
-            # user later switches req_cv back to 'Y', the Materials tab will
+            # ...) is preserved across any req_* flip Yes↔Optional↔No. If the
+            # user later switches req_cv back to 'Yes', the Materials tab will
             # again show the CV as done without the user re-ticking.
             if requirements_submitted:
                 payload: dict[str, Any] = {
@@ -595,12 +596,12 @@ if "selected_position_id" in st.session_state:
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
             # toggling a radio on the Requirements tab updates this tab on
-            # the next rerun. Uses the Y-only filter that matches the
+            # the next rerun. Uses the 'Yes'-only filter that matches the
             # readiness definition in database.py (~line 404).
             visible = [
                 (req_col, done_col, label)
                 for req_col, done_col, label in config.REQUIREMENT_DOCS
-                if st.session_state.get(f"edit_{req_col}") == "Y"
+                if st.session_state.get(f"edit_{req_col}") == "Yes"
             ]
             if not visible:
                 st.info(
@@ -617,9 +618,9 @@ if "selected_position_id" in st.session_state:
                     )
 
                 # T5-C: critical contract — the payload contains done_* keys
-                # ONLY for docs currently visible (req_* == 'Y'). done_* for
+                # ONLY for docs currently visible (req_* == 'Yes'). done_* for
                 # hidden docs are never written, so prior prepared-doc state
-                # survives any req_* Y↔N flip — mirrors T5-B's preservation
+                # survives any req_* Yes↔No flip — mirrors T5-B's preservation
                 # contract from the opposite side. Cast bool → int so the
                 # positions.done_* INTEGER 0/1 schema domain is honoured
                 # explicitly (SQLite would coerce a bool regardless, but the
