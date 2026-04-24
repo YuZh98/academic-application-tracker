@@ -384,6 +384,18 @@ if "selected_position_id" in st.session_state:
                 r["status"] if r["status"] in config.STATUS_VALUES
                 else config.STATUS_VALUES[0]
             )
+            # Sub-task 7 / DESIGN §8.2: work_auth is the categorical
+            # three-value enum. Same F2-style coercion as priority /
+            # status — NULL on quick-add rows and any legacy-vocabulary
+            # string (Sub-task 3 collapsed the pre-v1.3 six-value list
+            # manually, so dev DBs can carry 'OPT' / 'H1B' / …) must
+            # drop to WORK_AUTH_OPTIONS[0] so the selectbox always
+            # reads a valid in-vocab value.
+            raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
+            safe_work_auth = (
+                raw_work_auth if raw_work_auth in config.WORK_AUTH_OPTIONS
+                else config.WORK_AUTH_OPTIONS[0]
+            )
             # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
             # one malformed deadline row should render an empty date input,
             # not crash the whole page.
@@ -407,6 +419,18 @@ if "selected_position_id" in st.session_state:
             st.session_state["edit_status"]        = safe_status
             st.session_state["edit_deadline_date"] = safe_deadline
             st.session_state["edit_link"]          = _safe_str(r["link"])
+            # Sub-task 7: work_auth selectbox + work_auth_note text_area.
+            # _safe_str on work_auth_note handles both None (fresh row)
+            # and pandas float('nan') (NULL cell in a mixed-dtype TEXT
+            # column — the same NaN-truthiness trap that bit notes /
+            # link pre-seeds). Without it, st.text_area's protobuf
+            # serialisation raises "bad argument type for built-in
+            # operation".
+            st.session_state["edit_work_auth"]      = safe_work_auth
+            st.session_state["edit_work_auth_note"] = (
+                _safe_str(r["work_auth_note"])
+                if "work_auth_note" in r.index else ""
+            )
 
             # T4-D: pre-seed one session_state slot per req_* column so the
             # Requirements-tab radios render with the row's current values.
@@ -461,6 +485,18 @@ if "selected_position_id" in st.session_state:
                              key="edit_status")
                 st.date_input("Deadline",      key="edit_deadline_date")
                 st.text_input("Link",          key="edit_link")
+                # Sub-task 7 / DESIGN §8.2 + D22: work_auth categorical
+                # (Yes/No/Unknown) pinned as a selectbox over
+                # config.WORK_AUTH_OPTIONS; work_auth_note is the
+                # freetext companion immediately below so the pair
+                # reads as one conceptual field (category + posting-
+                # specific nuance — "green card required", "J-1 OK
+                # with a waiver"). Keys do not collide with the form
+                # id "edit_overview" per DESIGN §8.0.
+                st.selectbox("Work Authorization", config.WORK_AUTH_OPTIONS,
+                             key="edit_work_auth")
+                st.text_area("Work Authorization Note",
+                             key="edit_work_auth_note")
                 overview_submitted = st.form_submit_button(
                     "Save Changes",
                     key="edit_overview_submit",
@@ -492,6 +528,10 @@ if "selected_position_id" in st.session_state:
                             else None
                         ),
                         "link":          st.session_state.get("edit_link", ""),
+                        "work_auth":      st.session_state["edit_work_auth"],
+                        "work_auth_note": st.session_state.get(
+                            "edit_work_auth_note", ""
+                        ),
                     }
                     # Mirror F1 (Tier-4 review) on the save path: surface a
                     # friendly st.error on failure and DO NOT re-raise —
