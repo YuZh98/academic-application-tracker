@@ -206,6 +206,46 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       tooltip pin + bucket-level funnel coverage + three-branch
       empty-state pins + TestT2DFunnelExpand with 8 toggle tests).
       428 tests green on branch.
+- [x] Sub-task 13: `pages/1_Opportunities.py` alignment with
+      DESIGN §8.0 + §8.2. Adds
+      `st.set_page_config(page_title="Postdoc Tracker",
+      page_icon="📋", layout="wide")` as the first Streamlit call
+      (D14); swaps `filter_status` selectbox to
+      `format_func=lambda v: config.STATUS_LABELS.get(v, v)` ("All"
+      passthrough wrapper) and `edit_status` selectbox to the
+      vanilla `format_func=config.STATUS_LABELS.get` per DESIGN
+      §8.0 Status label convention (storage holds raw bracketed
+      values, UI renders stripped labels). Swaps the edit-panel
+      from `st.tabs(config.EDIT_PANEL_TABS)` to a
+      `st.radio(horizontal=True, label_visibility="collapsed",
+      key="_active_edit_tab")` tab selector + if/elif branch-
+      rendering — load-bearing because `st.tabs(key=...)` in
+      Streamlit 1.56 accepts `key` but does NOT populate
+      session_state with the active tab (verified via probe), so
+      DESIGN §8.2's "visible only when active tab is Overview"
+      Delete-button gate would have no signal to gate on. Delete
+      button (+ its elif-reopen for the @st.dialog AppTest quirk)
+      relocated OUTSIDE the tab branches, gated by `if active_tab
+      == "Overview":` — on non-Overview tabs the button is not
+      emitted at all (pre-Sub-task-13 it was CSS-hidden but still
+      in the DOM). New test helper `_select_row_and_tab(at, row,
+      tab)` writes the row + tab pair to session_state in one step
+      so tab-branch-rendering tests can drive non-Overview widgets
+      without chained `at.run()` cycles losing the dataframe
+      selection. 13 new tests on test_opportunities_page.py
+      (page-config source-grep pin + filter_status format_func
+      3-test class + edit_status format_func 2-test class +
+      Materials predicate contract + 5-test tab-sensitivity
+      class + `test_default_active_tab_is_first_config_entry`);
+      existing TestEditPanelShell / TestRequirementsTabWidgets /
+      TestMaterialsTabWidgets / TestNotesTabWidgets / three Save
+      classes / TestPreSeedNaNCoercion assertions updated for the
+      new tab-selector + branch-rendering. Scope:
+      `pages/1_Opportunities.py` +
+      `tests/test_opportunities_page.py`. Pure display-layer change
+      — no schema, no new queries, no config edit; CHANGELOG
+      Migration entry records "no migration required". 441 tests
+      green on branch; zero deprecation warnings.
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -249,11 +289,12 @@ deferred. All require separate approval before execution.
       `app.py` as v1.3 alignment Sub-task 12.
 - [x] Delete the 🔄 Refresh button from `app.py`
       — shipped as v1.3 alignment Sub-task 12 (per DESIGN D13).
-- [~] `st.set_page_config(layout="wide", page_title="Postdoc Tracker", page_icon="📋")` on `app.py`
+- [x] `st.set_page_config(layout="wide", page_title="Postdoc Tracker", page_icon="📋")` on `app.py`
       and every `pages/*.py`
-      — `app.py` done as v1.3 alignment Sub-task 12; `pages/1_Opportunities.py`
-      alignment pending (landing target: later sub-task focused on the
-      page's work_auth/format_func/DELETE-button relocation triage).
+      — `app.py` done as v1.3 alignment Sub-task 12;
+      `pages/1_Opportunities.py` done as v1.3 alignment Sub-task 13
+      (along with the `filter_status`/`edit_status` format_func wiring
+      and the Delete-button relocation per DESIGN §8.2).
 - [x] Tooltip on "Tracked" KPI via `st.metric(..., help="...")`
       — shipped as v1.3 alignment Sub-task 12. Locked copy:
       `"Saved + Applied — positions you're still actively pursuing"`.
@@ -286,4 +327,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–12 shipped; branch push + PR open is the last remaining step)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–13 shipped; branch push + PR open is the last remaining step)_

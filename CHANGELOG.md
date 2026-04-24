@@ -824,6 +824,110 @@ no new database queries, no config edits.
     `test_clicking_expand_from_branch_b_renders_chart`. Net: +8.
   - Unrelated T1-D / T1-E / T3 classes untouched.
 
+### Changed — v1.3 alignment Sub-task 13 (branch `feature/align-v1.3`)
+
+Sub-task 13 aligns `pages/1_Opportunities.py` with DESIGN.md v1.3 §8.0
+(cross-page conventions) + §8.2 (Opportunities page + Delete-button
+placement). Pure display-layer change — no schema, no new database
+queries, no config edits. Parallel in spirit to Sub-task 12's §8.0 +
+§8.1 alignment for `app.py`; this commit group closes the remaining
+page-side gap left by that sub-task.
+
+- **`pages/1_Opportunities.py` `st.set_page_config(…)`** added as the
+  first Streamlit call per DESIGN §8.0 + D14: `page_title="Postdoc
+  Tracker"`, `page_icon="📋"`, `layout="wide"`. Data-heavy views
+  (positions table + edit panel) need horizontal room. Placed
+  immediately after `database.init_db()`, before `st.title(…)`.
+- **`filter_status` selectbox gains `format_func=lambda v:
+  config.STATUS_LABELS.get(v, v)`** per DESIGN §8.0 Status label
+  convention (storage holds raw bracketed values; UI renders the
+  stripped labels). The lambda wraps the literal `STATUS_LABELS.get`
+  so the "All" sentinel passes through (vanilla `STATUS_LABELS.get(
+  "All")` returns `None` and would leak a blank option into the
+  rendered dropdown). `.value` and the downstream filter predicate
+  keep the raw storage key, so `df[df["status"] == status_filter]`
+  compares apples to apples.
+- **`edit_status` selectbox on the Overview form gains
+  `format_func=config.STATUS_LABELS.get`**. No "All" sentinel on
+  this path, so the literal dict-method is sufficient.
+  `session_state["edit_status"]` stays raw; the Save handler writes
+  the storage value into `positions.status` unchanged.
+- **Edit-panel tab selector swapped from `st.tabs` to
+  `st.radio(horizontal=True, label_visibility="collapsed",
+  key="_active_edit_tab")`** — the load-bearing change for the
+  Delete-button placement below. Rationale:
+  - DESIGN §8.2 Delete row: "Button rendered below the edit panel
+    (outside the panel box), visible only when the active tab is
+    Overview."
+  - Streamlit 1.56's `st.tabs(key=...)` accepts a `key` keyword but
+    does NOT actually populate `session_state` with the active tab
+    (verified via isolation probe before the swap); there is no
+    public API to detect the active `st.tabs` tab.
+  - `st.radio` with `horizontal=True` + collapsed label visually
+    approximates the old tab strip, while its value lives in
+    `session_state["_active_edit_tab"]` and drives branch-rendering:
+    each tab body is wrapped in `if active_tab == "Overview": …` /
+    `elif active_tab == "Requirements": …` / etc. On non-active
+    tabs, the tab-specific widgets ARE NOT EMITTED (pre-Sub-task-13
+    `st.tabs` emitted ALL tab bodies on every run and CSS-hid
+    inactive ones). Test consequence: non-Overview tests must now
+    set `session_state["_active_edit_tab"]` before accessing
+    e.g. `edit_req_cv` radios.
+- **Delete button relocated to below all four tab branches**,
+  gated by `if active_tab == "Overview":` per DESIGN §8.2 Delete row
+  ("the button's scope is the whole position, not the active tab's
+  data — hence the Overview-only placement, matching the tab where
+  the user is reviewing the position as a whole"). The `elif
+  st.session_state.get("_delete_target_id") == sid:` dialog-reopen
+  branch from Tier 5 lives in the same gated block — same AppTest
+  script-run quirk that required re-opening the dialog across
+  reruns is preserved end-to-end. On Requirements / Materials /
+  Notes tabs the Delete button is now not in the DOM at all
+  (pre-Sub-task-13 it was still there, just CSS-hidden; AppTest
+  would find it via `at.button(key="edit_delete")` regardless of
+  active tab).
+- **`tests/test_opportunities_page.py`** — 441 tests on the page;
+  +13 versus the pre-Sub-task-13 count of 428 (the branch was
+  428-green at the head of Sub-task 12). Highlights:
+  - New `TestPageConfigSetsWideLayout::test_page_config_sets_wide_
+    layout` — source-grep pin (AppTest doesn't surface
+    set_page_config), mirrors the `test_app_page.py` precedent.
+  - New `TestFilterStatusFormatFunc` (3 tests): options display
+    labels + "All" passthrough; `.value` stays raw; end-to-end
+    storage/display split via a real filter round-trip.
+  - New `TestEditStatusFormatFunc` (2 tests): Overview form's
+    Status selectbox mirrors the filter_status contract, minus the
+    "All" passthrough.
+  - New `TestMaterialsFilterPredicateIsYes` (1 test): Materials tab
+    renders a checkbox iff `session_state[f"edit_{req_col}"] ==
+    "Yes"` (DESIGN §8.2) — independent pin from Sub-task 2's
+    migration tests.
+  - New `TestDeleteButtonTabSensitivity` (5 tests): Delete button
+    visible on Overview, absent on each of Requirements / Materials
+    / Notes, and reappears on return to Overview.
+  - `TestEditPanelShell` — 4 tests updated to use
+    `at.radio(key="_active_edit_tab")` instead of `at.tabs`, plus a
+    new `test_default_active_tab_is_first_config_entry` pinning
+    Overview as the default.
+  - `TestRequirementsTabWidgets` / `TestMaterialsTabWidgets` /
+    `TestNotesTabWidgets` + the three matching Save classes +
+    `TestPreSeedNaNCoercion` — existing tests updated to call the
+    new `_select_row_and_tab(at, row, tab_name)` helper (which
+    writes both the row selection and the active tab to
+    session_state in one step) before accessing non-Overview
+    widgets. `TestRequirementsTabWidgets.test_one_radio_per_
+    requirement_doc` bumps its radio-count assertion by +1 for the
+    new tab selector. `TestNotesTabWidgets.test_text_area_renders_
+    when_row_selected` drops from 2→1 expected text_areas
+    (`edit_work_auth_note` now renders only when
+    active_tab == "Overview"; `edit_notes` is the only text_area on
+    the Notes tab).
+  - `TestFilterBarStructure.test_status_options_match_config` +
+    `TestOverviewTabWidgets.test_status_selectbox_options_match_
+    config` — expected-options lists swap from raw STATUS_VALUES
+    to `[STATUS_LABELS[v] for v in STATUS_VALUES]` (AppTest
+    surfaces `.options` as post-format_func display strings).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -1229,6 +1333,21 @@ the next page load. Existing DBs round-trip transparently. The
 session flag `st.session_state["_funnel_expanded"]` is
 session-scoped and defaults to False — no persistence to disk, no
 "migration" of prior sessions needed.
+
+**Sub-task 13** requires no migration — the entire change is
+display-layer (`pages/1_Opportunities.py` only). No schema edit,
+no new database queries, no config rename. A user upgrading to
+the new page sees the wide layout, the status selectboxes
+rendering display labels (Saved / Applied / …) instead of raw
+bracketed values, the edit-panel tab strip driven by a horizontal
+`st.radio` instead of `st.tabs`, and the Delete button absent on
+Requirements / Materials / Notes tabs. Existing DBs round-trip
+transparently (storage still holds raw `STATUS_VALUES`; format_func
+only changes what the UI renders). The session flag
+`st.session_state["_active_edit_tab"]` is session-scoped, defaults
+to `"Overview"` (the first `EDIT_PANEL_TABS` entry) via st.radio's
+`index=0` + Streamlit's widget-default contract — no persistence
+to disk, no "migration" of prior sessions needed.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 
