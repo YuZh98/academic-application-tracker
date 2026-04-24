@@ -192,6 +192,68 @@ migrate in place via two one-shot `UPDATE` loops in `init_db()`.
   pre-v1.3 literal via raw SQL, call `init_db()`, and pin both the
   translation and idempotence (second `init_db()` is a no-op).
 
+### Changed — v1.3 alignment Sub-task 6 (branch `feature/align-v1.3`)
+
+Sub-task 6 adds the `positions.updated_at` column plus the
+`AFTER UPDATE` trigger that keeps it fresh, per DESIGN.md v1.3 §6.2 +
+D25. With this in place, every write on `positions` stamps the row's
+last-modified time automatically — no Python writer has to remember.
+
+- **`database.py` — CREATE TABLE positions** gains a new column
+  `updated_at TEXT DEFAULT (datetime('now'))` right after
+  `created_at`. Fresh DBs get the full DDL default, so an
+  `add_position` INSERT (which does not fire the `AFTER UPDATE`
+  trigger) still ends up with a populated stamp via column default.
+- **`database.py — init_db()` migration block** gains a
+  `PRAGMA table_info`–guarded `ALTER TABLE positions ADD COLUMN
+  updated_at TEXT` followed by a one-shot
+  `UPDATE positions SET updated_at = datetime('now') WHERE
+  updated_at IS NULL` backfill. SQLite rejects non-constant
+  expression DEFAULTs on `ALTER TABLE ADD COLUMN` against a
+  non-empty table (`"Cannot add a column with non-constant
+  default"`), so the ALTER cannot mirror the CREATE TABLE DDL
+  verbatim; the backfill closes the gap for existing rows.
+  Idempotent — the `if "updated_at" not in existing_cols` guard
+  skips both statements on a re-run, and the backfill's
+  `WHERE updated_at IS NULL` scope would no-op even without it.
+- **`database.py — init_db()` trigger block** gains
+  `CREATE TRIGGER IF NOT EXISTS positions_updated_at AFTER UPDATE
+  ON positions FOR EACH ROW BEGIN UPDATE positions SET updated_at =
+  datetime('now') WHERE id = NEW.id; END`. Placed after the ALTER
+  so the body's `updated_at` reference resolves on migrated-DB
+  runs too, and before the Sub-task 2 / Sub-task 5 value-migration
+  UPDATE loops so those writes also route through the trigger
+  (D25 "every write touches the timestamp" applies to migration
+  writes as well as user writes). SQLite's default
+  `recursive_triggers = OFF` suppresses the inner UPDATE from
+  re-firing — the no-infinite-loop guarantee rides entirely on
+  that default, not on any code we write in the body.
+- **`tests/test_database.py`** — five new tests in `TestInitDb`:
+  - `test_positions_has_updated_at_column_with_datetime_default`
+    pins PRAGMA `dflt_value == "datetime('now')"`.
+  - `test_positions_updated_at_trigger_exists` pins the trigger
+    registered in `sqlite_master`.
+  - `test_add_position_populates_updated_at` pins the CREATE TABLE
+    column-default path (INSERT does not fire AFTER UPDATE, so
+    the DDL default is load-bearing).
+  - `test_update_position_refreshes_updated_at` seeds a position,
+    sleeps 1.1 s (SQLite's `datetime('now')` is second-precision),
+    updates a field, and asserts the stamp advanced. A clean
+    return from `update_position` also pins "no infinite loop"
+    implicitly — recursion under `recursive_triggers = ON` would
+    hit SQLite's 1000-frame limit and raise
+    `recursion limit reached` before returning.
+  - `test_migration_adds_updated_at_to_pre_v1_3_positions` uses
+    the `tmp_path` + monkeypatched `DB_PATH` pattern (same as
+    Sub-task 4's DDL-default sentinel test), seeds a pre-v1.3
+    positions table with an existing row, calls `init_db()`, and
+    asserts the ALTER added the column, the backfill populated
+    the existing row, the trigger is registered, and a second
+    `init_db()` leaves the backfilled stamp untouched.
+- Adds `import re` and `import time` at the top of
+  `tests/test_database.py` (for the ISO-datetime regex pattern
+  and the 1.1-second sleep).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -292,6 +354,44 @@ Schema DEFAULT clauses do **not** change — Sub-task 4 already lifted
 them into config-driven f-strings, so the v1.3 config values
 (`STATUS_VALUES[0] == '[SAVED]'`, `PRIORITY_VALUES[1] == 'Medium'`)
 flow through automatically. No rebuild, no data loss, no downtime.
+
+**Sub-task 6** — schema addition on `positions` (new column + new
+trigger). `init_db()` runs the migration automatically on next app
+start; a user upgrading from a v1.2 DB does not need to execute
+anything manually. For the record, the equivalent SQL executed is:
+
+```sql
+-- 1. Add the column (NULL default on ALTER — SQLite rejects
+--    non-constant expression DEFAULTs on ALTER TABLE ADD COLUMN
+--    against a non-empty table). Idempotent via the PRAGMA
+--    table_info guard in init_db().
+ALTER TABLE positions ADD COLUMN updated_at TEXT;
+
+-- 2. Backfill existing rows so they carry a stamp equivalent to
+--    what the CREATE TABLE DEFAULT would have given them on a
+--    fresh DB. Idempotent by the WHERE clause — a re-run finds
+--    no matching rows.
+UPDATE positions
+   SET updated_at = datetime('now')
+ WHERE updated_at IS NULL;
+
+-- 3. Install the AFTER UPDATE trigger so subsequent mutations
+--    refresh the stamp automatically. Idempotent via
+--    IF NOT EXISTS.
+CREATE TRIGGER IF NOT EXISTS positions_updated_at
+    AFTER UPDATE ON positions FOR EACH ROW
+BEGIN
+    UPDATE positions SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+```
+
+Fresh DBs reach the same final state via the CREATE TABLE DDL
+(`updated_at TEXT DEFAULT (datetime('now'))`) plus the trigger CREATE
+— so steps 1 and 2 above execute only on pre-v1.3 upgrades. No
+rebuild, no data loss, no downtime. Loop prevention on the trigger's
+inner UPDATE rides on SQLite's default `recursive_triggers = OFF`;
+users who `PRAGMA recursive_triggers = ON` globally would see infinite
+recursion on every UPDATE to `positions`.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

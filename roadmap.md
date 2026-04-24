@@ -20,17 +20,19 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–5 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+Sub-tasks 1–6 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
 migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
 DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
-`config.RESULT_DEFAULT` per DESIGN §6.2, and `[OPEN]→[SAVED]` +
+`config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
 `"Med"→"Medium"` renames with two idempotent `UPDATE positions` loops in
-`init_db()`). 305 tests green · zero deprecation warnings.
+`init_db()`, and `positions.updated_at` column + `AFTER UPDATE` trigger
+per §6.2 + D25 with `ALTER TABLE ADD COLUMN` + backfill for pre-v1.3
+DBs). 310 tests green · zero deprecation warnings.
 
 **Next up:** remaining v1.3 alignment items (schema overhauls
-incl. `work_auth_note`, `updated_at` trigger, interviews sub-table,
-confirmation_* and reminder_sent_* splits, cascade R1/R2/R3 rewire),
-then Phase 4 Tier 4 (Upcoming timeline).
+incl. `work_auth_note`, interviews sub-table, confirmation_* and
+reminder_sent_* splits, `recommenders.confirmed` INTEGER, cascade
+R1/R2/R3 rewire), then Phase 4 Tier 4 (Upcoming timeline).
 
 ---
 
