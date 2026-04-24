@@ -157,17 +157,26 @@ def init_db() -> None:
             )
         """)
 
+        # DESIGN §6.2 + D19 + D20: confirmed is tri-state INTEGER
+        # (0 = not confirmed, 1 = confirmed, NULL = pending response —
+        # no DEFAULT, so fresh rows start in the honest pending state);
+        # reminder_sent is INTEGER DEFAULT 0 paired with
+        # reminder_sent_date TEXT (ISO) per the (flag, date) split.
+        # Pre-v1.3 DBs carried TEXT columns for confirmed and
+        # reminder_sent with no reminder_sent_date; the rebuild below
+        # translates them via CREATE-COPY-DROP-RENAME.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS recommenders (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                position_id      INTEGER NOT NULL,
-                recommender_name TEXT,
-                relationship     TEXT,
-                asked_date       TEXT,
-                confirmed        TEXT,
-                submitted_date   TEXT,
-                reminder_sent    TEXT,
-                notes            TEXT,
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                position_id        INTEGER NOT NULL,
+                recommender_name   TEXT,
+                relationship       TEXT,
+                asked_date         TEXT,
+                confirmed          INTEGER,
+                submitted_date     TEXT,
+                reminder_sent      INTEGER DEFAULT 0,
+                reminder_sent_date TEXT,
+                notes              TEXT,
                 FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
             )
         """)
@@ -327,6 +336,120 @@ def init_db() -> None:
                 "SET confirmation_received = 1 "
                 "WHERE confirmation_email = 'Y'"
             )
+
+        # Migration (v1.3 Sub-task 11, DESIGN §6.2 + §6.3 + D19 + D20):
+        # rebuild the recommenders table to translate the pre-v1.3
+        # TEXT columns into the DESIGN-spec INTEGER / INTEGER-DEFAULT-0
+        # / TEXT shape. SQLite lacks in-place column-type change, so the
+        # recipe per SQLite docs §7 is CREATE-new → INSERT-COPY → DROP-
+        # old → RENAME-new. All four steps run inside the same
+        # `_connect()` transaction (a single commit at the outer `with`
+        # exit, rollback-on-exception via the context manager's except
+        # branch), so a mid-rebuild failure cannot leave the DB with
+        # a half-migrated table.
+        #
+        # Idempotence gate: inspect `PRAGMA table_info(recommenders)`
+        # and read the declared type of the `confirmed` column. When
+        # it's still the pre-v1.3 TEXT, run the rebuild; when it's
+        # already INTEGER, the rebuild has landed and this block
+        # short-circuits. The CREATE TABLE IF NOT EXISTS above always
+        # runs with the new-schema DDL — on a fresh DB it builds the
+        # target shape directly and the guard below evaluates False
+        # (confirmed's type is already INTEGER) so the rebuild skips.
+        #
+        # CASE translation rules (D19's dual-purpose-column split +
+        # D20's boolean-state-as-INTEGER):
+        #
+        #   confirmed     'Y'           -> 1
+        #                 'N'           -> 0
+        #                 anything else -> NULL  (pending-response
+        #                                         tri-state; cautious —
+        #                                         'maybe' / stray freetext
+        #                                         become NULL rather than
+        #                                         a guessed integer)
+        #
+        #   reminder_sent 'Y'           -> reminder_sent=1,
+        #                                  reminder_sent_date=NULL
+        #                 'YYYY-MM-DD'  -> reminder_sent=0,
+        #                                  reminder_sent_date=<value>
+        #                                  (matched via SQLite GLOB
+        #                                  '????-??-??' — any 10-char
+        #                                  '??-??' shape; a looser
+        #                                  match than Sub-task 10's
+        #                                  digit-class pattern but
+        #                                  pre-v1.3 reminder_sent
+        #                                  realistically held only
+        #                                  dates or 'Y'/NULL)
+        #                 anything else -> reminder_sent=0,
+        #                                  reminder_sent_date=NULL
+        #
+        # All other columns (id, position_id, recommender_name,
+        # relationship, asked_date, submitted_date, notes) copy
+        # through verbatim; id values preserved so the
+        # sqlite_sequence AUTOINCREMENT counter stays coherent on the
+        # next add_recommender call (SQLite advances it past any
+        # explicitly-inserted id).
+        #
+        # FK safety: recommenders is a CHILD table (outbound FK to
+        # positions). No other table has a FK pointing INTO
+        # recommenders, so DROP TABLE is safe even with
+        # PRAGMA foreign_keys = ON (set by _connect()). The new
+        # table's DDL re-declares the FK + ON DELETE CASCADE, so the
+        # delete_position cascade chain survives the rebuild; the
+        # `test_migration_preserves_fk_cascade_on_delete_position`
+        # test exercises this end-to-end.
+        rec_cols_info = conn.execute(
+            "PRAGMA table_info(recommenders)"
+        ).fetchall()
+        confirmed_type = next(
+            (row["type"] for row in rec_cols_info if row["name"] == "confirmed"),
+            None,
+        )
+        if confirmed_type is not None and confirmed_type.upper() != "INTEGER":
+            conn.execute("""
+                CREATE TABLE recommenders_new (
+                    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                    position_id        INTEGER NOT NULL,
+                    recommender_name   TEXT,
+                    relationship       TEXT,
+                    asked_date         TEXT,
+                    confirmed          INTEGER,
+                    submitted_date     TEXT,
+                    reminder_sent      INTEGER DEFAULT 0,
+                    reminder_sent_date TEXT,
+                    notes              TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO recommenders_new (
+                    id, position_id, recommender_name, relationship,
+                    asked_date, confirmed, submitted_date,
+                    reminder_sent, reminder_sent_date, notes
+                )
+                SELECT
+                    id,
+                    position_id,
+                    recommender_name,
+                    relationship,
+                    asked_date,
+                    CASE confirmed
+                        WHEN 'Y' THEN 1
+                        WHEN 'N' THEN 0
+                        ELSE NULL
+                    END,
+                    submitted_date,
+                    CASE WHEN reminder_sent = 'Y' THEN 1 ELSE 0 END,
+                    CASE
+                        WHEN reminder_sent GLOB '????-??-??'
+                            THEN reminder_sent
+                        ELSE NULL
+                    END,
+                    notes
+                FROM recommenders
+            """)
+            conn.execute("DROP TABLE recommenders")
+            conn.execute("ALTER TABLE recommenders_new RENAME TO recommenders")
 
         # Trigger (v1.3 Sub-task 6, DESIGN §6.2 + D25): stamp updated_at
         # on every row mutation so writers never have to remember.
