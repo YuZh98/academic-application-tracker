@@ -43,9 +43,64 @@ Sub-task 1 of the DESIGN-to-codebase alignment pass. Pure additions to
   each guard; a fresh `importlib.reload("config")` test covers the
   module-level execution path
 
+### Changed — v1.3 alignment Sub-task 2 (branch `feature/align-v1.3`)
+
+Sub-task 2 migrates `REQUIREMENT_VALUES` from single-letter sentinels
+(`Y`/`Optional`/`N`) to full words (`Yes`/`Optional`/`No`) per DESIGN.md
+v1.3 §5.1 + D21, completing D21's "full-word philosophy" for the
+requirement-docs vocabulary (matching D20's rule for boolean-state
+columns).
+
+- **`config.py`** — `REQUIREMENT_VALUES = ["Yes", "Optional", "No"]`;
+  `REQUIREMENT_LABELS` keys swap to match (`Yes`→"Required",
+  `Optional`→"Optional", `No`→"Not needed"); inline comment updated to
+  describe the new vocabulary and reference v1.3 / D21.
+- **`database.py`** — DDL `req_* TEXT DEFAULT 'No'` on both the
+  `CREATE TABLE` literal and the `ALTER TABLE` migration loop (new
+  `REQUIREMENT_DOCS` entries get the full-word default on next start).
+  `compute_materials_readiness()` predicates changed to `= 'Yes'` /
+  `!= 'Yes'` (matches the new vocabulary; docstring updated).
+- **`database.init_db()`** — adds a one-shot value migration loop that
+  rewrites any lingering `'Y'`/`'N'` rows in place on next app start
+  (see Migration section below). Idempotent — reruns on a migrated DB
+  are a no-op because the `ELSE req_*` branch passes already-migrated
+  values through unchanged.
+- **`pages/1_Opportunities.py`** — Materials-tab visibility filter
+  predicate changes from `== "Y"` to `== "Yes"` (the only behavioural
+  change on the page — radios and checkboxes are config-driven, so the
+  vocabulary swap propagates automatically). Pre-seed fallback for
+  out-of-vocabulary req values switches from `"N"` to `"No"`.
+- **Tests** — seeds and assertions updated across `test_database.py`,
+  `test_opportunities_page.py`, `test_app_page.py` (replace-all of the
+  quoted Y/N tokens, plus matching docstring/comment rewording). New
+  `test_migration_rewrites_legacy_req_short_codes` in
+  `TestInitDb` seeds legacy `'Y'`/`'N'`/`'Optional'` values via raw
+  SQL, calls `init_db()`, and pins the three-way translation plus
+  idempotence on a second `init_db()`.
+
 ### Migration
 
-Sub-task 1 requires no migration — all additions are Python constants.
+**Sub-task 1** requires no migration — all additions are Python constants.
+
+**Sub-task 2** — required value migration for the `req_*` columns on
+`positions`. `init_db()` runs this automatically on next app start; a
+user upgrading from a v1.2 DB does not need to execute anything
+manually. For the record, the equivalent SQL executed per
+`REQUIREMENT_DOCS` column is:
+
+```sql
+UPDATE positions
+   SET req_<col> = CASE req_<col>
+                     WHEN 'Y' THEN 'Yes'
+                     WHEN 'N' THEN 'No'
+                     ELSE req_<col>
+                   END;
+```
+
+Idempotent: second and later runs are no-ops because `ELSE req_<col>`
+passes `'Yes'`, `'No'`, `'Optional'`, and any other value through
+unchanged. Column names come from `config.REQUIREMENT_DOCS` (never user
+input). No schema rebuild, no data loss, no downtime.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

@@ -5,17 +5,29 @@ _Scope: software for this application tracker only. Older completions move to
 
 ---
 
-## Current sprint — v1.1 doc refactor
+## Current sprint — v1.3 DESIGN-to-codebase alignment
 
-Branch: `feature/docs-refactor-pre-t4` (off `main @ 5ac0f63`)
+Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merged via PR #7)
+
+- [x] Sub-task 1: `config.py` constants + invariants (VALID_PROFILES,
+      STATUS_LABELS, INTERVIEW_FORMATS + 3 invariants)
+- [x] Sub-task 2: `REQUIREMENT_VALUES` Y/N → Yes/No migration (D21) —
+      `config.py` vocab swap, `database.py` DDL `DEFAULT 'No'` + one-shot
+      UPDATE migration in `init_db()`, `pages/1_Opportunities.py`
+      Materials-tab filter `== "Yes"`; CHANGELOG Migration note landed.
+- [ ] Sub-task 3+: remaining v1.3 alignment items per
+      `memory/project_state.md` (status rename `[OPEN]→[SAVED]`,
+      `"Med"→"Medium"`, vocab + schema overhauls, cascade rewire)
+- [ ] Push branch; open PR; merge to main
+
+## Prior sprint — v1.1 doc refactor (merged via PR #7)
 
 - [x] Commit 1: DESIGN + GUIDELINES drift fixes (C1–C13)
 - [x] Commit 2: DESIGN restructure + `docs/adr/` skeleton
 - [x] Commit 3: GUIDELINES restructure + `docs/dev-notes/` extraction
-- [ ] Commit 4: TASKS + roadmap + CHANGELOG + .gitignore ← **in progress**
-- [ ] Retroactive git tags: `v0.1.0` @ `c972385` · `v0.2.0` @ `f49ec5f` ·
-      `v0.3.0` @ `96a5c76` · `v0.4.0` @ `5ac0f63`
-- [ ] Push branch; open PR; merge to main
+- [x] Commit 4: TASKS + roadmap + CHANGELOG + .gitignore
+- [x] Retroactive git tags: `v0.1.0` · `v0.2.0` · `v0.3.0` · `v0.4.0`
+- [x] Push branch; open PR; merge to main
 
 ---
 
@@ -70,4 +82,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-23 (v1.1 doc refactor in flight, Commit 4/4)_
+_Updated: 2026-04-23 (v1.3 alignment — Sub-task 2 merged; Sub-task 3 next)_
