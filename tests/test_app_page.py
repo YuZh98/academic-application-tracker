@@ -40,7 +40,13 @@ def _run_page() -> AppTest:
 class TestT1AppShell:
     """T1-A + T1-B: smoke test on an empty DB, and the 4-column KPI skeleton.
 
-    Only structure is checked here — concrete KPI values come in T1-C/D."""
+    Only structure is checked here — concrete KPI values come in T1-C/D.
+
+    Sub-task 12 adds `st.set_page_config(layout="wide", ...)` at the top of
+    app.py per DESIGN §8.0. AppTest does NOT surface st.set_page_config in
+    its element tree, so the wide-layout contract is pinned via a source
+    grep (same precedent as TestT1EEmptyDbHero.test_cta_targets_opportunities_page).
+    """
 
     def test_page_loads_on_empty_db(self, db):
         """Dashboard must render without exception against an empty DB."""
@@ -61,18 +67,56 @@ class TestT1AppShell:
             f"Expected KPI labels in order {KPI_LABELS}, got {labels}"
         )
 
+    def test_page_config_sets_wide_layout(self, db):
+        """DESIGN §8.0 requires `st.set_page_config(layout="wide", ...)` on
+        every page — the app is data-heavy and needs horizontal room.
 
-# ── T1-C: KPI count wiring + refresh button ───────────────────────────────────
+        AppTest does not surface set_page_config in the element tree (the
+        call is consumed by the page-setup phase before widgets render),
+        so the contract is pinned at the source level — same precedent as
+        TestT1EEmptyDbHero.test_cta_targets_opportunities_page for
+        st.switch_page. Checking for the three keyword bindings together
+        keeps a partial change (e.g. someone accidentally dropping `layout`)
+        from silently passing.
+        """
+        import pathlib
+        src = pathlib.Path("app.py").read_text(encoding="utf-8")
+        assert "st.set_page_config(" in src, (
+            "app.py must call st.set_page_config(...) per DESIGN §8.0."
+        )
+        assert 'page_title="Postdoc Tracker"' in src, (
+            "set_page_config must bind page_title=\"Postdoc Tracker\"."
+        )
+        assert 'page_icon="📋"' in src, (
+            "set_page_config must bind page_icon=\"📋\" per DESIGN §8.0."
+        )
+        assert 'layout="wide"' in src, (
+            "set_page_config must bind layout=\"wide\" per DESIGN §8.0 / D14."
+        )
 
-class TestT1CKpiCountsAndRefresh:
-    """T1-C: wire `count_by_status()` into Tracked / Applied / Interview and
-    expose a top-bar 🔄 refresh button (DESIGN.md §app.py; C3 locked).
+
+# ── T1-C: KPI count wiring + Tracked tooltip + refresh-button-absent ──────────
+
+class TestT1CKpiCounts:
+    """T1-C: wire `count_by_status()` into Tracked / Applied / Interview.
 
     Decision: Tracked = count([SAVED]) + count([APPLIED]) — the pool of
     positions that 'might still move forward'. Applied and Interview are
     single-bucket counts of their namesake status. Next Interview stays
     '—' until T1-D wires get_upcoming_interviews().
+
+    Sub-task 12 (DESIGN.md §8.1 + D13) landed two user-visible changes on
+    top of the original T1-C contract:
+      - The top-bar 🔄 Refresh button is GONE (D13 dictates no manual
+        refresh — Streamlit reruns on interaction). Class-level constant
+        and a dedicated `test_refresh_button_absent` keep the regression
+        guard explicit, not just an absence.
+      - The Tracked metric now carries the locked help-tooltip string
+        so hovering explains the arithmetic. AppTest surfaces the tooltip
+        at `metric.proto.help` (probed before writing this test).
     """
+
+    TRACKED_HELP = "Saved + Applied — positions you're still actively pursuing"
 
     @staticmethod
     def _kpis(at: AppTest) -> dict[str, str]:
@@ -140,36 +184,37 @@ class TestT1CKpiCountsAndRefresh:
         assert kpis["Applied"] == "0"
         assert kpis["Interview"] == "0"
 
-    def test_refresh_button_rendered(self, db):
-        """Top bar exposes a 🔄 refresh button (DESIGN.md §app.py; C3 locked)."""
+    def test_refresh_button_absent(self, db):
+        """DESIGN D13: no 🔄 Refresh button on the dashboard top bar.
+
+        Streamlit reruns on any interaction; a manual refresh is cognitive
+        noise for a single-user local app. An absence test (rather than
+        silent omission) keeps a regression visible if a future edit
+        accidentally brings the button back — belt-and-suspenders since
+        the label is a one-line regex away from reappearing by accident.
+        """
         at = _run_page()
-        refresh = [b for b in at.button if "Refresh" in b.label]
-        assert len(refresh) == 1, (
-            f"Expected exactly one Refresh button, got labels {[b.label for b in at.button]}"
-        )
-        assert "🔄" in refresh[0].label, (
-            f"Refresh button should carry the 🔄 glyph per DESIGN wireframe, "
-            f"got {refresh[0].label!r}"
+        refresh = [b for b in at.button if "Refresh" in b.label or "🔄" in b.label]
+        assert refresh == [], (
+            f"DESIGN D13 requires no Refresh button on the dashboard. "
+            f"Got labels: {[b.label for b in at.button]}"
         )
 
-    def test_refresh_button_rerenders_with_updated_counts(self, db):
-        """Clicking Refresh picks up rows added since the last render."""
-        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+    def test_tracked_kpi_help_tooltip(self, db):
+        """DESIGN §8.1 locks the Tracked KPI's hover-tooltip copy.
 
+        AppTest surfaces the tooltip at `metric.proto.help` (confirmed via
+        the Streamlit 1.56 protobuf descriptor). Exact-match pin — a
+        rephrase requires an explicit user decision, same discipline as
+        the funnel / readiness empty-state copy pins.
+        """
         at = _run_page()
-        assert self._kpis(at)["Tracked"] == "1"
-
-        # Simulate: another position lands (e.g., via the Opportunities page
-        # in another tab). The dashboard shouldn't know about it until a rerun.
-        database.add_position(make_position({"position_name": "B", "status": "[APPLIED]"}))
-
-        refresh = next(b for b in at.button if "Refresh" in b.label)
-        refresh.click().run()
-        assert not at.exception, f"Refresh click raised: {at.exception}"
-
-        kpis = self._kpis(at)
-        assert kpis["Tracked"] == "2", f"After refresh, Tracked should be 2, got {kpis['Tracked']!r}"
-        assert kpis["Applied"] == "1", f"After refresh, Applied should be 1, got {kpis['Applied']!r}"
+        tracked = next(m for m in at.metric if m.label == "Tracked")
+        assert tracked.proto.help == self.TRACKED_HELP, (
+            f"Tracked KPI must carry the locked help tooltip. "
+            f"expected: {self.TRACKED_HELP!r}\n"
+            f"got:      {tracked.proto.help!r}"
+        )
 
 
 # ── T1-D: Next Interview KPI — wire get_upcoming_interviews() ─────────────────
@@ -415,28 +460,53 @@ class TestT1EEmptyDbHero:
         )
 
 
-# ── T2-A: Application Funnel — Plotly horizontal bar from count_by_status ─────
+# ── T2-A: Application Funnel — Plotly horizontal bar from FUNNEL_BUCKETS ──────
 
 class TestT2AFunnelBar:
-    """T2-A: Plotly horizontal bar funnel built from `count_by_status()`.
+    """T2-A: Plotly horizontal bar funnel built from `count_by_status()`
+    aggregated into `config.FUNNEL_BUCKETS`.
 
-    Contract (DESIGN.md §app.py + PHASE_4_GUIDELINES.md §T2-A):
-      - One bar per `config.STATUS_VALUES` entry, in the canonical order of
-        that list (so the pipeline reads top-to-bottom OPEN → DECLINED).
-      - A status with zero positions still renders as a zero-width bar —
-        keeps the grid shape stable and makes "no applied" visually
-        distinct from "status doesn't exist".
-      - Orientation: horizontal (long status labels are readable on the y-axis).
-      - Marker colors sourced from `config.STATUS_COLORS` — never hardcoded
-        in `app.py`. This is the same anti-typo guardrail as STATUS_VALUES.
-      - Chart renders whether the DB is empty or not; T2-B will later swap
-        the figure for descriptive text on the fully-empty-DB branch.
+    Contract (DESIGN.md §8.1 + Sub-task 12):
+      - One bar per **visible** `FUNNEL_BUCKETS` entry, in the list's
+        display order (so the pipeline reads top-to-bottom once the
+        y-axis is reversed). A bucket is visible when its label is NOT
+        in `FUNNEL_DEFAULT_HIDDEN`, OR when the user has clicked
+        `[expand]` (`st.session_state["_funnel_expanded"] == True`) —
+        the latter is exercised in `TestT2DFunnelExpand`.
+      - A visible bucket with zero count renders as a zero-width bar
+        so the chart shape stays stable as the pipeline fills up. This
+        makes "no one applied yet" visually distinct from "bucket
+        doesn't exist".
+      - Orientation: horizontal (long bucket labels read on the y-axis).
+      - Marker colors come from `FUNNEL_BUCKETS[i][2]` — bucket owns its
+        color because a bucket may aggregate multiple raw statuses
+        (e.g. "Archived" = [REJECTED] + [DECLINED]). Anti-typo guardrail
+        still holds: the same "no hardcoded vocab" rule forbids inlining
+        these strings in app.py.
+      - Bucket x-values are the SUM of `count_by_status()` over the
+        bucket's raw-status tuple — a bucket of 1 raw status reduces to
+        the old per-status count, but a bucket of 2+ raw statuses
+        aggregates correctly (Archived combines rejected + declined).
+
+    Pre-Sub-task-12 the funnel was per-`STATUS_VALUES`: one bar per raw
+    status, colors from `STATUS_COLORS`. The aggregation + default-hiding
+    is what DESIGN §8.1 requires for v1; tests below assert the new
+    contract directly.
 
     Test-access pattern: AppTest surfaces `st.plotly_chart` as an
     `UnknownElement` whose `.value` triggers a session_state KeyError for
     stateless charts. `json.loads(el.proto.spec)` is the stable path —
     the spec is a full plotly figure JSON (`{data: [...], layout: {...}}`).
     """
+
+    @staticmethod
+    def _visible_bucket_indices() -> list[int]:
+        """Indices of FUNNEL_BUCKETS entries that render by default
+        (i.e. not in FUNNEL_DEFAULT_HIDDEN)."""
+        return [
+            i for i, (label, _, _) in enumerate(config.FUNNEL_BUCKETS)
+            if label not in config.FUNNEL_DEFAULT_HIDDEN
+        ]
 
     @staticmethod
     def _funnel_trace(at: AppTest) -> dict:
@@ -458,10 +528,14 @@ class TestT2AFunnelBar:
         return spec["data"][0]
 
     def test_funnel_chart_is_rendered(self, db):
-        """A plotly chart is present on the dashboard even on an empty DB.
+        """A plotly chart is present on the dashboard when any visible
+        bucket has data (branch (c) trigger).
 
-        (T2-B will later make the empty-DB branch show descriptive text
-        instead; when that lands this test is updated in the same commit.)"""
+        Seeding a [SAVED] position puts a count in the 'Saved' bucket —
+        a default-visible bucket — so the funnel renders. A DB with only
+        hidden-bucket data would fire branch (b) instead (covered by
+        `TestT2BFunnelEmptyState.test_all_hidden_bucket_data_fires_branch_b`).
+        """
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         charts = at.get("plotly_chart")
@@ -469,23 +543,29 @@ class TestT2AFunnelBar:
             f"Expected an Application Funnel plotly chart, got {len(charts)}."
         )
 
-    def test_funnel_has_one_bar_per_status_value_in_order(self, db):
-        """y-axis labels match config.STATUS_VALUES, in that exact order.
+    def test_funnel_has_one_bar_per_visible_bucket_in_order(self, db):
+        """y-axis labels match the visible-bucket subset of
+        config.FUNNEL_BUCKETS, in that list's order.
 
         Pinning order (not just membership) because DESIGN.md reads the
-        pipeline top-to-bottom — flipping OPEN↔DECLINED would break the
-        mental model without tripping any other test."""
+        pipeline top-to-bottom — flipping Saved↔Archived would break the
+        mental model without tripping any other test. Visible = NOT in
+        FUNNEL_DEFAULT_HIDDEN; the expanded path gets its own pin in
+        TestT2DFunnelExpand."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
-        assert list(trace["y"]) == list(config.STATUS_VALUES), (
-            f"Funnel y-axis must list every STATUS_VALUE in config order.\n"
-            f"  expected: {config.STATUS_VALUES}\n"
+        expected_labels = [
+            config.FUNNEL_BUCKETS[i][0] for i in self._visible_bucket_indices()
+        ]
+        assert list(trace["y"]) == expected_labels, (
+            f"Funnel y-axis must list visible FUNNEL_BUCKETS labels in order.\n"
+            f"  expected: {expected_labels}\n"
             f"  got:      {list(trace['y'])}"
         )
 
     def test_funnel_is_horizontal(self, db):
-        """Orientation is 'h' — status labels on y-axis, counts on x-axis."""
+        """Orientation is 'h' — bucket labels on y-axis, counts on x-axis."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
@@ -494,12 +574,13 @@ class TestT2AFunnelBar:
             f"{trace.get('orientation')!r}"
         )
 
-    def test_funnel_x_values_match_count_by_status(self, db):
-        """x-values read from `count_by_status()` in STATUS_VALUES order.
+    def test_funnel_x_values_sum_bucket_raw_statuses(self, db):
+        """x-values are the SUM of `count_by_status()` over each bucket's
+        raw-status tuple, in visible-bucket order.
 
-        Seeds a mix of statuses and checks the bar lengths. This also
-        verifies that count_by_status's sparse dict (zero-count statuses
-        omitted) is expanded to the full STATUS_VALUES length with zeros."""
+        Seed mixes several raw statuses; assertion re-computes the
+        expected sums directly from FUNNEL_BUCKETS to stay correct if
+        someone reshuffles bucket-to-raw mappings in config.py."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "B", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
@@ -507,35 +588,42 @@ class TestT2AFunnelBar:
         database.add_position(make_position({"position_name": "E", "status": "[OFFER]"}))
 
         counts = database.count_by_status()
-        expected = [counts.get(s, 0) for s in config.STATUS_VALUES]
+        expected = [
+            sum(counts.get(raw, 0) for raw in config.FUNNEL_BUCKETS[i][1])
+            for i in self._visible_bucket_indices()
+        ]
 
         at = _run_page()
         trace = self._funnel_trace(at)
         assert list(trace["x"]) == expected, (
-            f"Funnel x-values must mirror count_by_status() in STATUS_VALUES "
-            f"order.\n  expected: {expected}\n  got:      {list(trace['x'])}"
+            f"Funnel x-values must sum count_by_status() per bucket, in "
+            f"visible-bucket order.\n  expected: {expected}\n"
+            f"  got:      {list(trace['x'])}"
         )
 
-    def test_funnel_bar_colors_come_from_config(self, db):
-        """Marker colors are `config.STATUS_COLORS[s]` for each status,
-        in STATUS_VALUES order. Anti-typo guardrail — the same grep rule
-        that forbids hardcoded status literals in app.py forbids hardcoded
-        colors (they'd drift from STATUS_COLORS silently)."""
+    def test_funnel_bar_colors_come_from_funnel_buckets(self, db):
+        """Marker colors are `FUNNEL_BUCKETS[i][2]` for each visible
+        bucket in display order. Pins that the bucket owns its color
+        (the aggregation-aware choice) — not STATUS_COLORS which is for
+        per-status surfaces (badges, tooltips). A future color tweak
+        should live in config.FUNNEL_BUCKETS, not in app.py."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
         marker = trace.get("marker", {})
-        expected_colors = [config.STATUS_COLORS[s] for s in config.STATUS_VALUES]
+        expected_colors = [
+            config.FUNNEL_BUCKETS[i][2] for i in self._visible_bucket_indices()
+        ]
         assert list(marker.get("color", [])) == expected_colors, (
-            f"Funnel marker colors must come from config.STATUS_COLORS, in "
-            f"STATUS_VALUES order.\n  expected: {expected_colors}\n"
+            f"Funnel marker colors must come from FUNNEL_BUCKETS[i][2], in "
+            f"visible-bucket order.\n  expected: {expected_colors}\n"
             f"  got:      {list(marker.get('color', []))}"
         )
 
     def test_funnel_y_axis_reads_top_down_in_pipeline_order(self, db):
-        """Visual order must match reading order: [SAVED] at the TOP of the
-        chart, [DECLINED] at the bottom — the same top-down flow as
-        config.STATUS_VALUES.
+        """Visual order must match reading order: the FIRST visible bucket
+        ('Saved' by default) at the top, the LAST at the bottom — same
+        top-down flow as FUNNEL_BUCKETS.
 
         Plotly renders horizontal bars bottom-to-top by default (first
         y-category sits at the bottom), which inverts the pipeline. The
@@ -550,148 +638,228 @@ class TestT2AFunnelBar:
         spec = json.loads(at.get("plotly_chart")[0].proto.spec)
         yaxis = spec.get("layout", {}).get("yaxis", {})
         assert yaxis.get("autorange") == "reversed", (
-            "Funnel yaxis must set autorange='reversed' so [SAVED] is at "
-            "the top and [DECLINED] at the bottom (pipeline reads top-down). "
-            f"Got yaxis={yaxis!r}"
+            "Funnel yaxis must set autorange='reversed' so the first visible "
+            "bucket is at the top and the last at the bottom (pipeline reads "
+            f"top-down). Got yaxis={yaxis!r}"
         )
 
-    def test_funnel_missing_statuses_render_as_zero_bars(self, db):
+    def test_funnel_missing_buckets_render_as_zero_bars(self, db):
         """count_by_status() OMITS zero-count statuses from its dict.
-        The funnel must still render every STATUS_VALUES bar with the
+        The funnel must still render every VISIBLE bucket with the
         missing ones coerced to 0 — otherwise the chart's shape changes
-        as buckets fill up, and color/position assertions elsewhere break."""
+        as buckets fill up, and color/position assertions elsewhere break.
+
+        Seeds one [SAVED] position only. With default hiding the visible
+        buckets are Saved/Applied/Interview/Offer; only Saved is non-zero."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
-        assert len(trace["x"]) == len(config.STATUS_VALUES)
-        assert len(trace["y"]) == len(config.STATUS_VALUES)
-        # Every status except [SAVED] should read 0.
-        for status, count in zip(trace["y"], trace["x"]):
-            if status == config.STATUS_SAVED:
-                assert count == 1, f"[SAVED] bar should be 1, got {count}"
+        visible = self._visible_bucket_indices()
+        assert len(trace["x"]) == len(visible)
+        assert len(trace["y"]) == len(visible)
+        # Every bucket except Saved should read 0.
+        saved_label = config.FUNNEL_BUCKETS[0][0]  # "Saved"
+        for label, count in zip(trace["y"], trace["x"]):
+            if label == saved_label:
+                assert count == 1, f"'Saved' bar should be 1, got {count}"
             else:
                 assert count == 0, (
-                    f"Status {status!r} has no seeded rows; expected 0, got {count}"
+                    f"Bucket {label!r} has no seeded rows; expected 0, got {count}"
                 )
 
 
-# ── T2-B: Application Funnel empty-state ──────────────────────────────────────
+# ── T2-B: Application Funnel empty-state (3 branches) ─────────────────────────
 
 class TestT2BFunnelEmptyState:
-    """T2-B: when there are literally no positions, swap the Plotly figure
-    for descriptive text so the dashboard doesn't render an empty/broken
-    chart with seven zero-width bars.
+    """T2-B: the three-branch empty-state matrix for the funnel
+    (DESIGN §8.1 'Funnel visibility rules' + 'Empty-state branches').
 
-    Trigger semantics (user decision 2026-04-21, Option C):
-      - Empty-state fires iff `sum(count_by_status().values()) == 0` — i.e.
-        no rows in the positions table at all.
-      - A DB with only terminal-status rows ([CLOSED]/[REJECTED]/[DECLINED])
-        still has positions, so the figure STILL RENDERS (with the terminal
-        bars non-zero and the active bars at 0). This differs intentionally
-        from T1-E's hero trigger, which fires on 'no active pipeline'. The
-        funnel's job is visual pipeline state; terminal-only rows are valid
-        state to visualize.
+    Sub-task 12 replaces the pre-v1.3 two-state model (Option C: render or
+    info) with a three-branch model driven by FUNNEL_BUCKETS visibility:
 
-    Copy (user decision 2026-04-21, wording γ):
-      'Application funnel will appear once you've added positions.'
+      (a) NO DATA ANYWHERE. `sum(count_by_status().values()) == 0`:
+          show `st.info(EMPTY_COPY_A)`, and SUPPRESS the `[expand]` button
+          (nothing to expand into). Chart does not render.
 
-    Rendered via st.info(...). AppTest exposes info elements at `at.info`,
-    each with `.value` returning the body string.
+      (b) NO VISIBLE DATA. Total > 0 but every non-zero bucket lies in
+          FUNNEL_DEFAULT_HIDDEN and `_funnel_expanded` is False. Show
+          `st.info(EMPTY_COPY_B)` and RENDER the `[expand]` button
+          directly under the info — gives the user a single-click
+          recovery path. Chart does not render in this branch either.
+          A terminal-only DB falls here (all data in Closed + Archived,
+          both hidden by default).
 
-    Subheader stability:
-      'Application Funnel' renders in BOTH branches so the page shape does
-      not flicker when the first position is added.
+      (c) OTHERWISE. At least one visible bucket has data, OR the user
+          has clicked `[expand]` so hidden buckets are now visible.
+          Chart renders. The `[expand]` button renders below the chart
+          whenever FUNNEL_DEFAULT_HIDDEN is non-empty AND not yet
+          expanded.
+
+    Subheader renders in ALL THREE branches so page height does not
+    flicker across transitions. The `[expand]`-button toggling between
+    branches is covered by TestT2DFunnelExpand.
+
+    Pre-Sub-task-12 divergence: the earlier 'Option C' behaviour had
+    terminal-only DBs STILL RENDER the figure with terminal bars
+    non-zero. The v1.3 spec reverses that — terminal rows are all in
+    hidden buckets, so branch (b) fires. Tests below pin the new
+    behaviour; the pre-v1.3 Option C test is replaced.
     """
 
-    EMPTY_COPY = "Application funnel will appear once you've added positions."
+    EMPTY_COPY_A = "Application funnel will appear once you've added positions."
+    EMPTY_COPY_B = "All your positions are in hidden buckets. Click [expand] below to reveal them."
+    EXPAND_LABEL = "[expand]"
 
     @staticmethod
-    def _empty_state_shown(at: AppTest) -> bool:
-        return any(
-            TestT2BFunnelEmptyState.EMPTY_COPY in (i.value or "")
-            for i in at.info
-        )
+    def _info_bodies(at: AppTest) -> list[str]:
+        return [i.value for i in at.info]
+
+    @staticmethod
+    def _copy_shown(at: AppTest, body: str) -> bool:
+        return any(i.value == body for i in at.info)
 
     @staticmethod
     def _funnel_subheader_shown(at: AppTest) -> bool:
-        """The 'Application Funnel' subheader must render in both branches."""
+        """The 'Application Funnel' subheader must render in all branches."""
         return any("Application Funnel" in s.value for s in at.subheader)
 
-    def test_empty_db_hides_figure_and_shows_empty_state(self, db):
-        """No positions at all → no plotly_chart; empty-state info is shown."""
+    @staticmethod
+    def _expand_button_rendered(at: AppTest) -> bool:
+        return any(b.label == TestT2BFunnelEmptyState.EXPAND_LABEL for b in at.button)
+
+    # ── Branch (a): no data anywhere ──────────────────────────────────────────
+
+    def test_empty_db_fires_branch_a(self, db):
+        """Branch (a): empty DB → EMPTY_COPY_A info; no chart; NO [expand]."""
         at = _run_page()
-        charts = at.get("plotly_chart")
-        assert len(charts) == 0, (
-            f"Empty DB must not render the funnel chart (T2-B Option C); "
-            f"got {len(charts)} plotly_chart element(s)."
+        assert len(at.get("plotly_chart")) == 0, (
+            "Branch (a): chart must NOT render on an empty DB. "
+            f"Got {len(at.get('plotly_chart'))} plotly_chart element(s)."
         )
-        assert self._empty_state_shown(at), (
-            f"Expected empty-state info with copy {self.EMPTY_COPY!r} on "
-            f"empty DB. Got info bodies: {[i.value for i in at.info]}"
+        assert self._copy_shown(at, self.EMPTY_COPY_A), (
+            f"Branch (a): expected info {self.EMPTY_COPY_A!r}. "
+            f"Got info bodies: {self._info_bodies(at)}"
+        )
+        assert not self._expand_button_rendered(at), (
+            "Branch (a): [expand] button must be SUPPRESSED — nothing "
+            f"to expand into. Got labels: {[b.label for b in at.button]}"
         )
 
-    def test_empty_state_copy_is_spec_exact(self, db):
-        """Exact copy pin — guards against accidental rewording (the user
-        locked wording γ on 2026-04-21; a rephrase needs a new decision)."""
+    def test_branch_a_empty_copy_is_spec_exact(self, db):
+        """Exact copy pin — a rephrase needs a new user decision."""
         at = _run_page()
-        matching = [i for i in at.info if i.value == self.EMPTY_COPY]
+        matching = [i for i in at.info if i.value == self.EMPTY_COPY_A]
         assert len(matching) == 1, (
-            f"Expected exactly one info element with the exact copy "
-            f"{self.EMPTY_COPY!r}. Got info bodies: {[i.value for i in at.info]}"
+            f"Branch (a): expected exactly one info with copy "
+            f"{self.EMPTY_COPY_A!r}. Got: {self._info_bodies(at)}"
         )
 
-    def test_single_open_position_renders_figure_not_empty_state(self, db):
-        """A single [SAVED] position → funnel chart renders; empty-state hides."""
-        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
-        at = _run_page()
-        charts = at.get("plotly_chart")
-        assert len(charts) >= 1, (
-            f"Funnel must render when at least one position exists; "
-            f"got {len(charts)} plotly_chart element(s)."
-        )
-        assert not self._empty_state_shown(at), (
-            "Empty-state info must NOT render once any position exists. "
-            f"Found info bodies: {[i.value for i in at.info]}"
-        )
+    # ── Branch (b): total > 0 but all non-zero buckets hidden ─────────────────
 
-    def test_terminal_only_db_still_renders_figure(self, db):
-        """Option C guard: terminal-only DB has positions, so the funnel
-        still renders (with terminal bars non-zero and active bars at 0).
-
-        This is the critical Option C vs Option A divergence — the T1-E
-        hero DOES fire in this case (it gates on active-pipeline counts),
-        but the funnel renders regardless because terminal rows are valid
-        visual state. Swapping to Option A here is a single-test change."""
+    def test_all_hidden_bucket_data_fires_branch_b(self, db):
+        """Terminal-only DB: every position lands in Closed + Archived,
+        both default-hidden. Branch (b) fires — info + [expand] button,
+        no chart. This is the v1.3 replacement for the pre-Sub-task-12
+        'terminal-only DB still renders figure' behaviour."""
         for term in config.TERMINAL_STATUSES:
             database.add_position(
                 make_position({"position_name": f"P-{term}", "status": term})
             )
         at = _run_page()
-        charts = at.get("plotly_chart")
-        assert len(charts) >= 1, (
-            "Terminal-only DB has positions (just not active ones); the "
-            "funnel must still render. Got 0 plotly_chart elements."
+        assert len(at.get("plotly_chart")) == 0, (
+            "Branch (b): chart must NOT render when all non-zero buckets "
+            f"are default-hidden. Got {len(at.get('plotly_chart'))} chart(s)."
         )
-        assert not self._empty_state_shown(at), (
-            "Empty-state copy must NOT render when any position exists, "
-            "even in terminal statuses. Got info bodies: "
-            f"{[i.value for i in at.info]}"
+        assert self._copy_shown(at, self.EMPTY_COPY_B), (
+            f"Branch (b): expected info {self.EMPTY_COPY_B!r}. "
+            f"Got info bodies: {self._info_bodies(at)}"
+        )
+        assert self._expand_button_rendered(at), (
+            "Branch (b): [expand] button must render directly under the "
+            f"info. Got button labels: {[b.label for b in at.button]}"
+        )
+        assert not self._copy_shown(at, self.EMPTY_COPY_A), (
+            "Branch (b): EMPTY_COPY_A must NOT appear — branches are "
+            "mutually exclusive. Got info bodies: " f"{self._info_bodies(at)}"
         )
 
-    def test_subheader_renders_in_both_branches(self, db):
-        """'Application Funnel' subheader persists across the empty → seeded
-        transition, so the page height doesn't jump when the first
-        position is added."""
+    def test_branch_b_empty_copy_is_spec_exact(self, db):
+        """Exact copy pin for branch (b)."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        matching = [i for i in at.info if i.value == self.EMPTY_COPY_B]
+        assert len(matching) == 1, (
+            f"Branch (b): expected exactly one info with copy "
+            f"{self.EMPTY_COPY_B!r}. Got: {self._info_bodies(at)}"
+        )
+
+    # ── Branch (c): at least one visible bucket has data ──────────────────────
+
+    def test_single_open_position_fires_branch_c(self, db):
+        """A single [SAVED] position → chart renders (branch (c)); neither
+        empty-state info shows."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        assert len(at.get("plotly_chart")) >= 1, (
+            "Branch (c): chart must render when any visible bucket has data. "
+            f"Got {len(at.get('plotly_chart'))} plotly_chart element(s)."
+        )
+        assert not self._copy_shown(at, self.EMPTY_COPY_A), (
+            "Branch (c): EMPTY_COPY_A must NOT render once a visible "
+            f"bucket has data. Got info bodies: {self._info_bodies(at)}"
+        )
+        assert not self._copy_shown(at, self.EMPTY_COPY_B), (
+            "Branch (c): EMPTY_COPY_B must NOT render once a visible "
+            f"bucket has data. Got info bodies: {self._info_bodies(at)}"
+        )
+
+    def test_mixed_visible_and_hidden_data_fires_branch_c(self, db):
+        """A position in a visible bucket + another in a hidden bucket:
+        branch (c) still fires because at least one visible bucket is
+        non-zero. (Only 'all non-zero buckets hidden' triggers branch (b).)
+        """
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[CLOSED]"}))
+        at = _run_page()
+        assert len(at.get("plotly_chart")) >= 1, (
+            "Branch (c): chart must render when at least one visible bucket "
+            f"is non-zero. Got {len(at.get('plotly_chart'))} chart(s)."
+        )
+        assert not self._copy_shown(at, self.EMPTY_COPY_B), (
+            "Branch (c) precondition: with a SAVED position present, "
+            "branch (b) must NOT fire even though a hidden bucket has data."
+        )
+
+    # ── Subheader stability across all three branches ─────────────────────────
+
+    def test_subheader_renders_in_all_branches(self, db):
+        """'Application Funnel' subheader persists across branches (a) → (b)
+        → (c), so the page height doesn't jump as data lands."""
+        # Branch (a)
         at = _run_page()
         assert self._funnel_subheader_shown(at), (
-            "Empty-state branch must still render the 'Application Funnel' "
-            f"subheader. Got: {[s.value for s in at.subheader]}"
+            "Branch (a): 'Application Funnel' subheader missing. "
+            f"Got: {[s.value for s in at.subheader]}"
         )
+        # Branch (b) — terminal-only DB
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        assert self._funnel_subheader_shown(at), (
+            "Branch (b): 'Application Funnel' subheader missing. "
+            f"Got: {[s.value for s in at.subheader]}"
+        )
+        # Branch (c) — add a visible-bucket row
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         assert self._funnel_subheader_shown(at), (
-            "Seeded branch must still render the 'Application Funnel' "
-            f"subheader. Got: {[s.value for s in at.subheader]}"
+            "Branch (c): 'Application Funnel' subheader missing. "
+            f"Got: {[s.value for s in at.subheader]}"
         )
 
 
@@ -796,23 +964,210 @@ class TestT2CFunnelLayout:
         )
 
     def test_empty_state_info_renders_inside_left_column(self, db):
-        """Empty DB: the T2-B info copy must live INSIDE the left half
-        column too — otherwise the empty-state branch accidentally
+        """Empty DB: the branch-(a) info copy must live INSIDE the left
+        half column too — otherwise the empty-state branch accidentally
         escapes the layout wrap and the right-half alignment breaks
         when T3-B lands.
 
-        References `TestT2BFunnelEmptyState.EMPTY_COPY` rather than
+        References `TestT2BFunnelEmptyState.EMPTY_COPY_A` rather than
         re-literalizing the string so a future wording change (which
         requires a new user decision per §T2-B) updates one constant,
-        not multiple. See phase-4-Tier2 review Fix #2."""
+        not multiple. See phase-4-Tier2 review Fix #2. Sub-task 12
+        renamed `EMPTY_COPY` → `EMPTY_COPY_A` to disambiguate from the
+        new branch-(b) copy."""
         at = _run_page()
         halves = self._half_width_columns(at)
         left = halves[0]
         left_info_bodies = [i.value for i in left.info]
-        expected = TestT2BFunnelEmptyState.EMPTY_COPY
+        expected = TestT2BFunnelEmptyState.EMPTY_COPY_A
         assert expected in left_info_bodies, (
             f"Empty-state info must render inside the left half-width "
             f"column. Got left-column info bodies: {left_info_bodies}"
+        )
+
+
+# ── T2-D: Funnel [expand] toggle (Sub-task 12) ────────────────────────────────
+
+class TestT2DFunnelExpand:
+    """T2-D: single `[expand]` button + `st.session_state["_funnel_expanded"]`
+    flag that reveals every `FUNNEL_DEFAULT_HIDDEN` bucket for the rest of
+    the session (DESIGN §8.1 'Funnel visibility rules' + D24).
+
+    Contract pins:
+      - Button label: exactly `"[expand]"` (literal brackets — matches the
+        affordance convention used in DESIGN's prose).
+      - Click flips `st.session_state["_funnel_expanded"]` to True (one-way;
+        no collapse). Implementation uses `on_click` callback so the flag
+        is set BEFORE the next script rerun — probed in AppTest before
+        writing this class.
+      - Post-click: all `FUNNEL_BUCKETS` entries are visible on the chart
+        (y-axis lists every bucket label in list order). Button no longer
+        renders (since `not expanded` predicate is now False).
+      - In branch (a) (no data), the button is SUPPRESSED regardless of
+        state — nothing to expand into.
+      - In branch (b), the button renders under the empty-state info.
+      - In branch (c), the button renders below the chart.
+
+    Branch-(a)-suppression is also covered in TestT2BFunnelEmptyState but
+    is re-pinned here to keep the expand-affordance contract in one place.
+    Branch-(b) button presence is covered there as well.
+
+    Visibility formula (applied after click):
+      visible_bucket_labels = every label in FUNNEL_BUCKETS (in order).
+    """
+
+    EXPAND_LABEL = "[expand]"
+    STATE_KEY = "_funnel_expanded"
+
+    @staticmethod
+    def _expand_buttons(at: AppTest):
+        return [b for b in at.button if b.label == TestT2DFunnelExpand.EXPAND_LABEL]
+
+    @staticmethod
+    def _chart_y_labels(at: AppTest) -> list[str]:
+        import json
+        charts = at.get("plotly_chart")
+        assert len(charts) >= 1, "Expected a chart after expanding."
+        spec = json.loads(charts[0].proto.spec)
+        return list(spec["data"][0]["y"])
+
+    def test_expand_button_renders_in_branch_c_by_default(self, db):
+        """Branch (c) + FUNNEL_DEFAULT_HIDDEN non-empty + not expanded →
+        exactly one `[expand]` button renders. This is the common path
+        on a fresh session with any visible-bucket data."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        assert len(self._expand_buttons(at)) == 1, (
+            f"Expected exactly one {self.EXPAND_LABEL!r} button in branch "
+            f"(c) with default-hidden buckets. Got button labels: "
+            f"{[b.label for b in at.button]}"
+        )
+
+    def test_expand_button_absent_in_branch_a(self, db):
+        """Branch (a) re-pin (also tested in TestT2BFunnelEmptyState):
+        empty DB → no `[expand]` button — nothing to expand into."""
+        at = _run_page()
+        assert self._expand_buttons(at) == [], (
+            "Branch (a): [expand] must be SUPPRESSED. "
+            f"Got labels: {[b.label for b in at.button]}"
+        )
+
+    def test_expand_button_present_in_branch_b(self, db):
+        """Branch (b) re-pin: terminal-only DB → `[expand]` renders
+        directly under the empty-state info."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        assert len(self._expand_buttons(at)) == 1, (
+            "Branch (b): expected exactly one [expand] button. "
+            f"Got button labels: {[b.label for b in at.button]}"
+        )
+
+    def test_funnel_expanded_defaults_false(self, db):
+        """Fresh page load → `st.session_state["_funnel_expanded"]` is
+        initialized to False via setdefault (covered by `in` check since
+        bare absence would also satisfy "not expanded" semantically)."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        assert self.STATE_KEY in at.session_state, (
+            f"Expected {self.STATE_KEY!r} to be initialized via setdefault."
+        )
+        assert at.session_state[self.STATE_KEY] is False, (
+            f"Fresh page: {self.STATE_KEY} must default to False. "
+            f"Got {at.session_state[self.STATE_KEY]!r}."
+        )
+
+    def test_clicking_expand_sets_session_state_true(self, db):
+        """Single click → state flag flips to True via on_click callback."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        buttons = self._expand_buttons(at)
+        assert len(buttons) == 1
+        buttons[0].click().run()
+        assert not at.exception, f"[expand] click raised: {at.exception}"
+        assert at.session_state[self.STATE_KEY] is True, (
+            f"After click: {self.STATE_KEY} must be True. "
+            f"Got {at.session_state[self.STATE_KEY]!r}."
+        )
+
+    def test_clicking_expand_reveals_all_buckets_on_chart(self, db):
+        """Branch (c) click → y-axis now lists every `FUNNEL_BUCKETS` label
+        in order (hidden buckets promoted). Key behavioural pin."""
+        # Seed data in both a visible bucket and both hidden buckets so
+        # expansion produces non-trivial post-expand bars. Bucket-count
+        # assertion is covered by TestT2AFunnelBar; here we pin the label
+        # list only.
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[CLOSED]"}))
+        database.add_position(make_position({"position_name": "C", "status": "[REJECTED]"}))
+        at = _run_page()
+
+        # Pre-click: only default-visible buckets on the y-axis.
+        pre = self._chart_y_labels(at)
+        expected_pre = [
+            label for label, _, _ in config.FUNNEL_BUCKETS
+            if label not in config.FUNNEL_DEFAULT_HIDDEN
+        ]
+        assert pre == expected_pre, (
+            f"Pre-click y-axis must match default-visible buckets. "
+            f"expected: {expected_pre}\n got: {pre}"
+        )
+
+        # Click
+        buttons = self._expand_buttons(at)
+        assert len(buttons) == 1
+        buttons[0].click().run()
+        assert not at.exception, f"[expand] click raised: {at.exception}"
+
+        # Post-click: every bucket in FUNNEL_BUCKETS order.
+        post = self._chart_y_labels(at)
+        expected_post = [label for label, _, _ in config.FUNNEL_BUCKETS]
+        assert post == expected_post, (
+            f"Post-click y-axis must include every FUNNEL_BUCKETS label. "
+            f"expected: {expected_post}\n got: {post}"
+        )
+
+    def test_expand_button_hides_after_click(self, db):
+        """Once expanded, the `[expand]` button no longer renders —
+        DESIGN §8.1 says it renders 'whenever FUNNEL_DEFAULT_HIDDEN is
+        non-empty AND not yet expanded'; expansion flips the latter."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        buttons = self._expand_buttons(at)
+        assert len(buttons) == 1
+        buttons[0].click().run()
+        assert self._expand_buttons(at) == [], (
+            "Post-click: [expand] must not re-render (already expanded). "
+            f"Got button labels: {[b.label for b in at.button]}"
+        )
+
+    def test_clicking_expand_from_branch_b_renders_chart(self, db):
+        """Click from branch (b): all-hidden data becomes visible, so the
+        next render is branch (c) with the chart drawn across ALL buckets.
+        Verifies the `[expand]` recovery path DESIGN §8.1 promises."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        # Branch (b): no chart yet.
+        assert len(at.get("plotly_chart")) == 0, (
+            "Precondition: branch (b) renders no chart."
+        )
+        buttons = self._expand_buttons(at)
+        assert len(buttons) == 1
+        buttons[0].click().run()
+        # Post-click: branch (c) with chart including all buckets.
+        assert len(at.get("plotly_chart")) >= 1, (
+            "Post-click from branch (b): chart must render."
+        )
+        post = self._chart_y_labels(at)
+        expected_post = [label for label, _, _ in config.FUNNEL_BUCKETS]
+        assert post == expected_post, (
+            f"Post-click y-axis must include every FUNNEL_BUCKETS label. "
+            f"expected: {expected_post}\n got: {post}"
         )
 
 
