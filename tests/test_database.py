@@ -754,6 +754,332 @@ class TestUpsertApplication:
         assert app["applied_date"] == "2026-04-10"   # still set
 
 
+# ── upsert_application cascade R1 + R3 ────────────────────────────────────────
+# DESIGN §9.3 pipeline auto-promotion. Two cascade rules live inside
+# upsert_application:
+#   R1 — `applied_date` transitions from NULL to non-NULL
+#        → UPDATE positions SET status = STATUS_APPLIED
+#            WHERE id = ? AND status = STATUS_SAVED
+#   R3 — incoming `response_type == "Offer"`
+#        → UPDATE positions SET status = STATUS_OFFER
+#            WHERE id = ? AND status NOT IN TERMINAL_STATUSES
+#
+# Each cascade runs inside the same transaction as the primary write and
+# the function returns ``{"status_changed": bool, "new_status": str | None}``
+# so callers can render a toast when the pipeline moved.
+
+
+def _force_position_status(position_id: int, status: str) -> None:
+    """Raw-SQL helper: set positions.status directly, bypassing the
+    cascade. Used by tests to stage pre-states that a normal write path
+    can't produce (e.g. manual back-edit to STATUS_SAVED while retaining
+    a set applied_date). The tests below never call user-facing writers
+    to set pre-state status, because those writers may themselves fire
+    R1/R2/R3 and pollute the scenario."""
+    with database._connect() as conn:
+        conn.execute(
+            "UPDATE positions SET status = ? WHERE id = ?",
+            (status, position_id),
+        )
+
+
+class TestUpsertApplicationR1:
+    """R1 isolation — `applied_date` NULL→set on a STATUS_SAVED position.
+    No `response_type="Offer"` in the payload, so R3 never fires."""
+
+    def test_r1_promotes_saved_to_applied(self, db):
+        pid = database.add_position(make_position())
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+        result = database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+        assert result == {
+            "status_changed": True,
+            "new_status":     config.STATUS_APPLIED,
+        }
+
+    def test_r1_noop_when_applied_date_was_already_set(self, db):
+        """Idempotence: once applied_date is non-NULL, a subsequent
+        upsert that also sets applied_date (same or different date)
+        does NOT trigger R1 again — the cascade is scoped to the
+        NULL→non-NULL transition, not every touch of the column."""
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        # Pre-state now: status=APPLIED, applied_date='2026-04-10'.
+        # Manually back-edit the status to SAVED to isolate R1's
+        # "applied_date must be NULL pre" clause from its status guard.
+        _force_position_status(pid, config.STATUS_SAVED)
+        result = database.upsert_application(pid, {"applied_date": "2026-04-11"})
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED, (
+            "R1 must not fire when applied_date was already non-NULL "
+            "pre-upsert, even if the new value differs."
+        )
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    def test_r1_noop_when_status_not_saved(self, db):
+        """Status guard: R1's SQL includes AND status = STATUS_SAVED,
+        so a position already at a further stage is not regressed /
+        re-promoted. Verified against STATUS_APPLIED + STATUS_INTERVIEW
+        directly (STATUS_OFFER / terminals also satisfy the guard)."""
+        for pre in (config.STATUS_APPLIED, config.STATUS_INTERVIEW):
+            pid = database.add_position(make_position(
+                {"position_name": f"Pre-{pre}"}
+            ))
+            _force_position_status(pid, pre)
+            result = database.upsert_application(
+                pid, {"applied_date": "2026-04-10"}
+            )
+            assert database.get_position(pid)["status"] == pre, (
+                f"R1 must not affect a position already at {pre!r}; "
+                f"got {database.get_position(pid)['status']!r}"
+            )
+            assert result["status_changed"] is False
+            assert result["new_status"] is None
+
+    def test_r1_does_not_fire_when_propagate_status_false(self, db):
+        pid = database.add_position(make_position())
+        result = database.upsert_application(
+            pid, {"applied_date": "2026-04-10"}, propagate_status=False,
+        )
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED, (
+            "propagate_status=False must suppress R1 even when its "
+            "conditions are met."
+        )
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+        # Primary write still lands — propagate_status=False suppresses
+        # only the cascade, not the application upsert.
+        assert database.get_application(pid)["applied_date"] == "2026-04-10"
+
+
+class TestUpsertApplicationR3:
+    """R3 isolation — `response_type == "Offer"` without touching
+    `applied_date` on a non-NULL pre-state (or with pre-state manually
+    staged so R1's condition is False)."""
+
+    def test_r3_promotes_saved_to_offer(self, db):
+        pid = database.add_position(make_position())
+        # Pre: STATUS_SAVED. Payload has response_type=Offer, no
+        # applied_date, so R1's condition (applied_date transition) is
+        # False. R3 alone fires and sends SAVED→OFFER.
+        result = database.upsert_application(pid, {"response_type": "Offer"})
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result == {
+            "status_changed": True,
+            "new_status":     config.STATUS_OFFER,
+        }
+
+    def test_r3_promotes_applied_to_offer(self, db):
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        # Pre: STATUS_APPLIED. R3 upgrades to OFFER.
+        result = database.upsert_application(pid, {"response_type": "Offer"})
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is True
+        assert result["new_status"] == config.STATUS_OFFER
+
+    def test_r3_promotes_interview_to_offer(self, db):
+        pid = database.add_position(make_position())
+        _force_position_status(pid, config.STATUS_INTERVIEW)
+        result = database.upsert_application(pid, {"response_type": "Offer"})
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is True
+        assert result["new_status"] == config.STATUS_OFFER
+
+    def test_r3_noop_when_already_offer(self, db):
+        """DESIGN §9.3 pre-state matrix row: at STATUS_OFFER, R3 'fires
+        (no-op, already there)'. The SQL UPDATE's WHERE still matches
+        (OFFER is not terminal) and the SET self-assigns the same
+        value, but pre_status == post_status so the caller sees
+        status_changed=False (meaningful-change semantics)."""
+        pid = database.add_position(make_position())
+        _force_position_status(pid, config.STATUS_OFFER)
+        result = database.upsert_application(pid, {"response_type": "Offer"})
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is False, (
+            "status_changed must compare pre vs post STATUS STRING, "
+            "not whether an UPDATE executed. A self-assignment on "
+            "STATUS_OFFER is not a meaningful change."
+        )
+        assert result["new_status"] is None
+
+    @pytest.mark.parametrize("terminal_status", [
+        "[CLOSED]", "[REJECTED]", "[DECLINED]",
+    ])
+    def test_r3_blocked_on_terminal(self, db, terminal_status):
+        """DESIGN §9.3 R3 guard: the SQL WHERE excludes all three
+        terminals. A stray upsert with response_type=Offer on a terminal
+        row must not silently regress the decision."""
+        pid = database.add_position(make_position())
+        _force_position_status(pid, terminal_status)
+        result = database.upsert_application(pid, {"response_type": "Offer"})
+        assert database.get_position(pid)["status"] == terminal_status, (
+            f"R3 must not overwrite terminal status {terminal_status!r}; "
+            f"got {database.get_position(pid)['status']!r}"
+        )
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    def test_r3_does_not_fire_when_propagate_status_false(self, db):
+        pid = database.add_position(make_position())
+        result = database.upsert_application(
+            pid, {"response_type": "Offer"}, propagate_status=False,
+        )
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+        assert result["status_changed"] is False
+        assert database.get_application(pid)["response_type"] == "Offer"
+
+    def test_r3_does_not_fire_on_non_offer_response_type(self, db):
+        """R3 is keyed to the exact string "Offer". Other response_type
+        values (Rejection, Interview Invite, …) are just data, not
+        promotion triggers."""
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        # Now at STATUS_APPLIED. A Rejection response must not promote.
+        result = database.upsert_application(pid, {"response_type": "Rejection"})
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+        assert result["status_changed"] is False
+
+
+class TestUpsertApplicationR1R3Matrix:
+    """DESIGN §9.3 combined-cascade table: when R1's condition (applied_date
+    NULL→set) AND R3's condition (response_type=Offer) are BOTH in the
+    same upsert payload, the per-pre-state post-state matrix locks what
+    wins. All five non-terminal pre-states land at STATUS_OFFER; the
+    three terminals stay put because R3's guard blocks and R1's status
+    guard blocks too."""
+
+    def _upsert_both(self, pid):
+        """Shared body: one upsert carrying both R1 and R3 triggers."""
+        return database.upsert_application(pid, {
+            "applied_date":  "2026-04-10",
+            "response_type": "Offer",
+        })
+
+    def test_matrix_saved_lands_on_offer(self, db):
+        """STATUS_SAVED + R1 + R3 → R1 promotes SAVED→APPLIED, then
+        R3 promotes APPLIED→OFFER. Net: OFFER."""
+        pid = database.add_position(make_position())
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+        result = self._upsert_both(pid)
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is True
+        assert result["new_status"] == config.STATUS_OFFER
+
+    def test_matrix_applied_lands_on_offer(self, db):
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-01-01"})
+        # Back-edit status so pre is APPLIED but applied_date is already
+        # set, then send a new applied_date (R1 doesn't re-fire because
+        # pre applied_date was non-NULL) + Offer response (R3 fires).
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+        result = self._upsert_both(pid)
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is True
+
+    def test_matrix_interview_lands_on_offer(self, db):
+        pid = database.add_position(make_position())
+        _force_position_status(pid, config.STATUS_INTERVIEW)
+        result = self._upsert_both(pid)
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is True
+
+    def test_matrix_offer_stays_offer_with_no_change_indicator(self, db):
+        """Matrix row: pre STATUS_OFFER, both R1 and R3 evaluate. R1
+        does not fire (status guard — not SAVED). R3 fires but self-
+        assigns OFFER. Post == pre, so status_changed reads False."""
+        pid = database.add_position(make_position())
+        _force_position_status(pid, config.STATUS_OFFER)
+        result = self._upsert_both(pid)
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    @pytest.mark.parametrize("terminal_status", [
+        "[CLOSED]", "[REJECTED]", "[DECLINED]",
+    ])
+    def test_matrix_terminal_unchanged(self, db, terminal_status):
+        """Matrix row: any terminal pre-state — R1 blocked (status != SAVED),
+        R3 blocked (status IN TERMINAL_STATUSES). Post == pre."""
+        pid = database.add_position(make_position())
+        _force_position_status(pid, terminal_status)
+        result = self._upsert_both(pid)
+        assert database.get_position(pid)["status"] == terminal_status
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+
+class TestUpsertApplicationIndicator:
+    """Signature + return-shape contract on upsert_application."""
+
+    def test_signature_has_keyword_only_propagate_status_default_true(self, db):
+        """DESIGN §7 load-bearing contract #2. Sub-task 9 promotes
+        upsert_application to the same keyword-only cascade API as
+        add_interview (Sub-task 8), with default True."""
+        import inspect
+        sig = inspect.signature(database.upsert_application)
+        param = sig.parameters.get("propagate_status")
+        assert param is not None
+        assert param.default is True
+        assert param.kind == inspect.Parameter.KEYWORD_ONLY
+
+    def test_returns_indicator_dict_shape(self, db):
+        """Return value must always be a dict with exactly the two
+        indicator keys — callers can read them without a try/except."""
+        pid = database.add_position(make_position())
+        result = database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"status_changed", "new_status"}
+        assert isinstance(result["status_changed"], bool)
+
+    def test_empty_fields_returns_no_change_indicator(self, db):
+        """Empty-fields early return (existing no-op contract) must
+        still return the indicator dict, not None — so the caller can
+        unpack the return unconditionally."""
+        pid = database.add_position(make_position())
+        result = database.upsert_application(pid, {})
+        assert result == {"status_changed": False, "new_status": None}
+        # And no primary write happened.
+        assert database.get_application(pid)["applied_date"] is None
+
+
+class TestUpsertApplicationAtomicity:
+    """DESIGN §9.3: 'All cascades execute inside the same transaction as
+    the primary write, so a failure rolls the whole call back.'"""
+
+    def test_cascade_failure_rolls_back_primary_write(self, db, monkeypatch):
+        """Inject a failure in the R1 cascade by replacing
+        config.STATUS_APPLIED with an un-bindable Python object. SQLite's
+        `execute(..., [params])` raises InterfaceError when asked to bind
+        an un-adaptable value; the _connect() context manager's except
+        branch rolls back everything in the transaction. The primary
+        upsert (applications INSERT/UPDATE) must NOT persist.
+
+        Empirical: sqlite3 raises
+        'ProgrammingError: Error binding parameter' (Python 3.14) when
+        a non-adaptable Python value appears in a bind tuple."""
+        pid = database.add_position(make_position())
+
+        # Sentinel that SQLite cannot bind.
+        class NotBindable:
+            pass
+        monkeypatch.setattr(config, "STATUS_APPLIED", NotBindable())
+
+        with pytest.raises(Exception):
+            database.upsert_application(pid, {"applied_date": "2026-04-10"})
+
+        # Primary write must have rolled back — no applied_date.
+        app = database.get_application(pid)
+        assert app["applied_date"] is None, (
+            "Primary applications UPDATE must roll back when the R1 "
+            f"cascade fails; got applied_date={app['applied_date']!r}. "
+            "This is DESIGN §9.3 atomicity — cascade inside the same "
+            "transaction as the primary write."
+        )
+        # And status remains at SAVED (the cascade never committed).
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+
+
 # ── recommenders ─────────────────────────────────────────────────────────────
 
 class TestRecommenders:
@@ -805,6 +1131,78 @@ class TestRecommenders:
         database.delete_recommender(rec_id)
         pos = database.get_position(pos_id)   # should not raise
         assert pos["position_name"] == "BioStats Postdoc"
+
+
+# ── is_all_recs_submitted ─────────────────────────────────────────────────────
+# DESIGN §7 + D23: the "all recs submitted" summary that an earlier draft
+# stored as a column is computed at query time by this helper. Scope is a
+# single position; returns True when every recommender row for that
+# position has a non-NULL, non-empty `submitted_date`, OR when the
+# position has zero recommenders (vacuous truth — nothing outstanding).
+
+
+class TestIsAllRecsSubmitted:
+
+    def test_returns_true_for_zero_recommenders(self, db):
+        """Vacuous truth: a position with no recommenders has no
+        outstanding letters by definition. This matches the most
+        natural reading of D23 ('nothing to still be submitted') and
+        makes downstream 'is everything ready?' aggregations compose
+        cleanly without a 'no recs' special case."""
+        pid = database.add_position(make_position())
+        assert database.is_all_recs_submitted(pid) is True
+
+    def test_returns_true_when_all_recommenders_submitted(self, db):
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Smith",
+            "submitted_date":   "2026-04-10",
+        })
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Jones",
+            "submitted_date":   "2026-04-12",
+        })
+        assert database.is_all_recs_submitted(pid) is True
+
+    def test_returns_false_when_any_recommender_unsubmitted(self, db):
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Smith",
+            "submitted_date":   "2026-04-10",
+        })
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Jones",
+            # submitted_date omitted → NULL
+        })
+        assert database.is_all_recs_submitted(pid) is False
+
+    def test_empty_string_submitted_date_counts_as_unsubmitted(self, db):
+        """The page sometimes stores "" instead of NULL for cleared
+        date fields (matches the Notes-tab contract). is_all_recs_
+        submitted treats empty string the same as NULL — both mean
+        "no submission recorded"."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Smith",
+            "submitted_date":   "",
+        })
+        assert database.is_all_recs_submitted(pid) is False
+
+    def test_scoped_to_position_id(self, db):
+        """An unsubmitted recommender on another position must not
+        bleed into this position's 'all submitted' calculation."""
+        pid_a = database.add_position(make_position({"position_name": "A"}))
+        pid_b = database.add_position(make_position({"position_name": "B"}))
+        database.add_recommender(pid_a, {
+            "recommender_name": "Dr. Smith",
+            "submitted_date":   "2026-04-10",
+        })
+        database.add_recommender(pid_b, {
+            "recommender_name": "Dr. Jones",
+            # unsubmitted on position B only
+        })
+        assert database.is_all_recs_submitted(pid_a) is True
+        assert database.is_all_recs_submitted(pid_b) is False
 
 
 # ── count_by_status ───────────────────────────────────────────────────────────
@@ -1234,6 +1632,141 @@ class TestInterviewsCascade:
         )
 
 
+class TestAddInterviewR2:
+    """DESIGN §9.3 R2 — add_interview fires
+    `UPDATE positions SET status = STATUS_INTERVIEW
+       WHERE id = application_id AND status = STATUS_APPLIED`.
+    Status guard alone delivers correct semantics: the first interview
+    on an APPLIED position promotes; subsequent interviews on an
+    INTERVIEW position are no-ops; OFFER / terminals are not
+    regressed. The cascade body counts NO interviews (earlier draft
+    was over-restrictive per §9.3 narrative)."""
+
+    def test_r2_promotes_applied_to_interview(self, db):
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        # Now at STATUS_APPLIED.
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+
+        result = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+
+        assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
+        assert result["status_changed"] is True
+        assert result["new_status"] == config.STATUS_INTERVIEW
+        # Row id still present in the dict.
+        assert isinstance(result["id"], int) and result["id"] >= 1
+
+    def test_r2_noop_when_status_saved(self, db):
+        """A user could add an interview on a SAVED position (unusual
+        but not disallowed). R2's guard requires STATUS_APPLIED, so
+        SAVED stays SAVED — no silent jump from SAVED straight to
+        INTERVIEW."""
+        pid = database.add_position(make_position())
+        result = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    def test_r2_subsequent_interview_on_interview_position_is_noop(self, db):
+        """D18 idempotence narrative: 'subsequent interviews on a
+        STATUS_INTERVIEW position are no-ops'. The 2nd+ add_interview
+        call leaves the status untouched at INTERVIEW."""
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        # Now at STATUS_INTERVIEW (from the 1st interview's R2).
+        assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
+
+        result = database.add_interview(pid, {"scheduled_date": "2026-05-15"})
+        assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    def test_r2_noop_when_already_offer(self, db):
+        """Received an Offer, then scheduled another interview (e.g.
+        final committee before accepting). R2's guard blocks — must
+        not regress OFFER → INTERVIEW."""
+        pid = database.add_position(make_position())
+        _force_position_status(pid, config.STATUS_OFFER)
+        result = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+        assert result["status_changed"] is False
+
+    @pytest.mark.parametrize("terminal_status", [
+        "[CLOSED]", "[REJECTED]", "[DECLINED]",
+    ])
+    def test_r2_noop_when_terminal(self, db, terminal_status):
+        """Status guard blocks: a stray interview record on a
+        terminal-status position must not silently regress."""
+        pid = database.add_position(make_position())
+        _force_position_status(pid, terminal_status)
+        result = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        assert database.get_position(pid)["status"] == terminal_status
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    def test_r2_does_not_fire_when_propagate_status_false(self, db):
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        result = database.add_interview(
+            pid, {"scheduled_date": "2026-05-01"}, propagate_status=False,
+        )
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED, (
+            "propagate_status=False must suppress R2 even when its "
+            "conditions are met."
+        )
+        assert result["status_changed"] is False
+        # Primary INSERT still landed.
+        assert len(database.get_interviews(pid)) == 1
+
+    def test_r2_back_edited_applied_position_with_existing_interviews_promotes(self, db):
+        """DESIGN §9.3 R2 rationale: 'if the user back-edits status to
+        STATUS_APPLIED while retaining existing interviews, adding
+        another interview would fail to promote [under the count-based
+        variant]. The count-free form avoids this.' Verify the back-
+        edit scenario — R2 fires on the next add_interview and
+        re-promotes APPLIED → INTERVIEW."""
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        # Now at STATUS_INTERVIEW with one interview.
+        # User back-edits status to STATUS_APPLIED (via update_position
+        # — cascades don't fire on direct status edits).
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        # Add another interview; R2 must promote again.
+        result = database.add_interview(pid, {"scheduled_date": "2026-05-15"})
+        assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
+        assert result["status_changed"] is True
+        assert result["new_status"] == config.STATUS_INTERVIEW
+
+
+class TestAddInterviewAtomicity:
+
+    def test_cascade_failure_rolls_back_insert(self, db, monkeypatch):
+        """Mirror of TestUpsertApplicationAtomicity: force R2's UPDATE
+        to fail by monkeypatching config.STATUS_INTERVIEW to a non-
+        bindable Python object. The _connect() context manager must
+        roll back the primary INSERT along with the cascade so the
+        interviews row does NOT persist."""
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+
+        class NotBindable:
+            pass
+        monkeypatch.setattr(config, "STATUS_INTERVIEW", NotBindable())
+
+        with pytest.raises(Exception):
+            database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+
+        assert len(database.get_interviews(pid)) == 0, (
+            "Primary INSERT must roll back when the R2 cascade fails; "
+            "interviews row must not persist."
+        )
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+
+
 class TestInterviewsMigration:
     """Sub-task 8 / DESIGN §6.3 normalize-flat-columns-into-sub-table
     pattern. Pre-v1.3 DBs have interview1_date / interview2_date on the
@@ -1610,6 +2143,40 @@ class TestComputeMaterialsReadiness:
         result = database.compute_materials_readiness()
         assert result["ready"]   == 1
         assert result["pending"] == 1
+
+    def test_active_statuses_drive_from_config_aliases(self, db, monkeypatch):
+        """Sub-task 9 (TASKS C1): the active-statuses tuple in
+        compute_materials_readiness must source from the
+        config.STATUS_SAVED / STATUS_APPLIED / STATUS_INTERVIEW aliases
+        rather than a hardcoded `("[SAVED]", "[APPLIED]", "[INTERVIEW]")`
+        literal. Sentinel approach (precedent: Sub-task 4's
+        `test_ddl_defaults_interpolate_from_config`): monkeypatch the
+        aliases to values the DB doesn't contain and assert the scope
+        collapses to zero. A hardcoded tuple would ignore the patch
+        and still match the real `[SAVED]` row → this test is only
+        satisfiable if the function reads aliases at call time."""
+        # Seed a STATUS_SAVED position with a required doc — the
+        # pre-monkeypatch query would pick it up.
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"req_cv": "Yes", "done_cv": 0})
+        # Sanity: before patching, the position is pending.
+        assert database.compute_materials_readiness() == {"ready": 0, "pending": 1}
+
+        # Patch all three aliases to sentinel values the DB never holds.
+        monkeypatch.setattr(config, "STATUS_SAVED",     "[SENTINEL_SAVED]")
+        monkeypatch.setattr(config, "STATUS_APPLIED",   "[SENTINEL_APPLIED]")
+        monkeypatch.setattr(config, "STATUS_INTERVIEW", "[SENTINEL_INTERVIEW]")
+
+        # Post-patch: the real row's status ("[SAVED]") is no longer in
+        # the active set, so the position falls out of the aggregation.
+        # A hardcoded-tuple implementation would still return
+        # {"ready": 0, "pending": 1} and fail this assertion.
+        result = database.compute_materials_readiness()
+        assert result == {"ready": 0, "pending": 0}, (
+            "compute_materials_readiness must read active statuses from "
+            "config.STATUS_SAVED/APPLIED/INTERVIEW at call time, not "
+            "from a hardcoded tuple literal."
+        )
 
 
 # ── Edge cases for empty fields dicts (F2 / F3 fixes) ────────────────────────
