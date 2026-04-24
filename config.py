@@ -205,7 +205,7 @@ INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
 # ── Requirement document types ────────────────────────────────────────────────
 # Each tuple: (db_req_column, db_done_column, display_label)
 #
-#   db_req_column  — TEXT column in positions table: 'Y' | 'N' | 'Optional'
+#   db_req_column  — TEXT column in positions table: 'Yes' | 'Optional' | 'No'
 #   db_done_column — INTEGER column in positions table: 0 = not ready, 1 = ready
 #   display_label  — Human-readable name shown in the UI
 #
@@ -216,19 +216,23 @@ INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
 # Canonical DB values for the req_* TEXT columns. Order is the display order
 # the Requirements-tab radios use (T4-D) — "Required" first so the common
 # case is the leftmost/default-read option. Per GUIDELINES §6, never hardcode
-# these strings in page files.
-REQUIREMENT_VALUES: list[str] = ["Y", "Optional", "N"]
+# these strings in page files. DESIGN §5.1 + D21 pin the full-word vocabulary
+# (Yes/Optional/No) — consistent with D20's full-word philosophy for
+# type-safe, self-descriptive raw dumps; the short-code form (Y/Optional/N)
+# was used before v1.3 and migrates in place via init_db() on next start.
+REQUIREMENT_VALUES: list[str] = ["Yes", "Optional", "No"]
 
 # UI labels for each canonical value. `st.radio(..., format_func=...)` looks
 # up display text here so session_state keeps the canonical DB value and no
 # save-time translation is needed.
 REQUIREMENT_LABELS: dict[str, str] = {
-    "Y":        "Required",
+    "Yes":      "Required",
     "Optional": "Optional",
-    "N":        "Not needed",
+    "No":       "Not needed",
 }
 
-# Guard: one label per canonical value — catches drift at import time.
+# Invariant (DESIGN §5.2 #7): one label per canonical value — catches drift at
+# import time rather than as a KeyError deep in page code.
 assert set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES), (
     "REQUIREMENT_LABELS must have exactly one entry per REQUIREMENT_VALUES item. "
     f"Missing: {set(REQUIREMENT_VALUES) - set(REQUIREMENT_LABELS)}"
