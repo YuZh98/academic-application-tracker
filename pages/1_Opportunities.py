@@ -294,9 +294,16 @@ else:
     df_display["deadline_urgency"] = df_display["deadline_date"].apply(
         _deadline_urgency
     )
+    # DESIGN §8.0 + §8.2 Status label convention: the table's Status column
+    # displays the human-readable label (`config.STATUS_LABELS[raw]`), never
+    # the bracketed storage value. Derive a `status_label` column from the
+    # raw `status` and render that one instead — the raw column stays on
+    # df_display for the row-index → id lookup below (selection plumbing),
+    # but is kept out of column_order so the UI never surfaces it.
+    df_display["status_label"] = df_display["status"].map(config.STATUS_LABELS)
 
     display_cols = [
-        "position_name", "institute", "priority", "status",
+        "position_name", "institute", "priority", "status_label",
         "deadline_date", "deadline_urgency",
     ]
     # T4-A: enable single-row selection. AppTest drives this by writing to
@@ -316,7 +323,10 @@ else:
             "position_name":    st.column_config.TextColumn("Position",  width="large"),
             "institute":        st.column_config.TextColumn("Institute", width="medium"),
             "priority":         st.column_config.TextColumn("Priority",  width="small"),
-            "status":           st.column_config.TextColumn("Status",    width="medium"),
+            # DESIGN §8.0 + §8.2: header reads "Status" (the UI-facing
+            # concept); the underlying df column is `status_label` so the
+            # cell values go through the STATUS_LABELS map.
+            "status_label":     st.column_config.TextColumn("Status",    width="medium"),
             "deadline_date":    st.column_config.TextColumn("Due",       width="small"),
             "deadline_urgency": st.column_config.TextColumn("Urgency",   width="small"),
         },
