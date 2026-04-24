@@ -16,6 +16,18 @@ TRACKER_PROFILE: str = "postdoc"   # Options: "postdoc" | "software_eng" | "facu
 # page files (Phase 3) to filter profile-specific fields. If unused after
 # Phase 3, remove to avoid dead code.
 
+# Set of known tracker-profile identifiers. Guards TRACKER_PROFILE at import
+# time — catches typos or un-implemented profiles before any page renders.
+# Extending to a new profile (e.g. "faculty") is a two-step: add the value
+# here, then implement the profile-specific behaviour downstream per §12.1.
+VALID_PROFILES: set[str] = {"postdoc"}
+
+# Invariant (DESIGN §5.2 #1): TRACKER_PROFILE must be a known profile.
+assert TRACKER_PROFILE in VALID_PROFILES, (
+    f"TRACKER_PROFILE={TRACKER_PROFILE!r} is not a recognized profile. "
+    f"Known: {sorted(VALID_PROFILES)!r}. Add it to VALID_PROFILES or fix the typo."
+)
+
 # ── Status pipeline ───────────────────────────────────────────────────────────
 # Ordered list: earlier index = earlier stage in the pipeline.
 # Used by st.selectbox() in all page files — never hardcode status strings.
@@ -42,6 +54,22 @@ STATUS_COLORS: dict[str, str] = {
     "[DECLINED]":  "gray",
 }
 
+# Storage-to-UI label map. STATUS_VALUES keeps bracketed enum sentinels in
+# storage so DB rows round-trip exactly and a raw status literal stays
+# unambiguous in queries and logs; every user-facing surface goes through
+# STATUS_LABELS to strip the brackets. Never print a raw STATUS_VALUES entry
+# to the UI — look it up here instead (DESIGN §8.0 Status label convention).
+# Drift caught by invariant #3 below.
+STATUS_LABELS: dict[str, str] = {
+    "[OPEN]":      "Open",
+    "[APPLIED]":   "Applied",
+    "[INTERVIEW]": "Interview",
+    "[OFFER]":     "Offer",
+    "[CLOSED]":    "Closed",
+    "[REJECTED]":  "Rejected",
+    "[DECLINED]":  "Declined",
+}
+
 # Named aliases for the individual pipeline statuses. Page code that needs
 # a *specific* status (e.g. the dashboard's per-bucket KPI counts) references
 # these rather than hardcoding the literal — keeps the anti-typo guardrail in
@@ -62,12 +90,20 @@ STATUS_DECLINED:  str = STATUS_VALUES[6]  # "[DECLINED]"
 # database.py reads this list; never hardcode these strings outside config.py.
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
-# Guard: STATUS_COLORS must have exactly one entry per STATUS_VALUES item.
-# Catches drift at import time rather than as a KeyError deep in page code.
+# Guard (DESIGN §5.2 #2): STATUS_COLORS must have exactly one entry per
+# STATUS_VALUES item. Catches drift at import time rather than as a
+# KeyError deep in page code.
 assert set(STATUS_VALUES) == set(STATUS_COLORS), (
     "STATUS_COLORS must have exactly one entry per STATUS_VALUES item. "
     f"Missing from STATUS_COLORS: {set(STATUS_VALUES) - set(STATUS_COLORS)}"
 )
+# Invariant (DESIGN §5.2 #3): every status has a UI label, no extras.
+assert set(STATUS_VALUES) == set(STATUS_LABELS), (
+    "STATUS_LABELS must have exactly one entry per STATUS_VALUES item. "
+    f"Missing from STATUS_LABELS: {set(STATUS_VALUES) - set(STATUS_LABELS)}. "
+    f"Extra: {set(STATUS_LABELS) - set(STATUS_VALUES)}."
+)
+# Invariant (DESIGN §5.2 #4): terminal statuses are a subset of all statuses.
 assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
     "TERMINAL_STATUSES must only contain values defined in STATUS_VALUES. "
     f"Unknown: {set(TERMINAL_STATUSES) - set(STATUS_VALUES)}"
@@ -161,6 +197,11 @@ RELATIONSHIP_TYPES: list[str] = [
     "Postdoc Supervisor", "Department Faculty", "Other",
 ]
 
+# Vocabulary for the interviews sub-table's `format` column (DESIGN §6.2).
+# Kept small on purpose — "Other" is the escape hatch for edge cases so the
+# list doesn't bloat with one-off formats (hybrid, dinner, campus visit…).
+INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
+
 # ── Requirement document types ────────────────────────────────────────────────
 # Each tuple: (db_req_column, db_done_column, display_label)
 #
@@ -229,3 +270,11 @@ EDIT_PANEL_TABS: list[str] = ["Overview", "Requirements", "Materials", "Notes"]
 DEADLINE_ALERT_DAYS    = 30   # Show upcoming deadlines within this many days
 DEADLINE_URGENT_DAYS   = 7    # Color a deadline red if it falls within this many days
 RECOMMENDER_ALERT_DAYS = 7    # Alert if a recommender was asked N+ days ago with no submission
+
+# Invariant (DESIGN §5.2 #8): urgency window cannot exceed the alert window.
+# Swapping these by accident would mark every upcoming deadline "urgent"
+# (collapsing the urgency signal) — caught at import before any page renders.
+assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS, (
+    f"DEADLINE_URGENT_DAYS={DEADLINE_URGENT_DAYS} must be <= "
+    f"DEADLINE_ALERT_DAYS={DEADLINE_ALERT_DAYS}"
+)
