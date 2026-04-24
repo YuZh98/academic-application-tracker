@@ -77,14 +77,14 @@ with refresh_col:
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
-# Tracked = open + applied — "opportunities that might get moved forward".
+# Tracked = saved + applied — "opportunities that might get moved forward".
 # Applied and Interview are single-bucket counts of their namesake status.
 # Next Interview = earliest future date across interview1_date +
 # interview2_date, rendered '{Mon D} · {institute}'; '—' when none
 # (locked decision U3). All status literals via config.STATUS_* aliases.
 _status_counts = database.count_by_status()
 tracked = (
-    _status_counts.get(config.STATUS_OPEN, 0)
+    _status_counts.get(config.STATUS_SAVED, 0)
     + _status_counts.get(config.STATUS_APPLIED, 0)
 )
 applied = _status_counts.get(config.STATUS_APPLIED, 0)

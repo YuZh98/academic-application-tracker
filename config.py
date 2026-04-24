@@ -32,7 +32,7 @@ assert TRACKER_PROFILE in VALID_PROFILES, (
 # Ordered list: earlier index = earlier stage in the pipeline.
 # Used by st.selectbox() in all page files — never hardcode status strings.
 STATUS_VALUES: list[str] = [
-    "[OPEN]",        # Found; not yet applied
+    "[SAVED]",       # Found / saved for later; not yet applied
     "[APPLIED]",     # Application submitted
     "[INTERVIEW]",   # Interview stage reached
     "[OFFER]",       # Offer received
@@ -45,7 +45,7 @@ STATUS_VALUES: list[str] = [
 # Verified against st.badge signature in Streamlit 1.56.0:
 #   accepted literals: 'red','orange','yellow','blue','green','violet','gray','grey','primary'
 STATUS_COLORS: dict[str, str] = {
-    "[OPEN]":      "blue",
+    "[SAVED]":     "blue",
     "[APPLIED]":   "orange",
     "[INTERVIEW]": "violet",
     "[OFFER]":     "green",
@@ -61,7 +61,7 @@ STATUS_COLORS: dict[str, str] = {
 # to the UI — look it up here instead (DESIGN §8.0 Status label convention).
 # Drift caught by invariant #3 below.
 STATUS_LABELS: dict[str, str] = {
-    "[OPEN]":      "Open",
+    "[SAVED]":     "Saved",
     "[APPLIED]":   "Applied",
     "[INTERVIEW]": "Interview",
     "[OFFER]":     "Offer",
@@ -76,8 +76,10 @@ STATUS_LABELS: dict[str, str] = {
 # place without forcing positional-index access into STATUS_VALUES. Added in
 # Phase 4 T1-C for app.py's Tracked / Applied / Interview counters; extended
 # in the v1.1 doc refactor (F2 / F4 fix) so FUNNEL_BUCKETS below can be
-# defined without literals.
-STATUS_OPEN:      str = STATUS_VALUES[0]  # "[OPEN]" — will rename to STATUS_SAVED in deferred refactor
+# defined without literals. The stage-0 alias was renamed in v1.3
+# Sub-task 5 alongside the stage-0 literal rename; existing rows migrate
+# in place via the one-shot UPDATE in database.init_db() (DESIGN §6.3).
+STATUS_SAVED:     str = STATUS_VALUES[0]  # "[SAVED]"
 STATUS_APPLIED:   str = STATUS_VALUES[1]  # "[APPLIED]"
 STATUS_INTERVIEW: str = STATUS_VALUES[2]  # "[INTERVIEW]"
 STATUS_OFFER:     str = STATUS_VALUES[3]  # "[OFFER]"
@@ -121,10 +123,11 @@ assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
 # withdrawal is a genuinely distinct state (DESIGN D17).
 #
 # Raw statuses are referenced via the named aliases above so the bucket
-# layout survives a STATUS_VALUES reorder or rename (including the
-# deferred [OPEN]→[SAVED] refactor) without editing this table.
+# layout survives a STATUS_VALUES reorder or rename (the stage-0 rename
+# in v1.3 Sub-task 5 was a single-line swap of the stage-0 alias without
+# changing this table).
 FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
-    ("Saved",     (STATUS_OPEN,),                     "blue"),
+    ("Saved",     (STATUS_SAVED,),                    "blue"),
     ("Applied",   (STATUS_APPLIED,),                  "orange"),
     ("Interview", (STATUS_INTERVIEW,),                "violet"),
     ("Offer",     (STATUS_OFFER,),                    "green"),
@@ -167,7 +170,7 @@ assert FUNNEL_DEFAULT_HIDDEN <= _bucket_labels, (
 # Used by st.selectbox() in page files.
 # Append to any list to add a new option — no other changes needed.
 
-PRIORITY_VALUES: list[str] = ["High", "Med", "Low", "Stretch"]
+PRIORITY_VALUES: list[str] = ["High", "Medium", "Low", "Stretch"]
 
 # Three-value categorical answering "does the posting accept this applicant's
 # work authorization?" Paired with the freetext `work_auth_note` column so the
