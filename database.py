@@ -88,6 +88,7 @@ def init_db() -> None:
                 deadline_note    TEXT,
                 stipend          TEXT,
                 work_auth        TEXT,
+                work_auth_note   TEXT,
                 full_time        TEXT,
                 source           TEXT,
                 link             TEXT,
@@ -170,6 +171,17 @@ def init_db() -> None:
                 "UPDATE positions SET updated_at = datetime('now') "
                 "WHERE updated_at IS NULL"
             )
+
+        # Migration (v1.3 Sub-task 7, DESIGN §6.2 + §6.3 + D22):
+        # pre-v1.3 DBs pick up work_auth_note as a plain TEXT column
+        # with no DEFAULT — existing rows legitimately carry NULL
+        # because v1.2 never collected this field. Paired with the
+        # categorical `work_auth` column (already plain TEXT since
+        # v1.0), work_auth_note holds the freetext nuance (e.g.
+        # "green card required") while `work_auth` stays filter-
+        # friendly. Idempotent via the existing_cols guard.
+        if "work_auth_note" not in existing_cols:
+            conn.execute("ALTER TABLE positions ADD COLUMN work_auth_note TEXT")
 
         # Trigger (v1.3 Sub-task 6, DESIGN §6.2 + D25): stamp updated_at
         # on every row mutation so writers never have to remember.

@@ -1485,10 +1485,13 @@ class TestNotesTabWidgets:
         assert _text_area_rendered(at, NOTES_KEY), (
             "Notes tab must render a text_area keyed edit_notes after selection"
         )
-        # Tight bound: no other page text_area exists today. If a future tier
-        # adds more, update this count explicitly rather than loosening it.
-        assert len(at.text_area) == 1, (
-            f"Expected 1 text_area on the page, got {len(at.text_area)}"
+        # Tight bound: update this count explicitly when a new text_area
+        # lands (the previous 1 → 2 bump came with Sub-task 7's
+        # work_auth_note widget on the Overview tab). If a future tier
+        # adds another, bump again rather than loosen the inequality.
+        assert len(at.text_area) == 2, (
+            f"Expected 2 text_areas on the page "
+            f"(edit_notes + edit_work_auth_note); got {len(at.text_area)}"
         )
 
     def test_text_area_preseeded_from_db(self, db):
