@@ -4,7 +4,9 @@
 # All tests use real SQLite (no mocking). Each test gets an isolated temp DB
 # via the `db` fixture in conftest.py. Tests are grouped by concern.
 
+import re
 import sqlite3
+import time
 import pytest
 from datetime import date, timedelta
 from pathlib import Path
@@ -240,6 +242,181 @@ class TestInitDb:
             "applications.result DEFAULT must interpolate config.RESULT_DEFAULT "
             f"(wrapped in SQL quotes); got {result_default!r}, "
             f"expected {f'{chr(39)}{sentinel_result}{chr(39)}'!r}."
+        )
+
+    def test_positions_has_updated_at_column_with_datetime_default(self, db):
+        """Sub-task 6 / DESIGN §6.2 + D25: positions.updated_at column must
+        exist with DEFAULT (datetime('now')) so every INSERT without an
+        explicit updated_at value is stamped at row-creation time by SQLite
+        itself — no Python writer needs to remember.
+
+        SQLite preserves parenthesised expression defaults verbatim in
+        sqlite_master, and PRAGMA table_info surfaces the raw text through
+        dflt_value — so exact-string equality is safe here."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(positions)").fetchall()
+
+        updated_at = next((r for r in cols if r["name"] == "updated_at"), None)
+        assert updated_at is not None, (
+            "positions.updated_at must be defined in the CREATE TABLE DDL. "
+            f"Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert updated_at["type"] == "TEXT", (
+            f"positions.updated_at type must be TEXT; got {updated_at['type']!r}"
+        )
+        assert updated_at["dflt_value"] == "datetime('now')", (
+            "positions.updated_at DEFAULT must be the parenthesised expression "
+            f"datetime('now'); got {updated_at['dflt_value']!r}"
+        )
+
+    def test_positions_updated_at_trigger_exists(self, db):
+        """Sub-task 6 / DESIGN §6.2 + D25: CREATE TRIGGER positions_updated_at
+        must be registered in sqlite_master after init_db(). The trigger is
+        AFTER UPDATE on positions and resets updated_at to datetime('now');
+        SQLite's default recursive_triggers = 0 suppresses the inner UPDATE
+        from re-firing the trigger — the loop-prevention guarantee rides on
+        that default, not on any code we write here."""
+        with database._connect() as conn:
+            triggers = {
+                r["name"] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+                ).fetchall()
+            }
+        assert "positions_updated_at" in triggers, (
+            "Expected trigger 'positions_updated_at' registered in sqlite_master; "
+            f"got: {triggers!r}"
+        )
+
+    def test_add_position_populates_updated_at(self, db):
+        """Sub-task 6 / DESIGN §6.2 + D25: newly inserted positions must
+        carry a non-NULL updated_at stamp. add_position() does not pass
+        updated_at in its INSERT dict, so the value comes purely from the
+        column DEFAULT — which is exactly why the DDL default is load-
+        bearing (INSERT does not fire the AFTER UPDATE trigger)."""
+        pos_id = database.add_position(make_position())
+        pos = database.get_position(pos_id)
+
+        assert pos["updated_at"] is not None, (
+            "updated_at must be populated on INSERT via the column DEFAULT; got None"
+        )
+        # SQLite's datetime('now') renders as 'YYYY-MM-DD HH:MM:SS'.
+        assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", pos["updated_at"]), (
+            "updated_at must match SQLite's datetime('now') ISO-ish format; "
+            f"got {pos['updated_at']!r}"
+        )
+
+    def test_update_position_refreshes_updated_at(self, db):
+        """Sub-task 6 / DESIGN §6.2 + D25: every UPDATE on positions must
+        advance updated_at to the current wall clock via the trigger. Also
+        implicitly pins "no infinite loop" — if recursive_triggers were ON
+        (or the trigger body were re-entrant in some other way), the inner
+        UPDATE would recurse to SQLite's 1000-frame limit and raise
+        `sqlite3.OperationalError: recursion limit reached`. A clean return
+        from update_position therefore proves the recursion is suppressed.
+
+        SQLite's datetime('now') is second-precision, so the 1.1 s sleep is
+        the minimum needed to guarantee ts_after > ts_before under string
+        comparison (ISO datetimes sort lexically the same way they sort
+        chronologically)."""
+        pos_id = database.add_position(make_position())
+        ts_before = database.get_position(pos_id)["updated_at"]
+
+        time.sleep(1.1)
+        database.update_position(pos_id, {"position_name": "Renamed"})
+        ts_after = database.get_position(pos_id)["updated_at"]
+
+        assert ts_after > ts_before, (
+            "updated_at must advance on UPDATE (trigger fires AFTER UPDATE). "
+            f"Before: {ts_before!r}, after: {ts_after!r}"
+        )
+
+    def test_migration_adds_updated_at_to_pre_v1_3_positions(self, tmp_path, monkeypatch):
+        """Sub-task 6 / DESIGN §6.3: pre-v1.3 DBs whose positions table was
+        created without updated_at must pick up the column + trigger on the
+        next init_db(), and any existing row must be backfilled with
+        datetime('now') (not left NULL).
+
+        SQLite disallows `ALTER TABLE ADD COLUMN ... DEFAULT (datetime('now'))`
+        once the target table has rows — it raises 'Cannot add a column
+        with non-constant default'. The migration therefore uses a
+        NULL-default ADD COLUMN and a one-shot UPDATE backfill. The
+        CREATE TABLE DDL's DEFAULT (datetime('now')) handles fresh DBs;
+        this test exercises the upgrade path specifically.
+
+        Idempotence: a second init_db() finds the column already present
+        and must leave the backfilled stamp untouched (the backfill UPDATE
+        is scoped WHERE updated_at IS NULL, so it no-ops the second time)."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+
+        # Simulate a pre-v1.3 positions table (no updated_at) with an
+        # existing row — mirrors what a user's local DB looks like before
+        # this sub-task ships. Only includes the columns that init_db()
+        # needs to reach the updated_at migration: indexed columns
+        # (status, deadline_date) plus priority (touched by the Sub-task 5
+        # value-migration UPDATE) and position_name (NOT NULL identity).
+        # Everything else is added by existing req/done migration loops.
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT
+                )
+            """)
+            conn.execute(
+                "INSERT INTO positions (position_name) VALUES ('LegacyRow')"
+            )
+
+        database.init_db()
+
+        with database._connect() as conn:
+            cols = {r["name"] for r in conn.execute(
+                "PRAGMA table_info(positions)"
+            ).fetchall()}
+            legacy_row = conn.execute(
+                "SELECT updated_at FROM positions "
+                "WHERE position_name = 'LegacyRow'"
+            ).fetchone()
+            triggers = {
+                r["name"] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+                ).fetchall()
+            }
+
+        assert "updated_at" in cols, (
+            "Migration must add updated_at via ALTER TABLE ADD COLUMN."
+        )
+        assert legacy_row["updated_at"] is not None, (
+            "Existing pre-v1.3 rows must be backfilled with datetime('now') — "
+            f"got {legacy_row['updated_at']!r}"
+        )
+        assert re.match(
+            r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$",
+            legacy_row["updated_at"],
+        ), (
+            "Backfilled updated_at must match SQLite's datetime('now') "
+            f"format; got {legacy_row['updated_at']!r}"
+        )
+        assert "positions_updated_at" in triggers, (
+            "Trigger must also be created during the migration path."
+        )
+
+        # Idempotence: second init_db() must leave the migrated row's
+        # stamp untouched. The backfill UPDATE is WHERE updated_at IS NULL,
+        # so it no-ops; no other init_db() step should touch the column.
+        ts_after_first_init = legacy_row["updated_at"]
+        database.init_db()
+        with database._connect() as conn:
+            ts_after_second_init = conn.execute(
+                "SELECT updated_at FROM positions "
+                "WHERE position_name = 'LegacyRow'"
+            ).fetchone()["updated_at"]
+        assert ts_after_second_init == ts_after_first_init, (
+            "Second init_db() on a migrated DB must be a no-op for updated_at. "
+            f"Before: {ts_after_first_init!r}, after: {ts_after_second_init!r}"
         )
 
 
