@@ -3,8 +3,9 @@
 #
 # Phase 4 build-out: answers "What do I do today?" at a glance. This file
 # is layered in over several tiers (see PHASE_4_GUIDELINES.md):
-#   T1 — app shell + 4 KPI cards + 🔄 refresh + empty-DB hero   ✅ done
-#   T2 — application funnel (Plotly bar + empty-state + columns wrap)  ✅ done
+#   T1 — app shell + 4 KPI cards + empty-DB hero                ✅ done
+#   T2 — application funnel (Plotly bar, FUNNEL_BUCKETS aggregation,
+#        [expand] toggle, 3-branch empty-state, columns wrap)    ✅ done
 #   T3 — materials readiness panel                              ✅ done
 #   T4 — upcoming timeline
 #   T5 — recommender alerts
@@ -17,6 +18,16 @@ import streamlit as st
 
 import config
 import database
+
+# DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
+# with wide layout. Data-heavy views (KPI grid + funnel + timeline) need
+# horizontal room; the default centered layout cramps them at ~750px.
+# Must precede any other `st.*` call — Streamlit raises otherwise.
+st.set_page_config(
+    page_title="Postdoc Tracker",
+    page_icon="📋",
+    layout="wide",
+)
 
 database.init_db()
 
@@ -68,15 +79,11 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
     return label
 
 # ── Top bar ───────────────────────────────────────────────────────────────────
-# Title on the left, 🔄 Refresh on the right (DESIGN.md §app.py). Streamlit
-# already reruns on widget interaction; the manual refresh covers the case
-# where data changed in another tab (e.g. Opportunities) — user decision C3.
-title_col, refresh_col = st.columns([6, 1])
-with title_col:
-    st.title("Postdoc Tracker")
-with refresh_col:
-    if st.button("🔄 Refresh", key="dashboard_refresh"):
-        st.rerun()
+# Plain title only — no 🔄 Refresh button per DESIGN D13. Streamlit reruns
+# on any widget interaction; for a single-user local app a manual refresh
+# is cognitive noise for the common case. (The pre-v1.3 C3-locked Refresh
+# button was removed in Sub-task 12 alongside the DESIGN §8.0 alignment.)
+st.title("Postdoc Tracker")
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
@@ -120,7 +127,14 @@ if tracked == 0 and applied == 0 and interview == 0:
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.metric(label="Tracked", value=str(tracked))
+    # DESIGN §8.1 locks the Tracked KPI's help-tooltip string — explains
+    # the Saved + Applied arithmetic on hover so the reader doesn't have
+    # to guess what "tracked" means here.
+    st.metric(
+        label="Tracked",
+        value=str(tracked),
+        help="Saved + Applied — positions you're still actively pursuing",
+    )
 with c2:
     st.metric(label="Applied", value=str(applied))
 with c3:
@@ -136,42 +150,107 @@ with c4:
 _left_col, _right_col = st.columns(2)
 
 with _left_col:
-    # ── Application Funnel (T2-A + T2-B) ──────────────────────────────────────
-    # Plotly horizontal bar — one bar per config.STATUS_VALUES entry in
-    # canonical order so the pipeline reads top-to-bottom OPEN → DECLINED.
-    # count_by_status() returns a sparse dict (zero-count statuses omitted);
-    # we fill missing buckets with 0 so the chart shape stays stable as the
-    # pipeline fills up. Marker colors come from config.STATUS_COLORS — same
-    # anti-typo guardrail as the status literals, keeps the pre-merge grep
-    # rule enforcing a single source.
+    # ── Application Funnel (T2-A + T2-B + T2-D) ───────────────────────────────
+    # Plotly horizontal bar driven by config.FUNNEL_BUCKETS. One bar per
+    # VISIBLE bucket in list display order; the y-axis is reversed so the
+    # pipeline reads top-down (first bucket at the top). Bar counts sum
+    # count_by_status() over each bucket's raw-status tuple — "Archived"
+    # aggregates [REJECTED] + [DECLINED] (DESIGN D17), other buckets map
+    # one raw status each today.
     #
-    # T2-B empty-state (Option C, locked 2026-04-21): when the positions table
-    # is literally empty (no rows at all), skip the Plotly chart and show a
-    # descriptive info instead. A terminal-only DB still renders the figure —
-    # terminal rows are valid visual state, and the T1-E hero separately
-    # covers 'no active pipeline'. Subheader renders in both branches so page
-    # height doesn't flicker when the first position lands.
+    # Bar colors come from FUNNEL_BUCKETS[i][2] — the BUCKET owns its
+    # color because a bucket can aggregate multiple raw statuses
+    # (STATUS_COLORS is for per-status surfaces: badges, tooltips).
+    #
+    # Visibility follows DESIGN §8.1 "Funnel visibility rules":
+    #   - Default-visible: buckets whose label is NOT in FUNNEL_DEFAULT_HIDDEN.
+    #   - After `[expand]`: every bucket is visible for the session.
+    #   State flag: st.session_state["_funnel_expanded"] — False by default.
+    #
+    # Three empty-state branches, evaluated in order (DESIGN §8.1):
+    #   (a) total == 0 (no positions at all): info + NO [expand] button —
+    #       nothing to expand into.
+    #   (b) total > 0, not expanded, every non-hidden bucket is zero:
+    #       info pointing at the [expand] recovery path + [expand] button.
+    #       Terminal-only DBs land here (all data in Closed + Archived).
+    #   (c) otherwise: render chart; [expand] button below whenever
+    #       FUNNEL_DEFAULT_HIDDEN is non-empty AND not yet expanded.
+    # Subheader renders in ALL three branches for page-height stability.
     st.subheader("Application Funnel")
-    if sum(_status_counts.values()) == 0:
+
+    # Initialize the session flag once per session via setdefault so tests
+    # (and the first render) see the canonical False rather than a KeyError.
+    st.session_state.setdefault("_funnel_expanded", False)
+    _funnel_expanded = st.session_state["_funnel_expanded"]
+
+    def _expand_funnel() -> None:
+        """on_click callback — flips the flag BEFORE the next rerun so the
+        funnel branches evaluate with expanded=True in the very same rerun
+        (a plain `if st.button(): set state; st.rerun()` would need an
+        extra pass and risks briefly drawing the old chart)."""
+        st.session_state["_funnel_expanded"] = True
+
+    # Per-bucket aggregated counts. A sparse-dict lookup (count_by_status
+    # omits zero-count statuses) is fine — missing raws contribute 0.
+    _bucket_counts: list[tuple[str, int, str]] = [
+        (
+            label,
+            sum(_status_counts.get(raw, 0) for raw in raws),
+            color,
+        )
+        for label, raws, color in config.FUNNEL_BUCKETS
+    ]
+    _total = sum(count for _, count, _ in _bucket_counts)
+
+    # Branch (b) predicate — evaluated only when total > 0. "All non-zero
+    # buckets are hidden" = every default-visible bucket has count 0.
+    _all_visible_buckets_zero = all(
+        count == 0
+        for label, count, _ in _bucket_counts
+        if label not in config.FUNNEL_DEFAULT_HIDDEN
+    )
+
+    if _total == 0:
+        # Branch (a): no data anywhere — nothing to expand into.
         st.info("Application funnel will appear once you've added positions.")
+    elif (not _funnel_expanded) and _all_visible_buckets_zero:
+        # Branch (b): data exists but all of it sits in hidden buckets.
+        st.info(
+            "All your positions are in hidden buckets. "
+            "Click [expand] below to reveal them."
+        )
+        st.button("[expand]", key="funnel_expand", on_click=_expand_funnel)
     else:
-        _funnel_x = [_status_counts.get(s, 0) for s in config.STATUS_VALUES]
-        _funnel_colors = [config.STATUS_COLORS[s] for s in config.STATUS_VALUES]
+        # Branch (c): render the chart.
+        _visible_buckets = [
+            (label, count, color)
+            for label, count, color in _bucket_counts
+            if _funnel_expanded or label not in config.FUNNEL_DEFAULT_HIDDEN
+        ]
         _funnel_fig = go.Figure(
             data=[
                 go.Bar(
-                    x=_funnel_x,
-                    y=list(config.STATUS_VALUES),
+                    x=[count for _, count, _ in _visible_buckets],
+                    y=[label for label, _, _ in _visible_buckets],
                     orientation="h",
-                    marker_color=_funnel_colors,
+                    marker_color=[color for _, _, color in _visible_buckets],
                 )
             ]
         )
-        # Plotly renders horizontal bars bottom-to-top by default (first
-        # y-category at the bottom). Reverse the axis so the pipeline reads
-        # top-down — first STATUS_VALUES entry at the top, last at the bottom.
+        # Plotly renders horizontal bars bottom-to-top by default. Reverse
+        # so the first visible bucket sits at the top (pipeline reads
+        # top-down — same reasoning as pre-Sub-task-12, just bucket-scoped).
         _funnel_fig.update_yaxes(autorange="reversed")
         st.plotly_chart(_funnel_fig, key="funnel_chart")
+
+        # [expand] button renders below the chart iff FUNNEL_DEFAULT_HIDDEN
+        # is non-empty AND we haven't expanded yet (DESIGN §8.1).
+        if config.FUNNEL_DEFAULT_HIDDEN and not _funnel_expanded:
+            st.button(
+                "[expand]",
+                key="funnel_expand",
+                on_click=_expand_funnel,
+            )
 
 with _right_col:
     # ── Materials Readiness (T3) ──────────────────────────────────────────────
