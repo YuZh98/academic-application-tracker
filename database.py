@@ -120,6 +120,31 @@ def init_db() -> None:
             )
         """)
 
+        # Migrate-once gate for the interviews sub-table (Sub-task 8).
+        # Sample sqlite_master BEFORE the CREATE TABLE IF NOT EXISTS so
+        # we can tell whether this is a first-create-and-migrate run or
+        # a subsequent idempotent re-run. Computed here (before the
+        # CREATE) so the same boolean gates the one-shot data copy
+        # further below.
+        interviews_existed_pre_create = conn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'interviews'"
+        ).fetchone() is not None
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS interviews (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                application_id  INTEGER NOT NULL,
+                sequence        INTEGER NOT NULL,
+                scheduled_date  TEXT,
+                format          TEXT,
+                notes           TEXT,
+                UNIQUE (application_id, sequence),
+                FOREIGN KEY (application_id) REFERENCES applications(position_id)
+                    ON DELETE CASCADE
+            )
+        """)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS recommenders (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,10 +161,13 @@ def init_db() -> None:
         """)
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_positions_status   ON positions(status)"
+            "CREATE INDEX IF NOT EXISTS idx_positions_status      ON positions(status)"
         )
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_positions_deadline ON positions(deadline_date)"
+            "CREATE INDEX IF NOT EXISTS idx_positions_deadline    ON positions(deadline_date)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_interviews_application ON interviews(application_id)"
         )
 
         # Migration: add any REQUIREMENT_DOCS columns missing from the live schema.
@@ -182,6 +210,41 @@ def init_db() -> None:
         # friendly. Idempotent via the existing_cols guard.
         if "work_auth_note" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN work_auth_note TEXT")
+
+        # Migration (v1.3 Sub-task 8, DESIGN §6.3 normalize-flat-
+        # columns-into-sub-table + D18): the applications table used to
+        # carry two flat interview1_date / interview2_date columns,
+        # capping each position at 2 interviews. v1.3 moves interviews
+        # into the `interviews` sub-table so a position can carry
+        # arbitrarily many. This block runs EXACTLY ONCE per DB — the
+        # `interviews_existed_pre_create` guard above samples
+        # sqlite_master BEFORE the CREATE TABLE IF NOT EXISTS, so the
+        # first init_db() after upgrade hits this branch and subsequent
+        # calls skip it entirely (no INSERT OR IGNORE needed; no
+        # re-clearing of legacy columns). This is the "migrate-once
+        # gate" pattern.
+        #
+        # Step (a) from DESIGN §6.3: the CREATE TABLE happened above.
+        # Steps (b) + (c) live here: copy old columns → sub-table, then
+        # NULL-clear the source so nothing reads legacy data by accident
+        # and a future rebuild can drop the columns cleanly.
+        if not interviews_existed_pre_create:
+            conn.execute(
+                "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                "SELECT position_id, 1, interview1_date "
+                "FROM applications WHERE interview1_date IS NOT NULL"
+            )
+            conn.execute(
+                "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                "SELECT position_id, 2, interview2_date "
+                "FROM applications WHERE interview2_date IS NOT NULL"
+            )
+            conn.execute(
+                "UPDATE applications "
+                "SET interview1_date = NULL, interview2_date = NULL "
+                "WHERE interview1_date IS NOT NULL "
+                "   OR interview2_date IS NOT NULL"
+            )
 
         # Trigger (v1.3 Sub-task 6, DESIGN §6.2 + D25): stamp updated_at
         # on every row mutation so writers never have to remember.
@@ -349,6 +412,122 @@ def upsert_application(position_id: int, fields: dict[str, Any]) -> None:
     _exports.write_all()
 
 
+# ── Interviews ────────────────────────────────────────────────────────────────
+# DESIGN §6.2 + §7 + D18: the interviews sub-table replaces the flat
+# applications.interview1_date / interview2_date pair so a position can carry
+# arbitrarily many interviews. FK chain: interviews.application_id references
+# applications.position_id (which is itself the FK to positions.id), so
+# delete_position cascades transitively through applications → interviews.
+
+
+def add_interview(
+    application_id: int,
+    fields: dict[str, Any],
+    *,
+    propagate_status: bool = True,
+) -> dict[str, Any]:
+    """Insert an interview row for a position's application.
+
+    When `sequence` is omitted from `fields`, auto-assign the next
+    sequence for this application via
+    `SELECT COALESCE(MAX(sequence), 0) + 1 FROM interviews WHERE
+    application_id = ?`. Caller may pass `sequence` explicitly to
+    restore a deleted slot; the UNIQUE(application_id, sequence)
+    constraint catches collisions with IntegrityError.
+
+    Returns ``{"id": <new row id>, "status_changed": bool,
+    "new_status": str | None}``. The cascade indicator follows
+    DESIGN §9.3 — Sub-task 9 fills in the R2 body (`UPDATE positions
+    SET status = STATUS_INTERVIEW WHERE id = application_id
+    AND status = STATUS_APPLIED`) conditioned on `propagate_status`.
+    For Sub-task 8 the cascade is deferred, so status_changed always
+    reads False regardless of the kwarg. The keyword-only kwarg is in
+    place now to lock the API across the two sub-tasks (callers can
+    pass `propagate_status=False` today and get the same behaviour
+    they will get once Sub-task 9 lands).
+
+    Calls exports.write_all() on success."""
+    # Don't mutate the caller's dict — auto-sequence injection below
+    # would surprise a caller who reuses the same fields object.
+    fields = dict(fields)
+
+    with _connect() as conn:
+        if "sequence" not in fields:
+            cur = conn.execute(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_seq "
+                "FROM interviews WHERE application_id = ?",
+                (application_id,),
+            )
+            fields["sequence"] = cur.fetchone()["next_seq"]
+
+        cols = ", ".join(["application_id"] + list(fields.keys()))
+        placeholders = ", ".join(["?"] * (1 + len(fields)))
+        vals = [application_id] + list(fields.values())
+
+        cur = conn.execute(
+            f"INSERT INTO interviews ({cols}) VALUES ({placeholders})",
+            vals,
+        )
+        new_id: int = cur.lastrowid
+
+    import exports as _exports  # deferred: avoids circular import
+    _exports.write_all()
+
+    # Sub-task 9 target: gate the following UPDATE on propagate_status
+    # and return the actual status_changed / new_status. For now the
+    # indicator keys exist with their no-cascade defaults so callers
+    # can read them today without a try/except. `propagate_status` is
+    # consumed here only to satisfy the signature contract.
+    _ = propagate_status
+    return {
+        "id":             new_id,
+        "status_changed": False,
+        "new_status":     None,
+    }
+
+
+def get_interviews(application_id: int) -> pd.DataFrame:
+    """Return all interviews for a given application, ordered by sequence ASC.
+
+    Empty frame for an application with no interviews (not an error)."""
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            "SELECT * FROM interviews WHERE application_id = ? "
+            "ORDER BY sequence ASC",
+            conn,
+            params=(application_id,),
+        )
+    return df
+
+
+def update_interview(interview_id: int, fields: dict[str, Any]) -> None:
+    """Update provided fields on an interview row. Empty `fields` → no-op
+    (matches the update_position / update_recommender / upsert_application
+    convention). Calls exports.write_all()."""
+    if not fields:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    vals = list(fields.values()) + [interview_id]
+
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE interviews SET {set_clause} WHERE id = ?",
+            vals,
+        )
+
+    import exports as _exports  # deferred: avoids circular import
+    _exports.write_all()
+
+
+def delete_interview(interview_id: int) -> None:
+    """Delete a single interview row. Calls exports.write_all()."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM interviews WHERE id = ?", (interview_id,))
+
+    import exports as _exports  # deferred: avoids circular import
+    _exports.write_all()
+
+
 # ── Recommenders ──────────────────────────────────────────────────────────────
 
 def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
@@ -456,22 +635,35 @@ def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFra
 
 
 def get_upcoming_interviews() -> pd.DataFrame:
-    """Return rows where interview1_date or interview2_date is today or future,
-    joined with position details, ordered by interview1_date ASC."""
+    """Return every interview scheduled for today or a future date, joined
+    with position details, ordered by scheduled_date ASC.
+
+    DESIGN §6.2 + D18 row-per-interview shape: one row per interviews
+    record (a position with three interviews contributes three rows).
+    Columns: `interview_id`, `application_id`, `sequence`,
+    `scheduled_date`, `format`, `position_id`, `position_name`,
+    `institute`. Chronological ordering is part of the contract
+    (DESIGN §7 load-bearing contract #5)."""
     today = date.today().isoformat()
 
     with _connect() as conn:
         df = pd.read_sql_query(
-            """SELECT p.id, p.position_name, p.institute,
-                      a.interview1_date, a.interview2_date
-               FROM applications a
-               JOIN positions p ON a.position_id = p.id
-               WHERE (a.interview1_date IS NOT NULL AND a.interview1_date >= ?)
-                  OR (a.interview2_date IS NOT NULL AND a.interview2_date >= ?)
-               ORDER BY a.interview1_date ASC NULLS LAST,
-                        a.interview2_date ASC NULLS LAST""",
+            """SELECT i.id           AS interview_id,
+                      i.application_id,
+                      i.sequence,
+                      i.scheduled_date,
+                      i.format,
+                      p.id           AS position_id,
+                      p.position_name,
+                      p.institute
+               FROM interviews i
+               JOIN applications a ON i.application_id = a.position_id
+               JOIN positions    p ON a.position_id   = p.id
+               WHERE i.scheduled_date IS NOT NULL
+                 AND i.scheduled_date >= ?
+               ORDER BY i.scheduled_date ASC, i.sequence ASC""",
             conn,
-            params=(today, today),
+            params=(today,),
         )
     return df
 

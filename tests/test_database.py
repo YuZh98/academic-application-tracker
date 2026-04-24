@@ -932,8 +932,14 @@ class TestInterviewsSchema:
                 "PRAGMA table_info(interviews)"
             ).fetchall()}
 
+        # SQLite quirk: INTEGER PRIMARY KEY AUTOINCREMENT reports
+        # notnull=0 from PRAGMA table_info — the NOT NULL is enforced
+        # via the PK (pk=1 in the fifth tuple element) rather than the
+        # notnull flag. So the pk column's expected notnull is 0 here
+        # even though it's de-facto NOT NULL; the other NOT NULL
+        # columns still report notnull=1 as expected.
         expected = {
-            "id":             ("INTEGER", 1),   # PK, NOT NULL enforced by PK
+            "id":             ("INTEGER", 0),   # PK (notnull enforced by PK)
             "application_id": ("INTEGER", 1),   # NOT NULL
             "sequence":       ("INTEGER", 1),   # NOT NULL
             "scheduled_date": ("TEXT",    0),   # nullable

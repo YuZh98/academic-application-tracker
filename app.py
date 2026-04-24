@@ -30,15 +30,19 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
     """Format the Next-Interview KPI value from get_upcoming_interviews().
 
     User-locked behaviour (2026-04-21):
-      - Pick the EARLIEST future date across interview1_date AND
-        interview2_date across all rows.
+      - Pick the EARLIEST future scheduled_date across all upcoming
+        interviews.
       - The paired institute belongs to whichever position owns that date.
       - Render as '{Mon D} · {institute}' (short month + day, no year).
       - Empty / no upcoming date → NEXT_INTERVIEW_EMPTY ('—').
 
-    The underlying query includes a row when EITHER date is future, so
-    the other column on the same row may be in the past — scanning both
-    columns for the minimum FUTURE date is required.
+    Sub-task 8 rewrote get_upcoming_interviews() to return row-per-
+    interview from the normalized interviews sub-table (DESIGN §6.2 +
+    D18) with a single scheduled_date column — rows are guaranteed to
+    carry future dates (the SQL filters on `scheduled_date >= today`)
+    and are ordered ASC by scheduled_date. So iloc[0] would also be
+    correct today; the explicit min-scan is kept for robustness against
+    a future query tweak that drops or reorders the sort.
     """
     if upcoming.empty:
         return NEXT_INTERVIEW_EMPTY
@@ -47,13 +51,12 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
     best_iso: str | None = None
     best_institute: str | None = None
     for _, row in upcoming.iterrows():
-        for col in ("interview1_date", "interview2_date"):
-            v = row[col]
-            if pd.isna(v) or v == "" or v < today_iso:
-                continue
-            if best_iso is None or v < best_iso:
-                best_iso = v
-                best_institute = row["institute"]
+        v = row["scheduled_date"]
+        if pd.isna(v) or v == "" or v < today_iso:
+            continue
+        if best_iso is None or v < best_iso:
+            best_iso = v
+            best_institute = row["institute"]
 
     if best_iso is None:
         return NEXT_INTERVIEW_EMPTY
@@ -79,8 +82,9 @@ with refresh_col:
 # Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
 # Tracked = saved + applied — "opportunities that might get moved forward".
 # Applied and Interview are single-bucket counts of their namesake status.
-# Next Interview = earliest future date across interview1_date +
-# interview2_date, rendered '{Mon D} · {institute}'; '—' when none
+# Next Interview = earliest future scheduled_date across all rows of
+# database.get_upcoming_interviews() (row-per-interview post-Sub-task 8,
+# DESIGN §6.2 + D18), rendered '{Mon D} · {institute}'; '—' when none
 # (locked decision U3). All status literals via config.STATUS_* aliases.
 _status_counts = database.count_by_status()
 tracked = (
