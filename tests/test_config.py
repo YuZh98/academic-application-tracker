@@ -154,3 +154,197 @@ def test_status_guard_fires_on_drift(monkeypatch):
     )
     missing = set(config.STATUS_VALUES) - set(broken_colors)
     assert missing == {"[OPEN]"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sub-task 1 (v1.3 alignment) — DESIGN.md §5.1 / §5.2
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── STATUS_* aliases for terminal statuses (DESIGN §5.1 Status pipeline) ──────
+
+def test_status_closed_alias_matches_status_values():
+    """STATUS_CLOSED must equal the literal '[CLOSED]' from STATUS_VALUES."""
+    assert config.STATUS_CLOSED == "[CLOSED]"
+    assert config.STATUS_CLOSED in config.STATUS_VALUES
+
+
+def test_status_rejected_alias_matches_status_values():
+    """STATUS_REJECTED must equal the literal '[REJECTED]' from STATUS_VALUES."""
+    assert config.STATUS_REJECTED == "[REJECTED]"
+    assert config.STATUS_REJECTED in config.STATUS_VALUES
+
+
+def test_status_declined_alias_matches_status_values():
+    """STATUS_DECLINED must equal the literal '[DECLINED]' from STATUS_VALUES."""
+    assert config.STATUS_DECLINED == "[DECLINED]"
+    assert config.STATUS_DECLINED in config.STATUS_VALUES
+
+
+def test_all_seven_status_aliases_match_status_values_order():
+    """Named aliases follow STATUS_VALUES index order (per DESIGN §5.1)."""
+    expected = [
+        config.STATUS_OPEN, config.STATUS_APPLIED, config.STATUS_INTERVIEW,
+        config.STATUS_OFFER, config.STATUS_CLOSED, config.STATUS_REJECTED,
+        config.STATUS_DECLINED,
+    ]
+    assert expected == config.STATUS_VALUES, (
+        "Named STATUS_* aliases must equal STATUS_VALUES in index order. "
+        f"aliases={expected!r}, STATUS_VALUES={config.STATUS_VALUES!r}"
+    )
+
+
+# ── VALID_PROFILES + invariant #1 (DESIGN §5.1, §5.2 #1) ──────────────────────
+
+def test_valid_profiles_is_non_empty_set():
+    """VALID_PROFILES must be a non-empty set of profile-name strings."""
+    assert isinstance(config.VALID_PROFILES, set)
+    assert len(config.VALID_PROFILES) > 0
+    assert all(isinstance(p, str) and p for p in config.VALID_PROFILES)
+
+
+def test_valid_profiles_contains_postdoc():
+    """v1 profile is 'postdoc' (DESIGN §5.1 Tracker identity)."""
+    assert "postdoc" in config.VALID_PROFILES
+
+
+def test_invariant_1_tracker_profile_in_valid_profiles():
+    """DESIGN §5.2 invariant #1: TRACKER_PROFILE must be a known profile."""
+    assert config.TRACKER_PROFILE in config.VALID_PROFILES, (
+        f"TRACKER_PROFILE={config.TRACKER_PROFILE!r} not in "
+        f"VALID_PROFILES={config.VALID_PROFILES!r}"
+    )
+
+
+def test_invariant_1_fires_on_unknown_profile():
+    """Replicate DESIGN §5.2 invariant #1 on a synthetic bad value."""
+    broken_profile = "software_eng"
+    assert broken_profile not in config.VALID_PROFILES, (
+        "Guard should fire: unknown profile not in VALID_PROFILES"
+    )
+
+
+# ── STATUS_LABELS + invariant #3 (DESIGN §5.1, §5.2 #3) ───────────────────────
+
+def test_status_labels_is_dict_with_string_values():
+    """STATUS_LABELS maps each status to a non-empty UI label string."""
+    assert isinstance(config.STATUS_LABELS, dict)
+    assert all(isinstance(v, str) and v for v in config.STATUS_LABELS.values())
+
+
+def test_invariant_3_status_values_equal_status_labels():
+    """DESIGN §5.2 invariant #3: every status has a UI label, no extras."""
+    assert set(config.STATUS_VALUES) == set(config.STATUS_LABELS), (
+        "STATUS_LABELS must have exactly one entry per STATUS_VALUES item. "
+        f"missing={set(config.STATUS_VALUES) - set(config.STATUS_LABELS)!r}, "
+        f"extra={set(config.STATUS_LABELS) - set(config.STATUS_VALUES)!r}"
+    )
+
+
+def test_status_labels_are_bracket_stripped():
+    """Per DESIGN §5.1: 'UI strips the brackets via this dict'. No label
+    may contain a '[' or ']' character."""
+    for raw, label in config.STATUS_LABELS.items():
+        assert "[" not in label and "]" not in label, (
+            f"STATUS_LABELS[{raw!r}] = {label!r} retains bracket characters"
+        )
+
+
+def test_status_labels_spec_values():
+    """Pin the bracket-stripped, title-cased mapping for the v1 seven statuses."""
+    assert config.STATUS_LABELS == {
+        "[OPEN]":      "Open",
+        "[APPLIED]":   "Applied",
+        "[INTERVIEW]": "Interview",
+        "[OFFER]":     "Offer",
+        "[CLOSED]":    "Closed",
+        "[REJECTED]":  "Rejected",
+        "[DECLINED]":  "Declined",
+    }
+
+
+def test_invariant_3_fires_on_missing_label():
+    """Replicate DESIGN §5.2 invariant #3 on a synthetic drift."""
+    broken_labels = dict(config.STATUS_LABELS)
+    broken_labels.pop("[APPLIED]")
+    assert set(config.STATUS_VALUES) != set(broken_labels), (
+        "Guard should fire: STATUS_VALUES has [APPLIED] but broken_labels does not"
+    )
+    assert set(config.STATUS_VALUES) - set(broken_labels) == {"[APPLIED]"}
+
+
+# ── FUNNEL_DEFAULT_HIDDEN + invariant #6 (DESIGN §5.1, §5.2 #6) ───────────────
+
+def test_funnel_default_hidden_is_set_of_strings():
+    assert isinstance(config.FUNNEL_DEFAULT_HIDDEN, set)
+    assert all(isinstance(s, str) and s for s in config.FUNNEL_DEFAULT_HIDDEN)
+
+
+def test_funnel_default_hidden_spec_values():
+    """DESIGN §5.1: hidden-by-default buckets are Closed + Archived (D24)."""
+    assert config.FUNNEL_DEFAULT_HIDDEN == {"Closed", "Archived"}
+
+
+def test_invariant_6_default_hidden_subset_of_bucket_labels():
+    """DESIGN §5.2 invariant #6: every hidden label references a real bucket."""
+    bucket_labels = {label for label, _, _ in config.FUNNEL_BUCKETS}
+    assert config.FUNNEL_DEFAULT_HIDDEN <= bucket_labels, (
+        "FUNNEL_DEFAULT_HIDDEN references unknown bucket labels: "
+        f"{config.FUNNEL_DEFAULT_HIDDEN - bucket_labels!r}"
+    )
+
+
+def test_invariant_6_fires_on_unknown_hidden_label():
+    """Replicate DESIGN §5.2 invariant #6 on a synthetic drift."""
+    bucket_labels = {label for label, _, _ in config.FUNNEL_BUCKETS}
+    broken_hidden = config.FUNNEL_DEFAULT_HIDDEN | {"Nonexistent"}
+    assert not (broken_hidden <= bucket_labels), (
+        "Guard should fire: 'Nonexistent' is not a bucket label"
+    )
+
+
+# ── INTERVIEW_FORMATS (DESIGN §5.1 Vocabularies) ──────────────────────────────
+
+def test_interview_formats_is_non_empty_list_of_strings():
+    assert isinstance(config.INTERVIEW_FORMATS, list)
+    assert len(config.INTERVIEW_FORMATS) > 0
+    assert all(isinstance(f, str) and f for f in config.INTERVIEW_FORMATS)
+
+
+def test_interview_formats_spec_values():
+    """DESIGN §5.1: INTERVIEW_FORMATS = ['Phone', 'Video', 'Onsite', 'Other']."""
+    assert config.INTERVIEW_FORMATS == ["Phone", "Video", "Onsite", "Other"]
+
+
+# ── Invariant #8 (DESIGN §5.2 #8) ─────────────────────────────────────────────
+
+def test_invariant_8_urgent_leq_alert():
+    """DESIGN §5.2 invariant #8: DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS.
+
+    (Stricter '<' is pinned by test_deadline_urgent_less_than_alert above;
+    this test pins the exact DESIGN-spec inequality so the import-time
+    assert stays wired to DESIGN even if someone relaxes the strict test.)"""
+    assert config.DEADLINE_URGENT_DAYS <= config.DEADLINE_ALERT_DAYS, (
+        f"URGENT={config.DEADLINE_URGENT_DAYS} must be <= "
+        f"ALERT={config.DEADLINE_ALERT_DAYS}"
+    )
+
+
+def test_invariant_8_fires_on_inverted_thresholds():
+    """Replicate DESIGN §5.2 invariant #8 on synthetic inverted values."""
+    broken_urgent = config.DEADLINE_ALERT_DAYS + 1
+    broken_alert  = config.DEADLINE_ALERT_DAYS
+    assert not (broken_urgent <= broken_alert), (
+        "Guard should fire: urgent window cannot exceed alert window"
+    )
+
+
+# ── Fresh import exercises every module-level assertion ──────────────────────
+
+def test_config_reimports_cleanly():
+    """A fresh import of config must execute all §5.2 invariants without
+    raising. This is the most direct proof the import-time guards are wired
+    — any broken invariant would surface as AssertionError here."""
+    if "config" in sys.modules:
+        importlib.reload(sys.modules["config"])
+    else:
+        importlib.import_module("config")
