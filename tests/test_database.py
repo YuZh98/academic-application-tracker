@@ -8,6 +8,7 @@ import re
 import sqlite3
 import time
 import pytest
+import pandas as pd
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -576,6 +577,118 @@ class TestInitDb:
             "is the honest 'no date recorded yet' state and keeps the "
             "column semantics independent of the received flag. "
             f"Got dflt_value={date_col['dflt_value']!r}"
+        )
+
+    def test_recommenders_confirmed_column_is_integer_nullable(self, db):
+        """Sub-task 11 / DESIGN §6.2 + D20: recommenders.confirmed must be
+        INTEGER (0, 1, or NULL). NULL encodes the "pending response"
+        tri-state per DESIGN's inline comment — the column has no
+        DEFAULT so a fresh row starts in the honest pending state rather
+        than silently declaring "not confirmed" (which `0` would imply).
+        D20 pins boolean-state columns at INTEGER 0/1 rather than TEXT
+        Y/N; the tri-state (with NULL) requires no extra type gymnastics
+        since INTEGER is NULL-able by default."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(recommenders)").fetchall()
+
+        confirmed = next(
+            (r for r in cols if r["name"] == "confirmed"), None
+        )
+        assert confirmed is not None, (
+            "recommenders.confirmed must be defined in the CREATE TABLE DDL. "
+            f"Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert confirmed["type"] == "INTEGER", (
+            "recommenders.confirmed type must be INTEGER (D20 — boolean-"
+            "state columns as INTEGER 0/1, never TEXT Y/N); "
+            f"got {confirmed['type']!r}. If this is 'TEXT' the Sub-task "
+            "11 rebuild did not run or the DDL was not updated."
+        )
+        assert confirmed["dflt_value"] is None, (
+            "recommenders.confirmed must not carry a DEFAULT — NULL is the "
+            "pending-response tri-state, 0 means 'explicitly not confirmed'. "
+            f"Got dflt_value={confirmed['dflt_value']!r}"
+        )
+
+    def test_recommenders_reminder_sent_column_is_integer_with_zero_default(self, db):
+        """Sub-task 11 / DESIGN §6.2 + D19 + D20: recommenders.reminder_sent
+        must be INTEGER DEFAULT 0. Half of the D19 split — the partner
+        `reminder_sent_date TEXT` carries the date payload when the
+        flag is 1. Fresh rows start at "no reminder sent" (0) rather
+        than NULL so downstream predicates don't have to special-case
+        the default. D20 pins the type as INTEGER."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(recommenders)").fetchall()
+
+        reminder_sent = next(
+            (r for r in cols if r["name"] == "reminder_sent"), None
+        )
+        assert reminder_sent is not None, (
+            "recommenders.reminder_sent must be defined in the CREATE TABLE "
+            f"DDL. Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert reminder_sent["type"] == "INTEGER", (
+            "recommenders.reminder_sent type must be INTEGER (D20); "
+            f"got {reminder_sent['type']!r}"
+        )
+        assert reminder_sent["dflt_value"] == "0", (
+            "recommenders.reminder_sent DEFAULT must be 0 — fresh rows "
+            "start in the 'no reminder sent' state. "
+            f"Got dflt_value={reminder_sent['dflt_value']!r}"
+        )
+
+    def test_recommenders_has_reminder_sent_date_column_nullable(self, db):
+        """Sub-task 11 / DESIGN §6.2 + D19: recommenders.reminder_sent_date
+        is the date half of the D19 (flag, date) pair. Plain TEXT,
+        NULL-able, no DEFAULT — NULL means "no date recorded" and is
+        the only honest state when reminder_sent = 0."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(recommenders)").fetchall()
+
+        reminder_date = next(
+            (r for r in cols if r["name"] == "reminder_sent_date"), None
+        )
+        assert reminder_date is not None, (
+            "recommenders.reminder_sent_date must be defined in the CREATE "
+            f"TABLE DDL. Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert reminder_date["type"] == "TEXT", (
+            "recommenders.reminder_sent_date type must be TEXT (ISO "
+            "YYYY-MM-DD strings); "
+            f"got {reminder_date['type']!r}"
+        )
+        assert reminder_date["dflt_value"] is None, (
+            "recommenders.reminder_sent_date must not carry a DEFAULT — "
+            "NULL is the honest 'no date recorded yet' state. "
+            f"Got dflt_value={reminder_date['dflt_value']!r}"
+        )
+
+    def test_recommenders_foreign_key_survives_rebuild(self, db):
+        """Sub-task 11 / DESIGN §6.2: the FK
+        recommenders.position_id → positions.id ON DELETE CASCADE is
+        load-bearing — delete_position cascades through applications,
+        interviews, AND recommenders. The Sub-task 11 rebuild is a
+        CREATE-COPY-DROP-RENAME, so the FK has to be re-declared in
+        the _new table's DDL; this test pins that the constraint lands
+        on the surviving post-rename table with the correct target
+        table + column + delete action."""
+        with database._connect() as conn:
+            fks = conn.execute(
+                "PRAGMA foreign_key_list(recommenders)"
+            ).fetchall()
+
+        assert len(fks) == 1, (
+            "recommenders must carry exactly one foreign key "
+            f"(position_id → positions.id). Got {len(fks)} FKs: "
+            f"{[dict(r) for r in fks]!r}"
+        )
+        fk = fks[0]
+        assert fk["table"]    == "positions",   f"got {fk['table']!r}"
+        assert fk["from"]     == "position_id", f"got {fk['from']!r}"
+        assert fk["to"]       == "id",          f"got {fk['to']!r}"
+        assert fk["on_delete"] == "CASCADE", (
+            "FK delete action must be CASCADE so delete_position cleans "
+            f"up recommenders rows. Got {fk['on_delete']!r}"
         )
 
 
@@ -1222,6 +1335,85 @@ class TestRecommenders:
         database.delete_recommender(rec_id)
         pos = database.get_position(pos_id)   # should not raise
         assert pos["position_name"] == "BioStats Postdoc"
+
+    def test_fresh_recommender_row_defaults(self, db):
+        """Sub-task 11 / DESIGN §6.2 + D19 + D20: a fresh recommender
+        (only recommender_name set) must come up with `confirmed = NULL`
+        (pending response, tri-state), `reminder_sent = 0` (flag off,
+        the DEFAULT), and `reminder_sent_date = NULL` (no date yet).
+        These three defaults collectively pin the CREATE TABLE contract
+        for the DESIGN §6.2 recommenders DDL."""
+        pos_id = database.add_position(make_position())
+        rec_id = database.add_recommender(
+            pos_id, {"recommender_name": "Dr. Smith"}
+        )
+        recs = database.get_recommenders(pos_id)
+        row = recs.iloc[0]
+        assert row["id"] == rec_id
+        assert row["confirmed"] is None or pd.isna(row["confirmed"]), (
+            "Fresh recommender must have confirmed=NULL (pending response). "
+            f"Got {row['confirmed']!r}"
+        )
+        assert int(row["reminder_sent"]) == 0, (
+            "Fresh recommender must have reminder_sent=0 via DDL DEFAULT. "
+            f"Got {row['reminder_sent']!r}"
+        )
+        assert row["reminder_sent_date"] is None or pd.isna(row["reminder_sent_date"]), (
+            "Fresh recommender must have reminder_sent_date=NULL. "
+            f"Got {row['reminder_sent_date']!r}"
+        )
+
+    def test_integer_confirmed_values_roundtrip(self, db):
+        """Sub-task 11 / DESIGN §6.2 + D20: add_recommender writes the
+        integer `confirmed` tri-state (0 / 1 / NULL) and it round-trips
+        via get_recommenders. Pins that the add_recommender path does
+        not coerce or reject the integer values (it's schema-agnostic —
+        this test catches any accidental type narrowing)."""
+        pid = database.add_position(make_position())
+
+        r1 = database.add_recommender(pid, {
+            "recommender_name": "Dr. Yes",
+            "confirmed":        1,
+        })
+        r0 = database.add_recommender(pid, {
+            "recommender_name": "Dr. No",
+            "confirmed":        0,
+        })
+        rN = database.add_recommender(pid, {
+            "recommender_name": "Dr. Pending",
+            # confirmed omitted → NULL
+        })
+        recs = database.get_recommenders(pid).set_index("id")
+        assert int(recs.loc[r1, "confirmed"]) == 1
+        assert int(recs.loc[r0, "confirmed"]) == 0
+        assert recs.loc[rN, "confirmed"] is None or pd.isna(recs.loc[rN, "confirmed"])
+
+    def test_integer_reminder_sent_and_date_roundtrip(self, db):
+        """Sub-task 11 / DESIGN §6.2 + D19: the (flag, date) pair
+        round-trips via add_recommender + get_recommenders. `reminder_sent
+        = 1, reminder_sent_date = '2026-04-14'` is the common case after
+        the user records a sent reminder; `reminder_sent = 0,
+        reminder_sent_date = NULL` is the explicit un-sent state. Both
+        must come back byte-for-byte."""
+        pid = database.add_position(make_position())
+
+        r_sent = database.add_recommender(pid, {
+            "recommender_name":   "Dr. Reminded",
+            "reminder_sent":      1,
+            "reminder_sent_date": "2026-04-14",
+        })
+        r_unsent = database.add_recommender(pid, {
+            "recommender_name": "Dr. Unreminded",
+            "reminder_sent":    0,
+        })
+        recs = database.get_recommenders(pid).set_index("id")
+
+        assert int(recs.loc[r_sent, "reminder_sent"]) == 1
+        assert recs.loc[r_sent, "reminder_sent_date"] == "2026-04-14"
+
+        assert int(recs.loc[r_unsent, "reminder_sent"]) == 0
+        unsent_date = recs.loc[r_unsent, "reminder_sent_date"]
+        assert unsent_date is None or pd.isna(unsent_date)
 
 
 # ── is_all_recs_submitted ─────────────────────────────────────────────────────
@@ -2244,6 +2436,383 @@ class TestConfirmationSplitMigration:
             ).fetchone()
         assert row_second["confirmation_received"] == row_first["confirmation_received"]
         assert row_second["confirmation_date"]     == row_first["confirmation_date"]
+
+
+# ── recommenders rebuild: confirmed TEXT→INTEGER + reminder_sent split ────────
+# Sub-task 11 / DESIGN §6.2 + D19 + D20: SQLite lacks in-place column-type
+# change, so the pre-v1.3 recommenders table (`confirmed TEXT`,
+# `reminder_sent TEXT`, no `reminder_sent_date`) rebuilds via the
+# CREATE-COPY-DROP-RENAME recipe inside one transaction:
+#   (1) CREATE TABLE recommenders_new (...)  -- target schema
+#   (2) INSERT INTO recommenders_new SELECT id, ..., CASE-translated cols
+#   (3) DROP TABLE recommenders
+#   (4) ALTER TABLE recommenders_new RENAME TO recommenders
+# Idempotence: guarded by `PRAGMA table_info(recommenders)` check on the
+# `confirmed` column's declared type — INTEGER means the rebuild already
+# ran; TEXT (or absent) means it hasn't.
+#
+# CASE translation matrix:
+#   confirmed     'Y'           -> 1
+#                 'N'           -> 0
+#                 anything else -> NULL (pending-response tri-state —
+#                                        cautious; 'maybe' / stray
+#                                        freetext become NULL rather
+#                                        than a guessed integer)
+#   reminder_sent 'Y'           -> reminder_sent=1, reminder_sent_date=NULL
+#                 'YYYY-MM-DD'* -> reminder_sent=0, reminder_sent_date=<value>
+#                 anything else -> reminder_sent=0, reminder_sent_date=NULL
+#   *matched via SQLite GLOB '????-??-??' per the user-specified rebuild SQL;
+#   this is looser than Sub-task 10's [0-9]-digit-class pattern — any
+#   10-char '??-??' shape passes — but pre-v1.3 reminder_sent values
+#   realistically held only dates or 'Y'/NULL, so the looser match is safe.
+# All other columns (id, position_id, recommender_name, relationship,
+# asked_date, submitted_date, notes) copy through unchanged.
+
+class TestRecommendersRebuildMigration:
+    """Sub-task 11 / DESIGN §6.2 + §6.3 + D19 + D20: the recommenders
+    table rebuild translates pre-v1.3 TEXT columns into the DESIGN-spec
+    INTEGER tri-state (confirmed) + INTEGER flag (reminder_sent) +
+    TEXT date (reminder_sent_date) trio, preserving all other columns,
+    the autoincrement counter, and the FK → positions CASCADE
+    relationship. Idempotence guard is on `confirmed`'s declared type
+    so reruns are a strict no-op."""
+
+    def _seed_pre_v1_3_recommenders(self, tmp_path, monkeypatch,
+                                      rows=()):
+        """Build a minimal pre-v1.3 DB: positions (enough for init_db
+        to be happy) + recommenders with the pre-v1.3 schema
+        (`confirmed TEXT`, `reminder_sent TEXT`, no `reminder_sent_date`).
+        `rows` is a list of dicts, each keyed by the pre-v1.3 column
+        names; rows with the same position_id share a single parent
+        position (auto-created if needed).
+
+        Seed strategy matches TestInterviewsMigration /
+        TestConfirmationSplitMigration — tmp_path + monkeypatched
+        DB_PATH, a deliberately slim positions table, and the minimal
+        set of legacy columns init_db's migrations reference. Unlike
+        those migrations, Sub-task 11 only touches recommenders, so
+        the other tables can stay bare."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT
+                )
+            """)
+            # Applications carries the pre-v1.3 legacy columns that
+            # Sub-tasks 8 + 10 migrate — present so init_db() does not
+            # blow up before reaching the Sub-task 11 rebuild.
+            conn.execute("""
+                CREATE TABLE applications (
+                    position_id        INTEGER PRIMARY KEY,
+                    applied_date       TEXT,
+                    confirmation_email TEXT,
+                    interview1_date    TEXT,
+                    interview2_date    TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            # Pre-v1.3 recommenders schema — confirmed/reminder_sent as
+            # TEXT, no reminder_sent_date.
+            conn.execute("""
+                CREATE TABLE recommenders (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    position_id      INTEGER NOT NULL,
+                    recommender_name TEXT,
+                    relationship     TEXT,
+                    asked_date       TEXT,
+                    confirmed        TEXT,
+                    submitted_date   TEXT,
+                    reminder_sent    TEXT,
+                    notes            TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            # Insert rows. First ensure each position_id referenced has
+            # a matching positions row (FK is enforced at INSERT time
+            # with PRAGMA foreign_keys = ON in _connect()).
+            needed_positions = {r.get("position_id", 1) for r in rows}
+            if not rows:
+                needed_positions = {1}
+            for pid in sorted(needed_positions):
+                conn.execute(
+                    "INSERT INTO positions (id, position_name) VALUES (?, ?)",
+                    (pid, f"LegacyPosition{pid}"),
+                )
+
+            for r in rows:
+                cols = ["position_id"] + [k for k in r if k != "position_id"]
+                vals = [r.get("position_id", 1)] + [
+                    r[k] for k in cols if k != "position_id"
+                ]
+                placeholders = ", ".join("?" * len(cols))
+                conn.execute(
+                    f"INSERT INTO recommenders ({', '.join(cols)}) "
+                    f"VALUES ({placeholders})",
+                    vals,
+                )
+
+    # ── confirmed translation ──────────────────────────────────────
+
+    def test_migration_translates_confirmed_Y_to_1(self, tmp_path, monkeypatch):
+        """Legacy 'Y' in confirmed must translate to INTEGER 1."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. Yes", "confirmed": "Y"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmed FROM recommenders "
+                "WHERE recommender_name = 'Dr. Yes'"
+            ).fetchone()
+        assert row["confirmed"] == 1, (
+            f"Expected confirmed=1 after 'Y' translation, got {row['confirmed']!r}"
+        )
+
+    def test_migration_translates_confirmed_N_to_0(self, tmp_path, monkeypatch):
+        """Legacy 'N' in confirmed must translate to INTEGER 0."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. No", "confirmed": "N"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmed FROM recommenders "
+                "WHERE recommender_name = 'Dr. No'"
+            ).fetchone()
+        assert row["confirmed"] == 0, (
+            f"Expected confirmed=0 after 'N' translation, got {row['confirmed']!r}"
+        )
+
+    def test_migration_keeps_confirmed_null_as_null(self, tmp_path, monkeypatch):
+        """Legacy NULL in confirmed stays NULL post-rebuild — this is
+        the pending-response tri-state D20 preserves via INTEGER (no
+        DEFAULT, NULL-able). The `ELSE NULL` branch in the CASE
+        translation captures this."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. Pending", "confirmed": None},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmed FROM recommenders "
+                "WHERE recommender_name = 'Dr. Pending'"
+            ).fetchone()
+        assert row["confirmed"] is None
+
+    def test_migration_translates_confirmed_other_values_to_null(self, tmp_path, monkeypatch):
+        """Anything other than 'Y' or 'N' (including 'maybe', empty
+        string, legacy 'yes', stray typos) must translate to NULL
+        rather than guess an integer — the migration takes the
+        cautious path, reflecting "we don't know" as NULL (pending
+        response). The user-spec SQL's `CASE confirmed WHEN 'Y' THEN 1
+        WHEN 'N' THEN 0 ELSE NULL END` implements this exactly."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. Maybe",  "confirmed": "maybe"},
+            {"recommender_name": "Dr. Empty",  "confirmed": ""},
+            {"recommender_name": "Dr. Lower",  "confirmed": "y"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            rows = conn.execute(
+                "SELECT recommender_name, confirmed FROM recommenders "
+                "ORDER BY id"
+            ).fetchall()
+        for r in rows:
+            assert r["confirmed"] is None, (
+                f"Expected confirmed=NULL for {r['recommender_name']!r}, "
+                f"got {r['confirmed']!r}"
+            )
+
+    # ── reminder_sent (flag) translation ───────────────────────────
+
+    def test_migration_translates_reminder_sent_Y_to_flag_1(self, tmp_path, monkeypatch):
+        """Legacy 'Y' in reminder_sent sets the new INTEGER flag to 1;
+        reminder_sent_date stays NULL because 'Y' carried no date."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. Reminded", "reminder_sent": "Y"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT reminder_sent, reminder_sent_date FROM recommenders "
+                "WHERE recommender_name = 'Dr. Reminded'"
+            ).fetchone()
+        assert row["reminder_sent"]      == 1
+        assert row["reminder_sent_date"] is None
+
+    def test_migration_translates_reminder_sent_null_and_other_to_flag_0(
+        self, tmp_path, monkeypatch,
+    ):
+        """Legacy NULL, empty string, 'N', or any freetext that is not
+        'Y' and not date-shaped must produce reminder_sent=0 and
+        reminder_sent_date=NULL — the user-spec SQL's
+        `CASE WHEN reminder_sent = 'Y' THEN 1 ELSE 0 END` defaults
+        everything-not-Y to 0."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. Null",  "reminder_sent": None},
+            {"recommender_name": "Dr. Empty", "reminder_sent": ""},
+            {"recommender_name": "Dr. No",    "reminder_sent": "N"},
+            {"recommender_name": "Dr. Other", "reminder_sent": "sometime"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            rows = conn.execute(
+                "SELECT recommender_name, reminder_sent, reminder_sent_date "
+                "FROM recommenders ORDER BY id"
+            ).fetchall()
+        for r in rows:
+            assert r["reminder_sent"] == 0, (
+                f"Expected reminder_sent=0 for {r['recommender_name']!r}, "
+                f"got {r['reminder_sent']!r}"
+            )
+            assert r["reminder_sent_date"] is None, (
+                f"Expected reminder_sent_date=NULL for "
+                f"{r['recommender_name']!r}, got {r['reminder_sent_date']!r}"
+            )
+
+    def test_migration_splits_date_shaped_reminder_sent_into_new_column(
+        self, tmp_path, monkeypatch,
+    ):
+        """Pre-v1.3 reminder_sent sometimes stored a date string instead
+        of 'Y' — ambiguous dual-purpose semantics exactly like Sub-task
+        10's confirmation_email split. The rebuild's second CASE branch
+        (`GLOB '????-??-??'`) captures that date into the new
+        reminder_sent_date column. Per user-spec SQL: the flag itself
+        stays 0 in this path — the old TEXT value was NOT 'Y'.
+        Downstream the page UI will treat a non-NULL reminder_sent_date
+        as evidence that a reminder was sent; if the user wants both
+        flag and date set they re-save after the migration runs."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. Dated", "reminder_sent": "2026-04-14"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT reminder_sent, reminder_sent_date FROM recommenders "
+                "WHERE recommender_name = 'Dr. Dated'"
+            ).fetchone()
+        # Per user-spec rebuild SQL:
+        #   reminder_sent      = CASE WHEN reminder_sent = 'Y' THEN 1 ELSE 0 END
+        #   reminder_sent_date = CASE WHEN reminder_sent GLOB '????-??-??'
+        #                             THEN reminder_sent ELSE NULL END
+        # A date-shaped legacy value is not 'Y', so flag=0; the GLOB
+        # matches so the date populates the new column.
+        assert row["reminder_sent"]      == 0
+        assert row["reminder_sent_date"] == "2026-04-14"
+
+    # ── other-column preservation + structural invariants ──────────
+
+    def test_migration_preserves_other_columns_unchanged(self, tmp_path, monkeypatch):
+        """The rebuild's INSERT copies id, position_id,
+        recommender_name, relationship, asked_date, submitted_date, and
+        notes verbatim — only the three D19/D20 columns are CASE-
+        translated. This test pins every copied column via a single
+        seed row with non-NULL values across the board."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[{
+            "recommender_name": "Dr. FullRow",
+            "relationship":     "PhD Advisor",
+            "asked_date":       "2026-03-01",
+            "confirmed":        "Y",
+            "submitted_date":   "2026-04-15",
+            "reminder_sent":    "Y",
+            "notes":            "wrote in early",
+        }])
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT id, position_id, recommender_name, relationship, "
+                "       asked_date, submitted_date, notes "
+                "FROM recommenders WHERE recommender_name = 'Dr. FullRow'"
+            ).fetchone()
+        assert row["id"]               == 1
+        assert row["position_id"]      == 1
+        assert row["recommender_name"] == "Dr. FullRow"
+        assert row["relationship"]     == "PhD Advisor"
+        assert row["asked_date"]       == "2026-03-01"
+        assert row["submitted_date"]   == "2026-04-15"
+        assert row["notes"]            == "wrote in early"
+
+    def test_migration_preserves_fk_cascade_on_delete_position(self, tmp_path, monkeypatch):
+        """The rebuild must land the FK + ON DELETE CASCADE on the
+        post-rename table (the new DDL re-declares it, but this test
+        exercises the end-to-end behaviour). Deleting a position with
+        a migrated recommender must cascade the recommender row away."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"position_id": 1, "recommender_name": "Dr. Cascade", "confirmed": "Y"},
+        ])
+        database.init_db()
+        # Confirm pre-delete state: recommender exists.
+        assert len(database.get_recommenders(1)) == 1
+        database.delete_position(1)
+        with database._connect() as conn:
+            remaining = conn.execute(
+                "SELECT COUNT(*) AS c FROM recommenders"
+            ).fetchone()["c"]
+        assert remaining == 0, (
+            "FK CASCADE on delete_position must wipe the recommender row "
+            f"after the rebuild. Got {remaining} remaining rows."
+        )
+
+    def test_migration_preserves_autoincrement_counter(self, tmp_path, monkeypatch):
+        """After the rebuild, the next new recommender must get an id
+        of `max(previous ids) + 1` rather than restarting from 1. The
+        INSERT-COPY explicitly lists `id` so the primary key values
+        are preserved; the AUTOINCREMENT counter state lives in the
+        `sqlite_sequence` table, which SQLite updates on INSERT — so
+        copying the rows with explicit id values is sufficient for the
+        counter to stay coherent."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. First",  "confirmed": "Y"},
+            {"recommender_name": "Dr. Second", "confirmed": "N"},
+            {"recommender_name": "Dr. Third"},
+        ])
+        database.init_db()
+        # Max id pre-add is 3; next must be 4.
+        new_id = database.add_recommender(1, {
+            "recommender_name": "Dr. Fourth",
+        })
+        assert new_id == 4, (
+            f"AUTOINCREMENT counter must advance past migrated ids. "
+            f"Expected next id=4, got {new_id}"
+        )
+
+    def test_migration_is_idempotent(self, tmp_path, monkeypatch):
+        """Second init_db() must be a strict no-op for the rebuild:
+        the `confirmed` column is now INTEGER, so the PRAGMA
+        table_info guard evaluates False and the CREATE-COPY-DROP-
+        RENAME does not run. Previously-translated integer values
+        must stay put."""
+        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
+            {"recommender_name": "Dr. First",  "confirmed": "Y",
+             "reminder_sent": "2026-04-14"},
+        ])
+        database.init_db()
+        with database._connect() as conn:
+            first = conn.execute(
+                "SELECT id, confirmed, reminder_sent, reminder_sent_date "
+                "FROM recommenders WHERE recommender_name = 'Dr. First'"
+            ).fetchone()
+        assert first["confirmed"]          == 1
+        assert first["reminder_sent"]      == 0
+        assert first["reminder_sent_date"] == "2026-04-14"
+
+        database.init_db()  # second call must be a no-op
+
+        with database._connect() as conn:
+            second = conn.execute(
+                "SELECT id, confirmed, reminder_sent, reminder_sent_date "
+                "FROM recommenders WHERE recommender_name = 'Dr. First'"
+            ).fetchone()
+        assert second["id"]                 == first["id"]
+        assert second["confirmed"]          == first["confirmed"]
+        assert second["reminder_sent"]      == first["reminder_sent"]
+        assert second["reminder_sent_date"] == first["reminder_sent_date"]
 
 
 # ── get_upcoming_interviews ───────────────────────────────────────────────────
