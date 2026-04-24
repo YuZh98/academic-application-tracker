@@ -292,7 +292,10 @@ deferred. All require separate approval before execution.
 - [x] **C6/C7** Config-drive schema DEFAULTs in `init_db()` DDL
       (`DEFAULT '{config.STATUS_VALUES[0]}'` / `DEFAULT '{config.RESULT_DEFAULT}'`)
       — shipped as v1.3 alignment Sub-task 4
-- [ ] **C12** Add `assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` to `config.py`
+- [x] **C12** Add `assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` to `config.py`
+      — shipped as v1.3 alignment Sub-task 1 invariant #8 ([config.py:296](config.py#L296));
+      pinned by `tests/test_config.py::test_invariant_8_urgent_leq_alert`
+      and `::test_invariant_8_fires_on_inverted_thresholds`.
 - [x] Rename `[OPEN]` → `[SAVED]` + idempotent `UPDATE positions SET status=...` migration
       — shipped as v1.3 alignment Sub-task 5
 - [x] Rename `PRIORITY_VALUES` `"Med"` → `"Medium"` + migration
