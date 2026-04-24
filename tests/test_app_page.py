@@ -68,7 +68,7 @@ class TestT1CKpiCountsAndRefresh:
     """T1-C: wire `count_by_status()` into Tracked / Applied / Interview and
     expose a top-bar 🔄 refresh button (DESIGN.md §app.py; C3 locked).
 
-    Decision: Tracked = count([OPEN]) + count([APPLIED]) — the pool of
+    Decision: Tracked = count([SAVED]) + count([APPLIED]) — the pool of
     positions that 'might still move forward'. Applied and Interview are
     single-bucket counts of their namesake status. Next Interview stays
     '—' until T1-D wires get_upcoming_interviews().
@@ -91,9 +91,9 @@ class TestT1CKpiCountsAndRefresh:
         )
 
     def test_tracked_equals_open_plus_applied(self, db):
-        """Tracked = count([OPEN]) + count([APPLIED]); INTERVIEW/OFFER are not 'tracked'."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
-        database.add_position(make_position({"position_name": "B", "status": "[OPEN]"}))
+        """Tracked = count([SAVED]) + count([APPLIED]); INTERVIEW/OFFER are not 'tracked'."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
         database.add_position(make_position({"position_name": "D", "status": "[INTERVIEW]"}))
         database.add_position(make_position({"position_name": "E", "status": "[OFFER]"}))
@@ -106,7 +106,7 @@ class TestT1CKpiCountsAndRefresh:
 
     def test_applied_count_excludes_other_statuses(self, db):
         """Applied reflects the [APPLIED] bucket only — not OPEN, INTERVIEW, OFFER."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "B", "status": "[APPLIED]"}))
         database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
         database.add_position(make_position({"position_name": "D", "status": "[INTERVIEW]"}))
@@ -117,7 +117,7 @@ class TestT1CKpiCountsAndRefresh:
 
     def test_interview_count_excludes_other_statuses(self, db):
         """Interview reflects the [INTERVIEW] bucket only."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "B", "status": "[INTERVIEW]"}))
         database.add_position(make_position({"position_name": "C", "status": "[OFFER]"}))
 
@@ -154,7 +154,7 @@ class TestT1CKpiCountsAndRefresh:
 
     def test_refresh_button_rerenders_with_updated_counts(self, db):
         """Clicking Refresh picks up rows added since the last render."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
 
         at = _run_page()
         assert self._kpis(at)["Tracked"] == "1"
@@ -362,8 +362,8 @@ class TestT1EEmptyDbHero:
         )
 
     def test_hero_hidden_when_open_position_exists(self, db):
-        """A single [OPEN] position bumps Tracked off zero → hero hides."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        """A single [SAVED] position bumps Tracked off zero → hero hides."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         assert not self._has_cta(at), (
             "Hero CTA must NOT render once a trackable position exists."
@@ -458,7 +458,7 @@ class TestT2AFunnelBar:
 
         (T2-B will later make the empty-DB branch show descriptive text
         instead; when that lands this test is updated in the same commit.)"""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         charts = at.get("plotly_chart")
         assert len(charts) >= 1, (
@@ -471,7 +471,7 @@ class TestT2AFunnelBar:
         Pinning order (not just membership) because DESIGN.md reads the
         pipeline top-to-bottom — flipping OPEN↔DECLINED would break the
         mental model without tripping any other test."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
         assert list(trace["y"]) == list(config.STATUS_VALUES), (
@@ -482,7 +482,7 @@ class TestT2AFunnelBar:
 
     def test_funnel_is_horizontal(self, db):
         """Orientation is 'h' — status labels on y-axis, counts on x-axis."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
         assert trace.get("orientation") == "h", (
@@ -496,8 +496,8 @@ class TestT2AFunnelBar:
         Seeds a mix of statuses and checks the bar lengths. This also
         verifies that count_by_status's sparse dict (zero-count statuses
         omitted) is expanded to the full STATUS_VALUES length with zeros."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
-        database.add_position(make_position({"position_name": "B", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
         database.add_position(make_position({"position_name": "D", "status": "[INTERVIEW]"}))
         database.add_position(make_position({"position_name": "E", "status": "[OFFER]"}))
@@ -517,7 +517,7 @@ class TestT2AFunnelBar:
         in STATUS_VALUES order. Anti-typo guardrail — the same grep rule
         that forbids hardcoded status literals in app.py forbids hardcoded
         colors (they'd drift from STATUS_COLORS silently)."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
         marker = trace.get("marker", {})
@@ -529,7 +529,7 @@ class TestT2AFunnelBar:
         )
 
     def test_funnel_y_axis_reads_top_down_in_pipeline_order(self, db):
-        """Visual order must match reading order: [OPEN] at the TOP of the
+        """Visual order must match reading order: [SAVED] at the TOP of the
         chart, [DECLINED] at the bottom — the same top-down flow as
         config.STATUS_VALUES.
 
@@ -541,12 +541,12 @@ class TestT2AFunnelBar:
         trips — without it, flipping the data list would silently also
         flip the colors + the logical pairing."""
         import json
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         spec = json.loads(at.get("plotly_chart")[0].proto.spec)
         yaxis = spec.get("layout", {}).get("yaxis", {})
         assert yaxis.get("autorange") == "reversed", (
-            "Funnel yaxis must set autorange='reversed' so [OPEN] is at "
+            "Funnel yaxis must set autorange='reversed' so [SAVED] is at "
             "the top and [DECLINED] at the bottom (pipeline reads top-down). "
             f"Got yaxis={yaxis!r}"
         )
@@ -556,15 +556,15 @@ class TestT2AFunnelBar:
         The funnel must still render every STATUS_VALUES bar with the
         missing ones coerced to 0 — otherwise the chart's shape changes
         as buckets fill up, and color/position assertions elsewhere break."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
         assert len(trace["x"]) == len(config.STATUS_VALUES)
         assert len(trace["y"]) == len(config.STATUS_VALUES)
-        # Every status except [OPEN] should read 0.
+        # Every status except [SAVED] should read 0.
         for status, count in zip(trace["y"], trace["x"]):
-            if status == config.STATUS_OPEN:
-                assert count == 1, f"[OPEN] bar should be 1, got {count}"
+            if status == config.STATUS_SAVED:
+                assert count == 1, f"[SAVED] bar should be 1, got {count}"
             else:
                 assert count == 0, (
                     f"Status {status!r} has no seeded rows; expected 0, got {count}"
@@ -637,8 +637,8 @@ class TestT2BFunnelEmptyState:
         )
 
     def test_single_open_position_renders_figure_not_empty_state(self, db):
-        """A single [OPEN] position → funnel chart renders; empty-state hides."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        """A single [SAVED] position → funnel chart renders; empty-state hides."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         charts = at.get("plotly_chart")
         assert len(charts) >= 1, (
@@ -683,7 +683,7 @@ class TestT2BFunnelEmptyState:
             "Empty-state branch must still render the 'Application Funnel' "
             f"subheader. Got: {[s.value for s in at.subheader]}"
         )
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         assert self._funnel_subheader_shown(at), (
             "Seeded branch must still render the 'Application Funnel' "
@@ -780,7 +780,7 @@ class TestT2CFunnelLayout:
         column, not at top-level. Asserting scoped retrieval (col.get
         rather than at.get) pins that the whole funnel block was moved
         as a unit, not just the subheader."""
-        database.add_position(make_position({"position_name": "A", "status": "[OPEN]"}))
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         halves = self._half_width_columns(at)
         left = halves[0]
@@ -889,7 +889,7 @@ class TestT3MaterialsReadiness:
         )
 
         database.add_position(
-            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Yes"})
+            make_position({"position_name": "A", "status": "[SAVED]", "req_cv": "Yes"})
         )
         at_seeded = _run_page()
         assert self._subheader_in(self._right_col(at_seeded)), (
@@ -904,7 +904,7 @@ class TestT3MaterialsReadiness:
         is actually inside `with _right_col:` and not leaked to the
         top-level or the wrong column."""
         database.add_position(
-            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Yes"})
+            make_position({"position_name": "A", "status": "[SAVED]", "req_cv": "Yes"})
         )
         at = _run_page()
         left = self._left_col(at)
@@ -958,7 +958,7 @@ class TestT3MaterialsReadiness:
           - Only counts positions with at least one required doc.
         Using req_cv='Yes' for all three; flip done_cv for the ready one."""
         database.add_position(make_position({
-            "position_name": "Ready-A", "status": "[OPEN]",
+            "position_name": "Ready-A", "status": "[SAVED]",
             "req_cv": "Yes", "done_cv": 1,
         }))
         database.add_position(make_position({
@@ -1000,7 +1000,7 @@ class TestT3MaterialsReadiness:
         accepts the verified parameter name (`text=`) — asserting on the
         visible string is what the UI contract promises."""
         database.add_position(make_position({
-            "position_name": "Ready-A", "status": "[OPEN]",
+            "position_name": "Ready-A", "status": "[SAVED]",
             "req_cv": "Yes", "done_cv": 1,
         }))
         database.add_position(make_position({
@@ -1062,7 +1062,7 @@ class TestT3MaterialsReadiness:
               call inside the readiness block (AppTest single-file mode
               cannot navigate siblings — T1-E precedent)."""
         database.add_position(make_position({
-            "position_name": "A", "status": "[OPEN]",
+            "position_name": "A", "status": "[SAVED]",
             "req_cv": "Yes", "done_cv": 0,
         }))
         at = _run_page()
