@@ -339,6 +339,33 @@ def test_invariant_8_fires_on_inverted_thresholds():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Sub-task 3 (v1.3 alignment) — DESIGN.md §5.1 / D22
+# ─────────────────────────────────────────────────────────────────────────────
+# WORK_AUTH_OPTIONS collapses a six-value enum (Any/OPT/J-1/H1B/No Sponsorship/
+# Ask) into the three-value categorical Yes/No/Unknown paired with a freetext
+# `work_auth_note` column (D22). FULL_TIME_OPTIONS replaces the ambiguous
+# Yes/No/Part-time list with the employment-type vocabulary
+# Full-time/Part-time/Contract. Both columns stay plain TEXT — no DDL impact.
+
+def test_work_auth_options_spec_values():
+    """DESIGN §5.1: WORK_AUTH_OPTIONS = ['Yes', 'No', 'Unknown'] (D22).
+
+    Three-value categorical. 'Unknown' covers postings that do not disclose
+    sponsorship; the freetext `work_auth_note` column carries any nuance
+    (e.g. 'green card required') so the enum stays filter-friendly."""
+    assert config.WORK_AUTH_OPTIONS == ["Yes", "No", "Unknown"]
+
+
+def test_full_time_options_spec_values():
+    """DESIGN §5.1: FULL_TIME_OPTIONS = ['Full-time', 'Part-time', 'Contract'].
+
+    Employment type, not boolean. Old Yes/No/Part-time was ambiguous
+    (Yes=full-time? Yes=available?); the new vocabulary names the
+    category explicitly."""
+    assert config.FULL_TIME_OPTIONS == ["Full-time", "Part-time", "Contract"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Sub-task 2 (v1.3 alignment) — DESIGN.md §5.1 / D21
 # ─────────────────────────────────────────────────────────────────────────────
 # REQUIREMENT_VALUES migrated from short codes (Y/Optional/N) to full words
