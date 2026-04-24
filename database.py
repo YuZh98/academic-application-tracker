@@ -103,19 +103,31 @@ def init_db() -> None:
             )
         """)
 
+        # confirmation_email is the pre-v1.3 dual-purpose TEXT column
+        # (stored either 'Y' for flag semantics or a date string for
+        # date semantics). Sub-task 10 split it into the (received, date)
+        # pair per DESIGN §6.2 + D19 / D20; the physical column stays in
+        # place per DESIGN §6.3 step (c) "leave old columns NULL until a
+        # rebuild drops them" and is scheduled for drop in v1.0-rc.
+        # No caller writes to it post-split; the one-shot UPDATE migration
+        # below translates the two legitimate legacy shapes into the new
+        # columns on the first init_db() after upgrade. Same retention
+        # pattern as interview1_date / interview2_date from Sub-task 8.
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS applications (
-                position_id          INTEGER PRIMARY KEY,
-                applied_date         TEXT,
-                all_recs_submitted   TEXT,
-                confirmation_email   TEXT,
-                response_date        TEXT,
-                response_type        TEXT,
-                interview1_date      TEXT,
-                interview2_date      TEXT,
-                result_notify_date   TEXT,
-                result               TEXT    DEFAULT '{result_default}',
-                notes                TEXT,
+                position_id           INTEGER PRIMARY KEY,
+                applied_date          TEXT,
+                all_recs_submitted    TEXT,
+                confirmation_email    TEXT,
+                confirmation_received INTEGER DEFAULT 0,
+                confirmation_date     TEXT,
+                response_date         TEXT,
+                response_type         TEXT,
+                interview1_date       TEXT,
+                interview2_date       TEXT,
+                result_notify_date    TEXT,
+                result                TEXT    DEFAULT '{result_default}',
+                notes                 TEXT,
                 FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
             )
         """)
@@ -244,6 +256,76 @@ def init_db() -> None:
                 "SET interview1_date = NULL, interview2_date = NULL "
                 "WHERE interview1_date IS NOT NULL "
                 "   OR interview2_date IS NOT NULL"
+            )
+
+        # Migration (v1.3 Sub-task 10, DESIGN §6.2 + §6.3 + D19 + D20):
+        # split the pre-v1.3 dual-purpose `applications.confirmation_email`
+        # TEXT column into a (flag, date) pair.
+        #
+        # Shape of the legacy column values:
+        #   'Y'           -> flag-only; a confirmation was received but
+        #                    no date was recorded
+        #   'YYYY-MM-DD'  -> date-present; a confirmation was received
+        #                    on this specific date
+        #   NULL / '' /    -> no confirmation data; leave the new columns
+        #   anything else    at their DEFAULTs (received=0, date=NULL)
+        #
+        # Implementation follows DESIGN §6.3's "Split a dual-purpose
+        # column" recipe:
+        #   (a) ALTER TABLE ADD COLUMN for the two new columns — each
+        #       guarded by PRAGMA table_info so a rerun on an already-
+        #       migrated DB is a strict no-op.
+        #   (b) One-shot UPDATE translating the two legitimate legacy
+        #       shapes into the new columns — gated by the pre-ALTER
+        #       absence of the new columns (migrate-once gate pattern
+        #       borrowed from Sub-task 8's interviews sub-table migration).
+        #   (c) The legacy `confirmation_email` column stays in the
+        #       applications CREATE TABLE DDL NULL until a follow-up
+        #       release rebuilds the table to drop it (scheduled for
+        #       v1.0-rc). No caller writes to it post-split; the column
+        #       is dead weight but preserved so this migration need not
+        #       touch upsert_application or any other writer.
+        applications_cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(applications)").fetchall()
+        }
+        confirmation_split_needed = (
+            "confirmation_received" not in applications_cols
+            or "confirmation_date"     not in applications_cols
+        )
+        if "confirmation_received" not in applications_cols:
+            conn.execute(
+                "ALTER TABLE applications "
+                "ADD COLUMN confirmation_received INTEGER DEFAULT 0"
+            )
+        if "confirmation_date" not in applications_cols:
+            conn.execute(
+                "ALTER TABLE applications ADD COLUMN confirmation_date TEXT"
+            )
+        if confirmation_split_needed:
+            # Date-shaped legacy values: set both new columns. SQLite
+            # GLOB uses shell-style character classes;
+            # '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' matches
+            # exactly the 10-character ISO date shape and nothing else
+            # (so 'not-a-date' / 'Y' / '' / NULL all fall through).
+            # Runs before the flag-only UPDATE; the two WHERE clauses
+            # are disjoint (a date-shaped value is not 'Y') so order
+            # is not strictly load-bearing, but running the
+            # specific-shape match first keeps the translation
+            # deterministic even if the pre-v1.3 data ever carried
+            # edge cases we did not anticipate.
+            conn.execute(
+                "UPDATE applications "
+                "SET confirmation_received = 1, "
+                "    confirmation_date     = confirmation_email "
+                "WHERE confirmation_email GLOB "
+                "  '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
+            )
+            # Flag-only legacy values: set received=1, leave date NULL.
+            conn.execute(
+                "UPDATE applications "
+                "SET confirmation_received = 1 "
+                "WHERE confirmation_email = 'Y'"
             )
 
         # Trigger (v1.3 Sub-task 6, DESIGN §6.2 + D25): stamp updated_at

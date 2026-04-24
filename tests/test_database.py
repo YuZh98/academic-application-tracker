@@ -1893,12 +1893,20 @@ class TestInterviewsMigration:
                     deadline_date TEXT
                 )
             """)
+            # Realistic pre-v1.3 applications table: carries both the
+            # flat interview date columns (this sub-task's target) AND
+            # `confirmation_email` (Sub-task 10's target). init_db()
+            # runs ALL applicable migrations on the first post-upgrade
+            # call, so the seed must carry every legacy column that any
+            # migration references; otherwise a later sub-task that
+            # touches applications will trip on a narrower seed.
             conn.execute("""
                 CREATE TABLE applications (
-                    position_id     INTEGER PRIMARY KEY,
-                    applied_date    TEXT,
-                    interview1_date TEXT,
-                    interview2_date TEXT,
+                    position_id        INTEGER PRIMARY KEY,
+                    applied_date       TEXT,
+                    confirmation_email TEXT,
+                    interview1_date    TEXT,
+                    interview2_date    TEXT,
                     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
                 )
             """)
