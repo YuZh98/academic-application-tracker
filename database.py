@@ -469,19 +469,28 @@ def init_db() -> None:
 
         # One-shot value migration (v1.3, DESIGN §6.3 + D21): translate any
         # pre-v1.3 short-code req_* values to the full-word form in place.
-        # Idempotent by construction — the ELSE branch passes 'Optional'
-        # and any already-migrated 'Yes'/'No' values through unchanged, so
-        # rerunning on a migrated DB is a no-op. The f-string builds column
-        # identifiers only; the substituted `req_col` comes from
-        # config.REQUIREMENT_DOCS (never user input), matching the safety
-        # argument documented on compute_materials_readiness.
+        # Idempotent by construction via the `WHERE {req_col} IN ('Y', 'N')`
+        # scope — the second init_db() on a migrated DB matches zero rows
+        # and the UPDATE is a strict no-op (no trigger firing, no row
+        # rewrite). An earlier unscoped form used a CASE-ELSE passthrough
+        # that matched every row on every startup; SQLite fires AFTER
+        # UPDATE triggers for every matched row regardless of whether the
+        # new value equals the old, so that form silently advanced
+        # positions.updated_at to "last app startup" on every call —
+        # violating D25's "last row mutation" semantics. Scoping the
+        # UPDATE to the legacy shape only is the clean fix.
+        # The f-string builds column identifiers only; the substituted
+        # `req_col` comes from config.REQUIREMENT_DOCS (never user input),
+        # matching the safety argument documented on
+        # compute_materials_readiness.
         for req_col, _done_col, _ in config.REQUIREMENT_DOCS:
             conn.execute(
                 f"UPDATE positions SET {req_col} = "
                 f"CASE {req_col} "
                 f"WHEN 'Y' THEN 'Yes' "
                 f"WHEN 'N' THEN 'No' "
-                f"ELSE {req_col} END"
+                f"END "
+                f"WHERE {req_col} IN ('Y', 'N')"
             )
 
         # One-shot value migration (v1.3 Sub-task 5, DESIGN §5.1 + §6.3):
