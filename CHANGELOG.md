@@ -108,6 +108,44 @@ orphan TEXT until manually translated (see Migration below).
   the `work_auth_note` TEXT column land in later sub-tasks); both DB
   columns are already plain TEXT so no DDL edit is needed.
 
+### Changed — v1.3 alignment Sub-task 4 (branch `feature/align-v1.3`)
+
+Sub-task 4 lifts the two hardcoded DDL DEFAULT literals in
+`database.init_db()` into f-string interpolations of the corresponding
+`config.py` constants, per DESIGN.md v1.3 §6.2 ("DDL DEFAULTs are
+config-driven"). **Pure refactor — no user-visible change, no schema
+change, no data migration.** Live config still has
+`STATUS_VALUES[0] == "[OPEN]"` and `RESULT_DEFAULT == "Pending"`, so
+the emitted SQL bytes are identical to the pre-refactor DDL.
+
+- **`database.py`** — `init_db()` now binds `status_default =
+  config.STATUS_VALUES[0]` and `result_default = config.RESULT_DEFAULT`
+  once per call, then interpolates them into the two `CREATE TABLE`
+  strings:
+  - `positions.status    TEXT NOT NULL DEFAULT '{status_default}'`
+  - `applications.result TEXT          DEFAULT '{result_default}'`
+  An inline comment cites DESIGN §6.2 and reaffirms the GUIDELINES §5
+  safety argument (the interpolated values come exclusively from
+  config, never from user input — matching the pattern already used
+  for `REQUIREMENT_DOCS` column-name interpolation on
+  `compute_materials_readiness` and the migration loop).
+- **`tests/test_database.py`** — one new test
+  `test_ddl_defaults_interpolate_from_config` in `TestInitDb`.
+  Monkeypatches `config.STATUS_VALUES[0]` and `config.RESULT_DEFAULT`
+  to sentinel strings, points `DB_PATH` at a fresh tmp file, calls
+  `init_db()`, and asserts `PRAGMA table_info` `dflt_value` for
+  `positions.status` and `applications.result` equals
+  `f"'{config.<value>}'"` dynamically. The sentinel monkeypatch forces
+  a mismatch with any hardcoded DDL literal — only an f-string-based
+  `init_db()` can read the sentinel at call time, so the test
+  uniquely pins the refactor.
+- **Groundwork for Sub-task 5.** The `[OPEN]`→`[SAVED]` rename
+  (`STATUS_VALUES[0]`) can now ship as a pure `config.py` edit plus
+  the one-shot `UPDATE positions SET status = '[SAVED]' WHERE status
+  = '[OPEN]'` migration spelled out in DESIGN §6.3. Without this
+  refactor, Sub-task 5 would also need to touch `database.py` to keep
+  the DDL and config in sync — that coupling is now gone.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -175,6 +213,14 @@ UPDATE positions
 
 Idempotent on a clean DB (no rows match the `WHERE` clauses). Skip
 entirely on a DB that was only ever populated under v1.3.
+
+**Sub-task 4** requires no migration — it is a pure refactor. The
+f-string interpolation emits the same SQL bytes as the prior hardcoded
+DDL (`'[OPEN]'` / `'Pending'`) because live config still holds those
+values. Renames under `STATUS_VALUES[0]` or `RESULT_DEFAULT` in future
+sub-tasks will each ship their own one-shot `UPDATE` per DESIGN §6.3
+— no DDL edit needed because the CREATE TABLE strings now read
+config at call time.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

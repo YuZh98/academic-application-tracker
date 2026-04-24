@@ -20,11 +20,14 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–3 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
-migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap).
-299 tests green · zero deprecation warnings.
+Sub-tasks 1–4 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
+DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
+`config.RESULT_DEFAULT` per DESIGN §6.2). 300 tests green · zero
+deprecation warnings.
 
-**Next up:** remaining v1.3 alignment items (status rename `[OPEN]→[SAVED]`,
+**Next up:** remaining v1.3 alignment items (status rename `[OPEN]→[SAVED]`
+via one-shot UPDATE — now a config-only edit thanks to Sub-task 4,
 `PRIORITY_VALUES` `"Med"→"Medium"`, schema overhauls, cascade rewire),
 then Phase 4 Tier 4 (Upcoming timeline).
 
