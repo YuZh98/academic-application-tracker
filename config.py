@@ -169,9 +169,21 @@ assert FUNNEL_DEFAULT_HIDDEN <= _bucket_labels, (
 
 PRIORITY_VALUES: list[str] = ["High", "Med", "Low", "Stretch"]
 
-WORK_AUTH_OPTIONS: list[str] = ["Any", "OPT", "J-1", "H1B", "No Sponsorship", "Ask"]
+# Three-value categorical answering "does the posting accept this applicant's
+# work authorization?" Paired with the freetext `work_auth_note` column so the
+# enum stays filter-friendly while nuance ("green card required", "J-1 OK
+# with a waiver") lands in free text (DESIGN §5.1 + D22). Replaced the
+# six-value Any/OPT/J-1/H1B/No Sponsorship/Ask list in v1.3 — any legacy
+# values lingering in a dev DB stay as orphan TEXT (column has no constraint);
+# see CHANGELOG [Unreleased] Sub-task 3 for the recommended manual translation.
+WORK_AUTH_OPTIONS: list[str] = ["Yes", "No", "Unknown"]
 
-FULL_TIME_OPTIONS: list[str] = ["Yes", "No", "Part-time"]
+# Employment type. The pre-v1.3 Yes/No/Part-time list was ambiguous
+# (Yes = full-time? Yes = available?); the v1.3 vocabulary names the
+# category explicitly (DESIGN §5.1). Column remains plain TEXT — no DDL
+# change — so dev DBs carrying 'Yes' / 'No' need manual translation
+# (CHANGELOG [Unreleased] Sub-task 3).
+FULL_TIME_OPTIONS: list[str] = ["Full-time", "Part-time", "Contract"]
 
 SOURCE_OPTIONS: list[str] = [
     "Lab website", "AcademicJobsOnline", "HigherEdJobs",
