@@ -419,6 +419,106 @@ class TestInitDb:
             f"Before: {ts_after_first_init!r}, after: {ts_after_second_init!r}"
         )
 
+    def test_positions_has_work_auth_note_column(self, db):
+        """Sub-task 7 / DESIGN §6.2 + D22: positions.work_auth_note must
+        exist as plain TEXT (NULL-able, no DEFAULT). It is the freetext
+        companion to the categorical `work_auth` column — three-value enum
+        for filtering (Yes/No/Unknown), freetext for posting-specific
+        nuance (e.g. "green card required", "J-1 OK with a waiver"). The
+        column has no DEFAULT so NULL is the fresh-row state and the
+        Overview-tab UI decides when to populate it."""
+        with database._connect() as conn:
+            cols = conn.execute("PRAGMA table_info(positions)").fetchall()
+
+        work_auth_note = next(
+            (r for r in cols if r["name"] == "work_auth_note"), None
+        )
+        assert work_auth_note is not None, (
+            "positions.work_auth_note must be defined in the CREATE TABLE DDL. "
+            f"Column list: {sorted(r['name'] for r in cols)!r}"
+        )
+        assert work_auth_note["type"] == "TEXT", (
+            "positions.work_auth_note type must be TEXT; "
+            f"got {work_auth_note['type']!r}"
+        )
+        assert work_auth_note["dflt_value"] is None, (
+            "positions.work_auth_note must not carry a DEFAULT — fresh rows "
+            "start NULL and the Overview tab populates it explicitly. "
+            f"Got dflt_value={work_auth_note['dflt_value']!r}"
+        )
+
+    def test_migration_adds_work_auth_note_to_pre_v1_3_positions(self, tmp_path, monkeypatch):
+        """Sub-task 7 / DESIGN §6.3: pre-v1.3 DBs whose positions table
+        predates this sub-task must pick up the work_auth_note column on
+        the next init_db() via a PRAGMA-guarded ALTER TABLE ADD COLUMN,
+        with any existing row's other columns untouched.
+
+        The column has no DEFAULT (matching the CREATE TABLE DDL), so
+        existing rows end up with work_auth_note IS NULL — which is
+        correct: v1.2 never collected this field, so the honest state
+        is "unknown". The Overview tab treats NULL as empty via
+        _safe_str.
+
+        Idempotence: a second init_db() finds the column already
+        present and skips the ALTER entirely."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+
+        # Pre-v1.3 positions table — has work_auth (v1.2 already had it)
+        # but NO work_auth_note, no updated_at, no req_*/done_* columns.
+        # Same minimal-shape strategy as the Sub-task 6 migration test;
+        # deadline_date is required so idx_positions_deadline CREATE in
+        # init_db() does not fail.
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT,
+                    work_auth     TEXT
+                )
+            """)
+            conn.execute(
+                "INSERT INTO positions (position_name, work_auth) "
+                "VALUES ('LegacyRow', 'Yes')"
+            )
+
+        database.init_db()
+
+        with database._connect() as conn:
+            cols = {r["name"] for r in conn.execute(
+                "PRAGMA table_info(positions)"
+            ).fetchall()}
+            legacy_row = conn.execute(
+                "SELECT work_auth, work_auth_note "
+                "FROM positions WHERE position_name = 'LegacyRow'"
+            ).fetchone()
+
+        assert "work_auth_note" in cols, (
+            "Migration must add work_auth_note via ALTER TABLE ADD COLUMN."
+        )
+        assert legacy_row["work_auth"] == "Yes", (
+            "Pre-existing work_auth value must survive the migration "
+            f"untouched; got {legacy_row['work_auth']!r}"
+        )
+        assert legacy_row["work_auth_note"] is None, (
+            "Existing rows must carry NULL work_auth_note after migration "
+            "(honest 'unknown' state — v1.2 never collected this field); "
+            f"got {legacy_row['work_auth_note']!r}"
+        )
+
+        # Idempotence: second init_db() is a no-op, row stays intact.
+        database.init_db()
+        with database._connect() as conn:
+            legacy_row_after = conn.execute(
+                "SELECT work_auth, work_auth_note "
+                "FROM positions WHERE position_name = 'LegacyRow'"
+            ).fetchone()
+        assert legacy_row_after["work_auth"] == "Yes"
+        assert legacy_row_after["work_auth_note"] is None
+
 
 # ── add_position / get_position ───────────────────────────────────────────────
 
@@ -551,6 +651,39 @@ class TestUpdatePosition:
         database.update_position(pos_id, {"req_cv": "Yes", "done_cv": 1})
         pos = database.get_position(pos_id)
         assert pos["done_cv"] == 1
+
+    def test_work_auth_note_roundtrips(self, db):
+        """Sub-task 7 / DESIGN §6.2 + D22: work_auth_note is plain TEXT
+        with no normalisation at the DB layer — whatever the Overview
+        tab writes comes back verbatim on read. Exercises the full
+        write-then-read cycle through add_position (INSERT) and
+        update_position (UPDATE) for both the categorical `work_auth`
+        column and its freetext `work_auth_note` partner. Guards
+        against a future refactor that accidentally adds coercion or
+        truncation at the DB layer."""
+        # INSERT path — add_position accepts both fields in its dict.
+        pos_id = database.add_position(make_position({
+            "work_auth":      "Yes",
+            "work_auth_note": "green card required",
+        }))
+        pos = database.get_position(pos_id)
+        assert pos["work_auth"]      == "Yes"
+        assert pos["work_auth_note"] == "green card required"
+
+        # UPDATE path — both columns reachable via update_position.
+        database.update_position(pos_id, {
+            "work_auth":      "Unknown",
+            "work_auth_note": "J-1 OK with a waiver",
+        })
+        pos = database.get_position(pos_id)
+        assert pos["work_auth"]      == "Unknown"
+        assert pos["work_auth_note"] == "J-1 OK with a waiver"
+
+        # Empty string round-trips as empty string (not coerced to NULL).
+        # Matches the Notes-tab contract — the page is the sole decider
+        # of how to interpret empty vs NULL.
+        database.update_position(pos_id, {"work_auth_note": ""})
+        assert database.get_position(pos_id)["work_auth_note"] == ""
 
 
 # ── delete_position + cascade ─────────────────────────────────────────────────
