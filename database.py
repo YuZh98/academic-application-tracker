@@ -79,6 +79,7 @@ def init_db() -> None:
                 status           TEXT    NOT NULL DEFAULT '{status_default}',
                 priority         TEXT,
                 created_at       TEXT    DEFAULT (date('now')),
+                updated_at       TEXT    DEFAULT (datetime('now')),
                 position_name    TEXT    NOT NULL,
                 institute        TEXT,
                 location         TEXT,
@@ -152,6 +153,39 @@ def init_db() -> None:
                 conn.execute(
                     f"ALTER TABLE positions ADD COLUMN {done_col} INTEGER DEFAULT 0"
                 )
+
+        # Migration (v1.3 Sub-task 6, DESIGN §6.2 + D25): pre-v1.3 DBs
+        # whose positions table was created without updated_at pick up
+        # the column here, then existing rows are backfilled with
+        # datetime('now'). SQLite rejects non-constant expression
+        # DEFAULTs on ALTER TABLE ADD COLUMN against a non-empty table
+        # ('Cannot add a column with non-constant default'), so the
+        # ALTER uses a NULL default and the UPDATE fills the stamp —
+        # the CREATE TABLE DDL above keeps the full DEFAULT semantics
+        # for fresh DBs. Idempotent: a re-run sees updated_at already
+        # in existing_cols and skips both statements.
+        if "updated_at" not in existing_cols:
+            conn.execute("ALTER TABLE positions ADD COLUMN updated_at TEXT")
+            conn.execute(
+                "UPDATE positions SET updated_at = datetime('now') "
+                "WHERE updated_at IS NULL"
+            )
+
+        # Trigger (v1.3 Sub-task 6, DESIGN §6.2 + D25): stamp updated_at
+        # on every row mutation so writers never have to remember.
+        # Loop prevention relies on SQLite's default recursive_triggers
+        # = OFF — the inner UPDATE would otherwise re-fire this trigger
+        # indefinitely. Created AFTER the ALTER above so the body's
+        # column reference resolves in migrated-DB runs too; and BEFORE
+        # the value-migration UPDATEs below so those writes also route
+        # through the trigger (D25 applies to migration writes as well).
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS positions_updated_at
+                AFTER UPDATE ON positions FOR EACH ROW
+            BEGIN
+                UPDATE positions SET updated_at = datetime('now') WHERE id = NEW.id;
+            END
+        """)
 
         # One-shot value migration (v1.3, DESIGN §6.3 + D21): translate any
         # pre-v1.3 short-code req_* values to the full-word form in place.
