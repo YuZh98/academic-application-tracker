@@ -862,13 +862,15 @@ class TestEditPanelShell:
 # never collide with the quick-add "qa_*" keys.
 
 EDIT_KEYS = {
-    "position_name": "edit_position_name",
-    "institute":     "edit_institute",
-    "field":         "edit_field",
-    "priority":      "edit_priority",
-    "status":        "edit_status",
-    "deadline_date": "edit_deadline_date",
-    "link":          "edit_link",
+    "position_name":  "edit_position_name",
+    "institute":      "edit_institute",
+    "field":          "edit_field",
+    "priority":       "edit_priority",
+    "status":         "edit_status",
+    "deadline_date":  "edit_deadline_date",
+    "link":           "edit_link",
+    "work_auth":      "edit_work_auth",        # Sub-task 7 / DESIGN §8.2
+    "work_auth_note": "edit_work_auth_note",   # Sub-task 7 / DESIGN §8.2
 }
 
 
@@ -1025,6 +1027,98 @@ class TestOverviewTabWidgets:
             f"NULL priority must coerce to config.PRIORITY_VALUES[0] "
             f"(= {config.PRIORITY_VALUES[0]!r}); got "
             f"{at.selectbox(key=EDIT_KEYS['priority']).value!r}"
+        )
+
+
+class TestOverviewWorkAuthWidgets:
+    """Sub-task 7 / DESIGN §6.2 + §8.2 + D22.
+
+    The Overview tab gains two new widgets: a `work_auth` selectbox drawn
+    from ``config.WORK_AUTH_OPTIONS`` (the categorical three-value
+    Yes/No/Unknown enum) and a `work_auth_note` text_area below it
+    holding the freetext posting-specific nuance (e.g. "green card
+    required", "J-1 OK with a waiver"). Both pre-seed from the selected
+    row; both ride the existing Overview Save path."""
+
+    def test_work_auth_selectbox_renders_after_selection(self, db):
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.selectbox(key=EDIT_KEYS["work_auth"]) is not None, (
+            "work_auth selectbox must render inside the Overview tab once a "
+            "row is selected (DESIGN §8.2 Overview-tab row)."
+        )
+
+    def test_work_auth_note_text_area_renders_after_selection(self, db):
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_area(key=EDIT_KEYS["work_auth_note"]) is not None, (
+            "work_auth_note text_area must render inside the Overview tab "
+            "once a row is selected (DESIGN §8.2 — below the work_auth "
+            "selectbox)."
+        )
+
+    def test_work_auth_selectbox_options_match_config(self, db):
+        """Options must come from config.WORK_AUTH_OPTIONS — never
+        hardcoded (GUIDELINES §6). Order matters: Sub-task 3 locked
+        ['Yes', 'No', 'Unknown'] as the canonical order."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["work_auth"]).options)
+        assert options == config.WORK_AUTH_OPTIONS, (
+            "work_auth selectbox options must match config.WORK_AUTH_OPTIONS "
+            "exactly (same order).\n"
+            f"  Expected: {config.WORK_AUTH_OPTIONS}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_widgets_pre_seed_from_selected_row(self, db):
+        """Both widgets must carry the selected row's DB values on render
+        — the same widget-value-trap pre-seed pattern as status/priority,
+        via the _edit_form_sid sentinel. work_auth_note on a populated row
+        is a string; work_auth is one of WORK_AUTH_OPTIONS."""
+        database.add_position({
+            "position_name":  "Stanford BioStats",
+            "work_auth":      "Yes",
+            "work_auth_note": "green card required",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.selectbox(key=EDIT_KEYS["work_auth"]).value == "Yes"
+        assert (
+            at.text_area(key=EDIT_KEYS["work_auth_note"]).value
+            == "green card required"
+        )
+
+    def test_null_work_auth_falls_back_to_first_option(self, db):
+        """A row with work_auth IS NULL (never populated — quick-add
+        doesn't set it) must not blow up the selectbox. F2-style
+        coercion drops the value to WORK_AUTH_OPTIONS[0], mirroring the
+        existing priority/status fallback for NULL / out-of-vocab
+        values. An empty work_auth_note comes back as "" via _safe_str."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, (
+            f"Page crashed on row with NULL work_auth: {at.exception}"
+        )
+        assert (
+            at.selectbox(key=EDIT_KEYS["work_auth"]).value
+            == config.WORK_AUTH_OPTIONS[0]
+        ), (
+            "NULL work_auth must coerce to WORK_AUTH_OPTIONS[0] — the F2 "
+            "fallback precedent set by priority/status selectboxes."
+        )
+        assert at.text_area(key=EDIT_KEYS["work_auth_note"]).value == "", (
+            "NULL work_auth_note must coerce to empty string via _safe_str "
+            "— NaN-truthiness trap applies here too."
         )
 
 
@@ -1687,6 +1781,32 @@ class TestOverviewSave:
             "pre-edit value. If this fails, the sentinel may be stuck on "
             "the pre-save render cycle."
         )
+
+    def test_save_persists_work_auth_and_note(self, db):
+        """Sub-task 7 / DESIGN §6.2 + §8.2: the Overview Save payload must
+        carry both work_auth and work_auth_note so the pair round-trips
+        through the full UI path. Seeds a row with no work auth info, edits
+        both widgets, clicks Save, and asserts the DB row reflects both —
+        guards against either field being added to the form but forgotten
+        in update_position's payload dict."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        at.selectbox(key=EDIT_KEYS["work_auth"]).set_value("Yes")
+        at.text_area(key=EDIT_KEYS["work_auth_note"]).set_value(
+            "green card required"
+        )
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["work_auth"]      == "Yes"
+        assert row["work_auth_note"] == "green card required"
 
 
 # ── Requirements tab Save (T5-B) ──────────────────────────────────────────────
