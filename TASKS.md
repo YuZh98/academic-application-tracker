@@ -144,10 +144,35 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       reference it in WHERE). 399 tests green. CHANGELOG Migration
       note records the full SQL (ALTER + GLOB-based translation +
       flag-only UPDATE).
-- [ ] Sub-task 11+: remaining v1.3 alignment items per
-      `memory/project_state.md` (`recommenders.reminder_sent` TEXT
-      → INTEGER flag + `reminder_sent_date TEXT` split;
-      `recommenders.confirmed` TEXT → INTEGER 0/1/NULL)
+- [x] Sub-task 11: recommenders table rebuild per DESIGN §6.2 +
+      §6.3 + D19 + D20. `confirmed TEXT` → `confirmed INTEGER`
+      (tri-state 0/1/NULL, no DEFAULT so fresh rows start NULL =
+      pending); `reminder_sent TEXT` → `reminder_sent INTEGER
+      DEFAULT 0`; add `reminder_sent_date TEXT`. SQLite lacks
+      in-place column-type change, so the standard CREATE-COPY-
+      DROP-RENAME rebuild recipe inside one transaction — CREATE
+      TABLE recommenders_new with the target DDL, INSERT with CASE
+      translations (`'Y'`/`'N'`/other → 1/0/NULL for confirmed;
+      `'Y'` → flag=1 / date=NULL, `GLOB '????-??-??'` → flag=0 /
+      date=value, else → flag=0 / date=NULL for reminder_sent pair),
+      DROP recommenders, ALTER recommenders_new RENAME TO
+      recommenders. Idempotence gate keyed on `PRAGMA
+      table_info(recommenders)` → `confirmed.type != 'INTEGER'` —
+      a rerun sees INTEGER and short-circuits. All other columns
+      (id, position_id, recommender_name, relationship, asked_date,
+      submitted_date, notes) copy verbatim; id values preserved so
+      sqlite_sequence AUTOINCREMENT stays coherent. FK + ON DELETE
+      CASCADE re-declared on the new table so delete_position
+      cascade chain survives the rebuild. **No CRUD-function
+      changes** — all recommender writers/readers are schema-
+      agnostic (no field whitelist, no `= 'Y'` filters in queries);
+      pages/ + exports.py don't reference confirmed/reminder_sent
+      either. 18 new tests: 4 TestInitDb column/FK specs, 3
+      TestRecommenders round-trips + fresh-row defaults, 11
+      TestRecommendersRebuildMigration cases covering the full CASE
+      matrix + FK CASCADE + AUTOINCREMENT + idempotence. 417 tests
+      green. CHANGELOG Migration note records the full rebuild SQL
+      + translation caveats.
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -218,4 +243,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–10 shipped; Sub-task 11+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–11 shipped; branch push + PR open is the last remaining step)_

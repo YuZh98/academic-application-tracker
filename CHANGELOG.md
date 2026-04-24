@@ -565,6 +565,146 @@ Sub-task 8 `interview1_date` / `interview2_date` pair).
   WHERE clauses). Pure seed realism — no change to the Sub-task
   8 test focus.
 
+### Changed — v1.3 alignment Sub-task 11 (branch `feature/align-v1.3`)
+
+Sub-task 11 rebuilds the `recommenders` table to bring its
+storage types in line with DESIGN.md v1.3 §6.2 + D19 + D20:
+`confirmed TEXT` → `confirmed INTEGER` (tri-state 0/1/NULL);
+`reminder_sent TEXT` → `reminder_sent INTEGER DEFAULT 0`; add
+`reminder_sent_date TEXT`. D19 frames the `reminder_sent` part as
+a dual-concern (flag, date) split (a pre-v1.3 `reminder_sent`
+TEXT cell could legitimately hold either `'Y'` or a date-shaped
+string); D20 pins boolean-state columns at INTEGER 0/1 rather
+than TEXT `'Y'`/`'N'`. Unlike Sub-tasks 8 and 10, which kept the
+pre-v1.3 columns physically present (legacy-column retention per
+§6.3 step c), this sub-task does a full table rebuild — SQLite
+lacks in-place column-type change, so CREATE-COPY-DROP-RENAME
+is the only clean recipe (see DESIGN §6.3's "Remove a column"
+row, which also enumerates this pattern).
+
+- **`database.py` CREATE TABLE recommenders DDL** rewritten to
+  the target schema:
+  ```
+  confirmed          INTEGER,                -- 0, 1, or NULL
+  submitted_date     TEXT,
+  reminder_sent      INTEGER DEFAULT 0,      -- 0 or 1
+  reminder_sent_date TEXT,                   -- ISO, NULL if none
+  ```
+  Preamble comment explains the tri-state semantics on `confirmed`
+  (no DEFAULT so a fresh row is NULL = pending, distinct from 0 =
+  explicitly not confirmed) and the (flag, date) split on the
+  reminder pair. All other columns (`id`, `position_id`,
+  `recommender_name`, `relationship`, `asked_date`,
+  `submitted_date`, `notes`) stay untouched; the FK +
+  `ON DELETE CASCADE` carries over verbatim.
+- **`database.init_db()` migration block** inserted right after
+  the Sub-task 10 confirmation_email split, before the
+  `positions_updated_at` trigger:
+  - **Idempotence gate** (borrowed from Sub-task 8's migrate-once
+    shape, but keyed on the column's declared type rather than
+    table presence): `PRAGMA table_info(recommenders)` → read the
+    `confirmed` column's declared type. `INTEGER` (fresh DB or
+    already-migrated) short-circuits the rebuild; `TEXT` (pre-v1.3)
+    triggers it. A rerun on a migrated DB is a strict no-op — no
+    duplicate tables, no double-translation.
+  - **Step 1 — CREATE** `recommenders_new` with the target DDL
+    (same columns and DEFAULTs as the CREATE TABLE above; FK +
+    `ON DELETE CASCADE` re-declared so the rename lands a fully-
+    constrained table).
+  - **Step 2 — INSERT-COPY** from `recommenders` into
+    `recommenders_new` with CASE translations:
+    ```
+    confirmed     'Y'           -> 1
+                  'N'           -> 0
+                  anything else -> NULL
+                                   (cautious; 'maybe' / empty / stray
+                                    freetext becomes NULL rather than
+                                    a guessed integer)
+
+    reminder_sent 'Y'           -> reminder_sent=1,
+                                   reminder_sent_date=NULL
+                  'YYYY-MM-DD'  -> reminder_sent=0,
+                                   reminder_sent_date=<value>
+                                   (matched via SQLite
+                                    GLOB '????-??-??' — any 10-char
+                                    '??-??' shape; looser than
+                                    Sub-task 10's [0-9]-digit-class
+                                    but safe given pre-v1.3
+                                    reminder_sent realistically held
+                                    only dates or 'Y'/NULL)
+                  anything else -> reminder_sent=0,
+                                   reminder_sent_date=NULL
+    ```
+    Other columns copy through verbatim. `id` values preserved so
+    the `sqlite_sequence` AUTOINCREMENT counter stays coherent —
+    SQLite advances it past any explicitly-inserted id on the
+    next INSERT.
+  - **Step 3 — DROP** the old `recommenders` table. Safe with
+    `PRAGMA foreign_keys = ON` (set by `_connect()`): recommenders
+    is a CHILD table (only an outbound FK to positions); nothing
+    points INTO recommenders, so the implicit DELETE FROM that
+    fires on DROP with FK=ON has nothing to cascade.
+  - **Step 4 — RENAME** `recommenders_new` to `recommenders`. The
+    FK definitions in other tables are unchanged (nothing points
+    to recommenders), so the rename is structural only.
+  - **Atomicity**: all four steps run inside the same
+    `with _connect() as conn:` block, i.e. the same transaction
+    as every other init_db() DDL change. A mid-rebuild failure
+    triggers the `_connect()` context manager's rollback, so the
+    DB cannot be left with a half-migrated table (e.g.
+    `recommenders_new` orphaned alongside an un-translated
+    `recommenders`).
+- **No changes to recommender CRUD or dashboard-query functions.**
+  `add_recommender` / `update_recommender` are schema-agnostic
+  (no field whitelist), so they transparently accept integer
+  values on the new INTEGER columns. `get_recommenders` /
+  `get_all_recommenders` / `get_pending_recommenders` do not
+  filter on `confirmed` or `reminder_sent` (the only WHERE
+  predicates involve `submitted_date` and `asked_date`).
+  `is_all_recs_submitted` only reads `submitted_date`. `pages/`
+  and `exports.py` do not reference `confirmed` or `reminder_sent`
+  at all (verified via grep; `pages/3_Recommenders.py` does not
+  yet exist — landing target is Phase 5).
+- **`tests/test_database.py`** — 18 new tests:
+  - `TestInitDb` gets 4 pins (3 column-spec + 1 FK survival):
+    `test_recommenders_confirmed_column_is_integer_nullable`
+    (INTEGER, no DEFAULT — tri-state pending stays NULL),
+    `test_recommenders_reminder_sent_column_is_integer_with_zero_default`
+    (INTEGER, `dflt_value == "0"`),
+    `test_recommenders_has_reminder_sent_date_column_nullable`
+    (TEXT, no DEFAULT), and
+    `test_recommenders_foreign_key_survives_rebuild`
+    (PRAGMA foreign_key_list confirms position_id → positions.id
+    with `on_delete == "CASCADE"` post-rename).
+  - `TestRecommenders` gets 3 round-trip / defaults pins:
+    `test_fresh_recommender_row_defaults` (add_recommender with
+    only `recommender_name` → `confirmed=NULL`,
+    `reminder_sent=0`, `reminder_sent_date=NULL`),
+    `test_integer_confirmed_values_roundtrip` (0 / 1 / NULL all
+    round-trip), and
+    `test_integer_reminder_sent_and_date_roundtrip` (both the
+    sent+dated and explicit-unsent states round-trip).
+  - New `TestRecommendersRebuildMigration` class (11 tests)
+    modeled on Sub-tasks 8 + 10's migration-test precedents.
+    Shared `_seed_pre_v1_3_recommenders` helper builds a minimal
+    pre-v1.3 DB via `tmp_path` + monkeypatched `DB_PATH`,
+    including the pre-v1.3 applications columns Sub-tasks 8 + 10
+    migrate (so init_db() runs ALL applicable migrations cleanly
+    in order — Sub-task 8, Sub-task 10, Sub-task 11). Cases:
+    `'Y'` → 1, `'N'` → 0, NULL stays NULL, other values
+    (`'maybe'` / `''` / `'y'`) → NULL; `reminder_sent='Y'` →
+    flag=1 / date=NULL, NULL / `''` / `'N'` / freetext →
+    flag=0 / date=NULL, date-shaped → flag=0 /
+    date=`<value>`; other columns preserved verbatim; FK +
+    CASCADE still cleans up recommenders on delete_position;
+    AUTOINCREMENT counter advances past migrated ids; second
+    `init_db()` is a strict no-op (PRAGMA table_info guard
+    evaluates False once `confirmed`'s type is INTEGER).
+  - `import pandas as pd` added at the top for `pd.isna`
+    checks on NULL-able columns (pandas may return None or NaN
+    depending on whether other rows in the same column forced
+    the dtype to float).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -848,6 +988,118 @@ A dev DB that somehow has the new columns but legacy values still
 in `confirmation_email` (hand-built, partial failed migration) is
 out of scope for the auto-path; recover with a one-time manual run
 of the two UPDATEs above.
+
+**Sub-task 11** — schema migration rebuilding the `recommenders`
+table to convert `confirmed TEXT` → `confirmed INTEGER`,
+`reminder_sent TEXT` → `reminder_sent INTEGER DEFAULT 0`, and add
+`reminder_sent_date TEXT`. `init_db()` runs this automatically on
+the first app start after upgrade; a user does not need to execute
+anything manually. Unlike Sub-tasks 8 + 10 (which kept legacy
+columns physically present), this sub-task is a full table rebuild
+because SQLite lacks in-place column-type change. For the record,
+the equivalent SQL executed is:
+
+```sql
+-- (1) CREATE the target-schema table under a temporary name.
+CREATE TABLE recommenders_new (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id        INTEGER NOT NULL,
+    recommender_name   TEXT,
+    relationship       TEXT,
+    asked_date         TEXT,
+    confirmed          INTEGER,                -- 0, 1, or NULL
+    submitted_date     TEXT,
+    reminder_sent      INTEGER DEFAULT 0,      -- 0 or 1
+    reminder_sent_date TEXT,                   -- ISO, NULL if none
+    notes              TEXT,
+    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+);
+
+-- (2) INSERT-COPY from the old table with CASE translations.
+--     Other columns (id, position_id, recommender_name, relationship,
+--     asked_date, submitted_date, notes) copy verbatim; id values are
+--     preserved so the sqlite_sequence AUTOINCREMENT counter advances
+--     past them on the next add_recommender call.
+INSERT INTO recommenders_new (
+    id, position_id, recommender_name, relationship, asked_date,
+    confirmed, submitted_date, reminder_sent, reminder_sent_date, notes
+)
+SELECT
+    id,
+    position_id,
+    recommender_name,
+    relationship,
+    asked_date,
+    CASE confirmed
+        WHEN 'Y' THEN 1
+        WHEN 'N' THEN 0
+        ELSE NULL
+    END,
+    submitted_date,
+    CASE WHEN reminder_sent = 'Y' THEN 1 ELSE 0 END,
+    CASE WHEN reminder_sent GLOB '????-??-??'
+         THEN reminder_sent
+         ELSE NULL
+    END,
+    notes
+FROM recommenders;
+
+-- (3) DROP the old table.  Safe with PRAGMA foreign_keys = ON:
+--     recommenders is a CHILD (outbound FK to positions); nothing
+--     points INTO recommenders, so the implicit DELETE FROM on DROP
+--     has nothing to cascade.
+DROP TABLE recommenders;
+
+-- (4) RENAME the new table into place.
+ALTER TABLE recommenders_new RENAME TO recommenders;
+```
+
+All four steps run inside a single transaction (the same one that
+every init_db() DDL change shares). A mid-rebuild failure triggers
+the `_connect()` context manager's rollback, so the DB cannot be
+left with a half-migrated table alongside a temporary
+`recommenders_new`.
+
+Idempotence is implemented via a **declared-type gate**: before
+step (1), `init_db()` reads `PRAGMA table_info(recommenders)` and
+extracts the declared type of the `confirmed` column. If it is
+already `INTEGER` (fresh DB built with the v1.3 CREATE TABLE, or
+the rebuild has already run), the entire block short-circuits —
+no re-rebuild, no data copied twice.
+
+Value-translation caveats:
+
+- **`confirmed` tri-state** — only the two canonical legacy values
+  (`'Y'` / `'N'`) translate to integers (`1` / `0`); every other
+  value (including legacy `'y'` / `'yes'` / `'maybe'` / empty
+  string / any freetext typo) becomes NULL. This is the
+  pending-response semantics — "we don't know for sure" is NULL,
+  distinct from the explicit-no `0`. If a dev DB had been
+  hand-editing the column with a non-`'Y'`/`'N'` vocabulary, those
+  rows will read as pending after migration; re-save them from
+  the Recommenders page (Phase 5) to set the intended integer.
+- **`reminder_sent` date-shaped values** — the `GLOB '????-??-??'`
+  pattern matches any 10-character `??-??` shape, including
+  theoretically-pathological strings like `'abcd-ef-gh'`. Safe in
+  practice because pre-v1.3 `reminder_sent` realistically held
+  only dates, `'Y'`, or NULL; the looser GLOB is acceptable and
+  matches the SQL the user prescribed. (Sub-task 10's
+  `confirmation_email` split used a stricter `[0-9]`-digit-class
+  pattern; the two patterns diverge intentionally.)
+- **Explicit-unsent after migration** — a pre-v1.3
+  `reminder_sent = 'Y'` row lands as `reminder_sent = 1,
+  reminder_sent_date = NULL`; a pre-v1.3 date-shaped row lands
+  as `reminder_sent = 0, reminder_sent_date = <value>`. If the
+  user wants both flag and date set they can re-save from the
+  Recommenders page (Phase 5). The migration's conservative
+  "flag = 0 unless literally 'Y'" rule keeps the translation
+  deterministic and matches the spec SQL exactly.
+
+A dev DB that somehow has both the old recommenders table and a
+stranded `recommenders_new` (hand-built, partial failed migration)
+is out of scope for the auto-path. Recover manually: inspect both
+tables, decide which carries the truth, DROP the stale one, RENAME
+the live one to `recommenders`, and restart.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

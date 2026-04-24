@@ -20,7 +20,7 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–10 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+Sub-tasks 1–11 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
 migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
 DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
 `config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
@@ -36,18 +36,21 @@ interview rewrite of `get_upcoming_interviews` per §6.2 + D18 with
 scan, the R1/R2/R3 pipeline auto-promotion cascade wired across
 `upsert_application` + `add_interview` with atomic rollback,
 `is_all_recs_submitted` helper, and `compute_materials_readiness` alias
-swap per §9.3 + §7 + D12 + D23, and the `applications.confirmation_email`
+swap per §9.3 + §7 + D12 + D23, the `applications.confirmation_email`
 TEXT split into `confirmation_received INTEGER DEFAULT 0` +
 `confirmation_date TEXT` per §6.2 + §6.3 + D19 + D20 with PRAGMA-guarded
 `ALTER ADD COLUMN` + migrate-once gate running GLOB-based translation
-for ISO-date values and a `'Y'`-only flag UPDATE — physical drop of the
-legacy column deferred to v1.0-rc). 399 tests green · zero deprecation
-warnings.
+for ISO-date values and a `'Y'`-only flag UPDATE (physical drop of the
+legacy column deferred to v1.0-rc), and the `recommenders` table rebuild
+per §6.2 + D19 + D20 translating `confirmed TEXT` → `INTEGER` tri-state
+and splitting `reminder_sent TEXT` into `INTEGER DEFAULT 0` +
+`reminder_sent_date TEXT` via the CREATE-COPY-DROP-RENAME recipe inside
+one transaction — idempotence gate keyed on `confirmed`'s declared
+type). 417 tests green · zero deprecation warnings.
 
-**Next up:** remaining v1.3 alignment items (`recommenders.reminder_sent`
-TEXT → INTEGER flag + `reminder_sent_date TEXT` split;
-`recommenders.confirmed` TEXT → INTEGER 0/1/NULL), then Phase 4 Tier 4
-(Upcoming timeline).
+**Next up:** push branch, open PR, merge to main — all v1.3 alignment
+items now landed. After merge, resume Phase 4 Tier 4 (Upcoming
+timeline).
 
 ---
 
