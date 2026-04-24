@@ -80,7 +80,7 @@ class TestInitDb:
 
         pos = database.get_position(pos_id)
         assert pos["position_name"] == "BioStats Postdoc"
-        assert pos["req_portfolio"] == "N"   # default for new column
+        assert pos["req_portfolio"] == "No"   # default for new column
 
 
 # ── add_position / get_position ───────────────────────────────────────────────
@@ -102,11 +102,11 @@ class TestAddPosition:
         pos = database.get_position(pos_id)
         assert pos["status"] == "[OPEN]"
 
-    def test_req_columns_default_to_n(self, db):
+    def test_req_columns_default_to_no(self, db):
         pos_id = database.add_position(make_position())
         pos = database.get_position(pos_id)
         for req_col, _, _ in config.REQUIREMENT_DOCS:
-            assert pos[req_col] == "N", f"{req_col} should default to 'N'"
+            assert pos[req_col] == "No", f"{req_col} should default to 'No'"
 
     def test_done_columns_default_to_zero(self, db):
         pos_id = database.add_position(make_position())
@@ -197,10 +197,10 @@ class TestUpdatePosition:
 
     def test_updates_specified_fields(self, db):
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {"status": "[APPLIED]", "req_cv": "Y"})
+        database.update_position(pos_id, {"status": "[APPLIED]", "req_cv": "Yes"})
         pos = database.get_position(pos_id)
         assert pos["status"] == "[APPLIED]"
-        assert pos["req_cv"] == "Y"
+        assert pos["req_cv"] == "Yes"
 
     def test_partial_update_does_not_clobber_other_fields(self, db):
         pos_id = database.add_position(make_position())
@@ -211,7 +211,7 @@ class TestUpdatePosition:
 
     def test_can_set_done_column(self, db):
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {"req_cv": "Y", "done_cv": 1})
+        database.update_position(pos_id, {"req_cv": "Yes", "done_cv": 1})
         pos = database.get_position(pos_id)
         assert pos["done_cv"] == 1
 
@@ -554,21 +554,21 @@ class TestComputeMaterialsReadiness:
         assert result == {"ready": 0, "pending": 0}
 
     def test_position_with_no_required_docs_excluded(self, db):
-        """req_* all default to 'N' — position has no requirements, excluded from count."""
+        """req_* all default to 'No' — position has no requirements, excluded from count."""
         database.add_position(make_position())
         result = database.compute_materials_readiness()
         assert result == {"ready": 0, "pending": 0}
 
     def test_ready_when_all_required_docs_done(self, db):
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {"req_cv": "Y", "done_cv": 1})
+        database.update_position(pos_id, {"req_cv": "Yes", "done_cv": 1})
         result = database.compute_materials_readiness()
         assert result["ready"] == 1
         assert result["pending"] == 0
 
     def test_pending_when_required_doc_not_done(self, db):
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {"req_cv": "Y", "done_cv": 0})
+        database.update_position(pos_id, {"req_cv": "Yes", "done_cv": 0})
         result = database.compute_materials_readiness()
         assert result["ready"] == 0
         assert result["pending"] == 1
@@ -576,8 +576,8 @@ class TestComputeMaterialsReadiness:
     def test_pending_when_one_of_many_required_docs_not_done(self, db):
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {
-            "req_cv": "Y", "done_cv": 1,
-            "req_cover_letter": "Y", "done_cover_letter": 0,   # not done
+            "req_cv": "Yes", "done_cv": 1,
+            "req_cover_letter": "Yes", "done_cover_letter": 0,   # not done
         })
         result = database.compute_materials_readiness()
         assert result["ready"] == 0
@@ -587,11 +587,11 @@ class TestComputeMaterialsReadiness:
         """req_* = 'Optional' means the doc exists but is not required for readiness."""
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {
-            "req_cv": "Y", "done_cv": 1,
+            "req_cv": "Yes", "done_cv": 1,
             "req_transcripts": "Optional", "done_transcripts": 0,  # Optional, not done
         })
         result = database.compute_materials_readiness()
-        # 'Optional' != 'Y', so done_transcripts=0 does not make it pending
+        # 'Optional' != 'Yes', so done_transcripts=0 does not make it pending
         assert result["ready"] == 1
         assert result["pending"] == 0
 
@@ -599,7 +599,7 @@ class TestComputeMaterialsReadiness:
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {
             "status": "[CLOSED]",
-            "req_cv": "Y", "done_cv": 0,
+            "req_cv": "Yes", "done_cv": 0,
         })
         result = database.compute_materials_readiness()
         assert result == {"ready": 0, "pending": 0}
@@ -607,11 +607,11 @@ class TestComputeMaterialsReadiness:
     def test_counts_multiple_positions_correctly(self, db):
         # Position 1: cv required and done → ready
         p1 = database.add_position(make_position({"position_name": "P1"}))
-        database.update_position(p1, {"req_cv": "Y", "done_cv": 1})
+        database.update_position(p1, {"req_cv": "Yes", "done_cv": 1})
 
         # Position 2: cv required but not done → pending
         p2 = database.add_position(make_position({"position_name": "P2"}))
-        database.update_position(p2, {"req_cv": "Y", "done_cv": 0})
+        database.update_position(p2, {"req_cv": "Yes", "done_cv": 0})
 
         # Position 3: no requirements → excluded
         database.add_position(make_position({"position_name": "P3"}))

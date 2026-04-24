@@ -889,7 +889,7 @@ class TestT3MaterialsReadiness:
         )
 
         database.add_position(
-            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Y"})
+            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Yes"})
         )
         at_seeded = _run_page()
         assert self._subheader_in(self._right_col(at_seeded)), (
@@ -904,7 +904,7 @@ class TestT3MaterialsReadiness:
         is actually inside `with _right_col:` and not leaked to the
         top-level or the wrong column."""
         database.add_position(
-            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Y"})
+            make_position({"position_name": "A", "status": "[OPEN]", "req_cv": "Yes"})
         )
         at = _run_page()
         left = self._left_col(at)
@@ -954,20 +954,20 @@ class TestT3MaterialsReadiness:
 
         Readiness semantics (database.compute_materials_readiness):
           - Active-only (status in OPEN / APPLIED / INTERVIEW).
-          - 'Ready' iff every req_* = 'Y' also has done_* = 1.
+          - 'Ready' iff every req_* = 'Yes' also has done_* = 1.
           - Only counts positions with at least one required doc.
-        Using req_cv='Y' for all three; flip done_cv for the ready one."""
+        Using req_cv='Yes' for all three; flip done_cv for the ready one."""
         database.add_position(make_position({
             "position_name": "Ready-A", "status": "[OPEN]",
-            "req_cv": "Y", "done_cv": 1,
+            "req_cv": "Yes", "done_cv": 1,
         }))
         database.add_position(make_position({
             "position_name": "Pending-B", "status": "[APPLIED]",
-            "req_cv": "Y", "done_cv": 0,
+            "req_cv": "Yes", "done_cv": 0,
         }))
         database.add_position(make_position({
             "position_name": "Pending-C", "status": "[INTERVIEW]",
-            "req_cv": "Y", "done_cv": 0,
+            "req_cv": "Yes", "done_cv": 0,
         }))
 
         at = _run_page()
@@ -1001,15 +1001,15 @@ class TestT3MaterialsReadiness:
         visible string is what the UI contract promises."""
         database.add_position(make_position({
             "position_name": "Ready-A", "status": "[OPEN]",
-            "req_cv": "Y", "done_cv": 1,
+            "req_cv": "Yes", "done_cv": 1,
         }))
         database.add_position(make_position({
             "position_name": "Pending-B", "status": "[APPLIED]",
-            "req_cv": "Y", "done_cv": 0,
+            "req_cv": "Yes", "done_cv": 0,
         }))
         database.add_position(make_position({
             "position_name": "Pending-C", "status": "[INTERVIEW]",
-            "req_cv": "Y", "done_cv": 0,
+            "req_cv": "Yes", "done_cv": 0,
         }))
 
         at = _run_page()
@@ -1037,7 +1037,7 @@ class TestT3MaterialsReadiness:
         scoped to the active pipeline."""
         for term in config.TERMINAL_STATUSES:
             database.add_position(make_position({
-                "position_name": f"P-{term}", "status": term, "req_cv": "Y",
+                "position_name": f"P-{term}", "status": term, "req_cv": "Yes",
             }))
         at = _run_page()
         right = self._right_col(at)
@@ -1063,7 +1063,7 @@ class TestT3MaterialsReadiness:
               cannot navigate siblings — T1-E precedent)."""
         database.add_position(make_position({
             "position_name": "A", "status": "[OPEN]",
-            "req_cv": "Y", "done_cv": 0,
+            "req_cv": "Yes", "done_cv": 0,
         }))
         at = _run_page()
         right = self._right_col(at)
