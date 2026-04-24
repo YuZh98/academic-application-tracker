@@ -416,10 +416,14 @@ class TestFilterBarStructure:
         at.text_input(key="filter_field")
 
     def test_status_options_match_config(self, db):
-        """Status filter must offer 'All' plus every value from config.STATUS_VALUES."""
+        """Status filter must offer 'All' plus an entry per config.STATUS_VALUES,
+        exposed via format_func=STATUS_LABELS.get (Sub-task 13 / DESIGN §8.0)
+        so the rendered options are display labels while the underlying raw
+        values drive the filter predicate. Options list returned by AppTest
+        is the post-format_func display strings."""
         at = _run_page()
         actual = list(at.selectbox(key="filter_status").options)
-        expected = ["All"] + config.STATUS_VALUES
+        expected = ["All"] + [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
         assert actual == expected, (
             f"Status filter options mismatch.\n"
             f"  Expected: {expected}\n"
@@ -974,15 +978,20 @@ class TestOverviewTabWidgets:
         assert at.text_input(key=EDIT_KEYS["link"]).value          == "https://example.org/apply"
 
     def test_status_selectbox_options_match_config(self, db):
-        """Status selectbox must expose exactly config.STATUS_VALUES, same order."""
+        """Status selectbox must expose one option per config.STATUS_VALUES,
+        same order. Options render as display labels via
+        format_func=STATUS_LABELS.get (Sub-task 13 / DESIGN §8.0): AppTest's
+        `.options` returns the post-format_func strings, so the expected
+        list is the STATUS_LABELS lookup over STATUS_VALUES."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
-        assert options == config.STATUS_VALUES, (
-            f"Status options must match config.STATUS_VALUES.\n"
-            f"  Expected: {config.STATUS_VALUES}\n"
+        expected = [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        assert options == expected, (
+            f"Status options must match [STATUS_LABELS[v] for v in STATUS_VALUES].\n"
+            f"  Expected: {expected}\n"
             f"  Got:      {options}"
         )
 
@@ -1195,20 +1204,25 @@ class TestRequirementsTabWidgets:
             )
 
     def test_one_radio_per_requirement_doc(self, db):
-        """Exactly one radio per REQUIREMENT_DOCS entry must render after selection."""
+        """Exactly one radio per REQUIREMENT_DOCS entry must render on the
+        Requirements tab. Sub-task 13 (DESIGN §8.2) renders tab contents
+        conditionally via the st.radio-based tab selector, so the test
+        must switch to Requirements first; the tab selector itself also
+        contributes one radio to the page's total, hence the +1."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised on selection: {at.exception}"
         for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
             assert at.radio(key=_req_key(req_col)) is not None, (
                 f"Missing radio for {req_col!r}"
             )
-        # And the total radio count equals the config length — guards against
-        # a stray hardcoded radio slipping in.
-        assert len(at.radio) == len(config.REQUIREMENT_DOCS), (
-            f"Expected {len(config.REQUIREMENT_DOCS)} radios, got {len(at.radio)}"
+        # Total = REQUIREMENT_DOCS radios + 1 tab-selector radio (Sub-task 13).
+        assert len(at.radio) == len(config.REQUIREMENT_DOCS) + 1, (
+            f"Expected {len(config.REQUIREMENT_DOCS) + 1} radios "
+            f"({len(config.REQUIREMENT_DOCS)} requirement radios "
+            f"+ 1 tab selector), got {len(at.radio)}"
         )
 
     def test_radio_values_match_db(self, db):
@@ -1223,7 +1237,7 @@ class TestRequirementsTabWidgets:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert at.radio(key=_req_key("req_cv")).value             == "Yes"
         assert at.radio(key=_req_key("req_cover_letter")).value   == "Yes"
         assert at.radio(key=_req_key("req_writing_sample")).value == "Optional"
@@ -1238,7 +1252,7 @@ class TestRequirementsTabWidgets:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         expected_labels = [config.REQUIREMENT_LABELS[v]
                            for v in config.REQUIREMENT_VALUES]
         for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
@@ -1265,7 +1279,7 @@ class TestRequirementsTabWidgets:
             )
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised on unknown req_* value: {at.exception}"
         assert at.radio(key=_req_key("req_cv")).value == "No", (
             "Unknown req_* value must coerce to 'No' (schema default), "
@@ -1279,9 +1293,9 @@ class TestRequirementsTabWidgets:
         database.add_position({"position_name": "Beta",  "req_cv": "No"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         first = at.radio(key=_req_key("req_cv")).value
-        _select_row(at, 1)
+        _select_row_and_tab(at, 1, "Requirements")
         second = at.radio(key=_req_key("req_cv")).value
         assert {first, second} == {"Yes", "No"}, (
             f"Selection change must re-seed req_cv; got {first!r} → {second!r}"
@@ -1303,7 +1317,7 @@ class TestRequirementsTabWidgets:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised with extended config: {at.exception}"
         assert at.radio(key=_req_key("req_portfolio")) is not None, (
             "Adding a new doc to config.REQUIREMENT_DOCS must render a new "
@@ -1373,7 +1387,7 @@ class TestMaterialsTabWidgets:
         database.add_position({"position_name": "Alpha"})   # all req_* default 'No'
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # No done_* checkboxes must render.
         assert len(at.checkbox) == 0, (
             f"With all req_* = 'No', no Materials checkboxes should render; "
@@ -1393,7 +1407,7 @@ class TestMaterialsTabWidgets:
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # done_cv is the only one required → exactly one checkbox rendered.
         assert _checkbox_rendered(at, _done_key("done_cv")), (
             "done_cv checkbox must render when req_cv == 'Yes'"
@@ -1422,7 +1436,7 @@ class TestMaterialsTabWidgets:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # Use == (not `is`) because pandas surfaces numpy booleans
         # (numpy.bool_), and `np.True_ is True` is False.
         assert bool(at.checkbox(key=_done_key("done_cv")).value)          is True
@@ -1442,10 +1456,15 @@ class TestMaterialsTabWidgets:
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         assert _checkbox_rendered(at, _done_key("done_cv"))   # precondition
-        # Simulate the user flipping the req_cv radio to "Not needed".
+        # Simulate the user flipping the req_cv radio to "Not needed". We
+        # keep the Materials tab active (and row selected) across the rerun
+        # so the checkbox-absence is driven by the req flip alone, not by
+        # the tab / selection state disappearing.
         at.session_state["edit_req_cv"] = "No"
+        _keep_selection(at, 0)
+        at.session_state[TAB_SELECTOR_KEY] = "Materials"
         at.run()
         assert not at.exception, f"Page raised on req toggle: {at.exception}"
         assert not _checkbox_rendered(at, _done_key("done_cv")), (
@@ -1461,7 +1480,7 @@ class TestMaterialsTabWidgets:
         database.add_position({"position_name": "Alpha", "req_cv": "Optional"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         assert not _checkbox_rendered(at, _done_key("done_cv")), (
             "'Optional' docs must be hidden from Materials (Y-only filter "
             "matches the readiness definition in database.py)"
@@ -1476,10 +1495,10 @@ class TestMaterialsTabWidgets:
                                "req_cv": "Yes", "done_cv": 0})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # bool() normalises numpy.bool_ → Python bool so set equality works.
         first = bool(at.checkbox(key=_done_key("done_cv")).value)
-        _select_row(at, 1)
+        _select_row_and_tab(at, 1, "Materials")
         second = bool(at.checkbox(key=_done_key("done_cv")).value)
         assert {first, second} == {True, False}, (
             f"Selection change must re-seed done_cv; got {first!r} → {second!r}"
@@ -1524,22 +1543,24 @@ class TestNotesTabWidgets:
         )
 
     def test_text_area_renders_when_row_selected(self, db):
-        """Baseline positive contract: selecting a row must produce exactly
-        one text_area with key=edit_notes on the page."""
+        """Baseline positive contract: switching to the Notes tab after a row
+        is selected must render exactly one text_area with key=edit_notes.
+        (Sub-task 13: Notes widgets only render when active_tab == 'Notes'.)"""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         assert _text_area_rendered(at, NOTES_KEY), (
             "Notes tab must render a text_area keyed edit_notes after selection"
         )
-        # Tight bound: update this count explicitly when a new text_area
-        # lands (the previous 1 → 2 bump came with Sub-task 7's
-        # work_auth_note widget on the Overview tab). If a future tier
-        # adds another, bump again rather than loosen the inequality.
-        assert len(at.text_area) == 2, (
-            f"Expected 2 text_areas on the page "
-            f"(edit_notes + edit_work_auth_note); got {len(at.text_area)}"
+        # Post-Sub-task-13: only one text_area renders on the Notes tab
+        # (edit_work_auth_note lives on the Overview tab and only renders
+        # when active_tab == "Overview"). If a future tier adds another
+        # text_area to the Notes tab, bump this count rather than loosen
+        # the inequality.
+        assert len(at.text_area) == 1, (
+            f"Expected 1 text_area on the Notes tab (edit_notes); "
+            f"got {len(at.text_area)}"
         )
 
     def test_text_area_preseeded_from_db(self, db):
@@ -1550,7 +1571,7 @@ class TestNotesTabWidgets:
         database.add_position({"position_name": "Alpha", "notes": notes})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         assert at.text_area(key=NOTES_KEY).value == notes, (
             f"Expected edit_notes pre-seeded to {notes!r}, "
             f"got {at.text_area(key=NOTES_KEY).value!r}"
@@ -1563,7 +1584,7 @@ class TestNotesTabWidgets:
         database.add_position({"position_name": "Alpha"})   # notes omitted → NULL
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         assert at.text_area(key=NOTES_KEY).value == "", (
             f"NULL notes must coerce to empty string, got "
             f"{at.text_area(key=NOTES_KEY).value!r}"
@@ -1578,9 +1599,9 @@ class TestNotesTabWidgets:
         database.add_position({"position_name": "Beta",  "notes": "beta notes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         first = at.text_area(key=NOTES_KEY).value
-        _select_row(at, 1)
+        _select_row_and_tab(at, 1, "Notes")
         second = at.text_area(key=NOTES_KEY).value
         assert first == "alpha notes", f"Row 0 notes mis-seeded: {first!r}"
         assert second == "beta notes", (
@@ -1640,6 +1661,30 @@ def _keep_selection(at: AppTest, row_index: int) -> None:
     at.session_state[TABLE_KEY] = {
         "selection": {"rows": [row_index], "columns": []}
     }
+
+
+def _select_row_and_tab(at: AppTest, row_index: int, tab_name: str) -> None:
+    """Set table row selection + edit-panel active tab, then rerun.
+
+    Needed by tests that access widgets on a NON-Overview tab (Requirements,
+    Materials, Notes). Sub-task 13 (DESIGN §8.2) swapped `st.tabs` for
+    `st.radio(horizontal=True, key="_active_edit_tab")` + branch-based tab
+    rendering; unlike `st.tabs` — which used to render ALL tab bodies and
+    CSS-hide the inactive ones — the radio-based panel renders ONLY the
+    active tab's widgets, so a test that wants to access e.g. the
+    `edit_req_cv` radio MUST first set `_active_edit_tab = "Requirements"`.
+
+    Writing session_state directly (rather than `at.radio(...).set_value(x)
+    + at.run()`) keeps the single-rerun contract — the dataframe selection
+    doesn't outlive its single-run signal (see `_keep_selection` docstring),
+    so we write selection + tab together before the next rerun.
+
+    `tab_name` must be one of config.EDIT_PANEL_TABS."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [row_index], "columns": []}
+    }
+    at.session_state[TAB_SELECTOR_KEY] = tab_name
+    at.run()
 
 
 class TestOverviewSave:
@@ -1883,7 +1928,7 @@ class TestRequirementsSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         sid = at.session_state["selected_position_id"]
 
         # Set each req_* to a value drawn from config.REQUIREMENT_VALUES,
@@ -1927,7 +1972,7 @@ class TestRequirementsSave:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         sid = at.session_state["selected_position_id"]
 
         # Flip req_cv to N.
@@ -1959,7 +2004,7 @@ class TestRequirementsSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -1986,7 +2031,7 @@ class TestRequirementsSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         sid_before = at.session_state["selected_position_id"]
         at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
@@ -2012,7 +2057,7 @@ class TestRequirementsSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2063,7 +2108,7 @@ class TestMaterialsSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
 
         # Tick the visible checkboxes.
         for _req_col, done_col, _label in visible:
@@ -2108,7 +2153,7 @@ class TestMaterialsSave:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
 
         # Flip req_research_statement to 'Yes' live via session_state directly —
         # the Requirements-tab radio is inside st.form("edit_requirements") so
@@ -2118,6 +2163,7 @@ class TestMaterialsSave:
         # state-driven visibility.
         at.session_state[_req_key("req_research_statement")] = "Yes"
         _keep_selection(at, 0)
+        at.session_state[TAB_SELECTOR_KEY] = "Materials"
         at.run()
 
         # Tick the newly-visible checkbox and save.
@@ -2152,7 +2198,7 @@ class TestMaterialsSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         at.checkbox(key=_done_key("done_cv")).set_value(True)
         at.button(key=MATERIALS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2179,7 +2225,7 @@ class TestMaterialsSave:
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         sid_before = at.session_state["selected_position_id"]
 
         at.checkbox(key=_done_key("done_cv")).set_value(True)
@@ -2208,7 +2254,7 @@ class TestMaterialsSave:
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         at.checkbox(key=_done_key("done_cv")).set_value(True)
         at.button(key=MATERIALS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2250,7 +2296,7 @@ class TestNotesSave:
         sid = database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
 
         at.text_area(key=NOTES_KEY).set_value(
             "Contact: jane@example.edu\nFollow up after Oct 15."
@@ -2281,7 +2327,7 @@ class TestNotesSave:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
 
         at.text_area(key=NOTES_KEY).set_value("")
         at.button(key=NOTES_SUBMIT_KEY).click()
@@ -2309,7 +2355,7 @@ class TestNotesSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         at.text_area(key=NOTES_KEY).set_value("anything")
         at.button(key=NOTES_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2336,7 +2382,7 @@ class TestNotesSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         sid_before = at.session_state["selected_position_id"]
 
         at.text_area(key=NOTES_KEY).set_value("context")
@@ -2365,7 +2411,7 @@ class TestNotesSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         at.text_area(key=NOTES_KEY).set_value("context")
         at.button(key=NOTES_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2737,8 +2783,11 @@ class TestPreSeedNaNCoercion:
             f"Saving Overview on row 0 unexpectedly raised: {at.exception}"
         )
 
-        # Row 1: this is what blew up before the fix.
-        _select_row(at, 1)
+        # Row 1: this is what blew up before the fix. Post-Sub-task-13 the
+        # Notes text_area only renders when active_tab == "Notes", so we
+        # combine row selection + tab switch so the text_area we're checking
+        # below actually renders.
+        _select_row_and_tab(at, 1, "Notes")
         assert not at.exception, (
             "Selecting row 1 after saving row 0 raised — NaN pre-seed "
             "regression:\n"
@@ -2755,8 +2804,9 @@ class TestPreSeedNaNCoercion:
         )
 
         # And row 2 for good measure — pandas hands back NaN for its
-        # text cells too.
-        _select_row(at, 2)
+        # text cells too. Keep the active tab at "Notes" so the pre-seed
+        # code path exercised is the one that bit the user (Notes text_area).
+        _select_row_and_tab(at, 2, "Notes")
         assert not at.exception, (
             f"Selecting row 2 also raised (NaN pre-seed regression): "
             f"{at.exception}"
@@ -2957,6 +3007,10 @@ class TestEditStatusFormatFunc:
         at.run()
         _select_row(at, 0)
         at.selectbox(key=EDIT_KEYS["status"]).select(config.STATUS_APPLIED)
+        # Selection rerun needs the row kept (AppTest's on_select='rerun'
+        # single-run contract — see `_keep_selection` docstring) so the
+        # Overview form re-renders and the selectbox is reachable.
+        _keep_selection(at, 0)
         at.run()
         assert not at.exception
         assert at.selectbox(key=EDIT_KEYS["status"]).value == config.STATUS_APPLIED, (
@@ -2985,10 +3039,10 @@ class TestMaterialsFilterPredicateIsYes:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        # Switch to Materials tab so its body renders.
-        at.radio(key=TAB_SELECTOR_KEY).set_value("Materials")
-        at.run()
+        # Switch to Materials tab so its body renders. _select_row_and_tab
+        # handles the two-piece state (row selection + active tab) in one
+        # rerun so the Materials-tab code path is exercised.
+        _select_row_and_tab(at, 0, "Materials")
         assert not at.exception, f"Page raised after tab switch: {at.exception}"
         # CV + Writing Sample visible (req == "Yes"); Cover Letter (Optional)
         # and Transcripts (No) hidden. _checkbox_rendered is defined earlier
@@ -3058,9 +3112,7 @@ class TestDeleteButtonTabSensitivity:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        at.radio(key=TAB_SELECTOR_KEY).set_value("Requirements")
-        at.run()
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised after switch to Requirements: {at.exception}"
         assert at.radio(key=TAB_SELECTOR_KEY).value == "Requirements"
         assert not _delete_button_rendered(at), (
@@ -3074,9 +3126,7 @@ class TestDeleteButtonTabSensitivity:
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        at.radio(key=TAB_SELECTOR_KEY).set_value("Materials")
-        at.run()
+        _select_row_and_tab(at, 0, "Materials")
         assert not at.exception, f"Page raised after switch to Materials: {at.exception}"
         assert at.radio(key=TAB_SELECTOR_KEY).value == "Materials"
         assert not _delete_button_rendered(at), (
@@ -3090,9 +3140,7 @@ class TestDeleteButtonTabSensitivity:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        at.radio(key=TAB_SELECTOR_KEY).set_value("Notes")
-        at.run()
+        _select_row_and_tab(at, 0, "Notes")
         assert not at.exception, f"Page raised after switch to Notes: {at.exception}"
         assert at.radio(key=TAB_SELECTOR_KEY).value == "Notes"
         assert not _delete_button_rendered(at), (
@@ -3106,14 +3154,11 @@ class TestDeleteButtonTabSensitivity:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
         # Away
-        at.radio(key=TAB_SELECTOR_KEY).set_value("Notes")
-        at.run()
+        _select_row_and_tab(at, 0, "Notes")
         assert not _delete_button_rendered(at)   # precondition
         # Back
-        at.radio(key=TAB_SELECTOR_KEY).set_value("Overview")
-        at.run()
+        _select_row_and_tab(at, 0, "Overview")
         assert not at.exception
         assert _delete_button_rendered(at), (
             "Delete button must render again when user returns to Overview"

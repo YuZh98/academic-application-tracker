@@ -155,6 +155,17 @@ def _deadline_urgency(date_str: str | None) -> str:
 
 database.init_db()
 
+# DESIGN §8.0 / D14: page-wide layout is mandatory — positions table + edit
+# panel are data-heavy, a centered default layout crams every row. Sub-task 12
+# added the matching call to app.py; Sub-task 13 brings pages/1_Opportunities.py
+# in line. Must be the first Streamlit call on the page (after this point any
+# other st.* fires page-setup).
+st.set_page_config(
+    page_title="Postdoc Tracker",
+    page_icon="📋",
+    layout="wide",
+)
+
 st.title("Opportunities")
 
 # ── TIER 1: Quick-add expander ────────────────────────────────────────────────
@@ -223,8 +234,17 @@ if submitted:
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
 col_status, col_priority, col_field = st.columns([2, 2, 3])
 with col_status:
+    # DESIGN §8.0 Status label convention: UI shows labels
+    # (`config.STATUS_LABELS`), storage/compare holds the raw bracketed
+    # values. format_func wraps the literal dict.get so the "All" sentinel
+    # passes through (vanilla `STATUS_LABELS.get("All")` would return None
+    # and leak a blank option into the rendered dropdown).
     status_filter = st.selectbox(
-        "Status", ["All"] + config.STATUS_VALUES, index=0, key="filter_status"
+        "Status",
+        ["All"] + config.STATUS_VALUES,
+        index=0,
+        format_func=lambda v: config.STATUS_LABELS.get(v, v),
+        key="filter_status",
     )
 with col_priority:
     priority_filter = st.selectbox(
@@ -462,10 +482,27 @@ if "selected_position_id" in st.session_state:
 
             st.session_state["_edit_form_sid"]     = sid
 
-        # config.EDIT_PANEL_TABS is the single source for label + order.
-        # Unpacking by index keeps T4-C–F wiring readable even if tabs grow.
-        tabs = st.tabs(config.EDIT_PANEL_TABS)
-        with tabs[0]:   # Overview — T4-C + T5-A
+        # Sub-task 13 / DESIGN §8.2: the edit panel's tab selector is a
+        # config-driven `st.radio(horizontal=True, label_visibility="collapsed")`
+        # — NOT `st.tabs(...)`. This is load-bearing: DESIGN §8.2 places the
+        # Delete button BELOW the tab container, visible ONLY when the active
+        # tab is Overview. `st.tabs(key=...)` in Streamlit 1.56 accepts a
+        # `key` keyword but doesn't actually populate session_state with the
+        # active tab (verified via probe), so we use st.radio whose value
+        # lives in session_state["_active_edit_tab"] and can gate the Delete
+        # button below. Visually the radio renders as a horizontal strip
+        # (label collapsed), approximating the original tab-bar look while
+        # giving the page programmatic active-tab access.
+        active_tab = st.radio(
+            "Edit section",
+            options=config.EDIT_PANEL_TABS,
+            index=0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="_active_edit_tab",
+        )
+
+        if active_tab == "Overview":   # T4-C + T5-A
             # st.form batches edits so nothing writes on keystroke; the
             # submit button below is the only trigger that commits the
             # changes via database.update_position (T5-A).
@@ -481,7 +518,15 @@ if "selected_position_id" in st.session_state:
                 st.text_input("Field",         key="edit_field")
                 st.selectbox("Priority", config.PRIORITY_VALUES,
                              key="edit_priority")
+                # DESIGN §8.0 Status label convention: UI shows labels
+                # (`config.STATUS_LABELS`), storage holds raw bracketed
+                # values. The Overview form only shows real pipeline
+                # statuses (no "All" sentinel to pass through), so the
+                # vanilla `STATUS_LABELS.get` is sufficient here —
+                # mirrors the filter_status call above, minus the "All"
+                # passthrough wrapper.
                 st.selectbox("Status",   config.STATUS_VALUES,
+                             format_func=config.STATUS_LABELS.get,
                              key="edit_status")
                 st.date_input("Deadline",      key="edit_deadline_date")
                 st.text_input("Link",          key="edit_link")
@@ -556,39 +601,7 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save changes: {exc}")
 
-            # T5-E: Delete lives on the Overview tab (DESIGN.md §6 + user
-            # decision 2026-04-20). It MUST live outside st.form("edit_overview")
-            # — st.form only permits st.form_submit_button inside; a plain
-            # st.button inside the form would raise. type='primary' marks
-            # the action as destructive in the UI.
-            #
-            # Dialog lifecycle: clicking Delete stashes the target id + name
-            # in session_state (_delete_target_id / _delete_target_name) and
-            # opens the dialog. The elif re-opens the same dialog on every
-            # subsequent rerun while those keys remain — without this,
-            # confirm/cancel clicks inside the dialog would not reach their
-            # branches in AppTest, because Streamlit's "dialog auto-re-renders
-            # across reruns" behaviour does not carry through AppTest's
-            # script-run model (verified by isolation probe 2026-04-20).
-            # Confirm and Cancel handlers inside the dialog clear the
-            # _delete_target_* pair themselves before st.rerun(), so the
-            # dialog disappears naturally on the next run.
-            #
-            # Review Fix #2 (phase-3-tier5-review.md): cross-row phantom
-            # dialogs (dismiss via X on row A, switch to row B, come back
-            # to row A, dialog reopens) are fixed by the row-change
-            # cleanup in the selection-resolution block above. Same-row
-            # phantom (dismiss via X on row A, stay on row A, reopens on
-            # next rerun) remains a known limitation — Streamlit 1.56 does
-            # not expose an on_close event for @st.dialog. Users can
-            # always click Cancel to dismiss cleanly.
-            if st.button("Delete", type="primary", key="edit_delete"):
-                st.session_state["_delete_target_id"]   = sid
-                st.session_state["_delete_target_name"] = r["position_name"]
-                _confirm_delete_dialog()
-            elif st.session_state.get("_delete_target_id") == sid:
-                _confirm_delete_dialog()
-        with tabs[1]:   # Requirements — T4-D + T5-B
+        elif active_tab == "Requirements":   # T4-D + T5-B
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
             # session_state holds exactly what will go into the TEXT column
@@ -632,12 +645,13 @@ if "selected_position_id" in st.session_state:
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Could not save requirements: {exc}")
-        with tabs[2]:   # Materials — T4-E + T5-C
+
+        elif active_tab == "Materials":   # T4-E + T5-C
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
             # toggling a radio on the Requirements tab updates this tab on
-            # the next rerun. Uses the 'Yes'-only filter that matches the
-            # readiness definition in database.py (~line 404).
+            # the next rerun. Uses the 'Yes'-only filter (DESIGN §8.2) that
+            # matches the readiness definition in database.py (~line 404).
             visible = [
                 (req_col, done_col, label)
                 for req_col, done_col, label in config.REQUIREMENT_DOCS
@@ -683,7 +697,8 @@ if "selected_position_id" in st.session_state:
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Could not save materials: {exc}")
-        with tabs[3]:   # Notes — T4-F + T5-D
+
+        elif active_tab == "Notes":   # T4-F + T5-D
             # Single free-form text_area for miscellaneous context (contact
             # details, interview prep hints, follow-up reminders). Pre-seeded
             # from the row's notes column via the _edit_form_sid block above,
@@ -723,6 +738,51 @@ if "selected_position_id" in st.session_state:
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Could not save notes: {exc}")
+
+        # ── Delete button (DESIGN §8.2) ──────────────────────────────────
+        # DESIGN §8.2 Delete row: the button renders BELOW the edit panel
+        # (outside the panel box), visible ONLY when the active tab is
+        # Overview. Pre-Sub-task-13 it sat inside `with tabs[0]:` so it
+        # was CSS-hidden on non-Overview tabs but still in the DOM. Moving
+        # it out of the tab branches above and gating on active_tab makes
+        # the rendering itself conditional: on non-Overview tabs the button
+        # is not emitted at all. Rationale (DESIGN §8.2): the button's
+        # scope is the whole position, not the active tab's data — so it
+        # only belongs on the tab where the user reviews the position as
+        # a whole.
+        #
+        # The button MUST live outside st.form("edit_overview") — st.form
+        # only permits st.form_submit_button inside; a plain st.button
+        # inside the form would raise. type='primary' marks the action as
+        # destructive in the UI.
+        #
+        # Dialog lifecycle: clicking Delete stashes the target id + name
+        # in session_state (_delete_target_id / _delete_target_name) and
+        # opens the dialog. The elif re-opens the same dialog on every
+        # subsequent rerun while those keys remain — without this,
+        # confirm/cancel clicks inside the dialog would not reach their
+        # branches in AppTest, because Streamlit's "dialog auto-re-renders
+        # across reruns" behaviour does not carry through AppTest's
+        # script-run model (verified by isolation probe 2026-04-20).
+        # Confirm and Cancel handlers inside the dialog clear the
+        # _delete_target_* pair themselves before st.rerun(), so the
+        # dialog disappears naturally on the next run.
+        #
+        # Review Fix #2 (phase-3-tier5-review.md): cross-row phantom
+        # dialogs (dismiss via X on row A, switch to row B, come back
+        # to row A, dialog reopens) are fixed by the row-change
+        # cleanup in the selection-resolution block above. Same-row
+        # phantom (dismiss via X on row A, stay on row A, reopens on
+        # next rerun) remains a known limitation — Streamlit 1.56 does
+        # not expose an on_close event for @st.dialog. Users can
+        # always click Cancel to dismiss cleanly.
+        if active_tab == "Overview":
+            if st.button("Delete", type="primary", key="edit_delete"):
+                st.session_state["_delete_target_id"]   = sid
+                st.session_state["_delete_target_name"] = r["position_name"]
+                _confirm_delete_dialog()
+            elif st.session_state.get("_delete_target_id") == sid:
+                _confirm_delete_dialog()
     else:
         # F3 (Tier-4 review): the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
