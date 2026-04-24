@@ -28,10 +28,17 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       config-only edit. New pin: `test_ddl_defaults_interpolate_from_config`
       (monkeypatches to sentinels + reads `PRAGMA table_info`). Closes
       the C6/C7 pre-T4 item.
-- [ ] Sub-task 5+: remaining v1.3 alignment items per
-      `memory/project_state.md` (status rename `[OPEN]→[SAVED]` +
-      one-shot UPDATE migration, `"Med"→"Medium"`, schema overhauls
-      incl. `work_auth_note`, interviews sub-table, cascade rewire)
+- [x] Sub-task 5: `[OPEN]→[SAVED]` status rename + `"Med"→"Medium"`
+      priority rename, applied atomically across `config.py`,
+      `database.py` (incl. two idempotent `UPDATE positions` loops in
+      `init_db()`), `app.py` (Tracked KPI consumer), and all tests.
+      No DDL edit (Sub-task 4 config-drive carries the DEFAULT swap).
+      Acceptance grep clean: `grep -nE '\[OPEN\]|STATUS_OPEN|"Med"'
+      *.py pages/ tests/` → 0 hits. 305 tests green (+5 new pins).
+- [ ] Sub-task 6+: remaining v1.3 alignment items per
+      `memory/project_state.md` (schema overhauls incl.
+      `work_auth_note`, `updated_at` trigger, interviews sub-table,
+      confirmation_*/reminder_sent_* splits, cascade R1/R2/R3 rewire)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -60,8 +67,10 @@ deferred. All require separate approval before execution.
       (`DEFAULT '{config.STATUS_VALUES[0]}'` / `DEFAULT '{config.RESULT_DEFAULT}'`)
       — shipped as v1.3 alignment Sub-task 4
 - [ ] **C12** Add `assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` to `config.py`
-- [ ] Rename `[OPEN]` → `[SAVED]` + idempotent `UPDATE positions SET status=...` migration
-- [ ] Rename `PRIORITY_VALUES` `"Med"` → `"Medium"` + migration
+- [x] Rename `[OPEN]` → `[SAVED]` + idempotent `UPDATE positions SET status=...` migration
+      — shipped as v1.3 alignment Sub-task 5
+- [x] Rename `PRIORITY_VALUES` `"Med"` → `"Medium"` + migration
+      — shipped as v1.3 alignment Sub-task 5
 - [ ] Add `config.STATUS_LABELS` (presentation-layer UI strings) +
       `ARCHIVED_BUCKET` grouping of `TERMINAL_STATUSES` on the funnel
 - [ ] Delete the 🔄 Refresh button from `app.py`
