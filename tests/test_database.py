@@ -128,6 +128,52 @@ class TestInitDb:
         assert pos["req_cover_letter"] == "No"
         assert pos["req_transcripts"] == "Optional"
 
+    def test_ddl_defaults_interpolate_from_config(self, tmp_path, monkeypatch):
+        """Sub-task 4 / DESIGN §6.2: the CREATE TABLE statements must
+        interpolate config.STATUS_VALUES[0] into positions.status DEFAULT
+        and config.RESULT_DEFAULT into applications.result DEFAULT — so
+        that a rename in config.py is a config-only edit (no DDL change).
+
+        Sentinel monkeypatch forces a mismatch between live config values
+        and what a hardcoded DDL literal would emit; if init_db() reads
+        the constants at call time (f-string interpolation), PRAGMA
+        dflt_value reflects the sentinel. SQLite reports DEFAULT clauses
+        exactly as written in DDL, so the expected form is
+        f"'{value}'" — including the surrounding single quotes."""
+        sentinel_status = "[SENTINEL_SAVED]"
+        sentinel_result = "SentinelPending"
+
+        monkeypatch.setattr(
+            config, "STATUS_VALUES",
+            [sentinel_status] + config.STATUS_VALUES[1:],
+        )
+        monkeypatch.setattr(config, "RESULT_DEFAULT", sentinel_result)
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "ddl_probe.db")
+
+        database.init_db()
+
+        with database._connect() as conn:
+            positions_cols    = conn.execute("PRAGMA table_info(positions)").fetchall()
+            applications_cols = conn.execute("PRAGMA table_info(applications)").fetchall()
+
+        status_default = next(
+            r["dflt_value"] for r in positions_cols if r["name"] == "status"
+        )
+        result_default = next(
+            r["dflt_value"] for r in applications_cols if r["name"] == "result"
+        )
+
+        assert status_default == f"'{config.STATUS_VALUES[0]}'", (
+            "positions.status DEFAULT must interpolate config.STATUS_VALUES[0] "
+            f"(wrapped in SQL quotes); got {status_default!r}, "
+            f"expected {f'{chr(39)}{sentinel_status}{chr(39)}'!r}."
+        )
+        assert result_default == f"'{config.RESULT_DEFAULT}'", (
+            "applications.result DEFAULT must interpolate config.RESULT_DEFAULT "
+            f"(wrapped in SQL quotes); got {result_default!r}, "
+            f"expected {f'{chr(39)}{sentinel_result}{chr(39)}'!r}."
+        )
+
 
 # ── add_position / get_position ───────────────────────────────────────────────
 
