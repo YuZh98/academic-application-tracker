@@ -118,12 +118,36 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       atomicity, 5 is_all_recs_submitted, 1 sentinel for the
       materials-readiness alias swap. Pure behavioural change — no
       schema, no Migration entry. 389 tests green.
-- [ ] Sub-task 10+: remaining v1.3 alignment items per
-      `memory/project_state.md` (confirmation_email split into
-      `confirmation_received INTEGER` + `confirmation_date TEXT`;
-      `recommenders.reminder_sent` TEXT → INTEGER flag +
-      `reminder_sent_date TEXT` split; `recommenders.confirmed`
-      TEXT → INTEGER 0/1/NULL)
+- [x] Sub-task 10: `applications.confirmation_email` split into
+      `confirmation_received INTEGER DEFAULT 0` +
+      `confirmation_date TEXT` per DESIGN §6.2 + §6.3 + D19 + D20.
+      `CREATE TABLE applications` adds the new columns right after
+      the legacy one; `init_db()` migration block adds a PRAGMA-
+      guarded `ALTER TABLE ADD COLUMN` pair + migrate-once gate
+      (Sub-task 8 pattern) running two disjoint one-shot UPDATEs:
+      date-shaped values (via SQLite
+      `GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`) populate
+      both new columns; flag-only `'Y'` sets `confirmation_received
+      = 1` and leaves `confirmation_date` NULL. NULL / empty /
+      `'N'` / freetext fall through — defaults persist. Physical
+      drop of the legacy `confirmation_email` column is deferred to
+      v1.0-rc (DESIGN §6.3 step c). `upsert_application` is
+      schema-agnostic so no writer-side change was needed; no
+      caller writes to the legacy column post-split (verified via
+      grep). 10 new tests: 2 `TestInitDb` column specs, 1
+      `TestUpsertApplication` round-trip (incl. legacy column
+      stays NULL), new `TestConfirmationSplitMigration` class
+      (7 tests: 'Y' → received-only, date-shaped → both columns,
+      NULL / empty / 'N' → defaults, fresh-DB DDL defaults, second
+      `init_db()` idempotence). Sub-task 8 seed updated to include
+      `confirmation_email TEXT` for realism (Sub-task 10's UPDATEs
+      reference it in WHERE). 399 tests green. CHANGELOG Migration
+      note records the full SQL (ALTER + GLOB-based translation +
+      flag-only UPDATE).
+- [ ] Sub-task 11+: remaining v1.3 alignment items per
+      `memory/project_state.md` (`recommenders.reminder_sent` TEXT
+      → INTEGER flag + `reminder_sent_date TEXT` split;
+      `recommenders.confirmed` TEXT → INTEGER 0/1/NULL)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -194,4 +218,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–9 shipped; Sub-task 10+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–10 shipped; Sub-task 11+ next)_
