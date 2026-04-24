@@ -20,7 +20,7 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–12 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+Sub-tasks 1–13 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
 migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
 DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
 `config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
@@ -46,15 +46,24 @@ per §6.2 + D19 + D20 translating `confirmed TEXT` → `INTEGER` tri-state
 and splitting `reminder_sent TEXT` into `INTEGER DEFAULT 0` +
 `reminder_sent_date TEXT` via the CREATE-COPY-DROP-RENAME recipe inside
 one transaction — idempotence gate keyed on `confirmed`'s declared
-type, and `app.py` alignment with DESIGN §8.0 + §8.1: `st.set_page_config`
+type, `app.py` alignment with DESIGN §8.0 + §8.1: `st.set_page_config`
 with wide layout + locked page_title/page_icon (D14), removal of the
 🔄 Refresh button (D13), Tracked KPI help-tooltip, `FUNNEL_BUCKETS`-
 driven funnel with the "Archived" bucket aggregating [REJECTED] +
 [DECLINED] (D17), single `[expand]` button + session flag
 `st.session_state["_funnel_expanded"]` (D24), and the three-branch
 empty-state matrix — terminal-only DB now lands in branch (b) with an
-info + `[expand]` recovery button rather than rendering the figure).
-428 tests green · zero deprecation warnings.
+info + `[expand]` recovery button rather than rendering the figure, and
+`pages/1_Opportunities.py` alignment with DESIGN §8.0 + §8.2:
+`st.set_page_config` with wide layout (D14),
+`filter_status`/`edit_status` selectboxes gain `format_func` so the UI
+renders `STATUS_LABELS` while storage keeps raw bracketed values, and
+the edit-panel tab-strip swapped from `st.tabs` to
+`st.radio(horizontal=True, key="_active_edit_tab")` + branch-rendering
+so the Delete button could be relocated BELOW the panel, gated by
+`active_tab == "Overview"` — on non-Overview tabs the button is no
+longer in the DOM at all (pre-Sub-task-13 it was CSS-hidden but still
+present). 441 tests green · zero deprecation warnings.
 
 **Next up:** push branch, open PR, merge to main — all v1.3 alignment
 items now landed. After merge, resume Phase 4 Tier 4 (Upcoming
@@ -124,8 +133,9 @@ v1.0 ships when **all three** are true:
 - Urgency colors on the positions table
 - Search bar on Opportunities (currently filter-only)
 - ~~`st.set_page_config(layout="wide")` across the app~~ — `app.py`
-  done as v1.3 alignment Sub-task 12; `pages/*.py` pending a later
-  alignment sub-task
+  done as v1.3 alignment Sub-task 12; `pages/1_Opportunities.py`
+  done as v1.3 alignment Sub-task 13; other `pages/*.py` follow when
+  each page is built (DESIGN §8 specifies it on every page).
 - Confirm dialogs audit
 - Responsive layout check
 
