@@ -181,17 +181,16 @@ class TestT1DNextInterviewKpi:
     User decisions (2026-04-21):
     - Value format: "{Mon D} · {institute}" (e.g. 'May 3 · MIT') — short
       month + day, no year, with institute.
-    - Selection: take the EARLIEST future date across interview1_date AND
-      interview2_date across all rows. The paired institute belongs to
-      whichever position owns that winning date.
+    - Selection: take the EARLIEST future scheduled_date across all
+      upcoming interviews. The paired institute belongs to whichever
+      position owns that winning interview.
     - No upcoming interview anywhere → '—'.
 
-    The underlying query (database.get_upcoming_interviews) returns each
-    position as one row with two date columns, and a row is included when
-    EITHER date is future — so the other may be in the past. The SQL
-    ORDER BY sorts by interview1_date then interview2_date, which means
-    'earliest future date' is not necessarily the first row's first column.
-    The selection test cases below pin that.
+    Sub-task 8 rewrote get_upcoming_interviews() to return row-per-
+    interview from the normalized interviews sub-table (DESIGN §6.2 +
+    D18) instead of row-per-position with flat interview1_date /
+    interview2_date columns. Tests now seed via database.add_interview
+    and assert against the single scheduled_date column.
     """
 
     @staticmethod
@@ -210,8 +209,8 @@ class TestT1DNextInterviewKpi:
         )
 
     def test_position_without_interview_dates_shows_em_dash(self, db):
-        """A tracked position with no application/interview rows scheduled
-        must leave the Next Interview KPI empty."""
+        """A tracked position with no interview rows scheduled must leave
+        the Next Interview KPI empty."""
         database.add_position(make_position({"position_name": "P", "institute": "Stanford"}))
         at = _run_page()
         assert self._next(at) == "—"
@@ -222,9 +221,8 @@ class TestT1DNextInterviewKpi:
         pid = database.add_position(
             make_position({"position_name": "P", "institute": "Stanford"})
         )
-        database.upsert_application(
-            pid, {"interview1_date": yesterday, "interview2_date": yesterday}
-        )
+        database.add_interview(pid, {"scheduled_date": yesterday})
+        database.add_interview(pid, {"scheduled_date": yesterday})
         at = _run_page()
         assert self._next(at) == "—"
 
@@ -234,7 +232,7 @@ class TestT1DNextInterviewKpi:
         pid = database.add_position(
             make_position({"position_name": "BioStats Postdoc", "institute": "MIT"})
         )
-        database.upsert_application(pid, {"interview1_date": d_future.isoformat()})
+        database.add_interview(pid, {"scheduled_date": d_future.isoformat()})
 
         at = _run_page()
         assert self._next(at) == self._expected(d_future, "MIT"), (
@@ -252,15 +250,18 @@ class TestT1DNextInterviewKpi:
         pid_b = database.add_position(
             make_position({"position_name": "B", "institute": "MIT"})
         )
-        database.upsert_application(pid_a, {"interview1_date": d_late.isoformat()})
-        database.upsert_application(pid_b, {"interview1_date": d_early.isoformat()})
+        database.add_interview(pid_a, {"scheduled_date": d_late.isoformat()})
+        database.add_interview(pid_b, {"scheduled_date": d_early.isoformat()})
 
         at = _run_page()
         assert self._next(at) == self._expected(d_early, "MIT")
 
-    def test_interview2_date_beats_another_rows_interview1(self, db):
-        """Columns are symmetric: an interview2_date that's earlier than
-        another row's interview1_date wins, with its own row's institute."""
+    def test_later_interview_on_same_position_does_not_override(self, db):
+        """A position with multiple interviews contributes multiple rows
+        to get_upcoming_interviews (D18). The Next-Interview KPI picks
+        the globally earliest across all rows — a later interview on
+        the same position must NOT promote past an earlier interview
+        on a different position."""
         d_near = date.today() + timedelta(days=3)
         d_far  = date.today() + timedelta(days=30)
         pid_a = database.add_position(
@@ -269,35 +270,38 @@ class TestT1DNextInterviewKpi:
         pid_b = database.add_position(
             make_position({"position_name": "B", "institute": "MIT"})
         )
-        database.upsert_application(pid_a, {"interview2_date": d_near.isoformat()})
-        database.upsert_application(pid_b, {"interview1_date": d_far.isoformat()})
+        # Position A has the earlier interview (sequence 2), B has a far one.
+        database.add_interview(pid_a, {"scheduled_date": d_near.isoformat()})
+        database.add_interview(pid_b, {"scheduled_date": d_far.isoformat()})
 
         at = _run_page()
         assert self._next(at) == self._expected(d_near, "Stanford")
 
-    def test_past_date_in_same_row_is_ignored(self, db):
-        """Regression guard: a row with interview1_date=past and
-        interview2_date=future-far must NOT win over another position
-        whose interview1_date is future-near. Picking blindly by column
-        (or by row order) would mis-pick the past date."""
-        past      = (date.today() - timedelta(days=7)).isoformat()
-        d_far     = (date.today() + timedelta(days=25)).isoformat()
-        d_near    = date.today() + timedelta(days=3)
+    def test_past_date_on_same_position_is_ignored(self, db):
+        """Regression guard: a position with a past interview AND a
+        far-future interview must NOT win over another position whose
+        interview is future-near. The `scheduled_date >= today`
+        filter in get_upcoming_interviews drops the past row entirely
+        (one row per interview, so no row-level ambiguity between
+        past and future dates)."""
+        past   = (date.today() - timedelta(days=7)).isoformat()
+        d_far  = (date.today() + timedelta(days=25)).isoformat()
+        d_near = date.today() + timedelta(days=3)
         pid_a = database.add_position(
             make_position({"position_name": "A", "institute": "Stanford"})
         )
         pid_b = database.add_position(
             make_position({"position_name": "B", "institute": "MIT"})
         )
-        database.upsert_application(
-            pid_a, {"interview1_date": past, "interview2_date": d_far}
-        )
-        database.upsert_application(pid_b, {"interview1_date": d_near.isoformat()})
+        database.add_interview(pid_a, {"scheduled_date": past})
+        database.add_interview(pid_a, {"scheduled_date": d_far})
+        database.add_interview(pid_b, {"scheduled_date": d_near.isoformat()})
 
         at = _run_page()
         assert self._next(at) == self._expected(d_near, "MIT"), (
-            "Earliest FUTURE date across both columns should win; past "
-            "dates must not beat a later-but-future date from another row."
+            "Earliest FUTURE scheduled_date should win across all rows; "
+            "a past interview on Position A must not beat a future "
+            "interview on Position B."
         )
 
 

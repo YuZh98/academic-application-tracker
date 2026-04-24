@@ -906,7 +906,490 @@ class TestGetUpcomingDeadlines:
             assert col in df.columns, f"Missing column: {col}"
 
 
+# ── Interviews schema ─────────────────────────────────────────────────────────
+# Sub-task 8 / DESIGN §6.2 + D18: the flat interview1_date / interview2_date
+# columns on applications are replaced by a normalized interviews sub-table
+# so a position can carry arbitrarily many interviews.
+
+class TestInterviewsSchema:
+
+    def test_interviews_table_exists(self, db):
+        with database._connect() as conn:
+            tables = {r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()}
+        assert "interviews" in tables, (
+            "Sub-task 8: interviews table must be registered via CREATE TABLE "
+            "IF NOT EXISTS in init_db()."
+        )
+
+    def test_interviews_has_expected_columns(self, db):
+        """Column shape pinned exactly per DESIGN §6.2: id, application_id,
+        sequence, scheduled_date, format, notes. Other columns would signal
+        DDL drift from the DESIGN spec."""
+        with database._connect() as conn:
+            cols = {r["name"]: dict(r) for r in conn.execute(
+                "PRAGMA table_info(interviews)"
+            ).fetchall()}
+
+        expected = {
+            "id":             ("INTEGER", 1),   # PK, NOT NULL enforced by PK
+            "application_id": ("INTEGER", 1),   # NOT NULL
+            "sequence":       ("INTEGER", 1),   # NOT NULL
+            "scheduled_date": ("TEXT",    0),   # nullable
+            "format":         ("TEXT",    0),   # nullable
+            "notes":          ("TEXT",    0),   # nullable
+        }
+        for name, (type_, notnull) in expected.items():
+            assert name in cols, f"interviews.{name} missing — got {list(cols)!r}"
+            assert cols[name]["type"] == type_, (
+                f"interviews.{name} type expected {type_}, "
+                f"got {cols[name]['type']!r}"
+            )
+            assert cols[name]["notnull"] == notnull, (
+                f"interviews.{name} notnull expected {notnull}, "
+                f"got {cols[name]['notnull']!r}"
+            )
+        # Make sure nothing unexpected snuck in.
+        assert set(cols) == set(expected), (
+            f"Unexpected columns on interviews: {set(cols) - set(expected)!r}"
+        )
+
+    def test_interviews_unique_application_sequence(self, db):
+        """DESIGN §6.2 locks UNIQUE(application_id, sequence) so a
+        position can't accidentally hold two interviews at the same
+        sequence slot. SQLite raises IntegrityError on insert collision."""
+        pid = database.add_position(make_position())
+        with database._connect() as conn:
+            conn.execute(
+                "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                "VALUES (?, 1, ?)",
+                (pid, (date.today() + timedelta(days=7)).isoformat()),
+            )
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                    "VALUES (?, 1, ?)",
+                    (pid, (date.today() + timedelta(days=14)).isoformat()),
+                )
+
+    def test_interviews_fk_to_applications(self, db):
+        """interviews.application_id references applications.position_id
+        with ON DELETE CASCADE. Direct INSERT of a nonexistent
+        application_id must fail when foreign_keys PRAGMA is ON (which
+        _connect() guarantees)."""
+        with database._connect() as conn:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                    "VALUES (?, 1, ?)",
+                    (99999, date.today().isoformat()),
+                )
+
+    def test_interviews_application_index_exists(self, db):
+        """DESIGN §6.2 names idx_interviews_application — the index on
+        application_id that keeps get_interviews(application_id) fast as
+        the table grows."""
+        with database._connect() as conn:
+            indices = {r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            ).fetchall()}
+        assert "idx_interviews_application" in indices, (
+            f"Expected idx_interviews_application in sqlite_master; got {indices!r}"
+        )
+
+
+# ── add_interview / get_interviews / update_interview / delete_interview ─────
+
+class TestAddInterview:
+
+    def test_returns_indicator_dict(self, db):
+        """DESIGN §7 + §9.3: writers that can promote return an indicator
+        dict. For add_interview in Sub-task 8, the cascade body is
+        deferred to Sub-task 9, so status_changed stays False and
+        new_status stays None even when propagate_status=True."""
+        pid = database.add_position(make_position())
+        result = database.add_interview(pid, {
+            "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
+        })
+        assert isinstance(result, dict)
+        assert "id" in result and isinstance(result["id"], int)
+        assert result["id"] >= 1
+        assert result["status_changed"] is False, (
+            "Sub-task 8: R2 cascade body is deferred to Sub-task 9 — "
+            "status_changed must stay False regardless of propagate_status."
+        )
+        assert result["new_status"] is None
+
+    def test_auto_assigns_sequence_1_for_first_interview(self, db):
+        """When `sequence` is omitted, add_interview computes the next
+        available sequence for that application_id. First interview
+        picks sequence=1."""
+        pid = database.add_position(make_position())
+        database.add_interview(pid, {"scheduled_date": date.today().isoformat()})
+        df = database.get_interviews(pid)
+        assert len(df) == 1
+        assert df.iloc[0]["sequence"] == 1
+
+    def test_auto_assigns_next_sequence_for_subsequent_interviews(self, db):
+        """Second interview on the same position picks sequence=2. Gaps
+        in sequence (delete #1, add two more) are allowed — MAX+1 picks
+        past any leftover gap so the UNIQUE constraint never collides."""
+        pid = database.add_position(make_position())
+        database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-06-01"})
+        df = database.get_interviews(pid)
+        seqs = list(df["sequence"])
+        assert seqs == [1, 2], (
+            f"Second add_interview must auto-sequence to 2; got {seqs!r}"
+        )
+
+    def test_explicit_sequence_override(self, db):
+        """A caller that knows what it's doing can pass `sequence`
+        explicitly — e.g. restoring a deleted interview at its old slot.
+        The UNIQUE constraint catches collisions."""
+        pid = database.add_position(make_position())
+        database.add_interview(pid, {
+            "sequence": 3,
+            "scheduled_date": "2026-05-01",
+        })
+        df = database.get_interviews(pid)
+        assert list(df["sequence"]) == [3]
+
+    def test_explicit_sequence_collision_raises(self, db):
+        """Two interviews on the same application_id with the same
+        sequence → IntegrityError from the UNIQUE constraint."""
+        pid = database.add_position(make_position())
+        database.add_interview(pid, {"sequence": 1, "scheduled_date": "2026-05-01"})
+        with pytest.raises(sqlite3.IntegrityError):
+            database.add_interview(pid, {"sequence": 1, "scheduled_date": "2026-06-01"})
+
+    def test_propagate_status_kwarg_default_true(self, db):
+        """DESIGN §7: add_interview signature must be
+        `add_interview(application_id, fields, *, propagate_status=True)`.
+        Default must be True — cascade opt-out is explicit. In Sub-task 8
+        the kwarg has no observable effect (cascade body deferred), but
+        the signature is in place for Sub-task 9."""
+        import inspect
+        sig = inspect.signature(database.add_interview)
+        param = sig.parameters.get("propagate_status")
+        assert param is not None, (
+            "add_interview must accept a propagate_status kwarg "
+            "(DESIGN §7 load-bearing contract #2)"
+        )
+        assert param.default is True, (
+            f"propagate_status must default to True; got {param.default!r}"
+        )
+        assert param.kind == inspect.Parameter.KEYWORD_ONLY, (
+            "propagate_status must be keyword-only so callers pass it "
+            "explicitly; got kind = "
+            f"{param.kind!r}"
+        )
+
+    def test_propagate_status_false_accepted(self, db):
+        """Passing propagate_status=False must not raise in Sub-task 8,
+        and the return indicator stays unchanged (no cascade anyway)."""
+        pid = database.add_position(make_position())
+        result = database.add_interview(
+            pid,
+            {"scheduled_date": "2026-05-01"},
+            propagate_status=False,
+        )
+        assert result["status_changed"] is False
+        assert result["new_status"] is None
+
+    def test_fk_violation_raises_on_nonexistent_application(self, db):
+        """Inserting an interview for a position that doesn't exist
+        (no applications row) violates the FK → IntegrityError."""
+        with pytest.raises(sqlite3.IntegrityError):
+            database.add_interview(99999, {"scheduled_date": "2026-05-01"})
+
+    def test_accepts_format_and_notes(self, db):
+        """DESIGN §6.2 columns: format (from INTERVIEW_FORMATS vocabulary,
+        but column is plain TEXT so any string is allowed) and notes.
+        Round-trip through add_interview → get_interviews."""
+        pid = database.add_position(make_position())
+        database.add_interview(pid, {
+            "scheduled_date": "2026-05-01",
+            "format":         "Video",
+            "notes":          "PI chat then committee",
+        })
+        row = database.get_interviews(pid).iloc[0]
+        assert row["format"] == "Video"
+        assert row["notes"]  == "PI chat then committee"
+
+
+class TestGetInterviews:
+
+    def test_empty_when_no_interviews(self, db):
+        pid = database.add_position(make_position())
+        df = database.get_interviews(pid)
+        assert len(df) == 0
+
+    def test_returns_interviews_ordered_by_sequence(self, db):
+        """DESIGN §8.3: 'one row per interviews record, ordered by
+        sequence'. Pin the ORDER BY on the reader so the Applications
+        page never has to re-sort."""
+        pid = database.add_position(make_position())
+        # Insert out-of-order by sequence to verify the ORDER BY.
+        database.add_interview(pid, {"sequence": 3, "scheduled_date": "2026-05-03"})
+        database.add_interview(pid, {"sequence": 1, "scheduled_date": "2026-05-01"})
+        database.add_interview(pid, {"sequence": 2, "scheduled_date": "2026-05-02"})
+        seqs = list(database.get_interviews(pid)["sequence"])
+        assert seqs == [1, 2, 3], f"ORDER BY sequence ASC not applied; got {seqs!r}"
+
+    def test_scoped_to_application_id(self, db):
+        """get_interviews filters by application_id; interviews on other
+        positions are not returned."""
+        pid_a = database.add_position(make_position({"position_name": "A"}))
+        pid_b = database.add_position(make_position({"position_name": "B"}))
+        database.add_interview(pid_a, {"scheduled_date": "2026-05-01"})
+        database.add_interview(pid_b, {"scheduled_date": "2026-06-01"})
+        assert len(database.get_interviews(pid_a)) == 1
+        assert len(database.get_interviews(pid_b)) == 1
+
+
+class TestUpdateInterview:
+
+    def test_updates_specified_fields(self, db):
+        pid = database.add_position(make_position())
+        res = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.update_interview(res["id"], {
+            "scheduled_date": "2026-06-15",
+            "format":         "Onsite",
+        })
+        row = database.get_interviews(pid).iloc[0]
+        assert row["scheduled_date"] == "2026-06-15"
+        assert row["format"]         == "Onsite"
+
+    def test_partial_update_preserves_other_fields(self, db):
+        pid = database.add_position(make_position())
+        res = database.add_interview(pid, {
+            "scheduled_date": "2026-05-01",
+            "notes":          "keep me",
+        })
+        database.update_interview(res["id"], {"format": "Phone"})
+        row = database.get_interviews(pid).iloc[0]
+        assert row["notes"] == "keep me", (
+            "Partial update must not clobber unmentioned columns."
+        )
+
+    def test_empty_fields_is_noop(self, db):
+        """Mirror the update_position / update_recommender / upsert
+        convention: empty dict → early return, no DB round-trip. Must
+        not raise and must not affect any row."""
+        pid = database.add_position(make_position())
+        res = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.update_interview(res["id"], {})
+        row = database.get_interviews(pid).iloc[0]
+        assert row["scheduled_date"] == "2026-05-01"
+
+
+class TestDeleteInterview:
+
+    def test_removes_single_row(self, db):
+        pid = database.add_position(make_position())
+        res = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.delete_interview(res["id"])
+        assert len(database.get_interviews(pid)) == 0
+
+    def test_leaves_other_interviews_untouched(self, db):
+        pid = database.add_position(make_position())
+        res1 = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-06-01"})
+        database.delete_interview(res1["id"])
+        remaining = database.get_interviews(pid)
+        assert len(remaining) == 1
+        assert remaining.iloc[0]["scheduled_date"] == "2026-06-01"
+
+
+class TestInterviewsCascade:
+
+    def test_delete_position_cascades_through_application_to_interviews(self, db):
+        """FK chain: positions → applications (ON DELETE CASCADE via
+        applications.position_id → positions.id) → interviews (ON DELETE
+        CASCADE via interviews.application_id → applications.position_id).
+        So delete_position transitively removes every interview for
+        that position, atomically."""
+        pid = database.add_position(make_position())
+        database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-06-01"})
+
+        database.delete_position(pid)
+
+        with database._connect() as conn:
+            orphans = conn.execute(
+                "SELECT COUNT(*) AS n FROM interviews WHERE application_id = ?",
+                (pid,),
+            ).fetchone()["n"]
+        assert orphans == 0, (
+            f"FK cascade must remove interviews when their parent "
+            f"position is deleted; got {orphans} orphaned rows"
+        )
+
+
+class TestInterviewsMigration:
+    """Sub-task 8 / DESIGN §6.3 normalize-flat-columns-into-sub-table
+    pattern. Pre-v1.3 DBs have interview1_date / interview2_date on the
+    applications row; init_db() creates the interviews table on first
+    seeing it, copies the two legacy date columns across as
+    sequence=1 / sequence=2 rows, and NULL-clears the source columns.
+
+    Re-running init_db() on an already-migrated DB must be a strict
+    no-op — implemented via a "migrate-once gate" that inspects
+    sqlite_master BEFORE the CREATE TABLE IF NOT EXISTS and only runs
+    the copy path when the interviews table did not already exist."""
+
+    def _seed_pre_v1_3_applications(self, tmp_path, monkeypatch,
+                                      interview1_date=None,
+                                      interview2_date=None):
+        """Build a minimal pre-v1.3 DB: positions (enough columns for
+        init_db() to be happy) + applications with the two legacy date
+        columns, one row with the requested values. Intentionally does
+        NOT create an interviews table — that's what the migration
+        creates.
+
+        Mirrors the Sub-task 6/7 migration-test shape. Returns nothing;
+        callers call database.init_db() after seeding and inspect the
+        resulting tables."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE applications (
+                    position_id     INTEGER PRIMARY KEY,
+                    applied_date    TEXT,
+                    interview1_date TEXT,
+                    interview2_date TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute(
+                "INSERT INTO positions (position_name) VALUES ('LegacyPosition')"
+            )
+            conn.execute(
+                "INSERT INTO applications "
+                "(position_id, interview1_date, interview2_date) VALUES (1, ?, ?)",
+                (interview1_date, interview2_date),
+            )
+
+    def test_migration_copies_interview1_date_as_sequence_1(self, tmp_path, monkeypatch):
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, interview1_date="2026-05-01"
+        )
+        database.init_db()
+        with database._connect() as conn:
+            rows = conn.execute(
+                "SELECT application_id, sequence, scheduled_date "
+                "FROM interviews ORDER BY sequence"
+            ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["application_id"] == 1
+        assert rows[0]["sequence"]       == 1
+        assert rows[0]["scheduled_date"] == "2026-05-01"
+
+    def test_migration_copies_interview2_date_as_sequence_2(self, tmp_path, monkeypatch):
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, interview2_date="2026-06-15"
+        )
+        database.init_db()
+        with database._connect() as conn:
+            rows = conn.execute(
+                "SELECT application_id, sequence, scheduled_date "
+                "FROM interviews ORDER BY sequence"
+            ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["sequence"]       == 2
+        assert rows[0]["scheduled_date"] == "2026-06-15"
+
+    def test_migration_copies_both_dates_in_order(self, tmp_path, monkeypatch):
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch,
+            interview1_date="2026-05-01",
+            interview2_date="2026-06-15",
+        )
+        database.init_db()
+        with database._connect() as conn:
+            rows = conn.execute(
+                "SELECT sequence, scheduled_date FROM interviews "
+                "WHERE application_id = 1 ORDER BY sequence"
+            ).fetchall()
+        dates = [(r["sequence"], r["scheduled_date"]) for r in rows]
+        assert dates == [(1, "2026-05-01"), (2, "2026-06-15")]
+
+    def test_migration_skips_null_dates(self, tmp_path, monkeypatch):
+        """A row with interview1_date=NULL AND interview2_date=NULL must
+        produce zero interviews rows. The WHERE IS NOT NULL filter is
+        load-bearing — otherwise a normal v1.2 row with no interviews
+        scheduled would migrate two NULL-date rows into the new table."""
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch)  # both NULL
+        database.init_db()
+        with database._connect() as conn:
+            n = conn.execute(
+                "SELECT COUNT(*) AS n FROM interviews"
+            ).fetchone()["n"]
+        assert n == 0
+
+    def test_migration_nulls_legacy_columns_after_copy(self, tmp_path, monkeypatch):
+        """DESIGN §6.3 explicitly specifies: 'leave old columns NULL
+        until a rebuild drops them'. After migration the legacy
+        interview1_date / interview2_date on applications must be NULL
+        — this both prevents data drift between old and new and
+        guarantees idempotence (second migration run finds nothing
+        to copy)."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch,
+            interview1_date="2026-05-01",
+            interview2_date="2026-06-15",
+        )
+        database.init_db()
+        with database._connect() as conn:
+            app = conn.execute(
+                "SELECT interview1_date, interview2_date FROM applications "
+                "WHERE position_id = 1"
+            ).fetchone()
+        assert app["interview1_date"] is None
+        assert app["interview2_date"] is None
+
+    def test_migration_is_idempotent(self, tmp_path, monkeypatch):
+        """Migrate-once gate: first init_db() creates interviews and
+        runs the copy; second init_db() must be a strict no-op — no
+        duplicate rows, no re-copy of any NULL-cleared legacy value,
+        no IntegrityError from the UNIQUE constraint."""
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch,
+            interview1_date="2026-05-01",
+            interview2_date="2026-06-15",
+        )
+        database.init_db()
+        database.init_db()  # second call must be a no-op
+        with database._connect() as conn:
+            rows = conn.execute(
+                "SELECT sequence FROM interviews WHERE application_id = 1 "
+                "ORDER BY sequence"
+            ).fetchall()
+        assert [r["sequence"] for r in rows] == [1, 2], (
+            "Second init_db() must not duplicate migrated rows; "
+            f"got sequences {[r['sequence'] for r in rows]!r}"
+        )
+
+
 # ── get_upcoming_interviews ───────────────────────────────────────────────────
+# Sub-task 8 / DESIGN §7: rewrites to read from the new interviews sub-table
+# via JOIN interviews → applications → positions. Returns row-per-interview
+# (prior shape was row-per-position with two date columns), ordered by
+# scheduled_date ASC. Seed via add_interview — NEVER via upsert_application
+# with the legacy interview1_date/interview2_date columns (those stay NULL
+# after the Sub-task 8 migration).
 
 class TestGetUpcomingInterviews:
 
@@ -915,46 +1398,78 @@ class TestGetUpcomingInterviews:
         df = database.get_upcoming_interviews()
         assert len(df) == 0
 
-    def test_returns_row_with_future_interview1(self, db):
+    def test_returns_single_future_interview(self, db):
         pos_id = database.add_position(make_position())
-        database.upsert_application(pos_id, {
-            "interview1_date": (date.today() + timedelta(days=7)).isoformat(),
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
         })
         df = database.get_upcoming_interviews()
         assert len(df) == 1
 
-    def test_returns_row_with_future_interview2_only(self, db):
+    def test_returns_row_per_interview(self, db):
+        """D18: arbitrary interview count per position. Two interviews
+        on the same position → two rows in the result (not one
+        aggregated row, not capped at 2)."""
         pos_id = database.add_position(make_position())
-        database.upsert_application(pos_id, {
-            "interview2_date": (date.today() + timedelta(days=14)).isoformat(),
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
+        })
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=14)).isoformat(),
         })
         df = database.get_upcoming_interviews()
-        assert len(df) == 1
+        assert len(df) == 2, (
+            "Row-per-interview shape is load-bearing for D18 — two "
+            "interviews on one position must produce two rows."
+        )
 
     def test_excludes_past_interview(self, db):
         pos_id = database.add_position(make_position())
-        database.upsert_application(pos_id, {
-            "interview1_date": (date.today() - timedelta(days=1)).isoformat(),
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() - timedelta(days=1)).isoformat(),
         })
         df = database.get_upcoming_interviews()
         assert len(df) == 0
 
     def test_includes_interview_today(self, db):
         pos_id = database.add_position(make_position())
-        database.upsert_application(pos_id, {
-            "interview1_date": date.today().isoformat(),
+        database.add_interview(pos_id, {
+            "scheduled_date": date.today().isoformat(),
         })
         df = database.get_upcoming_interviews()
         assert len(df) == 1
 
+    def test_ordered_by_scheduled_date_asc(self, db):
+        """Chronological order is part of the contract (DESIGN §7 load-
+        bearing #5). Earliest upcoming interview first, regardless of
+        position or insert order."""
+        pid_a = database.add_position(make_position({"position_name": "A"}))
+        pid_b = database.add_position(make_position({"position_name": "B"}))
+        later  = (date.today() + timedelta(days=20)).isoformat()
+        sooner = (date.today() + timedelta(days=5)).isoformat()
+        database.add_interview(pid_a, {"scheduled_date": later})
+        database.add_interview(pid_b, {"scheduled_date": sooner})
+        df = database.get_upcoming_interviews()
+        assert list(df["scheduled_date"]) == [sooner, later]
+
     def test_result_has_join_columns(self, db):
+        """Consumer contract: each row carries the position identity
+        (name + institute) and the interview identity (scheduled_date,
+        plus format and sequence for the Applications page)."""
         pos_id = database.add_position(make_position())
-        database.upsert_application(pos_id, {
-            "interview1_date": (date.today() + timedelta(days=5)).isoformat(),
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+            "format":         "Video",
         })
         df = database.get_upcoming_interviews()
-        for col in ("position_name", "institute", "interview1_date"):
-            assert col in df.columns
+        for col in (
+            "position_id", "position_name", "institute",
+            "scheduled_date", "format", "sequence",
+        ):
+            assert col in df.columns, (
+                f"get_upcoming_interviews missing expected column {col!r}; "
+                f"got {list(df.columns)!r}"
+            )
 
 
 # ── get_pending_recommenders ──────────────────────────────────────────────────
