@@ -67,11 +67,38 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       `TestNotesTabWidgets` text_area tight-bound bumps 1 → 2 per
       its own in-line maintenance note. CHANGELOG Migration note
       recorded. 319 tests green.
-- [ ] Sub-task 8+: remaining v1.3 alignment items per
-      `memory/project_state.md` (schema overhauls incl.
-      interviews sub-table, confirmation_* + reminder_sent_*
-      splits, `recommenders.confirmed` INTEGER, cascade R1/R2/R3
-      rewire)
+- [x] Sub-task 8: `interviews` sub-table + CRUD + one-shot
+      migration from `applications.interview1_date`/`interview2_date`
+      + row-per-interview rewrite of `get_upcoming_interviews`, per
+      DESIGN §6.2 + §6.3 + §7 + D18. `database.py` gains
+      `CREATE TABLE IF NOT EXISTS interviews` + FK cascade +
+      UNIQUE(application_id, sequence) + `idx_interviews_application`,
+      a migrate-once gate (sqlite_master probe pre-CREATE) that
+      drives the one-shot INSERT SELECT copy of legacy `interview1_date`
+      (sequence=1) and `interview2_date` (sequence=2) into the new
+      table then NULL-clears the source columns, and a full CRUD
+      section (`add_interview` with auto-sequence and a
+      keyword-only `propagate_status=True` kwarg reserved for
+      Sub-task 9's R2 cascade body; `get_interviews`,
+      `update_interview`, `delete_interview`).
+      `get_upcoming_interviews` rewritten to row-per-interview
+      over `interviews JOIN applications JOIN positions`.
+      **Scope expanded beyond the originally stated database-only
+      scope**: `app.py._next_interview_display` migrated from
+      dual-column to single-`scheduled_date` scan; five
+      `tests/test_app_page.py::TestT1DNextInterviewKpi` tests
+      rewritten to seed via `add_interview`. 30 new tests:
+      5 schema, 9 add_interview, 3 get_interviews, 3
+      update_interview, 2 delete_interview, 1 full-cascade,
+      6 migration, 1 new row-per-interview pin in
+      `TestGetUpcomingInterviews`. CHANGELOG Migration note
+      records the full SQL including the migrate-once gate
+      rationale. 349 tests green.
+- [ ] Sub-task 9+: remaining v1.3 alignment items per
+      `memory/project_state.md` (cascade R1/R2/R3 rewire —
+      including the R2 body inside `add_interview` that Sub-task
+      8 left deferred; confirmation_* + reminder_sent_* splits;
+      `recommenders.confirmed` INTEGER)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -139,4 +166,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–7 shipped; Sub-task 8+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–8 shipped; Sub-task 9+ next)_
