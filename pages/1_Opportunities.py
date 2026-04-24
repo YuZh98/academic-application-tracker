@@ -391,7 +391,15 @@ if "selected_position_id" in st.session_state:
     selected_row = df[df["id"] == sid]
     if not selected_row.empty:
         r = selected_row.iloc[0]
-        st.subheader(f"{r['position_name']} · {r['status']}")
+        # DESIGN §8.0 Status label convention: render STATUS_LABELS[raw]
+        # ('Applied'), never the raw bracketed storage value ('[APPLIED]').
+        # The pre-seed block below already coerces an out-of-vocab status
+        # to STATUS_VALUES[0] via safe_status, so the map lookup is safe
+        # in practice — we still use .get(..., raw) as a last-resort
+        # passthrough to avoid a KeyError surfacing as an uncaught
+        # exception if a row ever carries an un-labelled status.
+        _status_label = config.STATUS_LABELS.get(r['status'], r['status'])
+        st.subheader(f"{r['position_name']} · {_status_label}")
 
         # T4-C: widget-value trap — once session_state[key] is set, Streamlit
         # ignores the `value=` argument on later reruns, so the form would

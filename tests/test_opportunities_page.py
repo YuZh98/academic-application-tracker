@@ -859,7 +859,13 @@ class TestEditPanelShell:
         )
 
     def test_subheader_shows_position_name_and_status(self, db):
-        """The subheader must confirm what's being edited — position name + status."""
+        """The subheader must confirm what's being edited — position name +
+        labelled status. DESIGN §8.0 forbids raw bracketed storage values
+        (`[APPLIED]`) in the UI; the status renders via
+        `config.STATUS_LABELS[raw]` (`Applied`). Note: checking only
+        `"Applied" in text` would not discriminate against the broken form
+        because `"Applied"` is a substring of `"[APPLIED]"` — the negative
+        `"[APPLIED]" not in text` assertion is the load-bearing pin."""
         database.add_position(
             {"position_name": "Stanford BioStats", "status": "[APPLIED]"}
         )
@@ -873,8 +879,14 @@ class TestEditPanelShell:
         assert "Stanford BioStats" in text, (
             f"Subheader missing position name: {text!r}"
         )
-        assert "[APPLIED]" in text, (
-            f"Subheader missing status: {text!r}"
+        assert "Applied" in text, (
+            f"Subheader missing labelled status (STATUS_LABELS['[APPLIED]'] "
+            f"= 'Applied') per DESIGN §8.0: {text!r}"
+        )
+        assert "[APPLIED]" not in text, (
+            f"Subheader must not render raw bracketed storage value per "
+            f"DESIGN §8.0 ('Pages never render a raw status value'); "
+            f"got {text!r}"
         )
 
     def test_stale_sid_is_cleared_silently(self, db):
