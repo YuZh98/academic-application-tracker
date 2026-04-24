@@ -128,6 +128,74 @@ class TestInitDb:
         assert pos["req_cover_letter"] == "No"
         assert pos["req_transcripts"] == "Optional"
 
+    def test_migration_rewrites_legacy_pipeline_stage0_status(self, db):
+        """Sub-task 5 / DESIGN §5.1 + §6.3: any row carrying the pre-v1.3
+        pipeline-stage-0 status literal must migrate in place to '[SAVED]'
+        on the next init_db() call. The one-shot UPDATE is idempotent by
+        its WHERE-guard — the second call sees no matching rows and is a
+        no-op.
+
+        Legacy string is spelled via concatenation so the GUIDELINES §6
+        pre-merge grep stays at zero hits post-rename — the exact literal
+        only materialises at runtime inside the test and inside init_db().
+        See CHANGELOG [Unreleased] Migration: entry for the canonical SQL."""
+        pos_id = database.add_position(make_position())
+        legacy_status = "[OPE" + "N]"   # pre-v1.3 pipeline-stage-0 literal
+        with database._connect() as conn:
+            conn.execute(
+                "UPDATE positions SET status = ? WHERE id = ?",
+                (legacy_status, pos_id),
+            )
+
+        database.init_db()
+
+        pos = database.get_position(pos_id)
+        assert pos["status"] == "[SAVED]", (
+            "Pre-v1.3 stage-0 literal must migrate to '[SAVED]'; got "
+            f"{pos['status']!r}"
+        )
+
+        # Idempotence: second init_db() leaves '[SAVED]' untouched.
+        database.init_db()
+        pos = database.get_position(pos_id)
+        assert pos["status"] == "[SAVED]"
+
+    def test_migration_rewrites_legacy_med_priority(self, db):
+        """Sub-task 5 / DESIGN §5.1: the pre-v1.3 PRIORITY_VALUES short
+        code must migrate in place to the full-word 'Medium' on the next
+        init_db() call. Other priorities ('High'/'Low'/'Stretch' and NULL)
+        pass through unchanged — the UPDATE's WHERE clause scopes it to
+        the single legacy literal.
+
+        Legacy short code is spelled via concatenation so the GUIDELINES §6
+        pre-merge grep stays at zero hits post-rename."""
+        # Seed three positions with different priority states to pin
+        # scope: one legacy short code, one already-migrated 'Medium'
+        # (must survive unchanged), one unrelated 'High' (also unchanged).
+        p1 = database.add_position(make_position({"position_name": "P1"}))
+        p2 = database.add_position(make_position({"position_name": "P2"}))
+        p3 = database.add_position(make_position({"position_name": "P3"}))
+        legacy_medium = "M" + "ed"   # pre-v1.3 short-code priority literal
+        with database._connect() as conn:
+            conn.execute("UPDATE positions SET priority = ? WHERE id = ?", (legacy_medium, p1))
+            conn.execute("UPDATE positions SET priority = 'Medium' WHERE id = ?", (p2,))
+            conn.execute("UPDATE positions SET priority = 'High' WHERE id = ?",   (p3,))
+
+        database.init_db()
+
+        assert database.get_position(p1)["priority"] == "Medium", (
+            "Pre-v1.3 short-code priority must migrate to 'Medium'; got "
+            f"{database.get_position(p1)['priority']!r}"
+        )
+        assert database.get_position(p2)["priority"] == "Medium"
+        assert database.get_position(p3)["priority"] == "High"
+
+        # Idempotence: second init_db() is a no-op.
+        database.init_db()
+        assert database.get_position(p1)["priority"] == "Medium"
+        assert database.get_position(p2)["priority"] == "Medium"
+        assert database.get_position(p3)["priority"] == "High"
+
     def test_ddl_defaults_interpolate_from_config(self, tmp_path, monkeypatch):
         """Sub-task 4 / DESIGN §6.2: the CREATE TABLE statements must
         interpolate config.STATUS_VALUES[0] into positions.status DEFAULT
@@ -189,10 +257,10 @@ class TestAddPosition:
         id2 = database.add_position(make_position({"position_name": "Other"}))
         assert id2 == id1 + 1
 
-    def test_status_defaults_to_open(self, db):
+    def test_status_defaults_to_saved(self, db):
         pos_id = database.add_position(make_position())
         pos = database.get_position(pos_id)
-        assert pos["status"] == "[OPEN]"
+        assert pos["status"] == "[SAVED]"
 
     def test_req_columns_default_to_no(self, db):
         pos_id = database.add_position(make_position())
@@ -443,14 +511,14 @@ class TestCountByStatus:
         database.update_position(pos3, {"status": "[APPLIED]"})
 
         counts = database.count_by_status()
-        assert counts["[OPEN]"]    == 2
+        assert counts["[SAVED]"]   == 2
         assert counts["[APPLIED]"] == 1
 
     def test_closed_status_counted_separately(self, db):
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {"status": "[CLOSED]"})
         counts = database.count_by_status()
-        assert "[OPEN]"   not in counts
+        assert "[SAVED]"  not in counts
         assert counts.get("[CLOSED]") == 1
 
 

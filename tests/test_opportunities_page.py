@@ -220,7 +220,7 @@ class TestQuickAddFormBehaviour:
         assert at.toast, "Expected st.toast after a valid quick-add submission"
 
     def test_new_position_has_open_status(self, db):
-        """Positions added via quick-add must default to STATUS_VALUES[0] ('[OPEN]')."""
+        """Positions added via quick-add must default to STATUS_VALUES[0] ('[SAVED]')."""
         at = _run_page()
         at.text_input(key="qa_position_name").input("Yale Postdoc")
         at.button(key=SUBMIT_KEY).click()
@@ -266,16 +266,16 @@ class TestPositionsTable:
 
     def test_table_row_count_matches_filtered_count(self, db):
         """Row count in the dataframe must match the filter-narrowed position count."""
-        database.add_position({"position_name": "A"})                          # [OPEN] by default
-        database.add_position({"position_name": "B"})                          # [OPEN] by default
+        database.add_position({"position_name": "A"})                          # [SAVED] by default
+        database.add_position({"position_name": "B"})                          # [SAVED] by default
         database.add_position({"position_name": "C", "status": "[APPLIED]"})
         at = _run_page()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         assert not at.exception
         assert len(at.dataframe) == 1
         assert len(at.dataframe[0].value) == 2, (
-            f"Expected 2 rows after status=[OPEN] filter, got {len(at.dataframe[0].value)}"
+            f"Expected 2 rows after status=[SAVED] filter, got {len(at.dataframe[0].value)}"
         )
 
     def test_table_has_required_columns(self, db):
@@ -455,10 +455,10 @@ class TestFilterBarBehaviour:
 
     def test_filter_by_status_narrows_results(self, db):
         """Selecting a specific status must hide positions with other statuses."""
-        database.add_position({"position_name": "Open One"})                          # status defaults to [OPEN]
+        database.add_position({"position_name": "Open One"})                          # status defaults to [SAVED]
         database.add_position({"position_name": "Applied One", "status": "[APPLIED]"})
         at = _run_page()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
@@ -468,7 +468,7 @@ class TestFilterBarBehaviour:
 
     def test_filter_by_status_no_match_shows_info(self, db):
         """When the status filter matches no rows, a specific info message must appear."""
-        database.add_position({"position_name": "Open One"})  # [OPEN] by default
+        database.add_position({"position_name": "Open One"})  # [SAVED] by default
         at = _run_page()
         at.selectbox(key="filter_status").select("[APPLIED]")
         at.run()
@@ -480,7 +480,7 @@ class TestFilterBarBehaviour:
     def test_filter_by_priority_narrows_results(self, db):
         """Selecting a specific priority must hide positions with other priorities."""
         database.add_position({"position_name": "High Prio", "priority": "High"})
-        database.add_position({"position_name": "Med Prio",  "priority": "Med"})
+        database.add_position({"position_name": "Med Prio",  "priority": "Medium"})
         at = _run_page()
         at.selectbox(key="filter_priority").select("High")
         at.run()
@@ -517,11 +517,11 @@ class TestFilterBarBehaviour:
 
     def test_combined_status_and_priority_narrows_results(self, db):
         """Both status and priority filters apply simultaneously (AND logic)."""
-        database.add_position({"position_name": "A", "priority": "High"})                          # [OPEN] + High
-        database.add_position({"position_name": "B", "priority": "Med"})                           # [OPEN] + Med
+        database.add_position({"position_name": "A", "priority": "High"})                          # [SAVED] + High
+        database.add_position({"position_name": "B", "priority": "Medium"})                           # [SAVED] + Med
         database.add_position({"position_name": "C", "priority": "High", "status": "[APPLIED]"})   # [APPLIED] + High
         at = _run_page()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.selectbox(key="filter_priority").select("High")
         at.run()
         assert not at.exception
@@ -618,11 +618,11 @@ class TestRowSelection:
             {"position_name": "Applied One", "status": "[APPLIED]"}
         )
         pid_open = database.add_position(
-            {"position_name": "Open One", "status": "[OPEN]"}
+            {"position_name": "Open One", "status": "[SAVED]"}
         )
         at = AppTest.from_file(PAGE)
         at.run()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         # df_display now has exactly one row: "Open One". Row 0 must map to pid_open.
         _select_row(at, 0)
@@ -636,7 +636,7 @@ class TestRowSelection:
         """When an active filter hides all rows (or the DB goes empty), any stale
         selection must be cleared so later tiers (tabs, edit panel) don't render
         for a position the user can no longer see."""
-        database.add_position({"position_name": "Alpha", "status": "[OPEN]"})
+        database.add_position({"position_name": "Alpha", "status": "[SAVED]"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
@@ -710,7 +710,7 @@ class TestRowSelection:
         bug once Tier 5 Save wires up."""
         pid_alpha = database.add_position(
             {"position_name":  "Alpha",
-             "status":         "[OPEN]",
+             "status":         "[SAVED]",
              "deadline_date":  "2026-06-01"}
         )
         pid_beta = database.add_position(
@@ -726,8 +726,8 @@ class TestRowSelection:
             f"Precondition: row 0 unfiltered must bind to Beta={pid_beta}; "
             f"got {at.session_state['selected_position_id']}"
         )
-        # Filter to [OPEN] → Beta filtered out, Alpha is the only visible row.
-        at.selectbox(key="filter_status").select("[OPEN]")
+        # Filter to [SAVED] → Beta filtered out, Alpha is the only visible row.
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         assert not at.exception, f"Filter change raised: {at.exception}"
         # Key assertion: Streamlit cleared the dataframe selection on the
@@ -1508,7 +1508,7 @@ class TestOverviewSave:
             "institute":     "Original Inst",
             "field":         "Original Field",
             "priority":      "Medium",
-            "status":        "[OPEN]",
+            "status":        "[SAVED]",
             "deadline_date": "2026-01-01",
             "link":          "https://old.example",
         })

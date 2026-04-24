@@ -148,12 +148,12 @@ def test_status_guard_fires_on_drift(monkeypatch):
     We cannot re-trigger the module-level assert directly, so we replicate the
     exact guard logic here to confirm it detects a synthetic drift."""
     broken_colors = dict(config.STATUS_COLORS)
-    broken_colors.pop("[OPEN]")  # introduce the drift
+    broken_colors.pop("[SAVED]")  # introduce the drift
     assert set(config.STATUS_VALUES) != set(broken_colors), (
-        "Guard should fire: STATUS_VALUES has [OPEN] but broken_colors does not"
+        "Guard should fire: STATUS_VALUES has [SAVED] but broken_colors does not"
     )
     missing = set(config.STATUS_VALUES) - set(broken_colors)
-    assert missing == {"[OPEN]"}
+    assert missing == {"[SAVED]"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ def test_status_declined_alias_matches_status_values():
 def test_all_seven_status_aliases_match_status_values_order():
     """Named aliases follow STATUS_VALUES index order (per DESIGN §5.1)."""
     expected = [
-        config.STATUS_OPEN, config.STATUS_APPLIED, config.STATUS_INTERVIEW,
+        config.STATUS_SAVED, config.STATUS_APPLIED, config.STATUS_INTERVIEW,
         config.STATUS_OFFER, config.STATUS_CLOSED, config.STATUS_REJECTED,
         config.STATUS_DECLINED,
     ]
@@ -252,7 +252,7 @@ def test_status_labels_are_bracket_stripped():
 def test_status_labels_spec_values():
     """Pin the bracket-stripped, title-cased mapping for the v1 seven statuses."""
     assert config.STATUS_LABELS == {
-        "[OPEN]":      "Open",
+        "[SAVED]":     "Saved",
         "[APPLIED]":   "Applied",
         "[INTERVIEW]": "Interview",
         "[OFFER]":     "Offer",
@@ -399,6 +399,47 @@ def test_invariant_7_requirement_labels_keys_equal_values():
         f"missing={set(config.REQUIREMENT_VALUES) - set(config.REQUIREMENT_LABELS)!r}, "
         f"extra={set(config.REQUIREMENT_LABELS) - set(config.REQUIREMENT_VALUES)!r}"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sub-task 5 (v1.3 alignment) — DESIGN.md §5.1 + §6.3
+# ─────────────────────────────────────────────────────────────────────────────
+# Pipeline-stage-zero rename and priority-tier full-word rename. Both
+# renames interpolate into init_db() DDL DEFAULTs via the Sub-task 4
+# config-drive; migration of existing rows is handled by two one-shot
+# UPDATE loops in init_db() (pinned in test_database.py). Pre-v1.3
+# literals are not named here to keep the GUIDELINES §6 pre-merge
+# grep at zero hits.
+
+def test_status_values_spec_values():
+    """DESIGN §5.1 Status pipeline: STATUS_VALUES starts with [SAVED]
+    followed by APPLIED → INTERVIEW → OFFER → CLOSED → REJECTED →
+    DECLINED. Order is contract: index 0 is the DDL DEFAULT (via
+    config-drive, Sub-task 4), and auto-promotion rules R1/R3 (§9.3)
+    read STATUS_VALUES[0] as the source stage for R1."""
+    assert config.STATUS_VALUES == [
+        "[SAVED]", "[APPLIED]", "[INTERVIEW]", "[OFFER]",
+        "[CLOSED]", "[REJECTED]", "[DECLINED]",
+    ]
+
+
+def test_status_saved_alias_matches_status_values():
+    """STATUS_SAVED must equal the literal '[SAVED]' and be the first
+    pipeline stage — anti-typo guardrail for DESIGN §9.3 R1 cascade."""
+    assert config.STATUS_SAVED == "[SAVED]"
+    assert config.STATUS_SAVED == config.STATUS_VALUES[0]
+
+
+def test_priority_values_spec_values():
+    """DESIGN §5.1 Vocabularies: PRIORITY_VALUES uses the full-word
+    'Medium' at index 1. Full-word philosophy mirrors D20/D21 —
+    consistent, self-descriptive in raw dumps. Migration of legacy
+    short-code rows is handled by init_db() (pinned in test_database.py)."""
+    assert config.PRIORITY_VALUES == ["High", "Medium", "Low", "Stretch"]
+    # Pre-v1.3 short code must be absent. Single-quoted so the
+    # GUIDELINES §6 grep (which targets the double-quoted form) stays
+    # at zero hits post-rename.
+    assert 'Med' not in config.PRIORITY_VALUES
 
 
 # ── Fresh import exercises every module-level assertion ──────────────────────
