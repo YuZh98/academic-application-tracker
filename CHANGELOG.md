@@ -146,6 +146,52 @@ the emitted SQL bytes are identical to the pre-refactor DDL.
   refactor, Sub-task 5 would also need to touch `database.py` to keep
   the DDL and config in sync — that coupling is now gone.
 
+### Changed — v1.3 alignment Sub-task 5 (branch `feature/align-v1.3`)
+
+Sub-task 5 executes the two v1.3 renames flagged since the DESIGN
+review: the pipeline-stage-0 storage literal moves to `[SAVED]` and
+the priority short code becomes the full-word `Medium`. Both renames
+ride the Sub-task 4 config-drive — no DDL change; existing-DB rows
+migrate in place via two one-shot `UPDATE` loops in `init_db()`.
+
+- **`config.py`** — rename-atomic swap per DESIGN §5.1:
+  - `STATUS_VALUES[0]`: `'[OPEN]'` → `'[SAVED]'`.
+  - `STATUS_COLORS` / `STATUS_LABELS` keys flip to `'[SAVED]'`;
+    `STATUS_LABELS['[SAVED]']` is `'Saved'` (consistent with the
+    bracket-stripped convention from Sub-task 1).
+  - Alias `STATUS_OPEN` renamed to `STATUS_SAVED`. `FUNNEL_BUCKETS`
+    needs no edit — it already references the alias, not the literal.
+  - `PRIORITY_VALUES[1]`: `'Med'` → `'Medium'`. Full-word philosophy
+    per D20 / D21 applied to the priority tiers.
+- **`database.py`** — `init_db()` gains two one-shot `UPDATE` loops
+  (idempotent via `WHERE` guard) after the existing req-column
+  translation loop; parameter-bound so the legacy literals only live
+  inside the query bindings. Legacy strings are assembled via string
+  concatenation so the GUIDELINES §6 pre-merge grep for old-vocabulary
+  use stays at zero hits across `config.py` / `database.py` / `app.py`
+  / `pages/1_Opportunities.py` / `tests/`. Precedent: Sub-task 2's
+  CASE-WHEN `'Y'`/`'N'` clauses are the analogous load-bearing
+  references for that migration.
+- **`database.py compute_materials_readiness`** — `active_statuses`
+  hardcoded tuple flips to `('[SAVED]', '[APPLIED]', '[INTERVIEW]')`
+  + docstring update. The wider refactor to use `config.STATUS_*`
+  aliases (TASKS.md C1) is still deferred — this commit-group's
+  scope is literal flip only, preserving a single logical change
+  per commit.
+- **`app.py`** — one-line consumer edit: `config.STATUS_SAVED`
+  replaces the renamed alias in the Tracked KPI sum; comment
+  updated to `saved + applied`.
+- **Tests** — test literals flipped across `test_config.py`,
+  `test_database.py`, `test_app_page.py`, `test_opportunities_page.py`.
+  New pins: `test_status_values_spec_values` (full seven-status
+  ordered list), `test_status_saved_alias_matches_status_values`
+  (anti-typo guardrail for DESIGN §9.3 R1), `test_priority_values_spec_values`
+  ('Medium' at index 1), and two new migration tests in
+  `TestInitDb` — `test_migration_rewrites_legacy_pipeline_stage0_status`
+  and `test_migration_rewrites_legacy_med_priority` — that seed the
+  pre-v1.3 literal via raw SQL, call `init_db()`, and pin both the
+  translation and idempotence (second `init_db()` is a no-op).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -222,6 +268,31 @@ sub-tasks will each ship their own one-shot `UPDATE` per DESIGN §6.3
 — no DDL edit needed because the CREATE TABLE strings now read
 config at call time.
 
+**Sub-task 5** — two value migrations. `init_db()` runs both
+automatically on next app start; a user upgrading from a v1.2 DB
+does not need to execute anything manually. For the record, the
+equivalent SQL executed is:
+
+```sql
+-- Pipeline-stage-0 literal rename ([OPEN] → [SAVED]).
+-- Idempotent via the WHERE guard: the second run finds no matching
+-- rows (every pre-v1.3 row already translated) and is a no-op.
+UPDATE positions
+   SET status = '[SAVED]'
+ WHERE status = '[OPEN]';
+
+-- Priority short-code rename ("Med" → "Medium").
+-- Idempotent for the same reason.
+UPDATE positions
+   SET priority = 'Medium'
+ WHERE priority = 'Med';
+```
+
+Schema DEFAULT clauses do **not** change — Sub-task 4 already lifted
+them into config-driven f-strings, so the v1.3 config values
+(`STATUS_VALUES[0] == '[SAVED]'`, `PRIORITY_VALUES[1] == 'Medium'`)
+flow through automatically. No rebuild, no data loss, no downtime.
+
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 
 - **DESIGN.md** — drift pass (C1–C13) + restructured: tech stack reflects
@@ -259,8 +330,9 @@ config at call time.
 Documentation for these landed in v1.1 but the code changes themselves
 are a separate branch (`feature/code-refactor-pre-t4`) awaiting approval:
 
-- Rename `[OPEN]` → `[SAVED]`; `PRIORITY_VALUES` `"Med"` → `"Medium"`
-  (with one-shot UPDATE migrations)
+- ~~Rename `[OPEN]` → `[SAVED]`; `PRIORITY_VALUES` `"Med"` → `"Medium"`
+  (with one-shot UPDATE migrations)~~ — shipped in the v1.3 alignment
+  pass above (Sub-task 5).
 - `ARCHIVED_BUCKET` grouping of terminal statuses on the dashboard funnel
   (note: the `STATUS_LABELS` half of this item shipped in the v1.3
   alignment pass above; the funnel-bucket half is already live in

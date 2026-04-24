@@ -20,15 +20,16 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–4 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+Sub-tasks 1–5 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
 migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
 DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
-`config.RESULT_DEFAULT` per DESIGN §6.2). 300 tests green · zero
-deprecation warnings.
+`config.RESULT_DEFAULT` per DESIGN §6.2, and `[OPEN]→[SAVED]` +
+`"Med"→"Medium"` renames with two idempotent `UPDATE positions` loops in
+`init_db()`). 305 tests green · zero deprecation warnings.
 
-**Next up:** remaining v1.3 alignment items (status rename `[OPEN]→[SAVED]`
-via one-shot UPDATE — now a config-only edit thanks to Sub-task 4,
-`PRIORITY_VALUES` `"Med"→"Medium"`, schema overhauls, cascade rewire),
+**Next up:** remaining v1.3 alignment items (schema overhauls
+incl. `work_auth_note`, `updated_at` trigger, interviews sub-table,
+confirmation_* and reminder_sent_* splits, cascade R1/R2/R3 rewire),
 then Phase 4 Tier 4 (Upcoming timeline).
 
 ---
@@ -109,7 +110,7 @@ ordering, not a commitment.
 
 | Item | Source | Notes |
 |------|--------|-------|
-| Rename `[OPEN]` → `[SAVED]` + `"Med"` → `"Medium"` | Design critique (friend #1) | Planned for v0.5 code-refactor; doc landed in v1.1 |
+| ~~Rename `[OPEN]` → `[SAVED]` + `"Med"` → `"Medium"`~~ | Design critique (friend #1) | Shipped as v1.3 alignment Sub-task 5 on `feature/align-v1.3` |
 | Presentation-layer `STATUS_LABELS` + `ARCHIVED_BUCKET` | Design critique | Same batch as rename |
 | Delete 🔄 Refresh button | Design critique (friend #2) | Same batch |
 | Soft-delete with undo toast | UX | Requires `archived_at` column + FK cascade adjustment |
