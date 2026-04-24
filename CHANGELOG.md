@@ -254,6 +254,57 @@ last-modified time automatically — no Python writer has to remember.
   `tests/test_database.py` (for the ISO-datetime regex pattern
   and the 1.1-second sleep).
 
+### Changed — v1.3 alignment Sub-task 7 (branch `feature/align-v1.3`)
+
+Sub-task 7 closes the vertical slice Sub-task 3 deferred: the
+three-value `work_auth` vocabulary (Sub-task 3) plus a new
+`work_auth_note` freetext column plus the Overview-tab widgets that
+finally surface both to the user. DESIGN.md v1.3 §6.2 + §8.2 + D22.
+
+- **`database.py`** — `CREATE TABLE positions` gains
+  `work_auth_note TEXT` right after `work_auth`. `init_db()`
+  migration block gets a `PRAGMA table_info`-guarded
+  `ALTER TABLE positions ADD COLUMN work_auth_note TEXT`. Plain
+  TEXT, no DEFAULT — the column is NULL-able on fresh rows and on
+  migrated rows (v1.2 never collected this field, so NULL is the
+  honest state). Because the DEFAULT is constant (absent), the ALTER
+  works against non-empty tables unlike Sub-task 6's `updated_at`
+  — no backfill UPDATE is needed.
+- **`pages/1_Opportunities.py`** — pre-seed block gains
+  `safe_work_auth` with F2-style in-vocab coercion (NULL or
+  out-of-vocab → `config.WORK_AUTH_OPTIONS[0]`, matching the
+  priority / status fallback) and `edit_work_auth_note` via
+  `_safe_str` (same NaN-truthiness trap as notes / link).
+  Overview form gains `st.selectbox("Work Authorization",
+  config.WORK_AUTH_OPTIONS, key="edit_work_auth")` plus
+  `st.text_area("Work Authorization Note",
+  key="edit_work_auth_note")` between Link and the submit button —
+  placement per DESIGN §8.2 ("text_area below the selectbox").
+  Save payload extends with both keys so `database.update_position`
+  ships them to the DB.
+- **`tests/test_database.py`** — three new tests:
+  `test_positions_has_work_auth_note_column` (PRAGMA pin: TEXT,
+  `dflt_value IS NULL`), `test_migration_adds_work_auth_note_
+  to_pre_v1_3_positions` (`tmp_path` + pre-v1.3 seed mirroring the
+  Sub-task 6 migration test's shape; asserts column added, existing
+  `work_auth` preserved, new `work_auth_note` is NULL, second
+  `init_db()` is a no-op), and `test_work_auth_note_roundtrips`
+  in `TestUpdatePosition` (add_position → get → update → get
+  through both columns, plus empty-string round-trip as `""`).
+- **`tests/test_opportunities_page.py`** — `EDIT_KEYS` gains two
+  entries (`work_auth`, `work_auth_note`). New
+  `TestOverviewWorkAuthWidgets` class with 5 tests: selectbox
+  renders, text_area renders, options equal
+  `config.WORK_AUTH_OPTIONS` (order pinned — `Yes/No/Unknown`),
+  pre-seed populates both from the selected row, NULL fallback
+  (work_auth → `WORK_AUTH_OPTIONS[0]`, work_auth_note → `""`).
+  `TestOverviewSave.test_save_persists_work_auth_and_note` guards
+  against the classic "added to form, forgot in payload"
+  regression. `TestNotesTabWidgets.test_text_area_renders_when_
+  row_selected` tight-bound `len(at.text_area)` goes from 1 → 2
+  — the inline comment at that test already documented bumping
+  this count explicitly for exactly this case.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -392,6 +443,30 @@ rebuild, no data loss, no downtime. Loop prevention on the trigger's
 inner UPDATE rides on SQLite's default `recursive_triggers = OFF`;
 users who `PRAGMA recursive_triggers = ON` globally would see infinite
 recursion on every UPDATE to `positions`.
+
+**Sub-task 7** — schema addition on `positions` (new freetext
+companion column for the categorical `work_auth` field).
+`init_db()` runs the migration automatically on next app start; a
+user upgrading from a v1.2 DB does not need to execute anything
+manually. For the record, the equivalent SQL executed is:
+
+```sql
+-- Plain TEXT, no DEFAULT — existing rows correctly carry NULL
+-- (v1.2 never collected this field, so NULL is the honest
+-- "unknown" state). The PRAGMA table_info guard in init_db()
+-- makes the ALTER idempotent.
+ALTER TABLE positions ADD COLUMN work_auth_note TEXT;
+```
+
+Unlike Sub-task 6's `updated_at` migration, no backfill UPDATE
+is needed here — the fresh-DB CREATE TABLE DDL and the migration
+ALTER both produce the same "NULL-able TEXT, no DEFAULT" column,
+so the two paths converge without any extra SQL. If a dev DB
+carries legacy six-value `work_auth` strings (Sub-task 3 noted
+those would need manual translation; no auto-migration runs),
+the `work_auth_note` column is still added cleanly by this
+step — translating the old `work_auth` enum values is an
+independent manual action.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

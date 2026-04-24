@@ -49,11 +49,29 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       spec, trigger registered, INSERT via DDL default, UPDATE via
       trigger + 1.1 s sleep, pre-v1.3 migration path + idempotence).
       CHANGELOG Migration note recorded. 310 tests green.
-- [ ] Sub-task 7+: remaining v1.3 alignment items per
+- [x] Sub-task 7: `positions.work_auth_note` column + Overview-tab
+      `work_auth` selectbox + `work_auth_note` text_area per
+      DESIGN §6.2 + §8.2 + D22. Closes the vertical slice
+      Sub-task 3 deferred (WORK_AUTH_OPTIONS vocabulary landed;
+      UI deferred). `database.py` CREATE TABLE adds
+      `work_auth_note TEXT` after `work_auth`; `init_db()`
+      migration adds a PRAGMA-guarded `ALTER TABLE ADD COLUMN`
+      (no DEFAULT, constant-expression-free so it works against
+      non-empty tables; no backfill needed — NULL is the honest
+      "unknown" state for pre-v1.3 rows). `pages/1_Opportunities.py`
+      pre-seed gains F2-style work_auth coercion +
+      `_safe_str(work_auth_note)`, Overview form adds selectbox +
+      text_area between Link and submit, Save payload extends
+      with both. 9 new tests (2 TestInitDb, 1 TestUpdatePosition
+      roundtrip, 5 TestOverviewWorkAuthWidgets, 1 TestOverviewSave);
+      `TestNotesTabWidgets` text_area tight-bound bumps 1 → 2 per
+      its own in-line maintenance note. CHANGELOG Migration note
+      recorded. 319 tests green.
+- [ ] Sub-task 8+: remaining v1.3 alignment items per
       `memory/project_state.md` (schema overhauls incl.
-      `work_auth_note`, interviews sub-table, confirmation_* +
-      reminder_sent_* splits, `recommenders.confirmed` INTEGER,
-      cascade R1/R2/R3 rewire)
+      interviews sub-table, confirmation_* + reminder_sent_*
+      splits, `recommenders.confirmed` INTEGER, cascade R1/R2/R3
+      rewire)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -121,4 +139,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–6 shipped; Sub-task 7+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–7 shipped; Sub-task 8+ next)_
