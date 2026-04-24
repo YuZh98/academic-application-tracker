@@ -1,212 +1,181 @@
-# Project Roadmap
-_Big-picture tracker. Update the status column as phases complete._
+# Roadmap
+
+_Phase tracker, ship criteria, and backlog. Update the tier/phase status on completion;
+push deep detail to `CHANGELOG.md`._
 
 ---
 
 ## Vision
-A local, personal postdoc application tracker that answers one question clearly: **"What do I do today?"** — built in a way that can be extended to a general job tracker without rewriting existing code.
+
+A local, single-user postdoc application tracker that answers one question clearly:
+**"What do I do today?"** — built in a way that extends to a general job tracker
+without rewriting existing code.
 
 ---
 
-## Current State
-| Layer | Status |
-|-------|--------|
-| Design | Complete |
-| Markdown data files | Created and committed |
-| Git repository | Initialized |
-| Virtual environment | ✅ Created (.venv/) |
-| Data layer | ✅ database.py + exports.py stub |
-| SQLite database | ✅ postdoc.db initialized |
-| Python app | 🔄 Phase 3 merged to main via PR #3 (`c972385`). Phase 4 **T1 merged** via PR #4, **T2 merged** via PR #5. **Tier 3 COMPLETE** on `feature/phase-4-tier3-MaterialReadiness` — two `st.progress` bars (ready / pending) + CTA inside T2-C's right half-width column; locked empty-state copy + label pins; 271 tests green, 0 deprecation warnings. Next: T4 — Upcoming timeline. |
+## Current Status
+
+**v0.4.0** — Phase 4 Tier 3 (Materials Readiness) shipped to `main` at commit `5ac0f63`.
+271 tests green · zero deprecation warnings.
+See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
+
+**In flight:** v1.1 documentation refactor on branch `feature/docs-refactor-pre-t4` —
+drift fixes, new `docs/adr/` + `docs/dev-notes/`, testing/review conventions.
+
+**Next up:** Phase 4 Tier 4 (Upcoming timeline). Estimated 2.5 hr / 2 sessions.
 
 ---
 
-## Implementation Phases
+## v1 Ship Criteria
 
-### Phase 1 — Environment & Configuration ✅
-**Goal:** Clean, reproducible Python environment. All constants in one place.
+v1.0 ships when **all three** are true:
 
-| Task | Status |
-|------|--------|
-| Create `.venv` and install packages | ✅ Done (2026-04-15) |
-| Generate `requirements.txt` with pinned versions | ✅ Done (2026-04-15) |
-| Write `config.py` with all constants | ✅ Done (2026-04-15) |
+1. **All phases complete** — Phase 4 T4–T6, Phase 5 (Applications + Recommenders
+   pages), Phase 6 (exports), with Phase 7 polish bar to be set at T6 close.
+2. **Publish scaffolding** — `README.md`, `LICENSE`, `CHANGELOG.md` committed at
+   the repo root.
+3. **Working demo path** — either a live [Streamlit Cloud](https://streamlit.io/cloud)
+   instance or a recorded walkthrough GIF in `docs/`.
 
-**Installed versions:** `streamlit==1.56.0`, `plotly==6.7.0`, `pandas==3.0.2`
-**Commit:** `chore: set up venv and config.py`
-
----
-
-### Phase 2 — Data Layer ✅
-**Goal:** SQLite schema live; data readable and writable from Python.
-
-| Task | Status |
-|------|--------|
-| Write `database.py` with `init_db()` and all CRUD functions | ✅ Done (2026-04-16) |
-| Write `exports.py` stub (called after every write) | ✅ Done (2026-04-16) |
-| Create and initialise `postdoc.db` | ✅ Done (2026-04-16) |
-| Verify queries return correct DataFrames in isolation | ✅ 88/88 checks passed |
-
-**Commit message:** `feat: add database.py — SQLite schema and CRUD`
+### Nice-to-have (not binding)
+- Pre-commit (ruff) + GitHub Actions CI green on main
+- 300+ tests on main; zero deprecation warnings
+- Cold-clone to running app in ≤ 3 commands
 
 ---
 
-### Phase 3 — Opportunities Page
-**Goal:** First working UI. Can add and view positions.
+## Phases
 
-| Task | Status |
-|------|--------|
-| Stub `app.py` so Streamlit doesn't error on launch | ✅ Done (2026-04-17) |
-| `pages/1_Opportunities.py` skeleton with section markers | ✅ Done (2026-04-17) |
-| Quick-add form (6 fields, saves immediately) | ✅ Done (2026-04-17) |
-| Filter bar (status, priority, field) | ✅ Done (2026-04-18) — reviewed |
-| Positions table display (st.dataframe + deadline urgency) | ✅ Done (2026-04-18) — reviewed |
-| Row selection on positions table (T4-A) | ✅ Done (2026-04-19) |
-| Edit-panel shell — subheader + 4 tabs (T4-B) | ✅ Done (2026-04-19) |
-| Overview tab — 7 pre-filled edit widgets (T4-C) | ✅ Done (2026-04-19) |
-| Requirements tab — config-driven 3-way radios (T4-D) | ✅ Done (2026-04-19) |
-| Materials tab — state-driven checkboxes (T4-E) | ✅ Done (2026-04-19) |
-| Notes tab — text_area (T4-F) | ✅ Done (2026-04-19) |
-| Overview Save — update_position + toast + error + selection survival (T5-A) | ✅ Done (2026-04-20) |
-| Requirements Save (T5-B) | ✅ Done (2026-04-20) |
-| Materials Save (T5-C) | ✅ Done (2026-04-20) |
-| Notes Save (T5-D) | ✅ Done (2026-04-20) |
-| Delete with st.dialog confirm (T5-E) | ✅ Done (2026-04-20) |
-| Tier 5 pre-merge review + PR (T5-F) | ✅ Done (2026-04-20) — `reviews/phase-3-tier5-premerge.md` |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 1 | Environment & config | ✅ shipped (see CHANGELOG) |
+| 2 | Data layer (`database.py`, `exports.py` stub, `postdoc.db`) | ✅ shipped |
+| 3 | Opportunities page (quick-add, filter, table, edit, delete) | ✅ shipped @ v0.1.0 |
+| 4 | Dashboard (`app.py`) — 5 panels | 🔄 T1-T3 ✅ · T4-T6 pending |
+| 5 | Applications + Recommenders pages | ⏳ pending |
+| 6 | Full exports + Export page | ⏳ pending |
+| 7 | Polish (urgency colors, search, confirm dialogs, responsive) | ⏳ pending |
 
-**Commit message:** `feat: add Opportunities page with quick-add and full edit`
+### Phase 4 — Dashboard (detail)
 
----
+| Tier | Scope | Status |
+|------|-------|--------|
+| T1 | Shell + 4 KPI cards + 🔄 refresh + empty-DB hero | ✅ v0.2.0 (`f49ec5f`) |
+| T2 | Application funnel (Plotly + empty state + left half-column) | ✅ v0.3.0 (`96a5c76`) |
+| T3 | Materials readiness (two progress bars + CTA + empty state) | ✅ v0.4.0 (`5ac0f63`) |
+| T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | 🟠 next |
+| T5 | Recommender alerts (grouped by person; `mailto:` link) | ⏳ pending |
+| T6 | Pre-merge review + PR | ⏳ pending |
 
-### Phase 4 — Dashboard
-**Goal:** Home page answers "What do I do today?" at a glance.
-**Plan locked:** `PHASE_4_GUIDELINES.md` (6 tiers, ~9 sessions, ~9.5 hr; critical path linear).
-**Test file:** single `tests/test_app_page.py` (per decision C8).
+### Phase 5 — Applications + Recommenders (sketch)
 
-| Tier | Sub-task | Status |
-|------|----------|--------|
-| T1 | T1-A: `tests/test_app_page.py` scaffold + empty-DB smoke + 4-KPI shape test | ✅ Done (2026-04-20) |
-| T1 | T1-B: `app.py` shell — title + `init_db()` + `st.columns(4)` × `st.metric` placeholders | ✅ Done (2026-04-20) |
-| T1 | T1-C: top bar 🔄 refresh button + wire `count_by_status()` → 3 KPI values | ✅ Done (2026-04-21) |
-| T1 | T1-D: wire `get_upcoming_interviews()` → Next Interview (empty → `"—"`, per U3) | ✅ Done (2026-04-21) |
-| T1 | T1-E: fully-empty-DB hero callout + CTA (per U5) | ✅ Done (2026-04-21) |
-| T2 | T2-A: Plotly funnel from `count_by_status()` + `config.STATUS_COLORS` | ✅ Done (2026-04-21) |
-| T2 | T2-B: funnel empty-state render | ✅ Done (2026-04-21) |
-| T2 | T2-C: `st.columns(2)` left half (per U2) | ✅ Done (2026-04-21) |
-| T3 | T3-A: render `compute_materials_readiness()` | ✅ Done (2026-04-22) |
-| T3 | T3-B: `st.columns(2)` right half (per U2) | ✅ Done (2026-04-22) |
-| T4 | T4-A: merge deadlines + interviews DataFrame | Pending |
-| T4 | T4-B: urgency column from config thresholds | Pending |
-| T4 | T4-C: `st.dataframe(width="stretch")` render | Pending |
-| T4 | T4-D: timeline empty state | Pending |
-| T5 | T5-A: group `get_pending_recommenders` by recommender | Pending |
-| T5 | T5-B: per-person card + `mailto:` link | Pending |
-| T5 | T5-C: alerts empty state | Pending |
-| T6 | T6-A: pre-merge review doc | Pending |
-| T6 | T6-B: PR + merge + delete branch | Pending |
+- `pages/2_Applications.py` — submission/response/interview/result tracking per position
+- `pages/3_Recommenders.py` — letter log; alerts grouped by recommender; `mailto:`
+- **Design TBD (C13):** cross-table cascade "response_type='Offer' → positions.status"
+  moves into `database.py` as a `propagate_status=True` kwarg on
+  `upsert_application`. An ADR will land when the decision is finalized.
 
-**Decisions log (locked 2026-04-20):**
-- C3: keep `[🔄 Refresh]` button
-- C4: skip `@st.cache_data` in Phase 4 (revisit post-merge only if slowness measured)
-- C5: sync GUIDELINES.md §7 (`st.toast`) + §8 (no re-raise) — applied
-- C6: DESIGN.md §6 line 431 readiness scope fix — applied
-- C8: one test file `tests/test_app_page.py` for the whole dashboard
-- U2: Funnel + Readiness via `st.columns(2)`; stacking on narrow windows OK
-- U3: Next-Interview KPI shows `"—"` when empty
-- U5: fully-empty-DB hero callout at top of `app.py`
+### Phase 6 — Exports (sketch)
 
-**Commit message:** `feat: add dashboard home page`
+- Complete `exports.py` with three generators (`write_opportunities`,
+  `write_progress`, `write_recommenders`)
+- `pages/4_Export.py` with manual regenerate button + `st.download_button`
+- `exports.write_all()` already wired into every `database.py` writer; turns on
+  when the functions fill in
+
+### Phase 7 — Polish (sketch)
+
+- Urgency colors on the positions table
+- Search bar on Opportunities (currently filter-only)
+- `st.set_page_config(layout="wide")` across the app
+- Confirm dialogs audit
+- Responsive layout check
 
 ---
 
-### Phase 5 — Applications & Recommenders Pages
-**Goal:** Full lifecycle tracking in the UI.
+## Post-v1 Backlog
 
-| Task | Status |
-|------|--------|
-| Write `pages/2_Applications.py` | Pending |
-| Write `pages/3_Recommenders.py` | Pending |
-| Recommender alert grouping (one row per person across all positions) | Pending |
-| `mailto:` reminder link for overdue recommenders | Pending |
+Prioritized. Items land here when deferred from a phase; a P-tier is a rough
+ordering, not a commitment.
 
-**Commit message:** `feat: add Applications and Recommenders pages`
+### P1 — soon after v1
 
----
+| Item | Source | Notes |
+|------|--------|-------|
+| Rename `[OPEN]` → `[SAVED]` + `"Med"` → `"Medium"` | Design critique (friend #1) | Planned for v0.5 code-refactor; doc landed in v1.1 |
+| Presentation-layer `STATUS_LABELS` + `ARCHIVED_BUCKET` | Design critique | Same batch as rename |
+| Delete 🔄 Refresh button | Design critique (friend #2) | Same batch |
+| Soft-delete with undo toast | UX | Requires `archived_at` column + FK cascade adjustment |
+| Interactive funnel (click → filtered Opportunities) | Friend #3 | Plotly click events + `st.session_state` filter handoff |
+| Position search bar on Opportunities | UX | Substring search on `position_name` + `institute` |
+| Clickable `link` column via `st.column_config.LinkColumn` | UX | 10-line change |
+| Tooltip on "Tracked" KPI explaining semantics | UX | `st.metric(..., help=...)` |
 
-### Phase 6 — Exports
-**Goal:** Markdown files always in sync; downloadable from the app.
+### P2 — medium term
 
-| Task | Status |
-|------|--------|
-| Complete `exports.py` (all three markdown generators) | Pending |
-| Wire `exports.write_all()` into every `database.py` write function | Pending |
-| Write `pages/4_Export.py` with manual trigger and `st.download_button` | Pending |
-| Verify exported markdown matches current DB state | Pending |
+| Item | Source | Notes |
+|------|--------|-------|
+| AI-populate quick-add from listing URL | Friend #4 | New **Phase 8**; new dep (anthropic / openai SDK); `prefill: dict` hook in quick-add keeps v1 forward-compatible |
+| Cloud backup of `postdoc.db` (periodic upload to S3 / iCloud / Dropbox) | Friend #6 | Simplest today: drop the project folder into an iCloud/Dropbox-synced location |
+| File attachments on Materials panel (PDF/MD/TeX) | DESIGN.md §11 | Full sketch already in DESIGN; new `attachments` table + FK cascade + `shutil.rmtree` on delete |
+| Recommender edit inline within Opportunities edit panel | UX | Rather than only on separate Recommenders page |
+| Urgency colored badge / emoji prefix | Phase 7 | Column_config conditional formatting |
+| Offer details sub-table (start date, salary notes, decision deadline) | ADR-001 legacy | New `offers` table linked from `applications` |
+| Funding source field | ADR-001 legacy | Append to `QUICK_ADD_FIELDS` + schema |
+| Interview prep notes (format, interviewer, retrospective) | ADR-001 legacy | Extend `applications` table |
 
-**Commit message:** `feat: add exports.py and Export page`
+### P3 — eventually
 
----
-
-### Phase 7 — Polish
-**Goal:** Feels like a real app; no rough edges.
-
-| Task | Status |
-|------|--------|
-| Deadline urgency colors (red ≤ 7 days, yellow ≤ 14 days) | Pending |
-| Empty states ("No positions yet — use Quick Add above") | ✅ Done (2026-04-17) |
-| Search bar on Opportunities table | Pending |
-| Confirm dialog before delete | Pending |
-| Responsive layout check | Pending |
-
-**Commit message:** `feat: polish — colors, empty states, search, confirm dialog`
-
----
-
-## Backlog (Post-v1, Prioritized)
-
-These are accepted design decisions from ADR-001 that are intentionally deferred:
-
-| Item | Priority | Notes |
-|------|----------|-------|
-| Offer details sub-table (start date, salary notes, decision deadline) | P2 | Add `offers` table; link from `applications` |
-| Funding source field on positions | P2 | Add to `config.POSITION_FIELDS` and schema |
-| Interview prep notes (format, interviewer, how it went) | P2 | Extend `applications` table |
-| Application goal setting (target N applications) and progress bar | P2 | Store in a `settings` table; show on dashboard |
-| Source effectiveness chart (which source yields most interviews) | P3 | Derived from existing `source` + `status` fields |
-| Application timeline chart (when applications cluster around deadlines) | P3 | Derived from `applied_date` |
-| File attachments on Materials panel (PDF / Markdown / TeX upload, open, replace, remove) | P2 | New `attachments` table + `attachments/` folder on disk; checkbox auto-flips on upload; FK cascade + `rmtree` on delete. Full design in DESIGN.md §11 "Adding file attachments to the Materials panel". |
+| Item | Source | Notes |
+|------|--------|-------|
+| Application goal setting + progress bar on dashboard | ADR-001 legacy | New `settings` table |
+| Source effectiveness chart (sources → interviews conversion) | ADR-001 legacy | Derived; no new columns |
+| Application timeline chart (cluster around deadlines) | ADR-001 legacy | Derived from `applied_date` |
+| Keyboard shortcuts (N = new, / = search) | UX | Streamlit keyboard support limited |
+| Markdown rendering in notes | UX | `st.markdown` alongside `st.text_area` |
 
 ---
 
-## Future: General Job Tracker (v2)
+## v2 Vision — General Job Tracker
 
-The tracker is designed so this requires **editing `config.py` only** — no changes to `database.py`, `exports.py`, or page files.
+The tracker is designed so that reskinning to a different job context requires
+**editing `config.py` only** — no changes to `database.py`, `exports.py`, or page files.
 
 | Step | What changes |
 |------|-------------|
-| Set `TRACKER_PROFILE = "software_eng"` | One line in `config.py` |
-| Add `salary_range`, `equity`, `remote_ok` to `POSITION_FIELDS` | Three lines in `config.py` |
-| Add `req_coding_challenge` to `REQUIREMENT_DOCS` | One line in `config.py` |
-| Replace postdoc-specific status pipeline if needed | Edit `STATUS_VALUES` in `config.py` |
+| Set `TRACKER_PROFILE = "software_eng"` | One line (pending C2 wire-up) |
+| Add `salary_range`, `equity`, `remote_ok` to the schema via new columns | `REQUIREMENT_DOCS`-style additions or a parallel `JOB_FIELDS` block |
+| Add `req_coding_challenge` to `REQUIREMENT_DOCS` | One tuple; `init_db()` migrates |
+| Replace pipeline statuses if needed | Edit `STATUS_VALUES` + `STATUS_COLORS` + `TERMINAL_STATUSES` |
 
-The DB schema is generated from `config.py` at `init_db()` time — new fields appear automatically.
+A future profile-aware `init_db()` could conditionally include/exclude columns.
+v1 leaves postdoc-specific columns in place (NULL for non-postdoc rows) and
+hides them from the UI.
+
+**Backward compatibility:** users upgrading from the postdoc build to the
+generalized v2 keep their existing data. Schema is additive.
 
 ---
 
-## Out of Scope for v1
+## Explicitly Out of Scope (for v1)
+
 - User authentication (single user, local only)
-- Cloud deployment
-- Mobile-optimised layout
+- Cloud deployment (local-only app; backup is optional)
+- Mobile-first layout
 - Email integration (the `mailto:` link covers 90% of the need)
 - Calendar sync
-- AI-assisted position discovery or matching
+- AI-assisted position discovery or matching (P2 backlog handles ingestion, not discovery)
 
 ---
 
 ## Design Reference
-All architectural decisions, rationale, and critiques are recorded in this session's conversation history. Key documents committed to the repo:
-- `DESIGN.md` — master technical specification (schema, UI wireframes, data flow)
-- `GUIDELINES.md` — coding conventions (all sessions)
-- `PHASE_4_GUIDELINES.md` — Phase-4-specific rules, locked decisions, sub-tasks
-- `CLAUDE.md` — session memory
-- `roadmap.md` — this file
+
+Architectural decisions, technical specification, and coding conventions:
+
+- [`DESIGN.md`](DESIGN.md) — master technical specification (architecture,
+  schema, UI contracts, extension points)
+- [`GUIDELINES.md`](GUIDELINES.md) — coding conventions (read at every session start)
+- [`docs/adr/`](docs/adr/README.md) — architectural decision records (v1.1+)
+- [`docs/dev-notes/`](docs/dev-notes/) — Git workflow depth, Streamlit state gotchas
+- [`CHANGELOG.md`](CHANGELOG.md) — release history
+- [`reviews/`](reviews/) — pre-merge review docs, one per tier

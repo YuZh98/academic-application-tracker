@@ -1,0 +1,254 @@
+# Git Workflow — Depth
+
+This is the extended reference for the Git workflow on this project.
+`GUIDELINES.md §11` holds the 30-line summary — if the summary and this
+file disagree, the summary wins.
+
+---
+
+## 1. Branch strategy
+
+```
+main            ← always stable; only working code lands here
+feature/<name>  ← all new development; merge back via PR when done
+```
+
+**When to create a feature branch:**
+```bash
+git checkout -b feature/phase-3-opportunities
+```
+
+**When to merge back to main:**
+Only when the feature is complete and all tests pass.
+```bash
+git checkout main
+git merge feature/phase-3-opportunities --no-ff   # --no-ff preserves history
+```
+
+For a solo project you *can* work directly on main for small fixes, but use
+feature branches for any multi-session work. The discipline pays off when
+something breaks and you need to bisect to find the offending commit.
+
+---
+
+## 2. Commit frequency and granularity
+
+**Commit once per logical change — not once per session, not after every line.**
+
+### Too coarse
+```
+feat: Phase 2 complete
+```
+Lumps schema design, CRUD, dashboard queries, and tests into one diff.
+When a query bug is found later, you can't revert just the query.
+
+### Too fine
+```
+wip: started add_position
+wip: added conn.execute line
+wip: debugging
+```
+Meaningless history; can't roll back to anything meaningful.
+
+### Just right
+```
+feat: add init_db with schema and migration loop
+feat: add position CRUD (add, get, update, delete)
+feat: add upsert_application
+feat: add dashboard queries (count, deadlines, interviews, recommenders)
+test: add 98-test suite for config and database
+```
+
+The TDD three-commit cadence used throughout Phase 3/4:
+`test:` (red) → `feat:` (green) → `chore:` (tracker updates).
+Each commit leaves the repo shippable.
+
+---
+
+## 3. Commit message format
+
+```
+<type>: <short description>   ← subject line: imperative mood, ≤ 72 chars
+
+<optional body>               ← blank line, then longer explanation if needed
+<optional body>               ← what and WHY, not how (the diff shows how)
+```
+
+### Types
+
+| Type | When |
+|------|------|
+| `feat` | New feature or page |
+| `fix` | Bug fix |
+| `schema` | Database schema change |
+| `config` | Changes to `config.py` |
+| `refactor` | Code reorganisation, no behaviour change |
+| `test` | Adding or updating tests |
+| `docs` | DESIGN.md, GUIDELINES.md, roadmap.md, CHANGELOG.md, comments |
+| `review` | Pre-merge review docs (`reviews/*.md`) |
+| `chore` | requirements.txt, .gitignore, tooling, tracker rollups |
+
+### Scope (optional)
+
+For multi-tier phases, add the tier in parens:
+```
+feat(phase-4-t3): materials readiness panel in right half-width column
+test(phase-4-t3): materials readiness panel — 8 tests (red)
+```
+
+### Examples (subject only)
+
+```
+feat: add quick-add form to Opportunities page
+schema: split deadline_date from deadline_note
+config: add req_portfolio to REQUIREMENT_DOCS
+fix: materials readiness count excludes Optional docs
+docs: update roadmap — Phase 2 complete
+review(phase-4-t3): pre-merge review — zero bugs, approve + merge
+```
+
+### Example with body
+
+```
+fix: move PRAGMA foreign_keys inside try block in _connect()
+
+The PRAGMA call was outside the try/finally, so a rare connection-setup
+failure would leak the file descriptor. Moved inside the try so
+conn.close() is guaranteed via the finally block regardless of where
+the exception occurs.
+```
+
+Body length: use it when the "why" isn't obvious. Skip it for routine changes.
+
+---
+
+## 4. Staging discipline — review before you commit
+
+**Never `git add -A` or `git add .` blindly.** You will accidentally commit:
+- Debug `print()` statements left over from development
+- Leftover `TODO` lines that shouldn't ship
+- `.env` with API keys (should be gitignored — verify)
+- `postdoc.db` (gitignored — but worth knowing why it's dangerous)
+
+### Preferred workflow
+
+```bash
+# See what changed
+git status
+git diff                    # unstaged changes
+git diff --staged           # already staged (review this BEFORE committing)
+
+# Stage specific files
+git add config.py database.py
+
+# Or stage specific hunks (when a file has both keep-worthy and debug changes)
+git add -p database.py      # interactive: approve/skip each chunk
+```
+
+### Pre-commit checklist
+
+- [ ] `pytest tests/ -q` passes
+- [ ] `pytest -W error::DeprecationWarning tests/ -q` passes
+- [ ] No `print()` debug statements left in
+- [ ] No hardcoded paths or secrets
+- [ ] `postdoc.db` is **not** staged (check `git status`)
+- [ ] `git diff --staged` shows only what you intend to commit
+
+---
+
+## 5. What NEVER goes in git
+
+| File / pattern | Why | Handled via |
+|---|---|---|
+| `postdoc.db` | Personal data; binary; cannot be merged | `.gitignore` |
+| `.venv/` | Platform-specific binaries; hundreds of MB | `.gitignore` |
+| `.env`, `.env.*` | Secrets and credentials | `.gitignore` |
+| `__pycache__/`, `*.pyc` | Auto-generated bytecode | `.gitignore` |
+| `.DS_Store`, editor state | OS / editor clutter | `.gitignore` |
+| `CLAUDE.md`, `PHASE_*_GUIDELINES.md` | Internal session working memory | `.gitignore` (from v1.1) |
+| `exports/*.md` | **Exception: committed** — human-readable backup | — |
+
+If you accidentally commit a secret, deleting it in a later commit is
+**not enough** — the secret is still in history. You must rewrite
+history (`git filter-repo`). Avoid the problem entirely by checking
+`git diff --staged` before every commit.
+
+---
+
+## 6. Undoing mistakes — four levels
+
+Ordered from safest to most destructive.
+
+### Level 1 — Unstage (nothing lost)
+```bash
+git restore --staged database.py
+```
+Removes from staging area; file unchanged on disk.
+
+### Level 2 — Discard working-tree changes (permanent)
+```bash
+git restore database.py
+```
+File goes back to its last-committed state. **Irreversible** — make sure you
+meant it; `git stash` first if uncertain.
+
+### Level 3 — Undo the last commit, keep the changes
+```bash
+git reset --soft HEAD~1
+```
+The last commit is gone; changes are back in the staging area. Useful when
+you realise you committed the wrong files or message.
+
+### Level 4 — Revert safely (preserves history)
+```bash
+git revert <commit-hash>
+```
+Creates a new commit that undoes the target commit. Safest option because
+history is preserved; use this on shared branches.
+
+**Rule of thumb:** `restore` and `reset --soft` are safe for local work.
+Never force-push to a shared branch. If you are unsure, `git stash` first.
+
+---
+
+## 7. Tagging releases
+
+### Version scheme (from v1.1)
+
+- **v0.x.0** — pre-v1; each minor bump = one phase shipped
+  - `v0.1.0` Phase 3 (Opportunities)
+  - `v0.2.0` Phase 4 Tier 1 (dashboard shell + KPIs)
+  - `v0.3.0` Phase 4 Tier 2 (funnel)
+  - `v0.4.0` Phase 4 Tier 3 (materials readiness)
+- **v1.0.0** — first publishable release (see `roadmap.md` § v1 Ship Criteria)
+- **v1.x.y** — post-v1; minor = features, patch = fixes
+- **v2.0.0** — potentially the general job tracker
+
+### How to tag
+```bash
+git tag -a v0.4.0 <merge-commit-hash> -m "Phase 4 Tier 3 — Materials Readiness"
+git push origin v0.4.0
+```
+
+`-a` makes an annotated tag (has a message, author, date — the right default).
+Retroactive tagging is fine — the tag attaches to the historical commit.
+
+### Historical note
+
+Before v1.1, the tagging convention was `v1-phase-N`. Two such tags exist
+in history (`v1-phase-3`, `v1-phase-3-tier4-abc`) and are preserved. The
+`v0.x.0` scheme supersedes them going forward.
+
+---
+
+## 8. When you're stuck
+
+Order of escalation when `git` feels wrong:
+
+1. `git status` — read it literally
+2. `git log --oneline -20` — what's the recent history?
+3. `git reflog` — what did I actually do recently? (local-only safety net)
+4. `git stash` + make a new branch from `main` — isolate without losing anything
+5. Last resort: `git reset --hard` on a feature branch, re-apply from reflog
+
+Never `reset --hard` on `main` without a second pair of eyes.
