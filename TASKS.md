@@ -94,11 +94,36 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       `TestGetUpcomingInterviews`. CHANGELOG Migration note
       records the full SQL including the migrate-once gate
       rationale. 349 tests green.
-- [ ] Sub-task 9+: remaining v1.3 alignment items per
-      `memory/project_state.md` (cascade R1/R2/R3 rewire —
-      including the R2 body inside `add_interview` that Sub-task
-      8 left deferred; confirmation_* + reminder_sent_* splits;
-      `recommenders.confirmed` INTEGER)
+- [x] Sub-task 9: R1/R2/R3 pipeline auto-promotion cascade per
+      DESIGN §9.3 + §7 + D12 + D23. `upsert_application`
+      signature bumps to
+      `(position_id, fields, *, propagate_status=True) -> dict`
+      returning `{"status_changed", "new_status"}`; R1 (applied_date
+      NULL→set + status=SAVED guard → STATUS_APPLIED) and R3
+      (response_type=Offer + status NOT IN TERMINAL_STATUSES →
+      STATUS_OFFER) both fire inside the primary-write transaction
+      (atomicity via `_connect()` rollback). `add_interview` R2
+      body (Sub-task 8 stub) now wired: status=APPLIED guard →
+      STATUS_INTERVIEW, count-free per §9.3 narrative. `status_changed`
+      compares status STRING pre/post so the STATUS_OFFER + R3
+      self-assignment reads as no-change. New
+      `is_all_recs_submitted(position_id) -> bool` helper
+      (Applications group); zero-recs = True (vacuous truth per D23).
+      `compute_materials_readiness` swaps hardcoded tuple for
+      `(config.STATUS_SAVED, config.STATUS_APPLIED, config.STATUS_INTERVIEW)`
+      — closes the C1 carry-over from Sub-task 5. 40 new tests:
+      4 R1 isolation, 9 R3 isolation (incl. 3-terminal parametrize),
+      7 combined R1+R3 matrix, 3 indicator shape, 1 upsert atomicity,
+      9 R2 isolation (incl. 3-terminal parametrize), 1 add_interview
+      atomicity, 5 is_all_recs_submitted, 1 sentinel for the
+      materials-readiness alias swap. Pure behavioural change — no
+      schema, no Migration entry. 389 tests green.
+- [ ] Sub-task 10+: remaining v1.3 alignment items per
+      `memory/project_state.md` (confirmation_email split into
+      `confirmation_received INTEGER` + `confirmation_date TEXT`;
+      `recommenders.reminder_sent` TEXT → INTEGER flag +
+      `reminder_sent_date TEXT` split; `recommenders.confirmed`
+      TEXT → INTEGER 0/1/NULL)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -119,9 +144,12 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
 These are the code-only changes that the v1.1 doc refactor flagged but
 deferred. All require separate approval before execution.
 
-- [ ] **C1** `database.py compute_materials_readiness` — replace hardcoded
+- [x] **C1** `database.py compute_materials_readiness` — replace hardcoded
       `("[OPEN]", "[APPLIED]", "[INTERVIEW]")` with
       `(config.STATUS_OPEN, STATUS_APPLIED, STATUS_INTERVIEW)`
+      — shipped as v1.3 alignment Sub-task 9 (targeting the renamed
+      `config.STATUS_SAVED`/`STATUS_APPLIED`/`STATUS_INTERVIEW` trio;
+      pinned by `test_active_statuses_drive_from_config_aliases`)
 - [ ] **C2** Delete unused `TRACKER_PROFILE` from `config.py`
 - [x] **C6/C7** Config-drive schema DEFAULTs in `init_db()` DDL
       (`DEFAULT '{config.STATUS_VALUES[0]}'` / `DEFAULT '{config.RESULT_DEFAULT}'`)
@@ -166,4 +194,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–8 shipped; Sub-task 9+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–9 shipped; Sub-task 10+ next)_
