@@ -60,11 +60,22 @@ def init_db() -> None:
         req_done_cols += f",\n    {req_col:<30} TEXT    DEFAULT 'No'"
         req_done_cols += f",\n    {done_col:<30} INTEGER DEFAULT 0"
 
+    # DESIGN §6.2: DDL DEFAULTs are config-driven. The two DEFAULT
+    # clauses below interpolate config.STATUS_VALUES[0] (first pipeline
+    # stage — currently '[OPEN]', will become '[SAVED]' once the rename
+    # lands in config.py) and config.RESULT_DEFAULT into the CREATE TABLE
+    # strings, so renaming either constant is a config-only edit — no
+    # DDL change, only the one-shot UPDATE migration spelled out in
+    # §6.3. The interpolated values come exclusively from config (never
+    # user input), so the f-string path is safe per GUIDELINES §5.
+    status_default = config.STATUS_VALUES[0]
+    result_default = config.RESULT_DEFAULT
+
     with _connect() as conn:
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS positions (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                status           TEXT    NOT NULL DEFAULT '[OPEN]',
+                status           TEXT    NOT NULL DEFAULT '{status_default}',
                 priority         TEXT,
                 created_at       TEXT    DEFAULT (date('now')),
                 position_name    TEXT    NOT NULL,
@@ -89,7 +100,7 @@ def init_db() -> None:
             )
         """)
 
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS applications (
                 position_id          INTEGER PRIMARY KEY,
                 applied_date         TEXT,
@@ -100,7 +111,7 @@ def init_db() -> None:
                 interview1_date      TEXT,
                 interview2_date      TEXT,
                 result_notify_date   TEXT,
-                result               TEXT    DEFAULT 'Pending',
+                result               TEXT    DEFAULT '{result_default}',
                 notes                TEXT,
                 FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
             )
