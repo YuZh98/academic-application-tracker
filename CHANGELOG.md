@@ -78,6 +78,36 @@ columns).
   SQL, calls `init_db()`, and pins the three-way translation plus
   idempotence on a second `init_db()`.
 
+### Changed — v1.3 alignment Sub-task 3 (branch `feature/align-v1.3`)
+
+Sub-task 3 swaps the `WORK_AUTH_OPTIONS` and `FULL_TIME_OPTIONS`
+vocabularies to the v1.3 spec (DESIGN.md §5.1 + D22). Both columns
+stay plain TEXT with no DDL constraint, so no automatic schema
+migration runs; any dev-DB rows carrying legacy strings remain as
+orphan TEXT until manually translated (see Migration below).
+
+- **`config.py`** — vocabulary swaps per DESIGN §5.1:
+  - `WORK_AUTH_OPTIONS`: `["Any","OPT","J-1","H1B","No Sponsorship","Ask"]`
+    (6 values) → `["Yes","No","Unknown"]` (3 values). Paired with a
+    future `work_auth_note` TEXT column (separate sub-task) so the
+    enum stays filter-friendly while nuance lands in free text (D22).
+  - `FULL_TIME_OPTIONS`: `["Yes","No","Part-time"]` →
+    `["Full-time","Part-time","Contract"]`. Explicit employment-type
+    vocabulary replaces the ambiguous Yes/No pair (Yes = full-time?
+    Yes = available?).
+  - Inline comments on both constants cross-reference the v1.3
+    migration note below.
+- **`tests/test_config.py`** — two new `_spec_values` tests
+  (`test_work_auth_options_spec_values`,
+  `test_full_time_options_spec_values`) pinning the literal lists;
+  follows the Sub-task 2 precedent. Generic non-empty parametrize
+  entries at lines 118–119 stay (they cover list-shape but no longer
+  catch vocabulary drift — the new pins are the vocabulary contract).
+- **No page / schema / database changes** — neither constant is
+  consumed by any widget yet (the `work_auth`/`work_auth_note` UI and
+  the `work_auth_note` TEXT column land in later sub-tasks); both DB
+  columns are already plain TEXT so no DDL edit is needed.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -101,6 +131,50 @@ Idempotent: second and later runs are no-ops because `ELSE req_<col>`
 passes `'Yes'`, `'No'`, `'Optional'`, and any other value through
 unchanged. Column names come from `config.REQUIREMENT_DOCS` (never user
 input). No schema rebuild, no data loss, no downtime.
+
+**Sub-task 3** — no automatic migration runs because neither
+`positions.work_auth` nor `positions.full_time` has a DDL constraint;
+legacy values (if any) stay in place as orphan TEXT. No selectbox
+currently renders either column, so the page keeps working. The values
+will become meaningful again when the Overview-tab UI lands in a later
+sub-task — at that point any row with a legacy string will fall
+through the Opportunities-page pre-seed coercion (mirroring the
+priority / status `F2` guard at `pages/1_Opportunities.py:379-386`)
+and show the first option.
+
+If a dev DB does carry legacy values that should be preserved, run the
+translations manually. These require judgment — old values do not map
+1-to-1 onto the new vocabularies, so review each row before executing:
+
+```sql
+-- work_auth — old 6 values → new 3 values.
+-- "Any" / "OPT" / "J-1" / "H1B" are postings that would accept the
+-- applicant; map to 'Yes' and record the visa detail in the future
+-- work_auth_note column. "No Sponsorship" → 'No'. "Ask" → 'Unknown'.
+UPDATE positions
+   SET work_auth = CASE work_auth
+                     WHEN 'Any'            THEN 'Yes'
+                     WHEN 'OPT'            THEN 'Yes'
+                     WHEN 'J-1'            THEN 'Yes'
+                     WHEN 'H1B'            THEN 'Yes'
+                     WHEN 'No Sponsorship' THEN 'No'
+                     WHEN 'Ask'            THEN 'Unknown'
+                     ELSE work_auth
+                   END
+ WHERE work_auth IN ('Any','OPT','J-1','H1B','No Sponsorship','Ask');
+
+-- full_time — old Yes/No/Part-time → new Full-time/Part-time/Contract.
+-- "Part-time" survives unchanged. "Yes" most naturally → 'Full-time'.
+-- "No" is genuinely ambiguous (could be Part-time or Contract);
+-- preferred outcome: leave these rows for manual review.
+UPDATE positions
+   SET full_time = 'Full-time'
+ WHERE full_time = 'Yes';
+-- SELECT id, position_name, full_time FROM positions WHERE full_time = 'No';
+```
+
+Idempotent on a clean DB (no rows match the `WHERE` clauses). Skip
+entirely on a DB that was only ever populated under v1.3.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 
