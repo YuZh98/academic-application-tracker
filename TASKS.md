@@ -35,10 +35,25 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       No DDL edit (Sub-task 4 config-drive carries the DEFAULT swap).
       Acceptance grep clean: `grep -nE '\[OPEN\]|STATUS_OPEN|"Med"'
       *.py pages/ tests/` → 0 hits. 305 tests green (+5 new pins).
-- [ ] Sub-task 6+: remaining v1.3 alignment items per
+- [x] Sub-task 6: `positions.updated_at` column + `AFTER UPDATE`
+      trigger per DESIGN §6.2 + D25. `CREATE TABLE` gains
+      `updated_at TEXT DEFAULT (datetime('now'))`; `init_db()`
+      migration block gains `PRAGMA table_info`-guarded
+      `ALTER TABLE positions ADD COLUMN updated_at TEXT` +
+      one-shot backfill `UPDATE ... WHERE updated_at IS NULL`
+      (SQLite disallows non-constant DEFAULT on ALTER against a
+      non-empty table); `CREATE TRIGGER IF NOT EXISTS
+      positions_updated_at` stamps the row on every UPDATE, with
+      loop prevention riding on SQLite's default
+      `recursive_triggers = OFF`. 5 new `TestInitDb` tests (column
+      spec, trigger registered, INSERT via DDL default, UPDATE via
+      trigger + 1.1 s sleep, pre-v1.3 migration path + idempotence).
+      CHANGELOG Migration note recorded. 310 tests green.
+- [ ] Sub-task 7+: remaining v1.3 alignment items per
       `memory/project_state.md` (schema overhauls incl.
-      `work_auth_note`, `updated_at` trigger, interviews sub-table,
-      confirmation_*/reminder_sent_* splits, cascade R1/R2/R3 rewire)
+      `work_auth_note`, interviews sub-table, confirmation_* +
+      reminder_sent_* splits, `recommenders.confirmed` INTEGER,
+      cascade R1/R2/R3 rewire)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -106,4 +121,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–4 shipped; Sub-task 5+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–6 shipped; Sub-task 7+ next)_
