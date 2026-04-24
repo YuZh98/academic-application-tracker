@@ -373,6 +373,109 @@ Next-Interview KPI consumes.
   (equivalent semantic under row-per-interview shape); class
   docstring rewritten for the new column contract.
 
+### Changed — v1.3 alignment Sub-task 9 (branch `feature/align-v1.3`)
+
+Sub-task 9 wires the R1/R2/R3 pipeline auto-promotion cascades across
+`upsert_application` and `add_interview`, adds the
+`is_all_recs_submitted` query helper, and swaps the hardcoded
+`("[SAVED]", "[APPLIED]", "[INTERVIEW]")` tuple in
+`compute_materials_readiness` for `config.STATUS_*` aliases (closes the
+TASKS.md C1 carry-over that's been open since Sub-task 5). Pure
+behavioural / refactor change — no schema edit, so no Migration entry.
+DESIGN.md v1.3 §9.3 + §7 + D12 + D23.
+
+- **`database.py — upsert_application`** signature bumps to
+  `(position_id, fields, *, propagate_status: bool = True) -> dict`,
+  returning `{"status_changed": bool, "new_status": str | None}`.
+  Existing call sites that ignored the `None` return continue to
+  work; the empty-fields early return still no-ops and hands the
+  caller the indicator shape (both keys falsy) so unpacking is
+  unconditional.
+  - **R1**: when `pre_applied_date IS NULL AND
+    fields["applied_date"] IS NOT NULL`, emit
+    `UPDATE positions SET status = STATUS_APPLIED
+     WHERE id = ? AND status = STATUS_SAVED`. Scoped to the
+    NULL→non-NULL transition on the `applied_date` column rather
+    than every touch, so a later upsert that merely updates the
+    date leaves status alone.
+  - **R3**: when `fields["response_type"] == "Offer"`, emit
+    `UPDATE positions SET status = STATUS_OFFER
+     WHERE id = ? AND status NOT IN TERMINAL_STATUSES`. Terminal
+    guard in the WHERE prevents regression. The self-assignment
+    that fires when the pre-state is already STATUS_OFFER reads
+    as "no change" in the indicator because `status_changed`
+    compares the status *string* pre/post, not whether an UPDATE
+    executed.
+- **`database.py — add_interview`** cascade body (Sub-task 8 left
+  the body deferred for API stability) now emits R2:
+  `UPDATE positions SET status = STATUS_INTERVIEW
+   WHERE id = application_id AND status = STATUS_APPLIED`.
+  Count-free per DESIGN §9.3 narrative — status guard alone handles
+  all edges, including the back-edit-to-APPLIED-retaining-existing-
+  interviews scenario that a count-based variant would miss.
+- **`database.py — is_all_recs_submitted(position_id) -> bool`**
+  new helper in the Applications group. Returns True iff every
+  recommender for the position has a non-NULL, non-empty
+  `submitted_date`. Zero-recs position returns True (vacuous truth)
+  per D23's "summary that could be computed" framing — "nothing
+  outstanding" holds trivially, and downstream aggregators like
+  "is everything ready?" compose cleanly. Empty string is treated
+  as equal to NULL (the page writes `""` when clearing a date field
+  per the Notes-tab round-trip contract).
+- **`database.py — compute_materials_readiness`** swaps the
+  hardcoded `("[SAVED]", "[APPLIED]", "[INTERVIEW]")` tuple for
+  `(config.STATUS_SAVED, config.STATUS_APPLIED, config.STATUS_INTERVIEW)`.
+  Read at call time, not module load, so a future rename flows
+  through immediately. Docstring updated to reference the alias
+  names.
+- **Atomicity** (DESIGN §9.3): every cascade runs inside the same
+  `with _connect() as conn:` block as its primary write. When the
+  cascade UPDATE raises (e.g. a bound parameter the SQLite driver
+  cannot adapt), the context manager's except clause rolls back
+  the whole transaction — neither the primary write nor any earlier
+  cascade UPDATE persists.
+- **`tests/test_database.py`** — 40 new tests structured by concern:
+  - `TestUpsertApplicationR1` (4) — isolation: SAVED→APPLIED
+    promote, applied_date-already-set noop, non-SAVED status
+    guard, propagate_status=False suppression.
+  - `TestUpsertApplicationR3` (9 incl. 3-value terminal
+    parametrize) — SAVED/APPLIED/INTERVIEW promote to OFFER,
+    already-OFFER self-assignment reads as no-change, terminal
+    guard blocks CLOSED/REJECTED/DECLINED, propagate_status=False
+    suppression, non-Offer response_type does nothing.
+  - `TestUpsertApplicationR1R3Matrix` (7 incl. 3-value terminal
+    parametrize) — every row of the DESIGN §9.3 combined-cascade
+    matrix pinned (5 non-terminal pre-states + 3 terminals).
+  - `TestUpsertApplicationIndicator` (3) — `inspect.signature`
+    pin on the keyword-only `propagate_status=True`, return-shape
+    pin, empty-fields return.
+  - `TestUpsertApplicationAtomicity` (1) — monkeypatches
+    `config.STATUS_APPLIED` to a non-bindable `object()`, forcing
+    R1's UPDATE to raise `InterfaceError`, asserts primary write
+    rolls back (applied_date stays NULL, status stays SAVED).
+  - `TestAddInterviewR2` (9 incl. 3-value terminal parametrize)
+    — APPLIED→INTERVIEW promotion, SAVED guard, INTERVIEW
+    idempotence, OFFER guard, terminal guard, propagate_status
+    opt-out, and the explicit "back-edit to APPLIED retaining
+    existing interviews" scenario from the DESIGN §9.3 narrative.
+  - `TestAddInterviewAtomicity` (1) — sibling of the upsert
+    atomicity test for R2.
+  - `TestIsAllRecsSubmitted` (5) — vacuous-truth on zero recs,
+    all-submitted True, any-unsubmitted False, empty-string
+    counts as unsubmitted, scoped to position_id.
+  - `TestComputeMaterialsReadiness.test_active_statuses_drive_
+    from_config_aliases` (1) — sentinel pattern (Sub-task 4
+    precedent): monkeypatches the three aliases to strings the
+    DB never holds, asserts the aggregation collapses to zero.
+  Shared helper `_force_position_status(pid, status)` at module
+  scope for raw-SQL pre-state staging (the user-facing writers
+  would themselves fire the cascade and pollute the scenario).
+- **`tests/test_database.py`** — existing
+  `TestAddInterview.test_returns_indicator_dict` docstring updated
+  to reflect the Sub-task 9 semantics (the assertions still hold
+  because the seed's STATUS_SAVED pre-state doesn't trip R2's
+  STATUS_APPLIED guard, not because the cascade body is absent).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -588,6 +691,13 @@ un-cleared legacy data (hand-built, partial failed migration) is
 out of scope for the auto-path; recover with a one-time manual run
 of steps (b) + (c). No rebuild, no data loss, no downtime on the
 normal v1.2 → v1.3 upgrade.
+
+**Sub-task 9** requires no migration — the cascade rewire + new
+`is_all_recs_submitted` helper + `compute_materials_readiness`
+alias swap are all pure behavioural / refactor changes. Existing
+applications / interviews / recommenders rows persist untouched;
+`upsert_application` and `add_interview` return a dict now instead
+of `None`, but existing callers ignored the return value.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 
