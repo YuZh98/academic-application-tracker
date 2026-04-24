@@ -17,6 +17,36 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — v1.3 alignment (branch `feature/align-v1.3`)
+
+Sub-task 1 of the DESIGN-to-codebase alignment pass. Pure additions to
+`config.py` — no existing values changed, no schema impact.
+
+- **`config.py`** — three new constants per DESIGN.md v1.3 §5.1:
+  - `VALID_PROFILES: set[str] = {"postdoc"}` — guards `TRACKER_PROFILE`
+  - `STATUS_LABELS: dict[str, str]` — storage-to-UI map, bracket-stripped
+    (`"[OPEN]"→"Open"`, …); every user-facing status surface must look
+    up through this dict per DESIGN §8.0 Status label convention
+  - `INTERVIEW_FORMATS: list[str] = ["Phone","Video","Onsite","Other"]` —
+    vocabulary for the upcoming `interviews.format` column (DESIGN §6.2)
+- **`config.py`** — three new import-time invariants per DESIGN.md v1.3 §5.2:
+  - #1: `TRACKER_PROFILE in VALID_PROFILES`
+  - #3: `set(STATUS_VALUES) == set(STATUS_LABELS)`
+  - #8: `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS`
+  - Pre-existing guards also annotated with DESIGN §5.2 numbering
+    (#2 STATUS_COLORS coverage, #4 TERMINAL_STATUSES subset,
+    #5 FUNNEL_BUCKETS multiset, #6 FUNNEL_DEFAULT_HIDDEN ⊆ labels,
+    #7 REQUIREMENT_LABELS coverage)
+- **`tests/test_config.py`** — 22 new tests pinning every new constant
+  and every new/existing-but-unpinned invariant. Synthetic-drift tests
+  (per existing `test_status_guard_fires_on_drift` precedent) exercise
+  each guard; a fresh `importlib.reload("config")` test covers the
+  module-level execution path
+
+### Migration
+
+Sub-task 1 requires no migration — all additions are Python constants.
+
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 
 - **DESIGN.md** — drift pass (C1–C13) + restructured: tech stack reflects
@@ -56,14 +86,18 @@ are a separate branch (`feature/code-refactor-pre-t4`) awaiting approval:
 
 - Rename `[OPEN]` → `[SAVED]`; `PRIORITY_VALUES` `"Med"` → `"Medium"`
   (with one-shot UPDATE migrations)
-- Add presentation-layer `STATUS_LABELS` and `ARCHIVED_BUCKET` grouping
-  of terminal statuses on the dashboard funnel
+- `ARCHIVED_BUCKET` grouping of terminal statuses on the dashboard funnel
+  (note: the `STATUS_LABELS` half of this item shipped in the v1.3
+  alignment pass above; the funnel-bucket half is already live in
+  `FUNNEL_BUCKETS` as the `"Archived"` entry)
 - Delete the 🔄 Refresh button on `app.py`
 - C1: `database.py compute_materials_readiness` use `config.STATUS_OPEN/...`
   aliases instead of hardcoded tuple
-- C2: delete unused `TRACKER_PROFILE`
+- C2: ~~delete unused `TRACKER_PROFILE`~~ — superseded by DESIGN v1.3 §5.1,
+  which locks `TRACKER_PROFILE` + `VALID_PROFILES` as the v1 API
 - C6/C7: config-drive schema DEFAULTs in `init_db()`
-- C12: add `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` assertion
+- ~~C12: add `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` assertion~~
+  — shipped in the v1.3 alignment pass above (invariant #8)
 - Set `st.set_page_config(layout="wide", ...)` on `app.py` and pages
 - Tooltip on "Tracked" KPI
 
