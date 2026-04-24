@@ -1409,9 +1409,11 @@ class TestAddInterview:
 
     def test_returns_indicator_dict(self, db):
         """DESIGN §7 + §9.3: writers that can promote return an indicator
-        dict. For add_interview in Sub-task 8, the cascade body is
-        deferred to Sub-task 9, so status_changed stays False and
-        new_status stays None even when propagate_status=True."""
+        dict with id + status_changed + new_status keys. A fresh
+        position seeds at STATUS_SAVED, and R2's guard requires
+        STATUS_APPLIED, so the cascade doesn't fire here — the indicator
+        reads False/None. The R2-fires path is covered by
+        TestAddInterviewR2 in the Sub-task 9 coverage block."""
         pid = database.add_position(make_position())
         result = database.add_interview(pid, {
             "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
@@ -1419,10 +1421,7 @@ class TestAddInterview:
         assert isinstance(result, dict)
         assert "id" in result and isinstance(result["id"], int)
         assert result["id"] >= 1
-        assert result["status_changed"] is False, (
-            "Sub-task 8: R2 cascade body is deferred to Sub-task 9 — "
-            "status_changed must stay False regardless of propagate_status."
-        )
+        assert result["status_changed"] is False
         assert result["new_status"] is None
 
     def test_auto_assigns_sequence_1_for_first_interview(self, db):
