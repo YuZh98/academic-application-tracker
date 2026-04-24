@@ -15,9 +15,15 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       `config.py` vocab swap, `database.py` DDL `DEFAULT 'No'` + one-shot
       UPDATE migration in `init_db()`, `pages/1_Opportunities.py`
       Materials-tab filter `== "Yes"`; CHANGELOG Migration note landed.
-- [ ] Sub-task 3+: remaining v1.3 alignment items per
+- [x] Sub-task 3: `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary
+      swap per DESIGN §5.1 + D22 — `config.py` lists collapsed to
+      Yes/No/Unknown and Full-time/Part-time/Contract; 2 new `_spec_values`
+      tests; no DDL change (both columns plain TEXT); CHANGELOG Migration
+      note documents manual translation for dev DBs carrying legacy values.
+- [ ] Sub-task 4+: remaining v1.3 alignment items per
       `memory/project_state.md` (status rename `[OPEN]→[SAVED]`,
-      `"Med"→"Medium"`, vocab + schema overhauls, cascade rewire)
+      `"Med"→"Medium"`, schema overhauls incl. `work_auth_note`,
+      interviews sub-table, cascade rewire)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -82,4 +88,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-23 (v1.3 alignment — Sub-task 2 merged; Sub-task 3 next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–3 shipped; Sub-task 4+ next)_

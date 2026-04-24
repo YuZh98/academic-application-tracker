@@ -16,13 +16,17 @@ without rewriting existing code.
 ## Current Status
 
 **v0.4.0** — Phase 4 Tier 3 (Materials Readiness) shipped to `main` at commit `5ac0f63`.
-271 tests green · zero deprecation warnings.
+v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** v1.1 documentation refactor on branch `feature/docs-refactor-pre-t4` —
-drift fixes, new `docs/adr/` + `docs/dev-notes/`, testing/review conventions.
+**In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
+Sub-tasks 1–3 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap).
+299 tests green · zero deprecation warnings.
 
-**Next up:** Phase 4 Tier 4 (Upcoming timeline). Estimated 2.5 hr / 2 sessions.
+**Next up:** remaining v1.3 alignment items (status rename `[OPEN]→[SAVED]`,
+`PRIORITY_VALUES` `"Med"→"Medium"`, schema overhauls, cascade rewire),
+then Phase 4 Tier 4 (Upcoming timeline).
 
 ---
 
