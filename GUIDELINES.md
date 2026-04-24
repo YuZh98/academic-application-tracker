@@ -84,7 +84,9 @@ importing `exports` lazily inside each write function (not at module top).
 - **Form ids** end with `_form` to avoid collision with widget keys inside:
   `edit_notes_form` contains the widget `edit_notes`
 - **Internal sentinels** start with `_` and describe state, not widgets:
-  `_edit_form_sid`, `_delete_target_id`, `_skip_table_reset`
+  `_edit_form_sid`, `_delete_target_id`, `_skip_table_reset`,
+  `_active_edit_tab` (Opportunities edit-panel tab selector),
+  `_funnel_expanded` (dashboard `[expand]` toggle)
 
 ### Page files
 - Filename format: `N_Title.py` where `N` is the sort-order integer (`1_Opportunities.py`)
@@ -172,18 +174,18 @@ def add_position(fields: dict) -> int:
 - Always import the constant and use it:
 ```python
 # GOOD
-from config import STATUS_VALUES, STATUS_OPEN
-st.selectbox("Status", STATUS_VALUES)
-if row["status"] == STATUS_OPEN: ...
+from config import STATUS_VALUES, STATUS_SAVED, STATUS_LABELS
+st.selectbox("Status", STATUS_VALUES, format_func=STATUS_LABELS.get)
+if row["status"] == STATUS_SAVED: ...
 
 # BAD
-st.selectbox("Status", ["[OPEN]", "[APPLIED]", ...])
-if row["status"] == "[OPEN]": ...
+st.selectbox("Status", ["[SAVED]", "[APPLIED]", ...])
+if row["status"] == "[SAVED]": ...
 ```
 - When adding a new document type (e.g., "Portfolio"), add it to `REQUIREMENT_DOCS`
   in `config.py` only. The form, schema migration, and export pick it up.
 - **Grep rule (pre-merge check):**
-  `grep -nE "\[OPEN\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py` must return zero hits.
+  `grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py` must return zero hits.
 
 ---
 
@@ -191,9 +193,16 @@ if row["status"] == "[OPEN]": ...
 
 ### Controlled inputs for enumerated values
 ```python
-status = st.selectbox("Status", config.STATUS_VALUES)
+status = st.selectbox(
+    "Status", config.STATUS_VALUES,
+    format_func=config.STATUS_LABELS.get,   # display labels; storage stays raw
+)
 priority = st.selectbox("Priority", config.PRIORITY_VALUES)
 ```
+Status selectboxes go through `format_func=config.STATUS_LABELS.get` per
+DESIGN §8.0 — storage keeps raw bracketed sentinels, UI shows stripped
+labels. Selectboxes with an `"All"` passthrough wrap the getter in a
+lambda so the sentinel renders unchanged: `lambda v: STATUS_LABELS.get(v, v)`.
 
 ### Dates via `st.date_input()` — never `st.text_input()`
 ```python

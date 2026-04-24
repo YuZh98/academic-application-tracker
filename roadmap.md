@@ -20,7 +20,7 @@ v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–13 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+Sub-tasks 1–14 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
 migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
 DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
 `config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
@@ -63,7 +63,14 @@ the edit-panel tab-strip swapped from `st.tabs` to
 so the Delete button could be relocated BELOW the panel, gated by
 `active_tab == "Overview"` — on non-Overview tabs the button is no
 longer in the DOM at all (pre-Sub-task-13 it was CSS-hidden but still
-present). 441 tests green · zero deprecation warnings.
+present), and the v1.3 doc-alignment sweep updating `GUIDELINES.md`
+(stage-0 alias + grep rule + status-selectbox example flipped from
+`STATUS_OPEN`/`[OPEN]` to `STATUS_SAVED`/`[SAVED]`;
+`format_func=STATUS_LABELS.get` + `_active_edit_tab` /
+`_funnel_expanded` sentinels added per DESIGN §8.0 + Sub-tasks 12/13),
+`CHANGELOG.md`, `TASKS.md`, and this file to match DESIGN v1.3 — pure
+docs change, no schema, no test drift. 441 tests green · zero
+deprecation warnings.
 
 **Next up:** push branch, open PR, merge to main — all v1.3 alignment
 items now landed. After merge, resume Phase 4 Tier 4 (Upcoming
