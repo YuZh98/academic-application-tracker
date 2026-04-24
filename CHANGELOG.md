@@ -928,6 +928,96 @@ page-side gap left by that sub-task.
     to `[STATUS_LABELS[v] for v in STATUS_VALUES]` (AppTest
     surfaces `.options` as post-format_func display strings).
 
+### Changed — v1.3 alignment Sub-task 14 (branch `feature/align-v1.3`)
+
+Sub-task 14 is the v1.3 doc-alignment sweep across the non-DESIGN
+project docs. Closes the last v1.3-alignment item before the branch
+pushes to a PR. Pure docs change — no schema, no new queries, no
+config edit, no test drift. Scope: `GUIDELINES.md`, `CHANGELOG.md`,
+`roadmap.md`, `TASKS.md`, `docs/ui/wireframes.md`,
+`docs/dev-notes/extending.md`.
+
+- **`GUIDELINES.md` §3 (Naming Conventions — widget keys
+  sub-section)** — sentinel list gains `_active_edit_tab`
+  (Opportunities edit-panel tab selector, landed Sub-task 13) and
+  `_funnel_expanded` (dashboard `[expand]` toggle, landed
+  Sub-task 12). The two new sentinels follow the existing
+  `_edit_form_sid` / `_delete_target_id` / `_skip_table_reset`
+  precedent — leading `_` marks internal state, not a widget key.
+- **`GUIDELINES.md` §6 (Config Usage — status selectbox
+  example)** — alias + literal swap for the Sub-task 5 rename
+  ([OPEN] → [SAVED]):
+  - `from config import STATUS_VALUES, STATUS_OPEN` →
+    `from config import STATUS_VALUES, STATUS_SAVED, STATUS_LABELS`.
+  - `st.selectbox("Status", STATUS_VALUES)` gains
+    `format_func=STATUS_LABELS.get` so the GOOD example matches
+    DESIGN §8.0 Status label convention (the UI surface convention
+    Sub-task 13 actually enforced on `pages/1_Opportunities.py`).
+  - `if row["status"] == STATUS_OPEN:` →
+    `if row["status"] == STATUS_SAVED:`.
+  - BAD example literal list swaps `["[OPEN]", "[APPLIED]", ...]`
+    → `["[SAVED]", "[APPLIED]", ...]` and the BAD equality check
+    swaps `"[OPEN]"` → `"[SAVED]"`.
+- **`GUIDELINES.md` §6 pre-merge grep rule** —
+  `grep -nE "\[OPEN\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py`
+  → `grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py`.
+  The rule's purpose (catch hardcoded stage-0/1/2 literals that
+  drift from the config constants) is unchanged; the new pattern
+  pins the current stage-0 literal, which is what the rule
+  actually enforces.
+- **`GUIDELINES.md` §7 (Streamlit Patterns — controlled inputs
+  for enumerated values)** — the status selectbox example gains
+  `format_func=config.STATUS_LABELS.get` + a short paragraph
+  explaining the storage/display split and the `"All"`-passthrough
+  lambda wrapper (`lambda v: STATUS_LABELS.get(v, v)`). Brings the
+  canonical snippet in line with how Sub-task 13 wired
+  `pages/1_Opportunities.py`'s `filter_status` / `edit_status`
+  selectboxes.
+- **`roadmap.md` "In flight" paragraph** — Sub-tasks 1–13 → 1–14
+  in the opening clause; a final clause describes the Sub-task 14
+  doc-sweep inline (GUIDELINES sentinel list + grep rule + status-
+  selectbox example + CHANGELOG / TASKS / roadmap updates).
+  `441 tests green` count preserved — no tests added, none removed.
+- **`TASKS.md`** — new `[x] Sub-task 14` entry inserted between
+  Sub-task 13 and the remaining `[ ] Push branch; open PR; merge
+  to main` bullet; `_Updated:` footer bumped from "Sub-tasks
+  1–13 shipped" to "Sub-tasks 1–14 shipped". Matches the cadence
+  of every prior sub-task entry on this sprint.
+- **`CHANGELOG.md`** — this entry. Placed in `[Unreleased]`
+  immediately after the Sub-task 13 `Changed` block, mirroring
+  the per-sub-task cadence of the rest of the section. Migration
+  section below gains the matching "Sub-task 14 requires no
+  migration" line so readers can scan the Migration block in
+  isolation.
+- **`docs/ui/wireframes.md`** — audited against DESIGN §8.1/§8.2/§8.3.
+  Already shows the v1.3 state: `[expand]` button on the funnel,
+  `Saved`/`Applied` labels (not raw bracketed sentinels) in the
+  dashboard Upcoming table and the Opportunities-page table, no
+  🔄 Refresh button, a multi-interview list on the Applications
+  page, and the Delete button rendered below the Opportunities
+  edit panel. The edit-panel `[ Overview ] [ Requirements ] [
+  Materials ] [ Notes ]` ASCII strip is intent-only — DESIGN §8.2
+  still calls these "Tabs" even though Sub-task 13 switched the
+  underlying widget from `st.tabs` to `st.radio(horizontal=True)`;
+  the sketch's tab appearance matches a horizontal radio's rendered
+  shape, consistent with the file's "intent-only" disclaimer at
+  the top. No changes.
+- **`docs/dev-notes/extending.md`** — audited against DESIGN §5.3.
+  Already v1.3-aligned: "Add a new pipeline status" references
+  `STATUS_LABELS` / `FUNNEL_BUCKETS` / `FUNNEL_DEFAULT_HIDDEN` per
+  D24; "Rename a pipeline status" references `STATUS_LABELS` +
+  the config-driven DDL DEFAULT (Sub-task 4) so the one-shot
+  `UPDATE` is the whole migration; "Add a new vocabulary option"
+  lists `INTERVIEW_FORMATS` alongside the other v1.3 vocabs. No
+  changes.
+- **Out-of-scope (noted for follow-up)**:
+  `docs/dev-notes/streamlit-state-gotchas.md` entry #14 still
+  describes the removed 🔄 Refresh button and entry #13's example
+  still uses the `interview1_date`/`interview2_date` pair that
+  Sub-task 8 normalized into the `interviews` sub-table. Outside
+  Sub-task 14's stated scope; candidate for a separate sub-task
+  if approved.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -1348,6 +1438,17 @@ only changes what the UI renders). The session flag
 to `"Overview"` (the first `EDIT_PANEL_TABS` entry) via st.radio's
 `index=0` + Streamlit's widget-default contract — no persistence
 to disk, no "migration" of prior sessions needed.
+
+**Sub-task 14** requires no migration — the entire change is docs
+(`GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md`, `TASKS.md`; no
+edits needed in `docs/ui/wireframes.md` / `docs/dev-notes/
+extending.md` after audit). No schema edit, no new database
+queries, no config rename, no code touched. A user upgrading
+reads more v1.3-accurate conventions in GUIDELINES (status-
+selectbox examples matching the live `pages/1_Opportunities.py`,
+pre-merge grep pattern matching the current stage-0 literal,
+sentinel list mentioning the Sub-task 12/13 additions) — but
+nothing about the running app or its database changes.
 
 ### Changed — v1.1 doc refactor (branch `feature/docs-refactor-pre-t4`)
 

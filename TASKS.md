@@ -246,6 +246,22 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       — no schema, no new queries, no config edit; CHANGELOG
       Migration entry records "no migration required". 441 tests
       green on branch; zero deprecation warnings.
+- [x] Sub-task 14: doc-alignment sweep against DESIGN.md v1.3 —
+      `GUIDELINES.md` §3 sentinel list gains `_active_edit_tab`
+      (Sub-task 13) and `_funnel_expanded` (Sub-task 12); §6 status-
+      selectbox example flipped from the renamed `STATUS_OPEN` /
+      `[OPEN]` to `STATUS_SAVED` / `[SAVED]` and gains
+      `format_func=STATUS_LABELS.get` per DESIGN §8.0; §6 pre-merge
+      grep rule swaps `\[OPEN\]` → `\[SAVED\]`; §7 controlled-inputs
+      example gains the `format_func` pattern + lambda note for
+      `"All"` passthrough. `roadmap.md` "In flight" paragraph
+      updated to Sub-tasks 1–14 with an inline Sub-task 14 summary.
+      `TASKS.md` gains this entry + footer bumped. `CHANGELOG.md`
+      [Unreleased] gains a Sub-task 14 `Changed` block + "no
+      migration required" line. Verified `docs/ui/wireframes.md`
+      and `docs/dev-notes/extending.md` v1.3-aligned already
+      (no changes). Scope: docs-only — no schema, no test, no code.
+      441 tests green on branch; zero deprecation warnings.
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -327,4 +343,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–13 shipped; branch push + PR open is the last remaining step)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–14 shipped; branch push + PR open is the last remaining step)_
