@@ -20,10 +20,18 @@ Branch: `feature/align-v1.3` (off `main @ cf45c09`, after v1.1 doc refactor merg
       Yes/No/Unknown and Full-time/Part-time/Contract; 2 new `_spec_values`
       tests; no DDL change (both columns plain TEXT); CHANGELOG Migration
       note documents manual translation for dev DBs carrying legacy values.
-- [ ] Sub-task 4+: remaining v1.3 alignment items per
-      `memory/project_state.md` (status rename `[OPEN]→[SAVED]`,
-      `"Med"→"Medium"`, schema overhauls incl. `work_auth_note`,
-      interviews sub-table, cascade rewire)
+- [x] Sub-task 4: config-drive the two DDL DEFAULT clauses in
+      `database.init_db()` per DESIGN §6.2 — `positions.status` and
+      `applications.result` DEFAULTs now f-string-interpolate from
+      `config.STATUS_VALUES[0]` and `config.RESULT_DEFAULT`. Pure
+      refactor, no behaviour change; sets up Sub-task 5 as a
+      config-only edit. New pin: `test_ddl_defaults_interpolate_from_config`
+      (monkeypatches to sentinels + reads `PRAGMA table_info`). Closes
+      the C6/C7 pre-T4 item.
+- [ ] Sub-task 5+: remaining v1.3 alignment items per
+      `memory/project_state.md` (status rename `[OPEN]→[SAVED]` +
+      one-shot UPDATE migration, `"Med"→"Medium"`, schema overhauls
+      incl. `work_auth_note`, interviews sub-table, cascade rewire)
 - [ ] Push branch; open PR; merge to main
 
 ## Prior sprint — v1.1 doc refactor (merged via PR #7)
@@ -48,8 +56,9 @@ deferred. All require separate approval before execution.
       `("[OPEN]", "[APPLIED]", "[INTERVIEW]")` with
       `(config.STATUS_OPEN, STATUS_APPLIED, STATUS_INTERVIEW)`
 - [ ] **C2** Delete unused `TRACKER_PROFILE` from `config.py`
-- [ ] **C6/C7** Config-drive schema DEFAULTs in `init_db()` DDL
+- [x] **C6/C7** Config-drive schema DEFAULTs in `init_db()` DDL
       (`DEFAULT '{config.STATUS_VALUES[0]}'` / `DEFAULT '{config.RESULT_DEFAULT}'`)
+      — shipped as v1.3 alignment Sub-task 4
 - [ ] **C12** Add `assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` to `config.py`
 - [ ] Rename `[OPEN]` → `[SAVED]` + idempotent `UPDATE positions SET status=...` migration
 - [ ] Rename `PRIORITY_VALUES` `"Med"` → `"Medium"` + migration
@@ -88,4 +97,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–3 shipped; Sub-task 4+ next)_
+_Updated: 2026-04-24 (v1.3 alignment — Sub-tasks 1–4 shipped; Sub-task 5+ next)_
