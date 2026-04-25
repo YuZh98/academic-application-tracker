@@ -3053,6 +3053,41 @@ class TestGetPendingRecommenders:
         df = database.get_pending_recommenders(7)
         assert len(df) == 0
 
+    def test_empty_string_submitted_date_currently_excluded(self, db):
+        """Pin the **current** behaviour and document a known asymmetry.
+
+        is_all_recs_submitted (database.py) treats both ``NULL`` and
+        ``""`` as "not submitted" (its WHERE is
+        ``submitted_date IS NULL OR submitted_date = ''``) — pinned by
+        TestIsAllRecsSubmitted::
+        test_empty_string_submitted_date_counts_as_unsubmitted.
+
+        get_pending_recommenders only filters on ``submitted_date IS NULL``.
+        A recommender whose date got cleared to ``""`` (which the page
+        legitimately writes per the Notes-tab clear-field round-trip
+        contract) is therefore "unsubmitted" by one helper but **silently
+        excluded** from the alert list by the other. This test pins the
+        current asymmetric behaviour so a future production change to
+        normalise the two helpers (e.g. adding ``OR submitted_date = ''``
+        to get_pending_recommenders) is a deliberate edit, not an
+        invisible drift — the test will then need to flip and assert
+        len(df) == 1, and an empty-string date will start surfacing as a
+        pending alert."""
+        pos_id = database.add_position(make_position())
+        database.add_recommender(pos_id, {
+            "recommender_name": "Dr. Jones",
+            "asked_date":     (date.today() - timedelta(days=10)).isoformat(),
+            "submitted_date": "",
+        })
+        df = database.get_pending_recommenders(7)
+        assert len(df) == 0, (
+            "Current behaviour: empty-string submitted_date is treated as "
+            "'submitted' by get_pending_recommenders (only IS NULL is "
+            "filtered). is_all_recs_submitted DISAGREES — both NULL and "
+            "'' count as unsubmitted there. If you reconcile the two, "
+            "flip this assertion to len(df) == 1 and update this docstring."
+        )
+
     def test_excludes_recommender_with_no_asked_date(self, db):
         pos_id = database.add_position(make_position())
         database.add_recommender(pos_id, {"recommender_name": "Dr. Ghost"})
