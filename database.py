@@ -1207,8 +1207,20 @@ def compute_materials_readiness() -> dict[str, int]:
     Active = status in (STATUS_SAVED, STATUS_APPLIED, STATUS_INTERVIEW) —
     the tuple is sourced from config aliases at call time.
 
+    Empty `config.REQUIREMENT_DOCS` returns `{"ready": 0, "pending": 0}`
+    without touching SQL — a valid future profile-expansion state per
+    DESIGN §12.1 (e.g. a casual-tracker profile that ships without
+    document requirements). Without the early return, the
+    `" OR ".join(...)` and `" AND ".join(...)` fragments below would
+    each evaluate to `''` and the constructed SQL would carry an empty
+    `... AND ()` predicate plus a `CASE WHEN  THEN 1 ELSE 0 END`
+    branch — both invalid under SQLite syntax.
+
     SQL uses f-strings for column names only — column names come from config
     constants, never from user input (documented in GUIDELINES.md §DB access)."""
+    if not config.REQUIREMENT_DOCS:
+        return {"ready": 0, "pending": 0}
+
     has_any_req = " OR ".join(
         f"{req} = 'Yes'" for req, _, _ in config.REQUIREMENT_DOCS
     )
