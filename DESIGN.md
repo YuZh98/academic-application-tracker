@@ -472,6 +472,24 @@ evolution happens in one of three shapes:
 | Normalize flat columns into a sub-table | (a) `CREATE TABLE` the new sub-table; (b) `INSERT INTO` copying old columns; (c) leave old columns NULL until a rebuild drops them; (d) update application code to read from the sub-table. |
 | Remove a column | SQLite requires a table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM <t>; DROP TABLE <t>; ALTER TABLE new RENAME TO <t>`. Breaking change — document in CHANGELOG. |
 
+**Flag/date split divergence — `confirmation_email` vs `reminder_sent`.**
+Both migrations split a dual-purpose TEXT column into a
+`(flag INTEGER, date TEXT)` pair but translate a date-shaped legacy
+value differently — intentionally, not by accident.
+`applications.confirmation_email`'s date-shape lands as `received = 1`
++ `date = value` because pre-v1.3 semantics tied a recorded date
+strongly to "received" (a user wouldn't write a date if no receipt
+happened). `recommenders.reminder_sent`'s date-shape lands as
+`reminder_sent = 0` + `reminder_sent_date = value` (the conservative
+reading) because pre-v1.3 reminder_sent saw both date-only and
+`'Y'`-only legacy use without a clear "date implies sent" rule; the
+user re-saves to flip the flag if intended. Pinned by
+`test_migration_copies_date_string_to_both_fields` and
+`test_migration_splits_date_shaped_reminder_sent_into_new_column`
+respectively. A future maintainer reading the two tests side-by-side
+should expect the divergence rather than treat one as a bug relative
+to the other.
+
 **Migration discipline:** every schema or vocabulary change lands with a
 `Migration:` note in `CHANGELOG.md` under the release that introduces
 it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between
