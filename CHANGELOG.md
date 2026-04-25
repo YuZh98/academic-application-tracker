@@ -1229,6 +1229,43 @@ to the other.
 469/469 pytest green (default + `-W error::DeprecationWarning`) —
 +0 new tests, +0 prior tests touched.
 
+### Fixed — v1.3 alignment empty-REQUIREMENT_DOCS guard (branch `feature/align-v1.3`)
+
+Sixth (and final) code-review follow-up. Adds a defensive early-return
+to `database.compute_materials_readiness` for the edge case where
+`config.REQUIREMENT_DOCS` is empty. Pre-fix, the function built two
+SQL fragments via `" OR ".join(...)` / `" AND ".join(...)` over the
+constant; an empty list produced empty strings, leading to invalid
+SQL (`... AND ()` and `CASE WHEN THEN 1 ELSE 0 END`). The state is
+currently impossible — config.py REQUIREMENT_DOCS has seven entries
+— but DESIGN §12.1's v2 profile expansion permits a future profile
+(e.g. a casual job tracker) to ship with zero document requirements,
+and the dashboard's Materials Readiness panel calls this function
+unconditionally; without the guard, the dashboard would crash on
+first load for such a profile.
+
+- **`database.compute_materials_readiness`** — 2-line early-return
+  at the top of the function: `if not config.REQUIREMENT_DOCS:
+  return {"ready": 0, "pending": 0}`. Docstring extended with a
+  paragraph documenting the contract + §12.1 rationale.
+- **`tests/test_database.py`** —
+  `test_empty_requirement_docs_returns_zero_counts` in
+  `TestComputeMaterialsReadiness`: seeds a real ready position
+  (sanity: pre-patch count = 1 ready), monkeypatches
+  `config.REQUIREMENT_DOCS = []`, asserts the call returns
+  `{"ready": 0, "pending": 0}` without raising. Exercises a
+  config / schema mismatch (the DB still carries the standard
+  `req_*`/`done_*` columns from init_db's run with the real config).
+- **Chose defensive early-return over §5.2 invariant
+  `len(REQUIREMENT_DOCS) > 0`.** §12.1 implies a profile-without-
+  docs is a valid future state — an invariant would block it. The
+  fix is also localized to the one affected function; other
+  REQUIREMENT_DOCS-driven code (`init_db`'s CREATE/ALTER loops,
+  the Materials tab) already tolerated `[]` gracefully.
+
+470/470 pytest green (default + `-W error::DeprecationWarning`) —
++1 new test, +0 prior tests touched.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
