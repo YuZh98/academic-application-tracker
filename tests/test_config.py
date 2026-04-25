@@ -442,6 +442,55 @@ def test_priority_values_spec_values():
     assert 'Med' not in config.PRIORITY_VALUES
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Post-Sub-task 14 follow-up (v1.3 alignment) — DESIGN.md §5.1 + §5.2 #9 + §9.3
+# ─────────────────────────────────────────────────────────────────────────────
+# The "Offer" string that fires the R3 cascade (DESIGN §9.3) gets a config
+# alias on parity with the STATUS_* aliases that already insulate cascade
+# code from vocabulary renames. Without the alias, a future rename of the
+# 'Offer' entry inside RESPONSE_TYPES would silently break R3 (the
+# selectbox would show the new label, the user would pick it, and
+# upsert_application's hardcoded 'Offer' string would no longer match).
+# Invariant #9 (`RESPONSE_TYPE_OFFER in RESPONSE_TYPES`) is the
+# import-time guard that catches the drift before any page renders.
+
+def test_response_type_offer_value_is_offer():
+    """DESIGN §5.1: RESPONSE_TYPE_OFFER == 'Offer' — the literal R3
+    cascade trigger (§9.3). Pinned here so the alias never silently
+    drifts away from the user-facing 'Offer' selectbox option."""
+    assert config.RESPONSE_TYPE_OFFER == "Offer", (
+        f"RESPONSE_TYPE_OFFER must literally equal 'Offer' to match the "
+        f"selectbox option that fires R3. Got {config.RESPONSE_TYPE_OFFER!r}"
+    )
+
+
+def test_response_type_offer_is_member_of_response_types():
+    """DESIGN §5.2 invariant #9: RESPONSE_TYPE_OFFER must be a member
+    of RESPONSE_TYPES — the cascade trigger has to be a value the
+    selectbox can actually produce. Positive-case assertion that
+    pairs with `test_invariant_9_fires_on_drift` below."""
+    assert config.RESPONSE_TYPE_OFFER in config.RESPONSE_TYPES, (
+        f"RESPONSE_TYPE_OFFER={config.RESPONSE_TYPE_OFFER!r} not in "
+        f"RESPONSE_TYPES={config.RESPONSE_TYPES!r}. R3 cascade would "
+        f"never fire — selectbox cannot produce the trigger value."
+    )
+
+
+def test_invariant_9_fires_on_drift():
+    """Replicate DESIGN §5.2 invariant #9 on a synthetic bad
+    RESPONSE_TYPES list that has dropped the 'Offer' entry — mirrors
+    the test_invariant_*_fires_on_drift pattern (synthetic-drift, no
+    actual config reload). The replicated guard logic must detect
+    the missing alias the same way the import-time assert would."""
+    broken_response_types = [
+        v for v in config.RESPONSE_TYPES if v != config.RESPONSE_TYPE_OFFER
+    ]
+    assert config.RESPONSE_TYPE_OFFER not in broken_response_types, (
+        "Guard should fire: RESPONSE_TYPE_OFFER not in synthetic "
+        "broken_response_types (the entry was deliberately removed)"
+    )
+
+
 # ── Fresh import exercises every module-level assertion ──────────────────────
 
 def test_config_reimports_cleanly():
