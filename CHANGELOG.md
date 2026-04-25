@@ -1096,6 +1096,58 @@ import-time invariant #9 catches the drift before any page renders.
 
 455/455 pytest green (default + `-W error::DeprecationWarning`).
 
+### Fixed — v1.3 alignment exports log-and-continue (branch `feature/align-v1.3`)
+
+Third code-review follow-up. Honours the two related load-bearing
+contracts in DESIGN §7 + §9.5 that the v1.3 alignment pass left
+under-pinned: every `exports.write_all()` call must be log-and-swallow
+(at both ends — inside `exports.write_all()` itself per §9.5, and at
+each `database.py` writer's call site per §7 database.py contract #1).
+Pre-fix, an export failure (mkdir denied, write_progress raises) would
+propagate up to the page handler as a traceback, even though the DB
+write that triggered the export had already succeeded — exactly the
+"user sees Saved, not a traceback" promise §9.5 makes.
+
+- **`exports.py`** — add `logging.getLogger(__name__)`. `write_all()`
+  rewrites to wrap `EXPORTS_DIR.mkdir(exist_ok=True)` in its own
+  try/except (short-circuits the rest of the function on failure;
+  nothing else can succeed without the destination directory) and
+  iterate over the three writer slot NAMES (`write_opportunities`,
+  `write_progress`, `write_recommenders`) via `globals()`, each
+  wrapped in its own try/except. Per-call wrapping (rather than a
+  whole-function wrap) lets the other writers still run when one
+  fails — matches §9.5's "A failure in ANY `write_*`" wording.
+  Iterating by name rather than captured function reference keeps
+  the log message reading as the intended writer slot (a monkey-
+  patched stand-in carries its own `__name__` that would otherwise
+  leak into the operator-facing log).
+- **`database.py`** — add `logging.getLogger(__name__)`. Each of the
+  10 writer call sites that calls `_exports.write_all()` gains a
+  try/except wrapping the call: `add_position`, `update_position`,
+  `delete_position`, `upsert_application`, `add_interview`,
+  `update_interview`, `delete_interview`, `add_recommender`,
+  `update_recommender`, `delete_recommender`. The deferred
+  `import exports as _exports` line stays inside each writer per
+  DESIGN §7's literal "the import of `exports` inside each writer
+  is deferred (not at module top)" wording — no helper-function
+  abstraction.
+- **`tests/test_exports.py`** — three new tests pinning the §9.5
+  contract: `test_write_all_swallows_individual_writer_failure`,
+  `test_write_all_continues_after_individual_failure`,
+  `test_write_all_swallows_mkdir_failure`.
+- **`tests/test_database.py`** — new `TestExportsLogAndContinue`
+  class. `test_writer_swallows_exports_failure` is parametrized
+  over all 10 writers (a single failure surfaces as a unique line
+  in pytest output naming the offending writer). `test_db_write_
+  commits_even_when_exports_fails` is the load-bearing semantic
+  pin: a failed export must NOT roll back the DB write that
+  triggered it.
+- **No behavioural change for the happy path.** All prior 455 tests
+  continue passing — wrapping is strictly additive.
+
+469/469 pytest green (default + `-W error::DeprecationWarning`) —
++14 new tests, +0 prior tests touched.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
