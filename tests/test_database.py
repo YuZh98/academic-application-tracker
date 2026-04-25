@@ -1800,17 +1800,33 @@ class TestAddInterview:
             f"{param.kind!r}"
         )
 
-    def test_propagate_status_false_accepted(self, db):
-        """Passing propagate_status=False must not raise in Sub-task 8,
-        and the return indicator stays unchanged (no cascade anyway)."""
+    def test_propagate_status_false_suppresses_r2_cascade(self, db):
+        """propagate_status=False must suppress R2 even when its conditions
+        are met. Pre-stage STATUS_APPLIED so R2 would fire under the default
+        (cascade promotes APPLIED→INTERVIEW); kwarg=False must keep the row
+        at APPLIED. The previous form pre-stayed STATUS_SAVED — R2's status
+        guard would block it either way, so a regression that ignored the
+        kwarg silently passed."""
         pid = database.add_position(make_position())
+        # Move to STATUS_APPLIED via the same writer that fires R1, so the
+        # test reflects a realistic pre-state rather than back-doored SQL.
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+
         result = database.add_interview(
             pid,
             {"scheduled_date": "2026-05-01"},
             propagate_status=False,
         )
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED, (
+            "propagate_status=False must suppress R2 when its conditions "
+            "(pre-state STATUS_APPLIED, interview insert succeeds) are met."
+        )
         assert result["status_changed"] is False
         assert result["new_status"] is None
+        # And the primary INSERT still landed — kwarg suppresses the cascade,
+        # not the interview row.
+        assert len(database.get_interviews(pid)) == 1
 
     def test_fk_violation_raises_on_nonexistent_application(self, db):
         """Inserting an interview for a position that doesn't exist
