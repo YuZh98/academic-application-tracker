@@ -11,10 +11,13 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Generator
+import logging
 import sqlite3
 import pandas as pd
 
 import config
+
+logger = logging.getLogger(__name__)
 
 DB_PATH: Path = Path(__file__).parent / "postdoc.db"
 
@@ -553,7 +556,18 @@ def add_position(fields: dict[str, Any]) -> int:
         )
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
     return new_id
 
 
@@ -591,7 +605,18 @@ def update_position(position_id: int, fields: dict[str, Any]) -> None:
         )
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
 
 def delete_position(position_id: int) -> None:
@@ -601,7 +626,18 @@ def delete_position(position_id: int) -> None:
         conn.execute("DELETE FROM positions WHERE id = ?", (position_id,))
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
 
 # ── Applications ──────────────────────────────────────────────────────────────
@@ -733,7 +769,18 @@ def upsert_application(
         post_status = post_pos["status"] if post_pos else None
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
     if post_status != pre_status:
         return {"status_changed": True, "new_status": post_status}
@@ -857,7 +904,18 @@ def add_interview(
         post_status = post_pos["status"] if post_pos else None
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
     if post_status != pre_status:
         return {
@@ -902,7 +960,18 @@ def update_interview(interview_id: int, fields: dict[str, Any]) -> None:
         )
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
 
 def delete_interview(interview_id: int) -> None:
@@ -911,7 +980,18 @@ def delete_interview(interview_id: int) -> None:
         conn.execute("DELETE FROM interviews WHERE id = ?", (interview_id,))
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
 
 # ── Recommenders ──────────────────────────────────────────────────────────────
@@ -930,7 +1010,18 @@ def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
         new_id: int = cur.lastrowid
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
     return new_id
 
 
@@ -972,7 +1063,18 @@ def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
         )
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
 
 def delete_recommender(rec_id: int) -> None:
@@ -981,7 +1083,18 @@ def delete_recommender(rec_id: int) -> None:
         conn.execute("DELETE FROM recommenders WHERE id = ?", (rec_id,))
 
     import exports as _exports  # deferred: avoids circular import
-    _exports.write_all()
+    # DESIGN §7 database.py contract #1: log + swallow any
+    # exports failure so the DB write that already succeeded
+    # reports success to the caller. Markdown regeneration is
+    # best-effort; exports.write_all() additionally catches
+    # individual write_* failures internally per §9.5.
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — "
+            "markdown regeneration is best-effort"
+        )
 
 
 # ── Dashboard queries ─────────────────────────────────────────────────────────
