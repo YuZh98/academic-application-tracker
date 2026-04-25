@@ -3413,3 +3413,247 @@ class TestDeleteButtonTabSensitivity:
         assert _delete_button_rendered(at), (
             "Delete button must render again when user returns to Overview"
         )
+
+
+# ── Tab-switch widget-state survival (Bug 1 + Bug 2 repro, 2026-04-25) ───────
+# User-reported bugs:
+#   • Bug 1: Position name disappears in Overview after switching to
+#     Requirements and back. Same on second opportunity.
+#   • Bug 2: Requirements tab shows every doc as "Required" (not the DB's
+#     "No" default). Materials shows all 7 checkboxes; checking CV +
+#     Saving leaves only 6, with CV gone.
+#
+# Hypothesis: Sub-task 13's conditional tab rendering means each tab body
+# unmounts its widgets when the user switches tabs. Streamlit's documented
+# v1.20+ behaviour: session_state for unmounted widgets is cleaned up. The
+# pre-seed at pages/1_Opportunities.py is gated by `_edit_form_sid != sid`
+# — runs only on row CHANGE, not on tab switch. So returning to a previously-
+# active tab finds its widgets bereft of session_state and they fall back
+# to the widget's default value (empty for text_input, index=0 for radio).
+#
+# These tests pin both the buggy behaviour today (so a fix lands as a
+# behaviour change) AND the corrected contract once the fix is in.
+
+class TestTabSwitchWidgetStateSurvival:
+    """Diagnostic + regression coverage for the widget-state-loss-on-tab-
+    switch family of bugs. Each test exercises one tab-switch sequence
+    and pins the value the user MUST see after the switch."""
+
+    # --- Baseline: first open of each tab ----------------------------------
+
+    def test_overview_position_name_visible_on_initial_selection(self, db):
+        """Sanity baseline: selecting a row must populate the Overview
+        position name on the first script run (no tab switch yet)."""
+        database.add_position({"position_name": "Stanford BioStats"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
+
+    def test_requirements_radios_show_db_value_on_first_tab_open(self, db):
+        """First open of Requirements (after default-Overview render) must
+        display the DB's req_* values. Schema default is 'No' (Not needed).
+        If this fails on first open, Streamlit's cleanup is more aggressive
+        than the 'unmount → cleanup' rule (it would mean programmatic-only
+        session_state writes are also cleaned up). If it passes, the bug
+        only fires on the SECOND open of Requirements (after a round-trip
+        causes the widgets to mount-then-unmount)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
+        for req_col, _, _ in config.REQUIREMENT_DOCS:
+            value = at.radio(key=_req_key(req_col)).value
+            assert value == "No", (
+                f"First open of Requirements: radio {req_col!r} must show "
+                f"DB default 'No', got {value!r}. If failing here, "
+                f"Streamlit cleans up session_state for widget keys whose "
+                f"widgets have NOT YET been mounted (more aggressive than "
+                f"the documented 'mount-then-unmount' rule)."
+            )
+
+    # --- Bug 1: Overview position name across round-trip --------------------
+
+    def test_overview_position_name_persists_after_requirements_round_trip(self, db):
+        """Bug 1 repro. Sequence: select row → switch to Requirements →
+        switch back to Overview. The position name MUST still be the
+        row's value, not "" (the text_input default after Streamlit
+        cleaned up session_state on the Overview tab unmount)."""
+        database.add_position({"position_name": "Stanford BioStats"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        # Round-trip: Overview → Requirements → Overview.
+        _select_row_and_tab(at, 0, "Requirements")
+        _select_row_and_tab(at, 0, "Overview")
+        value = at.text_input(key=EDIT_KEYS["position_name"]).value
+        assert value == "Stanford BioStats", (
+            f"Bug 1: position name disappeared after Overview→Requirements"
+            f"→Overview round-trip. Got {value!r}. Streamlit cleans up "
+            f"session_state for unmounted widgets; the pre-seed gate "
+            f"(_edit_form_sid == sid) blocked re-seeding on the same row."
+        )
+
+    def test_overview_all_text_fields_persist_after_round_trip(self, db):
+        """Stronger Bug 1 pin: every text_input on Overview (position_name,
+        institute, field, link) AND the work_auth_note text_area must
+        survive an Overview→Notes→Overview round-trip with their DB
+        values intact, not collapse to ""."""
+        database.add_position({
+            "position_name":  "Stanford BioStats",
+            "institute":      "Stanford",
+            "field":          "Biostatistics",
+            "link":           "https://example.org/apply",
+            "work_auth_note": "OPT eligible",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
+        _select_row_and_tab(at, 0, "Overview")
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
+        assert at.text_input(key=EDIT_KEYS["institute"]).value     == "Stanford"
+        assert at.text_input(key=EDIT_KEYS["field"]).value         == "Biostatistics"
+        assert at.text_input(key=EDIT_KEYS["link"]).value          == "https://example.org/apply"
+        assert at.text_area(key=EDIT_KEYS["work_auth_note"]).value == "OPT eligible"
+
+    # --- Bug 2: Requirements radios across round-trip -----------------------
+
+    def test_requirements_radios_persist_after_overview_round_trip(self, db):
+        """Bug 2 repro. Sequence: select row → switch to Requirements
+        (radios mount with DB values) → switch to Overview (radios
+        unmount → Streamlit cleans up their session_state) → switch back
+        to Requirements. The radios MUST still show the DB's "No"
+        (Not needed) for every doc, not the 'Yes' (Required) that
+        index=0 would default to."""
+        database.add_position({"position_name": "Alpha"})  # all req_* default to 'No'
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")  # First open: widgets mount
+        _select_row_and_tab(at, 0, "Overview")      # Widgets unmount → cleanup
+        _select_row_and_tab(at, 0, "Requirements")  # Widgets remount → ???
+        for req_col, _, _ in config.REQUIREMENT_DOCS:
+            value = at.radio(key=_req_key(req_col)).value
+            assert value == "No", (
+                f"Bug 2: req radio {req_col!r} must show DB value 'No' "
+                f"after Requirements→Overview→Requirements round-trip; "
+                f"got {value!r}. Streamlit cleaned up the radio's "
+                f"session_state when it unmounted on Overview, and the "
+                f"pre-seed gate blocked the re-seed."
+            )
+
+    def test_notes_text_area_persists_after_round_trip(self, db):
+        """Bug 1 / 2 cross-check: the Notes tab's text_area must survive
+        a Notes→Overview→Notes round-trip with its DB value intact."""
+        database.add_position({
+            "position_name": "Alpha",
+            "notes":         "Follow up with Prof. Smith after SfN.",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
+        _select_row_and_tab(at, 0, "Overview")
+        _select_row_and_tab(at, 0, "Notes")
+        value = at.text_area(key=NOTES_KEY).value
+        assert value == "Follow up with Prof. Smith after SfN.", (
+            f"Bug-class repro on Notes tab: text_area lost its DB value "
+            f"after Notes→Overview→Notes round-trip; got {value!r}."
+        )
+
+    def test_user_reported_two_opportunity_scenario(self, db):
+        """Verbatim user-reported scenario (2026-04-25):
+
+          1. Add two opportunities.
+          2. Click first one → Overview shows position name.
+          3. Click Requirements tab.
+          4. Switch back to Overview → position name MUST still appear.
+          5. Click the second opportunity → same expectations.
+
+        Extends the per-tab round-trip tests above by also exercising
+        the user's 'switch to a different opportunity' transition,
+        which exercises both the cleanup-recovery path AND the
+        row-change force-reseed path in the new two-phase pre-seed.
+        """
+        sid_a = database.add_position({"position_name": "Stanford BioStats"})
+        sid_b = database.add_position({"position_name": "MIT CSAIL Postdoc"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+
+        # Step 2: select Alpha (row 0 — both have NULL deadline so the
+        # tiebreak is by id ASC, sid_a is first).
+        _select_row(at, 0)
+        assert at.session_state["selected_position_id"] == sid_a
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
+
+        # Steps 3-4: round-trip Overview → Requirements → Overview on Alpha.
+        _select_row_and_tab(at, 0, "Requirements")
+        _select_row_and_tab(at, 0, "Overview")
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats", (
+            "User-reported Bug 1 on first opportunity: position name lost "
+            "after Overview→Requirements→Overview round-trip"
+        )
+
+        # Step 5: switch to Beta (row 1).
+        _select_row_and_tab(at, 1, "Overview")
+        assert at.session_state["selected_position_id"] == sid_b
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "MIT CSAIL Postdoc", (
+            "Switching to second opportunity must show its position name "
+            "(force-reseed path: sid changed, pre-seed overwrites all keys)"
+        )
+
+        # Round-trip on Beta too.
+        _select_row_and_tab(at, 1, "Requirements")
+        _select_row_and_tab(at, 1, "Overview")
+        assert at.text_input(key=EDIT_KEYS["position_name"]).value == "MIT CSAIL Postdoc", (
+            "User-reported Bug 1 on second opportunity: position name lost "
+            "after Overview→Requirements→Overview round-trip on the second "
+            "selected row"
+        )
+
+    def test_materials_save_does_not_strand_visible_checkbox_set(self, db):
+        """Bug 2 second-half repro. Sequence: open a row whose req_cv was
+        EVER set to 'Yes' (so Materials shows the CV checkbox); switch
+        Requirements→Materials, tick CV, click Save. After the save's
+        rerun, CV must STILL be visible (req_cv is still 'Yes' in DB,
+        Materials Save doesn't touch req_*). The user reported CV
+        disappearing post-save — the only way that can happen is if the
+        pre-seed re-loaded edit_req_cv as something other than 'Yes',
+        which means the radio's session_state had drifted out of sync
+        with DB during the round-trip."""
+        sid = database.add_position({
+            "position_name": "Alpha",
+            "req_cv":        "Yes",   # CV is required by the row
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
+        _select_row_and_tab(at, 0, "Materials")
+        # Precondition: CV checkbox is visible because req_cv == 'Yes'.
+        assert _checkbox_rendered(at, _done_key("done_cv")), (
+            "Precondition failed: req_cv='Yes' must render done_cv checkbox"
+        )
+        at.checkbox(key=_done_key("done_cv")).set_value(True)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        assert not at.exception, f"Materials save raised: {at.exception}"
+        # Post-save: req_cv is still 'Yes' in DB, so the CV checkbox
+        # MUST still render. If the pre-seed reloaded req_cv as 'No'
+        # (because the round-trip stranded session_state), CV would
+        # disappear from the visible list — exactly the user's report.
+        row = database.get_position(sid)
+        assert row["req_cv"] == "Yes", (
+            f"Materials Save must NOT alter req_*; got "
+            f"req_cv={row['req_cv']!r} in DB"
+        )
+        assert _checkbox_rendered(at, _done_key("done_cv")), (
+            "Bug 2: CV checkbox vanished after Materials Save even though "
+            "req_cv is still 'Yes' in DB. The pre-seed must have reloaded "
+            "session_state[edit_req_cv] as something != 'Yes' on the post-"
+            "save rerun, which means edit_req_cv was already drifted by "
+            "the time Materials rendered."
+        )
