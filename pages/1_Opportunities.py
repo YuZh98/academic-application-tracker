@@ -407,56 +407,77 @@ if "selected_position_id" in st.session_state:
         # the selection changes, tracked via the internal _edit_form_sid
         # sentinel. Stored values match widget types: str for text, date|None
         # for date_input, config-vocabulary strings for the selectboxes.
-        if st.session_state.get("_edit_form_sid") != sid:
-            # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
-            # (no DEFAULT in schema) and could theoretically hold an unknown
-            # status value (sqlite CLI, future migration). Coerce both to
-            # in-vocabulary values so the selectboxes never get an
-            # out-of-options session_state value — today Streamlit tolerates
-            # it silently, but the tolerance is undocumented.
-            safe_priority = (
-                r["priority"] if r["priority"] in config.PRIORITY_VALUES
-                else config.PRIORITY_VALUES[0]
+        #
+        # Bug 1 + Bug 2 fix (2026-04-25): Sub-task 13's swap from `st.tabs`
+        # to `st.radio + conditional rendering` means each tab body's widgets
+        # unmount on tab switch. Streamlit's documented v1.20+ behaviour is
+        # to remove session_state entries for unmounted widgets — empirically
+        # confirmed on Streamlit 1.56 + AppTest for `st.text_input`
+        # (edit_position_name, etc. silently reset to "" on remount; see
+        # tests/test_opportunities_page.py::TestTabSwitchWidgetStateSurvival).
+        # The original sid-only gate blocked re-seeding on tab switch, so a
+        # cleaned-up text_input would render its empty default and the user
+        # would see the position name "disappear" after Overview→Req→Overview.
+        # Fix: a two-phase apply — compute canonical row-derived values
+        # unconditionally, then reassign each key only when (a) the row
+        # actually changed (force overwrite, original behaviour) OR (b) the
+        # key is missing from session_state (cleanup recovery, NEW). The
+        # missing-key path NEVER overwrites an existing session_state value
+        # — so AppTest's set_value-then-submit path (which writes
+        # session_state[key] before the rerun) keeps working, and a real
+        # user's in-flight form draft (held in form-internal state, not
+        # session_state) is unaffected because Streamlit commits the draft
+        # AFTER the pre-seed runs.
+        # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
+        # (no DEFAULT in schema) and could theoretically hold an unknown
+        # status value (sqlite CLI, future migration). Coerce both to
+        # in-vocabulary values so the selectboxes never get an
+        # out-of-options session_state value — today Streamlit tolerates
+        # it silently, but the tolerance is undocumented.
+        safe_priority = (
+            r["priority"] if r["priority"] in config.PRIORITY_VALUES
+            else config.PRIORITY_VALUES[0]
+        )
+        safe_status = (
+            r["status"] if r["status"] in config.STATUS_VALUES
+            else config.STATUS_VALUES[0]
+        )
+        # Sub-task 7 / DESIGN §8.2: work_auth is the categorical
+        # three-value enum. Same F2-style coercion as priority /
+        # status — NULL on quick-add rows and any legacy-vocabulary
+        # string (Sub-task 3 collapsed the pre-v1.3 six-value list
+        # manually, so dev DBs can carry 'OPT' / 'H1B' / …) must
+        # drop to WORK_AUTH_OPTIONS[0] so the selectbox always
+        # reads a valid in-vocab value.
+        raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
+        safe_work_auth = (
+            raw_work_auth if raw_work_auth in config.WORK_AUTH_OPTIONS
+            else config.WORK_AUTH_OPTIONS[0]
+        )
+        # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
+        # one malformed deadline row should render an empty date input,
+        # not crash the whole page.
+        try:
+            safe_deadline = (
+                datetime.date.fromisoformat(r["deadline_date"])
+                if r["deadline_date"] else None
             )
-            safe_status = (
-                r["status"] if r["status"] in config.STATUS_VALUES
-                else config.STATUS_VALUES[0]
-            )
-            # Sub-task 7 / DESIGN §8.2: work_auth is the categorical
-            # three-value enum. Same F2-style coercion as priority /
-            # status — NULL on quick-add rows and any legacy-vocabulary
-            # string (Sub-task 3 collapsed the pre-v1.3 six-value list
-            # manually, so dev DBs can carry 'OPT' / 'H1B' / …) must
-            # drop to WORK_AUTH_OPTIONS[0] so the selectbox always
-            # reads a valid in-vocab value.
-            raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
-            safe_work_auth = (
-                raw_work_auth if raw_work_auth in config.WORK_AUTH_OPTIONS
-                else config.WORK_AUTH_OPTIONS[0]
-            )
-            # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
-            # one malformed deadline row should render an empty date input,
-            # not crash the whole page.
-            try:
-                safe_deadline = (
-                    datetime.date.fromisoformat(r["deadline_date"])
-                    if r["deadline_date"] else None
-                )
-            except (ValueError, TypeError):
-                safe_deadline = None
+        except (ValueError, TypeError):
+            safe_deadline = None
 
-            # _safe_str (not `r[col] or ""`) is load-bearing: pandas returns
-            # float('nan') for NULL text cells once any row has a real string,
-            # and NaN is truthy — `nan or ""` evaluates to `nan`, which then
-            # blows up st.text_input/text_area's protobuf str check with a
-            # bare "TypeError: bad argument type for built-in operation".
-            st.session_state["edit_position_name"] = _safe_str(r["position_name"])
-            st.session_state["edit_institute"]     = _safe_str(r["institute"])
-            st.session_state["edit_field"]         = _safe_str(r["field"])
-            st.session_state["edit_priority"]      = safe_priority
-            st.session_state["edit_status"]        = safe_status
-            st.session_state["edit_deadline_date"] = safe_deadline
-            st.session_state["edit_link"]          = _safe_str(r["link"])
+        # _safe_str (not `r[col] or ""`) is load-bearing: pandas returns
+        # float('nan') for NULL text cells once any row has a real string,
+        # and NaN is truthy — `nan or ""` evaluates to `nan`, which then
+        # blows up st.text_input/text_area's protobuf str check with a
+        # bare "TypeError: bad argument type for built-in operation".
+        canonical: dict[str, Any] = {
+            "edit_position_name":  _safe_str(r["position_name"]),
+            "edit_institute":      _safe_str(r["institute"]),
+            "edit_field":          _safe_str(r["field"]),
+            "edit_priority":       safe_priority,
+            "edit_status":         safe_status,
+            "edit_deadline_date":  safe_deadline,
+            "edit_link":           _safe_str(r["link"]),
             # Sub-task 7: work_auth selectbox + work_auth_note text_area.
             # _safe_str on work_auth_note handles both None (fresh row)
             # and pandas float('nan') (NULL cell in a mixed-dtype TEXT
@@ -464,41 +485,48 @@ if "selected_position_id" in st.session_state:
             # link pre-seeds). Without it, st.text_area's protobuf
             # serialisation raises "bad argument type for built-in
             # operation".
-            st.session_state["edit_work_auth"]      = safe_work_auth
-            st.session_state["edit_work_auth_note"] = (
+            "edit_work_auth":      safe_work_auth,
+            "edit_work_auth_note": (
                 _safe_str(r["work_auth_note"])
                 if "work_auth_note" in r.index else ""
-            )
-
-            # T4-D: pre-seed one session_state slot per req_* column so the
-            # Requirements-tab radios render with the row's current values.
-            # Same F2-style coercion as priority/status: if a column holds
-            # an unknown string (future migration, raw SQL edit) or is
-            # missing from the row (e.g. during a migration-in-progress
-            # test), fall back to 'No' — the schema default (DESIGN §5.1
-            # + D21 Yes/Optional/No vocabulary).
-            for req_col, done_col, _label in config.REQUIREMENT_DOCS:
-                v = r[req_col] if req_col in r.index else None
-                safe_v = v if v in config.REQUIREMENT_VALUES else "No"
-                st.session_state[f"edit_{req_col}"] = safe_v
-
-                # T4-E: pre-seed one bool per done_* column for the Materials
-                # checkboxes. done_* is INTEGER 0/1; anything else (None,
-                # unexpected values) coerces to False. The checkbox itself
-                # is only rendered by the Materials tab when its req_* is
-                # 'Yes' — but we seed unconditionally so switching a
-                # requirement on mid-edit doesn't flash an unseeded checkbox.
-                d = r[done_col] if done_col in r.index else 0
-                st.session_state[f"edit_{done_col}"] = (d == 1)
-
+            ),
             # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
             # NULL-able (schema: database.py ~line 84), so coerce None/NaN → ""
             # before it reaches st.text_area — the widget expects str, and
             # pandas hands back float('nan') for NULL cells on mixed-dtype
             # object columns (see _safe_str docstring for the TypeError).
-            st.session_state["edit_notes"] = _safe_str(r["notes"])
+            "edit_notes":          _safe_str(r["notes"]),
+        }
+        # T4-D / T4-E: one slot per req_* column for the Requirements radios
+        # and one slot per done_* column for the Materials checkboxes.
+        # Same F2-style coercion as priority/status: if a req_* column holds
+        # an unknown string (future migration, raw SQL edit) or is missing
+        # from the row (e.g. during a migration-in-progress test), fall back
+        # to 'No' — the schema default (DESIGN §5.1 + D21 Yes/Optional/No
+        # vocabulary). done_* is INTEGER 0/1; anything else coerces to
+        # False. The checkbox itself is only rendered by the Materials tab
+        # when its req_* is 'Yes', but we seed unconditionally so switching
+        # a requirement on mid-edit doesn't flash an unseeded checkbox.
+        for req_col, done_col, _label in config.REQUIREMENT_DOCS:
+            v = r[req_col] if req_col in r.index else None
+            canonical[f"edit_{req_col}"] = (
+                v if v in config.REQUIREMENT_VALUES else "No"
+            )
+            d = r[done_col] if done_col in r.index else 0
+            canonical[f"edit_{done_col}"] = (d == 1)
 
-            st.session_state["_edit_form_sid"]     = sid
+        # Two-phase apply (see Bug 1 / Bug 2 fix block above):
+        #   (a) Row CHANGE → force-overwrite every key so a fresh row's
+        #       data replaces the previously-cached values.
+        #   (b) Same row, key missing → restore from canonical (repairs
+        #       Streamlit's tab-unmount cleanup of widget session_state).
+        #   (c) Same row, key present → leave it alone (preserves AppTest
+        #       set_value semantics and any in-flight form draft commit).
+        sid_changed = st.session_state.get("_edit_form_sid") != sid
+        for _key, _value in canonical.items():
+            if sid_changed or _key not in st.session_state:
+                st.session_state[_key] = _value
+        st.session_state["_edit_form_sid"] = sid
 
         # Sub-task 13 / DESIGN §8.2: the edit panel's tab selector is a
         # config-driven `st.radio(horizontal=True, label_visibility="collapsed")`
