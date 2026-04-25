@@ -198,6 +198,25 @@ RESPONSE_TYPES: list[str] = [
     "Rejection", "Offer", "Other",
 ]
 
+# Named alias for the response that fires the R3 auto-promotion cascade
+# (DESIGN §9.3). database.upsert_application reads this rather than the
+# hardcoded literal so a future rename of the 'Offer' entry inside
+# RESPONSE_TYPES doesn't silently break R3 — same anti-typo guardrail
+# as the STATUS_* aliases. The literal lives here (not as
+# RESPONSE_TYPES[i]) because RESPONSE_TYPES order is not a contract;
+# only membership matters, and invariant #9 below catches drift.
+RESPONSE_TYPE_OFFER: str = "Offer"
+
+# Invariant (DESIGN §5.2 #9): RESPONSE_TYPE_OFFER must be a real
+# selectbox option. If a future rename drops 'Offer' from
+# RESPONSE_TYPES without also updating the alias, the user's pick
+# would never match the cascade trigger — caught at import-time
+# rather than as a silent R3 no-op in production.
+assert RESPONSE_TYPE_OFFER in RESPONSE_TYPES, (
+    f"RESPONSE_TYPE_OFFER={RESPONSE_TYPE_OFFER!r} must be a member of "
+    f"RESPONSE_TYPES={RESPONSE_TYPES!r}. R3 cascade depends on this."
+)
+
 # RESULT_DEFAULT must match the DEFAULT value in the applications table schema.
 # If you rename this string, also update the DEFAULT clause in database.init_db().
 RESULT_DEFAULT: str = "Pending"
