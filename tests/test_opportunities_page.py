@@ -2593,6 +2593,54 @@ class TestDeleteAction:
             f"Delete button label should be 'Delete', got {btn.label!r}"
         )
 
+    def test_dialog_warning_mentions_cascade_and_irreversibility(self, db):
+        """DESIGN §8.0 Confirmation pattern + §8.2 Delete row require an
+        @st.dialog confirm with explicit copy mentioning cascade effects.
+        Pin the warning content directly: it must reference the position
+        name (so the user knows which row they are about to delete), the
+        cascade to application + recommender rows (so the user understands
+        the impact beyond positions), and irreversibility (so the user
+        knows there is no undo). A regression that drops any of these
+        signals is a UX-correctness bug that the action-only delete tests
+        cannot catch — they verify the row leaves the DB, not that the
+        user was warned about what else goes with it."""
+        sid = database.add_position({"position_name": "Stanford BioStats"})
+        database.add_recommender(sid, {"recommender_name": "Prof X"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+
+        at.button(key=DELETE_BUTTON_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        # The dialog renders an st.warning whose text is what the user
+        # actually sees. A bare existence check would pass even if the
+        # copy were silently neutered — pin every load-bearing fragment.
+        assert at.warning, (
+            f"Delete dialog must render an st.warning; got "
+            f"{[el.value for el in at.warning]}"
+        )
+        warning_text = " ".join(el.value for el in at.warning)
+        assert "Stanford BioStats" in warning_text, (
+            f"Dialog warning must reference the position name so the user "
+            f"knows which row they are about to delete; got "
+            f"{warning_text!r}"
+        )
+        assert "recommender" in warning_text.lower(), (
+            f"Dialog warning must mention recommenders so the user "
+            f"understands the FK cascade impact; got {warning_text!r}"
+        )
+        assert "application" in warning_text.lower(), (
+            f"Dialog warning must mention applications so the user "
+            f"understands the FK cascade impact; got {warning_text!r}"
+        )
+        assert "cannot be undone" in warning_text.lower(), (
+            f"Dialog warning must signal irreversibility — without this "
+            f"the user has no warning that there is no undo path; got "
+            f"{warning_text!r}"
+        )
+
     def test_confirm_deletes_position(self, db):
         """Click Delete → Confirm → the position is gone from the DB.
         database.get_position(sid) raises KeyError for missing rows."""
