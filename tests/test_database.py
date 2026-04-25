@@ -1135,13 +1135,14 @@ class TestUpsertApplicationR3:
         )
         assert result["new_status"] is None
 
-    @pytest.mark.parametrize("terminal_status", [
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
-    ])
+    @pytest.mark.parametrize("terminal_status", config.TERMINAL_STATUSES)
     def test_r3_blocked_on_terminal(self, db, terminal_status):
-        """DESIGN §9.3 R3 guard: the SQL WHERE excludes all three
-        terminals. A stray upsert with response_type=Offer on a terminal
-        row must not silently regress the decision."""
+        """DESIGN §9.3 R3 guard: the SQL WHERE excludes every terminal
+        status. A stray upsert with response_type=Offer on a terminal
+        row must not silently regress the decision.
+
+        Sourced from config so a future fourth terminal status flows
+        into coverage automatically."""
         pid = database.add_position(make_position())
         _force_position_status(pid, terminal_status)
         result = database.upsert_application(pid, {"response_type": "Offer"})
@@ -1227,12 +1228,13 @@ class TestUpsertApplicationR1R3Matrix:
         assert result["status_changed"] is False
         assert result["new_status"] is None
 
-    @pytest.mark.parametrize("terminal_status", [
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
-    ])
+    @pytest.mark.parametrize("terminal_status", config.TERMINAL_STATUSES)
     def test_matrix_terminal_unchanged(self, db, terminal_status):
         """Matrix row: any terminal pre-state — R1 blocked (status != SAVED),
-        R3 blocked (status IN TERMINAL_STATUSES). Post == pre."""
+        R3 blocked (status IN TERMINAL_STATUSES). Post == pre.
+
+        Sourced from config so a future fourth terminal status flows
+        into coverage automatically."""
         pid = database.add_position(make_position())
         _force_position_status(pid, terminal_status)
         result = self._upsert_both(pid)
@@ -1309,6 +1311,35 @@ class TestUpsertApplicationAtomicity:
             "transaction as the primary write."
         )
         # And status remains at SAVED (the cascade never committed).
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+
+    def test_r3_cascade_failure_rolls_back_primary_write(self, db, monkeypatch):
+        """Companion to the R1 atomicity test above — pin R3's slice of
+        the same DESIGN §9.3 contract. R3 lives in its own
+        `conn.execute(...)` block (database.py upsert_application,
+        STATUS_OFFER cascade) so a regression that opened a new
+        connection or committed between R1 and R3 would only surface
+        here. Force R3 to fail by monkeypatching STATUS_OFFER to an
+        un-bindable sentinel; the primary applications upsert must roll
+        back along with the (failed) cascade."""
+        pid = database.add_position(make_position())
+
+        class NotBindable:
+            pass
+        monkeypatch.setattr(config, "STATUS_OFFER", NotBindable())
+
+        with pytest.raises(Exception):
+            database.upsert_application(pid, {"response_type": "Offer"})
+
+        # Primary write must have rolled back — no response_type.
+        app = database.get_application(pid)
+        assert app["response_type"] is None, (
+            "Primary applications UPDATE must roll back when the R3 "
+            f"cascade fails; got response_type={app['response_type']!r}. "
+            "DESIGN §9.3 atomicity — cascade inside the same transaction "
+            "as the primary write."
+        )
+        # And status stays at SAVED (R3 never committed).
         assert database.get_position(pid)["status"] == config.STATUS_SAVED
 
 
@@ -1573,6 +1604,33 @@ class TestGetUpcomingDeadlines:
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 1
 
+    def test_includes_deadline_exactly_at_window_boundary(self, db):
+        """SQL uses `deadline_date <= cutoff` where cutoff = today + days.
+        The exact boundary day must be included; a regression to `<`
+        would silently drop the last day of the window. Pin both sides
+        of the comparison together with the next test."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=30)).isoformat(),
+        }))
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 1, (
+            "Deadline exactly at the upper boundary (today + days) must "
+            "be included — SQL uses <=, not <."
+        )
+
+    def test_excludes_deadline_one_day_past_window(self, db):
+        """The companion to the boundary test above: today+days+1 must
+        be excluded. Pinning both rules together protects against an
+        off-by-one in either direction."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=31)).isoformat(),
+        }))
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 0, (
+            "Deadline one day past the window upper boundary must be "
+            "excluded."
+        )
+
     def test_excludes_closed_status(self, db):
         pos_id = database.add_position(make_position({
             "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
@@ -1746,9 +1804,7 @@ class TestAddInterview:
         assert df.iloc[0]["sequence"] == 1
 
     def test_auto_assigns_next_sequence_for_subsequent_interviews(self, db):
-        """Second interview on the same position picks sequence=2. Gaps
-        in sequence (delete #1, add two more) are allowed — MAX+1 picks
-        past any leftover gap so the UNIQUE constraint never collides."""
+        """Second interview on the same position picks sequence=2."""
         pid = database.add_position(make_position())
         database.add_interview(pid, {"scheduled_date": "2026-05-01"})
         database.add_interview(pid, {"scheduled_date": "2026-06-01"})
@@ -1756,6 +1812,34 @@ class TestAddInterview:
         seqs = list(df["sequence"])
         assert seqs == [1, 2], (
             f"Second add_interview must auto-sequence to 2; got {seqs!r}"
+        )
+
+    def test_auto_sequence_picks_past_gap_after_delete(self, db):
+        """Gaps in sequence (delete #1, add two more) are allowed —
+        MAX+1 picks past any leftover gap so the UNIQUE constraint
+        never collides. A regression to MIN-style numbering would
+        re-use sequence=1 here and fail.
+
+        Also pins that the auto-sequencer reads from MAX over ALL rows,
+        not COUNT(*) — a COUNT-based variant would assign sequence=2
+        after the delete (one row remains), colliding with the existing
+        sequence=2."""
+        pid = database.add_position(make_position())
+        res1 = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-06-01"})
+        # Drop sequence=1; sequence=2 row stays. MAX(sequence)=2.
+        database.delete_interview(res1["id"])
+
+        # Two more inserts — auto-sequencer must pick past the surviving
+        # MAX(=2). Expected new sequences: 3 and 4.
+        database.add_interview(pid, {"scheduled_date": "2026-07-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-08-01"})
+
+        seqs = list(database.get_interviews(pid)["sequence"])
+        assert seqs == [2, 3, 4], (
+            "Auto-sequence must pick MAX(sequence)+1 (past any gap from "
+            "a deleted row), not MIN-of-available or COUNT+1. Got "
+            f"{seqs!r}; expected [2, 3, 4] (the deleted #1 is not re-used)."
         )
 
     def test_explicit_sequence_override(self, db):
@@ -1800,17 +1884,33 @@ class TestAddInterview:
             f"{param.kind!r}"
         )
 
-    def test_propagate_status_false_accepted(self, db):
-        """Passing propagate_status=False must not raise in Sub-task 8,
-        and the return indicator stays unchanged (no cascade anyway)."""
+    def test_propagate_status_false_suppresses_r2_cascade(self, db):
+        """propagate_status=False must suppress R2 even when its conditions
+        are met. Pre-stage STATUS_APPLIED so R2 would fire under the default
+        (cascade promotes APPLIED→INTERVIEW); kwarg=False must keep the row
+        at APPLIED. The previous form pre-stayed STATUS_SAVED — R2's status
+        guard would block it either way, so a regression that ignored the
+        kwarg silently passed."""
         pid = database.add_position(make_position())
+        # Move to STATUS_APPLIED via the same writer that fires R1, so the
+        # test reflects a realistic pre-state rather than back-doored SQL.
+        database.upsert_application(pid, {"applied_date": "2026-04-10"})
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+
         result = database.add_interview(
             pid,
             {"scheduled_date": "2026-05-01"},
             propagate_status=False,
         )
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED, (
+            "propagate_status=False must suppress R2 when its conditions "
+            "(pre-state STATUS_APPLIED, interview insert succeeds) are met."
+        )
         assert result["status_changed"] is False
         assert result["new_status"] is None
+        # And the primary INSERT still landed — kwarg suppresses the cascade,
+        # not the interview row.
+        assert len(database.get_interviews(pid)) == 1
 
     def test_fk_violation_raises_on_nonexistent_application(self, db):
         """Inserting an interview for a position that doesn't exist
@@ -2002,12 +2102,13 @@ class TestAddInterviewR2:
         assert database.get_position(pid)["status"] == config.STATUS_OFFER
         assert result["status_changed"] is False
 
-    @pytest.mark.parametrize("terminal_status", [
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
-    ])
+    @pytest.mark.parametrize("terminal_status", config.TERMINAL_STATUSES)
     def test_r2_noop_when_terminal(self, db, terminal_status):
         """Status guard blocks: a stray interview record on a
-        terminal-status position must not silently regress."""
+        terminal-status position must not silently regress.
+
+        Sourced from config so a future fourth terminal status flows
+        into coverage automatically."""
         pid = database.add_position(make_position())
         _force_position_status(pid, terminal_status)
         result = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
@@ -3008,6 +3109,41 @@ class TestGetPendingRecommenders:
         df = database.get_pending_recommenders(7)
         assert len(df) == 0
 
+    def test_empty_string_submitted_date_currently_excluded(self, db):
+        """Pin the **current** behaviour and document a known asymmetry.
+
+        is_all_recs_submitted (database.py) treats both ``NULL`` and
+        ``""`` as "not submitted" (its WHERE is
+        ``submitted_date IS NULL OR submitted_date = ''``) — pinned by
+        TestIsAllRecsSubmitted::
+        test_empty_string_submitted_date_counts_as_unsubmitted.
+
+        get_pending_recommenders only filters on ``submitted_date IS NULL``.
+        A recommender whose date got cleared to ``""`` (which the page
+        legitimately writes per the Notes-tab clear-field round-trip
+        contract) is therefore "unsubmitted" by one helper but **silently
+        excluded** from the alert list by the other. This test pins the
+        current asymmetric behaviour so a future production change to
+        normalise the two helpers (e.g. adding ``OR submitted_date = ''``
+        to get_pending_recommenders) is a deliberate edit, not an
+        invisible drift — the test will then need to flip and assert
+        len(df) == 1, and an empty-string date will start surfacing as a
+        pending alert."""
+        pos_id = database.add_position(make_position())
+        database.add_recommender(pos_id, {
+            "recommender_name": "Dr. Jones",
+            "asked_date":     (date.today() - timedelta(days=10)).isoformat(),
+            "submitted_date": "",
+        })
+        df = database.get_pending_recommenders(7)
+        assert len(df) == 0, (
+            "Current behaviour: empty-string submitted_date is treated as "
+            "'submitted' by get_pending_recommenders (only IS NULL is "
+            "filtered). is_all_recs_submitted DISAGREES — both NULL and "
+            "'' count as unsubmitted there. If you reconcile the two, "
+            "flip this assertion to len(df) == 1 and update this docstring."
+        )
+
     def test_excludes_recommender_with_no_asked_date(self, db):
         pos_id = database.add_position(make_position())
         database.add_recommender(pos_id, {"recommender_name": "Dr. Ghost"})
@@ -3224,9 +3360,9 @@ class TestTerminalStatusesConfig:
             f"{df['status'].tolist()}"
         )
 
-    def test_terminal_statuses_are_subset_of_status_values(self):
-        """Guard: TERMINAL_STATUSES must all be valid STATUS_VALUES entries."""
-        assert set(config.TERMINAL_STATUSES) <= set(config.STATUS_VALUES)
+    # `test_terminal_statuses_are_subset_of_status_values` lives in
+    # tests/test_config.py — pure config-invariant check that needs no
+    # database fixture. Removed here to drop the duplicate.
 
 
 # ── _connect rollback on exception ───────────────────────────────────────────
