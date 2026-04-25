@@ -458,7 +458,11 @@ class TestFilterBarBehaviour:
         )
 
     def test_filter_by_status_narrows_results(self, db):
-        """Selecting a specific status must hide positions with other statuses."""
+        """Selecting a specific status must hide positions with other statuses,
+        AND the surviving row must be the one whose status matches — not the
+        opposite-status row. The count assertion alone would survive a
+        match/no-match swap; the row-identity assertion pins which row was
+        actually retained."""
         database.add_position({"position_name": "Open One"})                          # status defaults to [SAVED]
         database.add_position({"position_name": "Applied One", "status": "[APPLIED]"})
         at = _run_page()
@@ -468,6 +472,11 @@ class TestFilterBarBehaviour:
         assert len(at.caption) == 1
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected '1 position(s)' after status filter, got: {at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["Open One"], (
+            f"Status=[SAVED] filter must retain the [SAVED] row only, "
+            f"not the [APPLIED] row; got {names!r}"
         )
 
     def test_filter_by_status_no_match_shows_info(self, db):
@@ -482,7 +491,10 @@ class TestFilterBarBehaviour:
         )
 
     def test_filter_by_priority_narrows_results(self, db):
-        """Selecting a specific priority must hide positions with other priorities."""
+        """Selecting a specific priority must hide positions with other
+        priorities, AND the surviving row must be the matching-priority one.
+        See test_filter_by_status_narrows_results for the count-vs-identity
+        rationale."""
         database.add_position({"position_name": "High Prio", "priority": "High"})
         database.add_position({"position_name": "Med Prio",  "priority": "Medium"})
         at = _run_page()
@@ -493,9 +505,18 @@ class TestFilterBarBehaviour:
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected '1 position(s)' after priority filter, got: {at.caption[0].value!r}"
         )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["High Prio"], (
+            f"Priority=High filter must retain the High row only, not the "
+            f"Medium row; got {names!r}"
+        )
 
     def test_filter_by_field_substring_match(self, db):
-        """Field text filter must match positions whose field contains the search term."""
+        """Field text filter must match positions whose field contains the
+        search term, AND the surviving row must be the substring-matching
+        one. See test_filter_by_status_narrows_results for the count-vs-
+        identity rationale — a swapped predicate (e.g. ~contains) would
+        also produce count=1 here, only the row identity catches it."""
         database.add_position({"position_name": "ML Postdoc",    "field": "Machine Learning"})
         database.add_position({"position_name": "Stats Postdoc", "field": "Statistics"})
         at = _run_page()
@@ -505,6 +526,11 @@ class TestFilterBarBehaviour:
         assert len(at.caption) == 1
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected '1 position(s)' after field filter, got: {at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["ML Postdoc"], (
+            f"field~='Machine' must retain 'ML Postdoc' (field='Machine "
+            f"Learning'), not 'Stats Postdoc'; got {names!r}"
         )
 
     def test_filter_by_field_is_case_insensitive(self, db):
@@ -520,7 +546,12 @@ class TestFilterBarBehaviour:
         )
 
     def test_combined_status_and_priority_narrows_results(self, db):
-        """Both status and priority filters apply simultaneously (AND logic)."""
+        """Both status and priority filters apply simultaneously (AND logic).
+        With 3 rows wired so each pairwise pair (A∩B is [SAVED]; A∩C is
+        High) survives one filter alone, the AND-only survivor is A. The
+        row-identity assertion catches an OR-mistake that would also
+        produce count=1 in some seedings — and pins that A specifically
+        is the surviving row."""
         database.add_position({"position_name": "A", "priority": "High"})                          # [SAVED] + High
         database.add_position({"position_name": "B", "priority": "Medium"})                           # [SAVED] + Med
         database.add_position({"position_name": "C", "priority": "High", "status": "[APPLIED]"})   # [APPLIED] + High
@@ -532,6 +563,11 @@ class TestFilterBarBehaviour:
         assert len(at.caption) == 1
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected only position A after combined filter, got: {at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["A"], (
+            f"Combined filter [SAVED]+High must retain only A; B fails the "
+            f"priority check, C fails the status check. Got {names!r}"
         )
 
     def test_db_empty_with_filter_shows_original_empty_message(self, db):
@@ -550,7 +586,9 @@ class TestFilterBarBehaviour:
 
         'C++' contains regex metacharacters ('+' = one-or-more quantifier) that would
         raise re.error with str.contains(regex=True). With regex=False, it must match
-        'C++ Programming' correctly and return exactly 1 position."""
+        'C++ Programming' correctly and return exactly 1 position. The row-identity
+        assertion pins that the C++ row (not the Python row) is what survives —
+        guards against a swapped predicate that would also produce count=1."""
         database.add_position({"position_name": "C++ Postdoc",    "field": "C++ Programming"})
         database.add_position({"position_name": "Python Postdoc", "field": "Python"})
         at = _run_page()
@@ -561,6 +599,11 @@ class TestFilterBarBehaviour:
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected 'C++ Programming' to match literal 'C++' filter; "
             f"got: {at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["C++ Postdoc"], (
+            f"field~='C++' (literal) must retain 'C++ Postdoc' only, not "
+            f"'Python Postdoc'; got {names!r}"
         )
 
 
@@ -3021,7 +3064,9 @@ class TestFilterStatusFormatFunc:
     def test_filter_status_round_trip_filters_correctly(self, db):
         """End-to-end: selecting the display-labelled status must narrow the
         table to rows with the corresponding raw status — storage/display
-        split works transparently."""
+        split works transparently. The row-identity assertion pins that
+        the Applied row (not the Saved row) is what survives — a wrong-
+        column-compared regression would also produce count=1 here."""
         database.add_position({"position_name": "Saved Row"})                       # [SAVED] by default
         database.add_position({"position_name": "Applied Row", "status": config.STATUS_APPLIED})
         at = _run_page()
@@ -3033,6 +3078,11 @@ class TestFilterStatusFormatFunc:
         assert "1 position(s)" in at.caption[0].value, (
             f"Expected exactly 1 applied row after filter, got: "
             f"{at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["Applied Row"], (
+            f"Filter=Applied must retain 'Applied Row' only, not 'Saved Row'; "
+            f"got {names!r}"
         )
 
 
