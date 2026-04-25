@@ -3360,9 +3360,9 @@ class TestTerminalStatusesConfig:
             f"{df['status'].tolist()}"
         )
 
-    def test_terminal_statuses_are_subset_of_status_values(self):
-        """Guard: TERMINAL_STATUSES must all be valid STATUS_VALUES entries."""
-        assert set(config.TERMINAL_STATUSES) <= set(config.STATUS_VALUES)
+    # `test_terminal_statuses_are_subset_of_status_values` lives in
+    # tests/test_config.py — pure config-invariant check that needs no
+    # database fixture. Removed here to drop the duplicate.
 
 
 # ── _connect rollback on exception ───────────────────────────────────────────
