@@ -16,13 +16,67 @@ without rewriting existing code.
 ## Current Status
 
 **v0.4.0** — Phase 4 Tier 3 (Materials Readiness) shipped to `main` at commit `5ac0f63`.
-271 tests green · zero deprecation warnings.
+v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** v1.1 documentation refactor on branch `feature/docs-refactor-pre-t4` —
-drift fixes, new `docs/adr/` + `docs/dev-notes/`, testing/review conventions.
+**In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
+Sub-tasks 1–14 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
+migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
+DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
+`config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
+`"Med"→"Medium"` renames with two idempotent `UPDATE positions` loops in
+`init_db()`, `positions.updated_at` column + `AFTER UPDATE` trigger per
+§6.2 + D25 with `ALTER TABLE ADD COLUMN` + backfill for pre-v1.3 DBs,
+`positions.work_auth_note TEXT` column + Overview-tab
+`work_auth`/`work_auth_note` selectbox+text_area pair per §6.2 + §8.2 +
+D22, the new `interviews` sub-table + CRUD + migrate-once one-shot
+copy from `applications.interview1_date`/`interview2_date` + row-per-
+interview rewrite of `get_upcoming_interviews` per §6.2 + D18 with
+`app.py._next_interview_display` migrated to single-`scheduled_date`
+scan, the R1/R2/R3 pipeline auto-promotion cascade wired across
+`upsert_application` + `add_interview` with atomic rollback,
+`is_all_recs_submitted` helper, and `compute_materials_readiness` alias
+swap per §9.3 + §7 + D12 + D23, the `applications.confirmation_email`
+TEXT split into `confirmation_received INTEGER DEFAULT 0` +
+`confirmation_date TEXT` per §6.2 + §6.3 + D19 + D20 with PRAGMA-guarded
+`ALTER ADD COLUMN` + migrate-once gate running GLOB-based translation
+for ISO-date values and a `'Y'`-only flag UPDATE (physical drop of the
+legacy column deferred to v1.0-rc), the `recommenders` table rebuild
+per §6.2 + D19 + D20 translating `confirmed TEXT` → `INTEGER` tri-state
+and splitting `reminder_sent TEXT` into `INTEGER DEFAULT 0` +
+`reminder_sent_date TEXT` via the CREATE-COPY-DROP-RENAME recipe inside
+one transaction — idempotence gate keyed on `confirmed`'s declared
+type, `app.py` alignment with DESIGN §8.0 + §8.1: `st.set_page_config`
+with wide layout + locked page_title/page_icon (D14), removal of the
+🔄 Refresh button (D13), Tracked KPI help-tooltip, `FUNNEL_BUCKETS`-
+driven funnel with the "Archived" bucket aggregating [REJECTED] +
+[DECLINED] (D17), single `[expand]` button + session flag
+`st.session_state["_funnel_expanded"]` (D24), and the three-branch
+empty-state matrix — terminal-only DB now lands in branch (b) with an
+info + `[expand]` recovery button rather than rendering the figure, and
+`pages/1_Opportunities.py` alignment with DESIGN §8.0 + §8.2:
+`st.set_page_config` with wide layout (D14),
+`filter_status`/`edit_status` selectboxes gain `format_func` so the UI
+renders `STATUS_LABELS` while storage keeps raw bracketed values, and
+the edit-panel tab-strip swapped from `st.tabs` to
+`st.radio(horizontal=True, key="edit_active_tab")` + branch-rendering
+so the Delete button could be relocated BELOW the panel, gated by
+`active_tab == "Overview"` — on non-Overview tabs the button is no
+longer in the DOM at all (pre-Sub-task-13 it was CSS-hidden but still
+present), and the v1.3 doc-alignment sweep updating `GUIDELINES.md`
+(stage-0 alias + grep rule + status-selectbox example flipped from
+`STATUS_OPEN`/`[OPEN]` to `STATUS_SAVED`/`[SAVED]`;
+`format_func=STATUS_LABELS.get` + `edit_active_tab` widget key (per
+the post-Sub-task-14 follow-up landing it under DESIGN §8.0's
+`edit_` widget-key scope rather than the `_` sentinel scope) +
+`_funnel_expanded` sentinel added per DESIGN §8.0 + Sub-tasks 12/13),
+`CHANGELOG.md`, `TASKS.md`, and this file to match DESIGN v1.3 — pure
+docs change, no schema, no test drift. 441 tests green · zero
+deprecation warnings.
 
-**Next up:** Phase 4 Tier 4 (Upcoming timeline). Estimated 2.5 hr / 2 sessions.
+**Next up:** push branch, open PR, merge to main — all v1.3 alignment
+items now landed. After merge, resume Phase 4 Tier 4 (Upcoming
+timeline).
 
 ---
 
@@ -60,8 +114,8 @@ v1.0 ships when **all three** are true:
 
 | Tier | Scope | Status |
 |------|-------|--------|
-| T1 | Shell + 4 KPI cards + 🔄 refresh + empty-DB hero | ✅ v0.2.0 (`f49ec5f`) |
-| T2 | Application funnel (Plotly + empty state + left half-column) | ✅ v0.3.0 (`96a5c76`) |
+| T1 | Shell + 4 KPI cards + empty-DB hero (Tracked KPI help-tooltip + set_page_config + refresh-button removal applied as v1.3 Sub-task 12) | ✅ v0.2.0 (`f49ec5f`) · v1.3 updates on `feature/align-v1.3` |
+| T2 | Application funnel (Plotly + empty state + left half-column; FUNNEL_BUCKETS aggregation + [expand] toggle + 3-branch empty-state applied as v1.3 Sub-task 12) | ✅ v0.3.0 (`96a5c76`) · v1.3 updates on `feature/align-v1.3` |
 | T3 | Materials readiness (two progress bars + CTA + empty state) | ✅ v0.4.0 (`5ac0f63`) |
 | T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | 🟠 next |
 | T5 | Recommender alerts (grouped by person; `mailto:` link) | ⏳ pending |
@@ -87,7 +141,10 @@ v1.0 ships when **all three** are true:
 
 - Urgency colors on the positions table
 - Search bar on Opportunities (currently filter-only)
-- `st.set_page_config(layout="wide")` across the app
+- ~~`st.set_page_config(layout="wide")` across the app~~ — `app.py`
+  done as v1.3 alignment Sub-task 12; `pages/1_Opportunities.py`
+  done as v1.3 alignment Sub-task 13; other `pages/*.py` follow when
+  each page is built (DESIGN §8 specifies it on every page).
 - Confirm dialogs audit
 - Responsive layout check
 
@@ -102,14 +159,14 @@ ordering, not a commitment.
 
 | Item | Source | Notes |
 |------|--------|-------|
-| Rename `[OPEN]` → `[SAVED]` + `"Med"` → `"Medium"` | Design critique (friend #1) | Planned for v0.5 code-refactor; doc landed in v1.1 |
-| Presentation-layer `STATUS_LABELS` + `ARCHIVED_BUCKET` | Design critique | Same batch as rename |
-| Delete 🔄 Refresh button | Design critique (friend #2) | Same batch |
+| ~~Rename `[OPEN]` → `[SAVED]` + `"Med"` → `"Medium"`~~ | Design critique (friend #1) | Shipped as v1.3 alignment Sub-task 5 on `feature/align-v1.3` |
+| ~~Presentation-layer `STATUS_LABELS` + Archived bucket~~ | Design critique | STATUS_LABELS shipped Sub-task 1; Archived bucket (`[REJECTED]`+`[DECLINED]`, D17) wired into `app.py` funnel as Sub-task 12 |
+| ~~Delete 🔄 Refresh button~~ | Design critique (friend #2) | Shipped as v1.3 alignment Sub-task 12 (per DESIGN D13) |
 | Soft-delete with undo toast | UX | Requires `archived_at` column + FK cascade adjustment |
 | Interactive funnel (click → filtered Opportunities) | Friend #3 | Plotly click events + `st.session_state` filter handoff |
 | Position search bar on Opportunities | UX | Substring search on `position_name` + `institute` |
 | Clickable `link` column via `st.column_config.LinkColumn` | UX | 10-line change |
-| Tooltip on "Tracked" KPI explaining semantics | UX | `st.metric(..., help=...)` |
+| ~~Tooltip on "Tracked" KPI explaining semantics~~ | UX | Shipped as v1.3 alignment Sub-task 12 — locked copy `"Saved + Applied — positions you're still actively pursuing"` |
 
 ### P2 — medium term
 
