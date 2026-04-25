@@ -1148,6 +1148,51 @@ write that triggered the export had already succeeded — exactly the
 469/469 pytest green (default + `-W error::DeprecationWarning`) —
 +14 new tests, +0 prior tests touched.
 
+### Fixed — v1.3 alignment widget-key naming follow-up (branch `feature/align-v1.3`)
+
+Fourth code-review follow-up. Renames the Opportunities edit-panel
+tab-selector radio's widget key from `_active_edit_tab` to
+`edit_active_tab` so it follows DESIGN §8.0's widget-key scope table.
+The leading-`_` prefix is documented as reserved for internal session-
+state sentinels (`_edit_form_sid`, `_skip_table_reset`,
+`_delete_target_id`, `_funnel_expanded`); the tab selector is a real
+widget, not a sentinel-only slot, so the `edit_` widget-key prefix is
+its documented home — same scope as `edit_position_name`,
+`edit_notes`, etc. Sub-task 14 had classified `_active_edit_tab` as a
+sentinel in `GUIDELINES.md` §3 because the slot is read from non-
+widget code paths (the Delete-button visibility gate); the §8.0
+scope table is unambiguous on the rule though, so this follow-up
+sides with the table.
+
+- **`pages/1_Opportunities.py`** — `key="_active_edit_tab"` →
+  `key="edit_active_tab"`. Inline comment refreshed to reference
+  `session_state["edit_active_tab"]` and gains a short paragraph
+  recording the §8.0 rationale.
+- **`tests/test_opportunities_page.py`** — `TAB_SELECTOR_KEY`
+  constant rebinds to `"edit_active_tab"`; descriptive prose in
+  comments / docstrings naming the old key (Sub-task 13 class
+  header, `_select_row_and_tab` docstring, §8.2 Delete-button
+  tab-sensitivity comment block, §8.2 Delete-row prose) updates to
+  the new key. A single forward-explaining note marks the
+  migration-history so future readers see why the constant flipped.
+  All test references go through the `TAB_SELECTOR_KEY` constant —
+  no per-test rewrites needed.
+- **`GUIDELINES.md` §3** — `_active_edit_tab` removed from the
+  internal-sentinel list; `edit_active_tab` appended to the
+  edit-panel widget-key example. Sub-task 14's classification is
+  superseded.
+- **`roadmap.md`** — current-state paragraph updated: the radio
+  declaration reads `key="edit_active_tab"`; the prose splits the
+  `edit_active_tab` widget key from the `_funnel_expanded` sentinel
+  in the doc-sweep summary.
+- **`CHANGELOG.md` Sub-task 13 / Sub-task 14 entries** — LEFT
+  unchanged (historical record of what shipped at the time). This
+  block is the canonical post-rename record.
+- **`TASKS.md` done-item entries** — LEFT unchanged, same rationale.
+
+469/469 pytest green (default + `-W error::DeprecationWarning`) —
++0 new tests, 41 tab-related tests rebound to the new constant.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
