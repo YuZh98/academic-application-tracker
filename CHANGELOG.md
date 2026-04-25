@@ -1193,6 +1193,42 @@ sides with the table.
 469/469 pytest green (default + `-W error::DeprecationWarning`) —
 +0 new tests, 41 tab-related tests rebound to the new constant.
 
+### Fixed — v1.3 alignment date-shape divergence cross-reference (branch `feature/align-v1.3`)
+
+Fifth code-review follow-up. Pure docs change. The Sub-task 10
+`confirmation_email` split and the Sub-task 11 `recommenders` rebuild
+both perform a dual-purpose-column split into a
+`(flag INTEGER, date TEXT)` pair, but they translate a date-shaped
+legacy value differently — `confirmation_email` lands a date as
+`received = 1` + `date = value` while `reminder_sent` lands the same
+shape as `reminder_sent = 0` + `reminder_sent_date = value`. Both
+behaviours are pinned by tests since v1.3 alignment landed, but the
+WHY of the divergence was nowhere on record — a future maintainer
+reading the two tests side-by-side could read one as a bug relative
+to the other.
+
+- **`DESIGN.md` §6.3** — new "Flag/date split divergence —
+  `confirmation_email` vs `reminder_sent`" paragraph after the
+  manual-migration table, before "Migration discipline". Explains
+  the per-column rationale (confirmation_email's pre-v1.3 semantics
+  tied a date strongly to "received"; reminder_sent saw both
+  date-only and `'Y'`-only legacy use without a clear "date implies
+  sent" rule, so the user re-saves to flip the flag if intended)
+  and names both pinning tests.
+- **`database.py`** — extends the existing recommenders-rebuild
+  comment block with a 9-line note immediately after the
+  `reminder_sent` CASE rules table. Cross-references the new §6.3
+  paragraph and includes a 1-sentence short-version so a maintainer
+  mid-rebuild who can't context-switch to the spec still sees the
+  load-bearing reason inline.
+- **No code change, no test change.** The behaviour is unchanged
+  and was already pinned by
+  `test_migration_copies_date_string_to_both_fields` and
+  `test_migration_splits_date_shaped_reminder_sent_into_new_column`.
+
+469/469 pytest green (default + `-W error::DeprecationWarning`) —
++0 new tests, +0 prior tests touched.
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
