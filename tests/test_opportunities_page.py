@@ -1625,24 +1625,34 @@ class TestNotesTabWidgets:
             f"widget-value trap. Got {second!r}"
         )
 
-    def test_unwired_save_buttons_still_disabled(self, db):
-        """Remaining disabled Tier-5 save buttons must still carry the
-        'Coming in Tier 5' tooltip until every tab's save is wired.
+    def test_no_save_buttons_are_disabled_post_tier5(self, db):
+        """Tier 5 fully shipped — every per-tab save button must render
+        ENABLED. The previous form (test_unwired_save_buttons_still_disabled)
+        iterated the remaining-disabled list and tooltip-checked each;
+        once Tier 5 landed that list went empty and the for-loop became
+        a no-op, asserting nothing.
 
-        T5-A enabled Overview. T5-B enabled Requirements. T5-C enables
-        Materials. T5-D enables Notes. As each sub-task lands, the count
-        of disabled placeholders shrinks toward 0; this test pins that
-        every placeholder that IS still present carries the tooltip, so
-        no Tier-5 save ever renders enabled but broken."""
+        Inverting the assertion turns the same scaffolding into a real
+        regression guard: if anyone re-introduces a `disabled=True` save
+        button (e.g. by checking out an old branch and re-merging it
+        without conflict resolution), this test fails loudly."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        disabled = [b for b in at.button if getattr(b, "disabled", False)]
-        # The Tier-5 tooltip must appear on every disabled placeholder.
-        for b in disabled:
-            assert "Tier 5" in (b.help or ""), (
-                f"Disabled Save button missing Tier-5 tooltip: help={b.help!r}"
+        # Each tab has its own save button — exercise all four to cover
+        # every enabled-state.
+        for tab_name in config.EDIT_PANEL_TABS:
+            at.session_state[TAB_SELECTOR_KEY] = tab_name
+            at.run()
+            disabled = [
+                b for b in at.button if getattr(b, "disabled", False)
+            ]
+            assert disabled == [], (
+                f"On the {tab_name!r} tab, found disabled buttons "
+                f"post-Tier-5: {[b.label for b in disabled]!r}. "
+                "Tier 5 wired every per-tab save; a disabled save "
+                "would mean a sub-task regression."
             )
 
 
@@ -1705,34 +1715,66 @@ def _select_row_and_tab(at: AppTest, row_index: int, tab_name: str) -> None:
 
 class TestOverviewSave:
 
-    def test_save_persists_all_seven_fields(self, db):
+    def test_save_persists_all_nine_fields(self, db):
         """Round-trip: edit every Overview widget, click Save, assert the DB
         row reflects every new value. Guards against a field being added to
-        the form but forgotten in the update_position payload."""
+        the form but forgotten in the update_position payload.
+
+        Coverage MUST equal EDIT_KEYS keys in the Overview save payload —
+        the previous form covered 7 of 9 (work_auth and work_auth_note
+        were missed when Sub-task 7 added them to the form), exactly the
+        regression class this test was supposed to catch. The
+        len(payload) == len(EDIT_KEYS) assertion below makes the
+        invariant explicit: a future field addition that lands in
+        EDIT_KEYS but not in the round-trip will fail loudly."""
         database.add_position({
-            "position_name": "Original Name",
-            "institute":     "Original Inst",
-            "field":         "Original Field",
-            "priority":      "Medium",
-            "status":        "[SAVED]",
-            "deadline_date": "2026-01-01",
-            "link":          "https://old.example",
+            "position_name":  "Original Name",
+            "institute":      "Original Inst",
+            "field":          "Original Field",
+            "priority":       "Medium",
+            "status":         "[SAVED]",
+            "deadline_date":  "2026-01-01",
+            "link":           "https://old.example",
+            "work_auth":      "Unknown",
+            "work_auth_note": "original note",
         })
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         sid = at.session_state["selected_position_id"]
 
-        # Edit every field.
-        at.text_input(key=EDIT_KEYS["position_name"]).set_value("New Name")
-        at.text_input(key=EDIT_KEYS["institute"]).set_value("New Inst")
-        at.text_input(key=EDIT_KEYS["field"]).set_value("New Field")
-        at.selectbox(key=EDIT_KEYS["priority"]).set_value("High")
-        at.selectbox(key=EDIT_KEYS["status"]).set_value("[APPLIED]")
-        at.date_input(key=EDIT_KEYS["deadline_date"]).set_value(
-            datetime.date(2026, 9, 15)
+        # Edit every field. New values keyed by the EDIT_KEYS logical
+        # name so a future EDIT_KEYS rename surfaces here, and the
+        # cardinality check below ties the test to EDIT_KEYS one-to-one.
+        new_values: dict[str, object] = {
+            "position_name":  "New Name",
+            "institute":      "New Inst",
+            "field":          "New Field",
+            "priority":       "High",
+            "status":         "[APPLIED]",
+            "deadline_date":  datetime.date(2026, 9, 15),
+            "link":           "https://new.example",
+            "work_auth":      "Yes",
+            "work_auth_note": "OPT eligible, sponsorship not needed",
+        }
+        assert set(new_values) == set(EDIT_KEYS), (
+            "test_save_persists_all_nine_fields must cover every EDIT_KEYS "
+            f"entry one-to-one. Diff: missing from new_values: "
+            f"{set(EDIT_KEYS) - set(new_values)!r}; "
+            f"extra in new_values: {set(new_values) - set(EDIT_KEYS)!r}. "
+            "If you added a field to EDIT_KEYS, also add it here AND wire "
+            "it into the Overview save payload in pages/1_Opportunities.py."
         )
-        at.text_input(key=EDIT_KEYS["link"]).set_value("https://new.example")
+
+        at.text_input(key=EDIT_KEYS["position_name"]).set_value(new_values["position_name"])
+        at.text_input(key=EDIT_KEYS["institute"]).set_value(new_values["institute"])
+        at.text_input(key=EDIT_KEYS["field"]).set_value(new_values["field"])
+        at.selectbox(key=EDIT_KEYS["priority"]).set_value(new_values["priority"])
+        at.selectbox(key=EDIT_KEYS["status"]).set_value(new_values["status"])
+        at.date_input(key=EDIT_KEYS["deadline_date"]).set_value(new_values["deadline_date"])
+        at.text_input(key=EDIT_KEYS["link"]).set_value(new_values["link"])
+        at.selectbox(key=EDIT_KEYS["work_auth"]).set_value(new_values["work_auth"])
+        at.text_area(key=EDIT_KEYS["work_auth_note"]).set_value(new_values["work_auth_note"])
 
         at.button(key=OVERVIEW_SUBMIT_KEY).click()
         _keep_selection(at, 0)   # mimic browser-side selection persistence
@@ -1740,13 +1782,15 @@ class TestOverviewSave:
 
         assert not at.exception, f"Save raised: {at.exception}"
         row = database.get_position(sid)
-        assert row["position_name"] == "New Name"
-        assert row["institute"]     == "New Inst"
-        assert row["field"]         == "New Field"
-        assert row["priority"]      == "High"
-        assert row["status"]        == "[APPLIED]"
-        assert row["deadline_date"] == "2026-09-15"
-        assert row["link"]          == "https://new.example"
+        assert row["position_name"]  == "New Name"
+        assert row["institute"]      == "New Inst"
+        assert row["field"]          == "New Field"
+        assert row["priority"]       == "High"
+        assert row["status"]         == "[APPLIED]"
+        assert row["deadline_date"]  == "2026-09-15"
+        assert row["link"]           == "https://new.example"
+        assert row["work_auth"]      == "Yes"
+        assert row["work_auth_note"] == "OPT eligible, sponsorship not needed"
 
     def test_save_shows_toast_on_success(self, db):
         """Success confirmation uses st.toast (not st.success) so it survives

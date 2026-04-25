@@ -1138,6 +1138,11 @@ class TestT2DFunnelExpand:
         buttons = self._expand_buttons(at)
         assert len(buttons) == 1
         buttons[0].click().run()
+        # The on_click callback runs inside Streamlit's widget pipeline;
+        # AppTest captures any callback exception on at.exception. Without
+        # this assertion a broken _expand_funnel callback would slip
+        # silently through to the post-click absence check below.
+        assert not at.exception, f"[expand] click raised: {at.exception}"
         assert self._expand_buttons(at) == [], (
             "Post-click: [expand] must not re-render (already expanded). "
             f"Got button labels: {[b.label for b in at.button]}"
@@ -1159,6 +1164,10 @@ class TestT2DFunnelExpand:
         buttons = self._expand_buttons(at)
         assert len(buttons) == 1
         buttons[0].click().run()
+        # AppTest captures callback exceptions on at.exception; assert it
+        # didn't fire so a broken _expand_funnel callback is visible
+        # before the chart-presence assertion below.
+        assert not at.exception, f"[expand] click raised: {at.exception}"
         # Post-click: branch (c) with chart including all buckets.
         assert len(at.get("plotly_chart")) >= 1, (
             "Post-click from branch (b): chart must render."
