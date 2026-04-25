@@ -249,7 +249,8 @@ auto-promotion rules). Longer enumerations are described by category
 | `WORK_AUTH_OPTIONS` | `list[str]` | Three-value categorical (`Yes` / `No` / `Unknown`) answering "does the posting accept this applicant's work authorization?" Paired with freetext `work_auth_note` for nuance (D22). |
 | `FULL_TIME_OPTIONS` | `list[str]` | Employment type: `Full-time` / `Part-time` / `Contract`. |
 | `SOURCE_OPTIONS` | `list[str]` | Where the posting was found (lab site, job board, referral, etc.). Fuels the P3 "source effectiveness" analytic sketched in §12.7. |
-| `RESPONSE_TYPES` | `list[str]` | First-response categorization. The value `"Offer"` fires auto-promotion rule R3 (§9.3). |
+| `RESPONSE_TYPES` | `list[str]` | First-response categorization. The value `"Offer"` fires auto-promotion rule R3 (§9.3); referenced from `database.py` via the `RESPONSE_TYPE_OFFER` alias below. |
+| `RESPONSE_TYPE_OFFER` | `str` | Named alias for the R3 cascade trigger (`"Offer"`) — anti-typo guardrail mirroring the `STATUS_*` alias pattern so `database.upsert_application` is insulated from a future rename of the `RESPONSE_TYPES` entry. Drift caught by §5.2 invariant #9. |
 | `RESULT_DEFAULT` | `str` | `"Pending"` — matches the `applications.result` schema `DEFAULT` clause; renaming requires a one-shot `UPDATE` migration (§6.3). |
 | `RESULT_VALUES` | `list[str]` | Final application outcome; starts with `RESULT_DEFAULT`, then accepted / declined / rejected / withdrawn. |
 | `RELATIONSHIP_TYPES` | `list[str]` | Recommender-to-applicant relationship (advisor / committee / collaborator / …). |
@@ -292,6 +293,7 @@ before any page renders:
 6. `FUNNEL_DEFAULT_HIDDEN <= {label for label, _, _ in FUNNEL_BUCKETS}` — the hidden-by-default set references real bucket labels
 7. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label
 8. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
+9. `RESPONSE_TYPE_OFFER in RESPONSE_TYPES` — the R3 cascade trigger (§9.3) must be a real `RESPONSE_TYPES` selectbox option; catches a rename that drops `"Offer"` without updating the alias
 
 ### 5.3 Extension recipes
 
@@ -469,6 +471,24 @@ evolution happens in one of three shapes:
 | Split a dual-purpose column | (a) `ALTER TABLE ... ADD COLUMN` for the new columns; (b) one-shot `UPDATE` translating the old column's values into the new columns; (c) leave the old column NULL until a follow-up release rebuilds the table to drop it. |
 | Normalize flat columns into a sub-table | (a) `CREATE TABLE` the new sub-table; (b) `INSERT INTO` copying old columns; (c) leave old columns NULL until a rebuild drops them; (d) update application code to read from the sub-table. |
 | Remove a column | SQLite requires a table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM <t>; DROP TABLE <t>; ALTER TABLE new RENAME TO <t>`. Breaking change — document in CHANGELOG. |
+
+**Flag/date split divergence — `confirmation_email` vs `reminder_sent`.**
+Both migrations split a dual-purpose TEXT column into a
+`(flag INTEGER, date TEXT)` pair but translate a date-shaped legacy
+value differently — intentionally, not by accident.
+`applications.confirmation_email`'s date-shape lands as `received = 1`
++ `date = value` because pre-v1.3 semantics tied a recorded date
+strongly to "received" (a user wouldn't write a date if no receipt
+happened). `recommenders.reminder_sent`'s date-shape lands as
+`reminder_sent = 0` + `reminder_sent_date = value` (the conservative
+reading) because pre-v1.3 reminder_sent saw both date-only and
+`'Y'`-only legacy use without a clear "date implies sent" rule; the
+user re-saves to flip the flag if intended. Pinned by
+`test_migration_copies_date_string_to_both_fields` and
+`test_migration_splits_date_shaped_reminder_sent_into_new_column`
+respectively. A future maintainer reading the two tests side-by-side
+should expect the divergence rather than treat one as a bug relative
+to the other.
 
 **Migration discipline:** every schema or vocabulary change lands with a
 `Migration:` note in `CHANGELOG.md` under the release that introduces
@@ -790,18 +810,19 @@ accept a keyword argument `propagate_status: bool = True`; when False,
 no pipeline promotion fires.
 
 **Placeholder convention.** In the SQL snippets below, `<STATUS_*>`
-placeholders interpolate to the corresponding `config.py` alias value
-at query-construction time, and `<TERMINAL_STATUSES>` interpolates to
-the tuple of all terminal status values. References elsewhere in this
-section use the alias names directly (e.g. `STATUS_APPLIED`) rather
-than the underlying literal (e.g. `[APPLIED]`), so a rename in
+and `<RESPONSE_TYPE_OFFER>` placeholders interpolate to the
+corresponding `config.py` alias value at query-construction time, and
+`<TERMINAL_STATUSES>` interpolates to the tuple of all terminal status
+values. References elsewhere in this section use the alias names
+directly (e.g. `STATUS_APPLIED`, `RESPONSE_TYPE_OFFER`) rather than
+the underlying literal (e.g. `[APPLIED]`, `"Offer"`), so a rename in
 `config.py` does not ripple into this section.
 
 | # | Trigger (in which writer) | Condition | Cascade |
 |---|--------------------------|-----------|---------|
 | R1 | `upsert_application` | `applied_date` transitions from NULL to non-NULL | `UPDATE positions SET status = '<STATUS_APPLIED>' WHERE id = ? AND status = '<STATUS_SAVED>'` |
 | R2 | `add_interview` | Any successful interview insert | `UPDATE positions SET status = '<STATUS_INTERVIEW>' WHERE id = ? AND status = '<STATUS_APPLIED>'` |
-| R3 | `upsert_application` | `response_type` transitions to `"Offer"` | `UPDATE positions SET status = '<STATUS_OFFER>' WHERE id = ? AND status NOT IN (<TERMINAL_STATUSES>)` |
+| R3 | `upsert_application` | `response_type` transitions to `<RESPONSE_TYPE_OFFER>` | `UPDATE positions SET status = '<STATUS_OFFER>' WHERE id = ? AND status NOT IN (<TERMINAL_STATUSES>)` |
 
 **R1 and R2 are idempotent by construction** — the `AND status = '<prev>'`
 guard makes the cascade a no-op when the position is already at or past
@@ -821,9 +842,9 @@ Receiving an Offer while at `STATUS_SAVED`, `STATUS_APPLIED`, or
 position already in a terminal stage (any member of
 `TERMINAL_STATUSES`) is **not** silently regressed — the user must
 first move the status out of the terminal bucket, and then the next
-`upsert_application` with `response_type = "Offer"` will promote. This
-prevents a stray edit, data import, or misread response from clobbering
-a terminal decision.
+`upsert_application` with `response_type = RESPONSE_TYPE_OFFER` will
+promote. This prevents a stray edit, data import, or misread response
+from clobbering a terminal decision.
 
 If R1 and R3 fire from the same `upsert_application` call, the combined
 effect depends on the pre-state. The per-state behaviour is:

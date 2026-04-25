@@ -220,7 +220,7 @@ class TestQuickAddFormBehaviour:
         assert at.toast, "Expected st.toast after a valid quick-add submission"
 
     def test_new_position_has_open_status(self, db):
-        """Positions added via quick-add must default to STATUS_VALUES[0] ('[OPEN]')."""
+        """Positions added via quick-add must default to STATUS_VALUES[0] ('[SAVED]')."""
         at = _run_page()
         at.text_input(key="qa_position_name").input("Yale Postdoc")
         at.button(key=SUBMIT_KEY).click()
@@ -266,16 +266,16 @@ class TestPositionsTable:
 
     def test_table_row_count_matches_filtered_count(self, db):
         """Row count in the dataframe must match the filter-narrowed position count."""
-        database.add_position({"position_name": "A"})                          # [OPEN] by default
-        database.add_position({"position_name": "B"})                          # [OPEN] by default
+        database.add_position({"position_name": "A"})                          # [SAVED] by default
+        database.add_position({"position_name": "B"})                          # [SAVED] by default
         database.add_position({"position_name": "C", "status": "[APPLIED]"})
         at = _run_page()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         assert not at.exception
         assert len(at.dataframe) == 1
         assert len(at.dataframe[0].value) == 2, (
-            f"Expected 2 rows after status=[OPEN] filter, got {len(at.dataframe[0].value)}"
+            f"Expected 2 rows after status=[SAVED] filter, got {len(at.dataframe[0].value)}"
         )
 
     def test_table_has_required_columns(self, db):
@@ -416,10 +416,14 @@ class TestFilterBarStructure:
         at.text_input(key="filter_field")
 
     def test_status_options_match_config(self, db):
-        """Status filter must offer 'All' plus every value from config.STATUS_VALUES."""
+        """Status filter must offer 'All' plus an entry per config.STATUS_VALUES,
+        exposed via format_func=STATUS_LABELS.get (Sub-task 13 / DESIGN §8.0)
+        so the rendered options are display labels while the underlying raw
+        values drive the filter predicate. Options list returned by AppTest
+        is the post-format_func display strings."""
         at = _run_page()
         actual = list(at.selectbox(key="filter_status").options)
-        expected = ["All"] + config.STATUS_VALUES
+        expected = ["All"] + [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
         assert actual == expected, (
             f"Status filter options mismatch.\n"
             f"  Expected: {expected}\n"
@@ -455,10 +459,10 @@ class TestFilterBarBehaviour:
 
     def test_filter_by_status_narrows_results(self, db):
         """Selecting a specific status must hide positions with other statuses."""
-        database.add_position({"position_name": "Open One"})                          # status defaults to [OPEN]
+        database.add_position({"position_name": "Open One"})                          # status defaults to [SAVED]
         database.add_position({"position_name": "Applied One", "status": "[APPLIED]"})
         at = _run_page()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
@@ -468,7 +472,7 @@ class TestFilterBarBehaviour:
 
     def test_filter_by_status_no_match_shows_info(self, db):
         """When the status filter matches no rows, a specific info message must appear."""
-        database.add_position({"position_name": "Open One"})  # [OPEN] by default
+        database.add_position({"position_name": "Open One"})  # [SAVED] by default
         at = _run_page()
         at.selectbox(key="filter_status").select("[APPLIED]")
         at.run()
@@ -480,7 +484,7 @@ class TestFilterBarBehaviour:
     def test_filter_by_priority_narrows_results(self, db):
         """Selecting a specific priority must hide positions with other priorities."""
         database.add_position({"position_name": "High Prio", "priority": "High"})
-        database.add_position({"position_name": "Med Prio",  "priority": "Med"})
+        database.add_position({"position_name": "Med Prio",  "priority": "Medium"})
         at = _run_page()
         at.selectbox(key="filter_priority").select("High")
         at.run()
@@ -517,11 +521,11 @@ class TestFilterBarBehaviour:
 
     def test_combined_status_and_priority_narrows_results(self, db):
         """Both status and priority filters apply simultaneously (AND logic)."""
-        database.add_position({"position_name": "A", "priority": "High"})                          # [OPEN] + High
-        database.add_position({"position_name": "B", "priority": "Med"})                           # [OPEN] + Med
+        database.add_position({"position_name": "A", "priority": "High"})                          # [SAVED] + High
+        database.add_position({"position_name": "B", "priority": "Medium"})                           # [SAVED] + Med
         database.add_position({"position_name": "C", "priority": "High", "status": "[APPLIED]"})   # [APPLIED] + High
         at = _run_page()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.selectbox(key="filter_priority").select("High")
         at.run()
         assert not at.exception
@@ -618,11 +622,11 @@ class TestRowSelection:
             {"position_name": "Applied One", "status": "[APPLIED]"}
         )
         pid_open = database.add_position(
-            {"position_name": "Open One", "status": "[OPEN]"}
+            {"position_name": "Open One", "status": "[SAVED]"}
         )
         at = AppTest.from_file(PAGE)
         at.run()
-        at.selectbox(key="filter_status").select("[OPEN]")
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         # df_display now has exactly one row: "Open One". Row 0 must map to pid_open.
         _select_row(at, 0)
@@ -636,7 +640,7 @@ class TestRowSelection:
         """When an active filter hides all rows (or the DB goes empty), any stale
         selection must be cleared so later tiers (tabs, edit panel) don't render
         for a position the user can no longer see."""
-        database.add_position({"position_name": "Alpha", "status": "[OPEN]"})
+        database.add_position({"position_name": "Alpha", "status": "[SAVED]"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
@@ -710,7 +714,7 @@ class TestRowSelection:
         bug once Tier 5 Save wires up."""
         pid_alpha = database.add_position(
             {"position_name":  "Alpha",
-             "status":         "[OPEN]",
+             "status":         "[SAVED]",
              "deadline_date":  "2026-06-01"}
         )
         pid_beta = database.add_position(
@@ -726,8 +730,8 @@ class TestRowSelection:
             f"Precondition: row 0 unfiltered must bind to Beta={pid_beta}; "
             f"got {at.session_state['selected_position_id']}"
         )
-        # Filter to [OPEN] → Beta filtered out, Alpha is the only visible row.
-        at.selectbox(key="filter_status").select("[OPEN]")
+        # Filter to [SAVED] → Beta filtered out, Alpha is the only visible row.
+        at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
         assert not at.exception, f"Filter change raised: {at.exception}"
         # Key assertion: Streamlit cleared the dataframe selection on the
@@ -748,17 +752,47 @@ class TestRowSelection:
 
 
 # ── Edit-panel shell (T4-B) ───────────────────────────────────────────────────
-# When a row is selected, the page renders a subheader + st.tabs(...) below
-# the table. The tabs are empty in T4-B — T4-C–F fill the bodies.
+# When a row is selected, the page renders a subheader + tab selector below
+# the table. Tab bodies hold Overview / Requirements / Materials / Notes.
+#
+# v1.3 Sub-task 13 (DESIGN §8.2): the tab selector is a config-driven
+# `st.radio(horizontal=True, label_visibility="collapsed",
+# key="edit_active_tab")` — NOT `st.tabs(...)`. The swap is load-bearing:
+# DESIGN §8.2 places the Delete button *outside* the tab container, visible
+# only when the active tab is Overview; `st.tabs` in Streamlit 1.56 has no
+# public active-tab API (the `key=` kwarg is accepted but does not populate
+# session_state), so we use st.radio whose active value lives in
+# session_state["edit_active_tab"] and can gate the Delete button below.
+# (The key migrated from `_active_edit_tab` to `edit_active_tab` in the
+# post-Sub-task-14 follow-up — DESIGN §8.0 reserves the `_` prefix for
+# internal sentinels; this is a real edit-panel widget so it follows the
+# `edit_` widget-key scope.)
+
+TAB_SELECTOR_KEY = "edit_active_tab"
+
+
+def _tab_selector_rendered(at: AppTest) -> bool:
+    """True iff the edit-panel tab selector (st.radio key=edit_active_tab)
+    is present on the rendered page.
+
+    AppTest's `at.radio(key=...)` raises KeyError when no such widget exists,
+    so this helper wraps the try/except for readability. Mirrors the
+    `_checkbox_rendered` pattern used by TestMaterialsTabWidgets."""
+    try:
+        at.radio(key=TAB_SELECTOR_KEY)
+        return True
+    except KeyError:
+        return False
+
 
 class TestEditPanelShell:
 
-    def test_no_tabs_when_no_selection(self, db):
-        """Tabs must not render unless a row is selected."""
+    def test_no_tab_selector_when_no_selection(self, db):
+        """The edit-panel tab selector must not render unless a row is selected."""
         database.add_position({"position_name": "Alpha"})
         at = _run_page()
-        assert len(at.tabs) == 0, (
-            f"Expected 0 tabs without selection, got {len(at.tabs)}"
+        assert not _tab_selector_rendered(at), (
+            "Expected no edit-panel tab selector without selection"
         )
 
     def test_no_subheader_when_no_selection(self, db):
@@ -769,47 +803,73 @@ class TestEditPanelShell:
             f"Expected 0 subheaders without selection, got {len(at.subheader)}"
         )
 
-    def test_four_tabs_appear_when_row_selected(self, db):
-        """Selecting a row must render exactly 4 tabs (Overview / Req / Mat / Notes)."""
+    def test_four_tab_options_when_row_selected(self, db):
+        """Selecting a row must render the tab selector with exactly 4 options
+        (Overview / Requirements / Materials / Notes)."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page raised after selection: {at.exception}"
-        assert len(at.tabs) == 4, (
-            f"Expected 4 tabs after selection, got {len(at.tabs)}"
+        assert _tab_selector_rendered(at), (
+            "Expected edit-panel tab selector to render after row selection"
+        )
+        options = list(at.radio(key=TAB_SELECTOR_KEY).options)
+        assert len(options) == 4, (
+            f"Expected 4 tab options after selection, got {len(options)}: {options}"
         )
 
     def test_tab_labels_match_config(self, db):
-        """Tab labels must come from config.EDIT_PANEL_TABS (proves config-drive)."""
+        """Tab-selector labels must come from config.EDIT_PANEL_TABS (proves config-drive)."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        labels = [t.label for t in at.tabs]
+        labels = list(at.radio(key=TAB_SELECTOR_KEY).options)
         assert labels == config.EDIT_PANEL_TABS, (
             f"Tab labels must match config.EDIT_PANEL_TABS.\n"
             f"  Expected: {config.EDIT_PANEL_TABS}\n"
             f"  Got:      {labels}"
         )
 
-    def test_tabs_disappear_when_deselected(self, db):
-        """Deselecting the row must unrender the edit panel (tabs + subheader)."""
+    def test_default_active_tab_is_first_config_entry(self, db):
+        """Without user interaction, the active tab must default to
+        config.EDIT_PANEL_TABS[0] (Overview) — Streamlit's native st.radio
+        default-index-0 behaviour, pinned here so a future default-changing
+        refactor shows up loudly."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        assert len(at.tabs) == 4   # precondition
+        assert at.radio(key=TAB_SELECTOR_KEY).value == config.EDIT_PANEL_TABS[0], (
+            f"Default active tab must be config.EDIT_PANEL_TABS[0]="
+            f"{config.EDIT_PANEL_TABS[0]!r}; got "
+            f"{at.radio(key=TAB_SELECTOR_KEY).value!r}"
+        )
+
+    def test_tabs_disappear_when_deselected(self, db):
+        """Deselecting the row must unrender the edit panel (tab selector + subheader)."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert _tab_selector_rendered(at)   # precondition
         _deselect_row(at)
-        assert len(at.tabs) == 0, (
-            "Deselection should unrender tabs"
+        assert not _tab_selector_rendered(at), (
+            "Deselection should unrender the tab selector"
         )
         assert len(at.subheader) == 0, (
             "Deselection should unrender the subheader"
         )
 
     def test_subheader_shows_position_name_and_status(self, db):
-        """The subheader must confirm what's being edited — position name + status."""
+        """The subheader must confirm what's being edited — position name +
+        labelled status. DESIGN §8.0 forbids raw bracketed storage values
+        (`[APPLIED]`) in the UI; the status renders via
+        `config.STATUS_LABELS[raw]` (`Applied`). Note: checking only
+        `"Applied" in text` would not discriminate against the broken form
+        because `"Applied"` is a substring of `"[APPLIED]"` — the negative
+        `"[APPLIED]" not in text` assertion is the load-bearing pin."""
         database.add_position(
             {"position_name": "Stanford BioStats", "status": "[APPLIED]"}
         )
@@ -823,8 +883,14 @@ class TestEditPanelShell:
         assert "Stanford BioStats" in text, (
             f"Subheader missing position name: {text!r}"
         )
-        assert "[APPLIED]" in text, (
-            f"Subheader missing status: {text!r}"
+        assert "Applied" in text, (
+            f"Subheader missing labelled status (STATUS_LABELS['[APPLIED]'] "
+            f"= 'Applied') per DESIGN §8.0: {text!r}"
+        )
+        assert "[APPLIED]" not in text, (
+            f"Subheader must not render raw bracketed storage value per "
+            f"DESIGN §8.0 ('Pages never render a raw status value'); "
+            f"got {text!r}"
         )
 
     def test_stale_sid_is_cleared_silently(self, db):
@@ -850,7 +916,9 @@ class TestEditPanelShell:
         assert "_edit_form_sid" not in at.session_state, (
             "Sentinel must be cleared alongside the stale sid"
         )
-        assert len(at.tabs) == 0, "Edit panel must not render for a stale sid"
+        assert not _tab_selector_rendered(at), (
+            "Edit panel (tab selector) must not render for a stale sid"
+        )
 
 
 # ── Overview tab widgets (T4-C) ───────────────────────────────────────────────
@@ -862,13 +930,15 @@ class TestEditPanelShell:
 # never collide with the quick-add "qa_*" keys.
 
 EDIT_KEYS = {
-    "position_name": "edit_position_name",
-    "institute":     "edit_institute",
-    "field":         "edit_field",
-    "priority":      "edit_priority",
-    "status":        "edit_status",
-    "deadline_date": "edit_deadline_date",
-    "link":          "edit_link",
+    "position_name":  "edit_position_name",
+    "institute":      "edit_institute",
+    "field":          "edit_field",
+    "priority":       "edit_priority",
+    "status":         "edit_status",
+    "deadline_date":  "edit_deadline_date",
+    "link":           "edit_link",
+    "work_auth":      "edit_work_auth",        # Sub-task 7 / DESIGN §8.2
+    "work_auth_note": "edit_work_auth_note",   # Sub-task 7 / DESIGN §8.2
 }
 
 
@@ -924,15 +994,20 @@ class TestOverviewTabWidgets:
         assert at.text_input(key=EDIT_KEYS["link"]).value          == "https://example.org/apply"
 
     def test_status_selectbox_options_match_config(self, db):
-        """Status selectbox must expose exactly config.STATUS_VALUES, same order."""
+        """Status selectbox must expose one option per config.STATUS_VALUES,
+        same order. Options render as display labels via
+        format_func=STATUS_LABELS.get (Sub-task 13 / DESIGN §8.0): AppTest's
+        `.options` returns the post-format_func strings, so the expected
+        list is the STATUS_LABELS lookup over STATUS_VALUES."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
-        assert options == config.STATUS_VALUES, (
-            f"Status options must match config.STATUS_VALUES.\n"
-            f"  Expected: {config.STATUS_VALUES}\n"
+        expected = [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        assert options == expected, (
+            f"Status options must match [STATUS_LABELS[v] for v in STATUS_VALUES].\n"
+            f"  Expected: {expected}\n"
             f"  Got:      {options}"
         )
 
@@ -1028,10 +1103,102 @@ class TestOverviewTabWidgets:
         )
 
 
+class TestOverviewWorkAuthWidgets:
+    """Sub-task 7 / DESIGN §6.2 + §8.2 + D22.
+
+    The Overview tab gains two new widgets: a `work_auth` selectbox drawn
+    from ``config.WORK_AUTH_OPTIONS`` (the categorical three-value
+    Yes/No/Unknown enum) and a `work_auth_note` text_area below it
+    holding the freetext posting-specific nuance (e.g. "green card
+    required", "J-1 OK with a waiver"). Both pre-seed from the selected
+    row; both ride the existing Overview Save path."""
+
+    def test_work_auth_selectbox_renders_after_selection(self, db):
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.selectbox(key=EDIT_KEYS["work_auth"]) is not None, (
+            "work_auth selectbox must render inside the Overview tab once a "
+            "row is selected (DESIGN §8.2 Overview-tab row)."
+        )
+
+    def test_work_auth_note_text_area_renders_after_selection(self, db):
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.text_area(key=EDIT_KEYS["work_auth_note"]) is not None, (
+            "work_auth_note text_area must render inside the Overview tab "
+            "once a row is selected (DESIGN §8.2 — below the work_auth "
+            "selectbox)."
+        )
+
+    def test_work_auth_selectbox_options_match_config(self, db):
+        """Options must come from config.WORK_AUTH_OPTIONS — never
+        hardcoded (GUIDELINES §6). Order matters: Sub-task 3 locked
+        ['Yes', 'No', 'Unknown'] as the canonical order."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["work_auth"]).options)
+        assert options == config.WORK_AUTH_OPTIONS, (
+            "work_auth selectbox options must match config.WORK_AUTH_OPTIONS "
+            "exactly (same order).\n"
+            f"  Expected: {config.WORK_AUTH_OPTIONS}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_widgets_pre_seed_from_selected_row(self, db):
+        """Both widgets must carry the selected row's DB values on render
+        — the same widget-value-trap pre-seed pattern as status/priority,
+        via the _edit_form_sid sentinel. work_auth_note on a populated row
+        is a string; work_auth is one of WORK_AUTH_OPTIONS."""
+        database.add_position({
+            "position_name":  "Stanford BioStats",
+            "work_auth":      "Yes",
+            "work_auth_note": "green card required",
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert at.selectbox(key=EDIT_KEYS["work_auth"]).value == "Yes"
+        assert (
+            at.text_area(key=EDIT_KEYS["work_auth_note"]).value
+            == "green card required"
+        )
+
+    def test_null_work_auth_falls_back_to_first_option(self, db):
+        """A row with work_auth IS NULL (never populated — quick-add
+        doesn't set it) must not blow up the selectbox. F2-style
+        coercion drops the value to WORK_AUTH_OPTIONS[0], mirroring the
+        existing priority/status fallback for NULL / out-of-vocab
+        values. An empty work_auth_note comes back as "" via _safe_str."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception, (
+            f"Page crashed on row with NULL work_auth: {at.exception}"
+        )
+        assert (
+            at.selectbox(key=EDIT_KEYS["work_auth"]).value
+            == config.WORK_AUTH_OPTIONS[0]
+        ), (
+            "NULL work_auth must coerce to WORK_AUTH_OPTIONS[0] — the F2 "
+            "fallback precedent set by priority/status selectboxes."
+        )
+        assert at.text_area(key=EDIT_KEYS["work_auth_note"]).value == "", (
+            "NULL work_auth_note must coerce to empty string via _safe_str "
+            "— NaN-truthiness trap applies here too."
+        )
+
+
 # ── Requirements tab widgets (T4-D) ───────────────────────────────────────────
 # The Requirements tab renders one st.radio per entry in
-# config.REQUIREMENT_DOCS. Values are canonical DB strings ('Y', 'Optional',
-# 'N'); labels come from config.REQUIREMENT_LABELS via format_func so
+# config.REQUIREMENT_DOCS. Values are canonical DB strings ('Yes', 'Optional',
+# 'No'); labels come from config.REQUIREMENT_LABELS via format_func so
 # session_state always holds the canonical value — no save-time translation.
 #
 # Widget key convention: "edit_" + req_col (e.g. "edit_req_cv").
@@ -1053,20 +1220,25 @@ class TestRequirementsTabWidgets:
             )
 
     def test_one_radio_per_requirement_doc(self, db):
-        """Exactly one radio per REQUIREMENT_DOCS entry must render after selection."""
+        """Exactly one radio per REQUIREMENT_DOCS entry must render on the
+        Requirements tab. Sub-task 13 (DESIGN §8.2) renders tab contents
+        conditionally via the st.radio-based tab selector, so the test
+        must switch to Requirements first; the tab selector itself also
+        contributes one radio to the page's total, hence the +1."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised on selection: {at.exception}"
         for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
             assert at.radio(key=_req_key(req_col)) is not None, (
                 f"Missing radio for {req_col!r}"
             )
-        # And the total radio count equals the config length — guards against
-        # a stray hardcoded radio slipping in.
-        assert len(at.radio) == len(config.REQUIREMENT_DOCS), (
-            f"Expected {len(config.REQUIREMENT_DOCS)} radios, got {len(at.radio)}"
+        # Total = REQUIREMENT_DOCS radios + 1 tab-selector radio (Sub-task 13).
+        assert len(at.radio) == len(config.REQUIREMENT_DOCS) + 1, (
+            f"Expected {len(config.REQUIREMENT_DOCS) + 1} radios "
+            f"({len(config.REQUIREMENT_DOCS)} requirement radios "
+            f"+ 1 tab selector), got {len(at.radio)}"
         )
 
     def test_radio_values_match_db(self, db):
@@ -1074,18 +1246,18 @@ class TestRequirementsTabWidgets:
         # Exercise all three vocabulary tiers so we catch one-way mappings.
         database.add_position({
             "position_name":        "Stanford BioStats",
-            "req_cv":               "Y",
-            "req_cover_letter":     "Y",
+            "req_cv":               "Yes",
+            "req_cover_letter":     "Yes",
             "req_writing_sample":   "Optional",
-            "req_teaching_statement": "N",
+            "req_teaching_statement": "No",
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        assert at.radio(key=_req_key("req_cv")).value             == "Y"
-        assert at.radio(key=_req_key("req_cover_letter")).value   == "Y"
+        _select_row_and_tab(at, 0, "Requirements")
+        assert at.radio(key=_req_key("req_cv")).value             == "Yes"
+        assert at.radio(key=_req_key("req_cover_letter")).value   == "Yes"
         assert at.radio(key=_req_key("req_writing_sample")).value == "Optional"
-        assert at.radio(key=_req_key("req_teaching_statement")).value == "N"
+        assert at.radio(key=_req_key("req_teaching_statement")).value == "No"
 
     def test_radio_options_display_config_labels_in_order(self, db):
         """Every radio must expose the three tiers in config order, shown via
@@ -1096,7 +1268,7 @@ class TestRequirementsTabWidgets:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         expected_labels = [config.REQUIREMENT_LABELS[v]
                            for v in config.REQUIREMENT_VALUES]
         for req_col, _done_col, _label in config.REQUIREMENT_DOCS:
@@ -1108,11 +1280,11 @@ class TestRequirementsTabWidgets:
                 f"  Got:      {options}"
             )
 
-    def test_null_req_falls_back_to_N(self, db):
+    def test_null_req_falls_back_to_no(self, db):
         """Defensive coercion (F2 analog): an unknown or None req_* value
         must not crash the page and must not put an out-of-options value
-        into the radio's session_state — fall back to 'N' (schema default)."""
-        database.add_position({"position_name": "Alpha"})  # req_* defaults → 'N'
+        into the radio's session_state — fall back to 'No' (schema default)."""
+        database.add_position({"position_name": "Alpha"})  # req_* defaults → 'No'
         # Manually corrupt one req_* column to simulate an unknown value
         # (e.g. from a future migration or sqlite3 CLI edit).
         import sqlite3
@@ -1123,25 +1295,25 @@ class TestRequirementsTabWidgets:
             )
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised on unknown req_* value: {at.exception}"
-        assert at.radio(key=_req_key("req_cv")).value == "N", (
-            "Unknown req_* value must coerce to 'N' (schema default), "
+        assert at.radio(key=_req_key("req_cv")).value == "No", (
+            "Unknown req_* value must coerce to 'No' (schema default), "
             f"got {at.radio(key=_req_key('req_cv')).value!r}"
         )
 
     def test_widgets_update_on_selection_change(self, db):
         """Widget-value-trap regression guard on the req_* path: switching
         rows must re-seed the req_* widgets, not stick on the first."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
-        database.add_position({"position_name": "Beta",  "req_cv": "N"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
+        database.add_position({"position_name": "Beta",  "req_cv": "No"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         first = at.radio(key=_req_key("req_cv")).value
-        _select_row(at, 1)
+        _select_row_and_tab(at, 1, "Requirements")
         second = at.radio(key=_req_key("req_cv")).value
-        assert {first, second} == {"Y", "N"}, (
+        assert {first, second} == {"Yes", "No"}, (
             f"Selection change must re-seed req_cv; got {first!r} → {second!r}"
         )
         assert first != second, (
@@ -1161,7 +1333,7 @@ class TestRequirementsTabWidgets:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised with extended config: {at.exception}"
         assert at.radio(key=_req_key("req_portfolio")) is not None, (
             "Adding a new doc to config.REQUIREMENT_DOCS must render a new "
@@ -1176,17 +1348,17 @@ class TestRequirementsTabWidgets:
                            for v in config.REQUIREMENT_VALUES]
         assert list(at.radio(key=_req_key("req_portfolio")).options) \
             == expected_labels
-        # And its default value (from the migration's DEFAULT 'N') should
-        # land in session_state as 'N' after the pre-seed coercion — this
+        # And its default value (from the migration's DEFAULT 'No') should
+        # land in session_state as 'No' after the pre-seed coercion — this
         # IS the canonical-value half of the contract.
-        assert at.radio(key=_req_key("req_portfolio")).value == "N"
+        assert at.radio(key=_req_key("req_portfolio")).value == "No"
 
 
 # ── Materials tab widgets (T4-E) ──────────────────────────────────────────────
 # The Materials tab is state-driven: it renders one st.checkbox per done_*
-# column ONLY for documents whose req_* is 'Y' (matching the readiness
+# column ONLY for documents whose req_* is 'Yes' (matching the readiness
 # definition in database.py ~line 404 — "A position is 'ready' if every
-# document where req_* = 'Y' has done_* = 1"). The source of truth for
+# document where req_* = 'Yes' has done_* = 1"). The source of truth for
 # "is this required?" is session_state["edit_{req_col}"], not the raw DB
 # value, so a user toggling a Requirements-tab radio sees the Materials
 # tab update on the next rerun.
@@ -1218,23 +1390,23 @@ class TestMaterialsTabWidgets:
 
     def test_no_materials_widgets_without_selection(self, db):
         """No done_* checkbox may render before a row is selected."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = _run_page()
         assert len(at.checkbox) == 0, (
             f"Expected 0 checkboxes before selection, got {len(at.checkbox)}"
         )
 
     def test_empty_state_when_no_required_docs(self, db):
-        """With all req_* = 'N' (the schema default), the Materials tab must
+        """With all req_* = 'No' (the schema default), the Materials tab must
         show an info hint directing the user to the Requirements tab — rendering
         zero checkboxes would be a silent dead-end UI."""
-        database.add_position({"position_name": "Alpha"})   # all req_* default 'N'
+        database.add_position({"position_name": "Alpha"})   # all req_* default 'No'
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # No done_* checkboxes must render.
         assert len(at.checkbox) == 0, (
-            f"With all req_* = 'N', no Materials checkboxes should render; "
+            f"With all req_* = 'No', no Materials checkboxes should render; "
             f"got {len(at.checkbox)}"
         )
         # An info hint must be present — substring match on "Requirements tab"
@@ -1246,21 +1418,21 @@ class TestMaterialsTabWidgets:
         )
 
     def test_only_required_doc_checkboxes_shown(self, db):
-        """With req_cv='Y' and everything else 'N', exactly one checkbox
+        """With req_cv='Yes' and everything else 'No', exactly one checkbox
         (done_cv) must render — not zero, not len(REQUIREMENT_DOCS)."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # done_cv is the only one required → exactly one checkbox rendered.
         assert _checkbox_rendered(at, _done_key("done_cv")), (
-            "done_cv checkbox must render when req_cv == 'Y'"
+            "done_cv checkbox must render when req_cv == 'Yes'"
         )
         for _req_col, done_col, _label in config.REQUIREMENT_DOCS:
             if done_col == "done_cv":
                 continue
             assert not _checkbox_rendered(at, _done_key(done_col)), (
-                f"{done_col} checkbox should be hidden when its req_* is 'N'"
+                f"{done_col} checkbox should be hidden when its req_* is 'No'"
             )
         # Tight bound: no other page checkboxes exist today.
         assert len(at.checkbox) == 1, (
@@ -1271,16 +1443,16 @@ class TestMaterialsTabWidgets:
         """Pre-seed must translate done_* INTEGER (0/1) to bool correctly."""
         database.add_position({
             "position_name":   "Stanford BioStats",
-            "req_cv":          "Y",
+            "req_cv":          "Yes",
             "done_cv":          1,
-            "req_cover_letter": "Y",
+            "req_cover_letter": "Yes",
             "done_cover_letter": 0,
-            "req_transcripts":  "Y",
+            "req_transcripts":  "Yes",
             # done_transcripts omitted → schema default 0
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # Use == (not `is`) because pandas surfaces numpy booleans
         # (numpy.bool_), and `np.True_ is True` is False.
         assert bool(at.checkbox(key=_done_key("done_cv")).value)          is True
@@ -1288,7 +1460,7 @@ class TestMaterialsTabWidgets:
         assert bool(at.checkbox(key=_done_key("done_transcripts")).value) is False
 
     def test_toggling_requirement_hides_checkbox(self, db):
-        """State-driven behaviour: when the user flips req_cv from 'Y' to 'N'
+        """State-driven behaviour: when the user flips req_cv from 'Yes' to 'No'
         on the Requirements tab, the done_cv checkbox on the Materials tab
         must disappear on the next rerun.
 
@@ -1297,17 +1469,22 @@ class TestMaterialsTabWidgets:
         live widget state (_edit_form_sid only reseeds on selection change
         — a DB-only update would not re-trigger the pre-seed). This is the
         faithful test of state-driven design."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         assert _checkbox_rendered(at, _done_key("done_cv"))   # precondition
-        # Simulate the user flipping the req_cv radio to "Not needed".
-        at.session_state["edit_req_cv"] = "N"
+        # Simulate the user flipping the req_cv radio to "Not needed". We
+        # keep the Materials tab active (and row selected) across the rerun
+        # so the checkbox-absence is driven by the req flip alone, not by
+        # the tab / selection state disappearing.
+        at.session_state["edit_req_cv"] = "No"
+        _keep_selection(at, 0)
+        at.session_state[TAB_SELECTOR_KEY] = "Materials"
         at.run()
         assert not at.exception, f"Page raised on req toggle: {at.exception}"
         assert not _checkbox_rendered(at, _done_key("done_cv")), (
-            "Toggling edit_req_cv → 'N' must hide the done_cv checkbox"
+            "Toggling edit_req_cv → 'No' must hide the done_cv checkbox"
         )
 
     def test_optional_docs_are_hidden(self, db):
@@ -1319,7 +1496,7 @@ class TestMaterialsTabWidgets:
         database.add_position({"position_name": "Alpha", "req_cv": "Optional"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         assert not _checkbox_rendered(at, _done_key("done_cv")), (
             "'Optional' docs must be hidden from Materials (Y-only filter "
             "matches the readiness definition in database.py)"
@@ -1329,15 +1506,15 @@ class TestMaterialsTabWidgets:
         """Widget-value-trap regression guard on the done_* path: selecting a
         different row must re-seed the done_* widgets with that row's values."""
         database.add_position({"position_name": "Alpha",
-                               "req_cv": "Y", "done_cv": 1})
+                               "req_cv": "Yes", "done_cv": 1})
         database.add_position({"position_name": "Beta",
-                               "req_cv": "Y", "done_cv": 0})
+                               "req_cv": "Yes", "done_cv": 0})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         # bool() normalises numpy.bool_ → Python bool so set equality works.
         first = bool(at.checkbox(key=_done_key("done_cv")).value)
-        _select_row(at, 1)
+        _select_row_and_tab(at, 1, "Materials")
         second = bool(at.checkbox(key=_done_key("done_cv")).value)
         assert {first, second} == {True, False}, (
             f"Selection change must re-seed done_cv; got {first!r} → {second!r}"
@@ -1382,19 +1559,24 @@ class TestNotesTabWidgets:
         )
 
     def test_text_area_renders_when_row_selected(self, db):
-        """Baseline positive contract: selecting a row must produce exactly
-        one text_area with key=edit_notes on the page."""
+        """Baseline positive contract: switching to the Notes tab after a row
+        is selected must render exactly one text_area with key=edit_notes.
+        (Sub-task 13: Notes widgets only render when active_tab == 'Notes'.)"""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         assert _text_area_rendered(at, NOTES_KEY), (
             "Notes tab must render a text_area keyed edit_notes after selection"
         )
-        # Tight bound: no other page text_area exists today. If a future tier
-        # adds more, update this count explicitly rather than loosening it.
+        # Post-Sub-task-13: only one text_area renders on the Notes tab
+        # (edit_work_auth_note lives on the Overview tab and only renders
+        # when active_tab == "Overview"). If a future tier adds another
+        # text_area to the Notes tab, bump this count rather than loosen
+        # the inequality.
         assert len(at.text_area) == 1, (
-            f"Expected 1 text_area on the page, got {len(at.text_area)}"
+            f"Expected 1 text_area on the Notes tab (edit_notes); "
+            f"got {len(at.text_area)}"
         )
 
     def test_text_area_preseeded_from_db(self, db):
@@ -1405,7 +1587,7 @@ class TestNotesTabWidgets:
         database.add_position({"position_name": "Alpha", "notes": notes})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         assert at.text_area(key=NOTES_KEY).value == notes, (
             f"Expected edit_notes pre-seeded to {notes!r}, "
             f"got {at.text_area(key=NOTES_KEY).value!r}"
@@ -1418,7 +1600,7 @@ class TestNotesTabWidgets:
         database.add_position({"position_name": "Alpha"})   # notes omitted → NULL
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         assert at.text_area(key=NOTES_KEY).value == "", (
             f"NULL notes must coerce to empty string, got "
             f"{at.text_area(key=NOTES_KEY).value!r}"
@@ -1433,9 +1615,9 @@ class TestNotesTabWidgets:
         database.add_position({"position_name": "Beta",  "notes": "beta notes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         first = at.text_area(key=NOTES_KEY).value
-        _select_row(at, 1)
+        _select_row_and_tab(at, 1, "Notes")
         second = at.text_area(key=NOTES_KEY).value
         assert first == "alpha notes", f"Row 0 notes mis-seeded: {first!r}"
         assert second == "beta notes", (
@@ -1497,6 +1679,30 @@ def _keep_selection(at: AppTest, row_index: int) -> None:
     }
 
 
+def _select_row_and_tab(at: AppTest, row_index: int, tab_name: str) -> None:
+    """Set table row selection + edit-panel active tab, then rerun.
+
+    Needed by tests that access widgets on a NON-Overview tab (Requirements,
+    Materials, Notes). Sub-task 13 (DESIGN §8.2) swapped `st.tabs` for
+    `st.radio(horizontal=True, key="edit_active_tab")` + branch-based tab
+    rendering; unlike `st.tabs` — which used to render ALL tab bodies and
+    CSS-hide the inactive ones — the radio-based panel renders ONLY the
+    active tab's widgets, so a test that wants to access e.g. the
+    `edit_req_cv` radio MUST first set `edit_active_tab = "Requirements"`.
+
+    Writing session_state directly (rather than `at.radio(...).set_value(x)
+    + at.run()`) keeps the single-rerun contract — the dataframe selection
+    doesn't outlive its single-run signal (see `_keep_selection` docstring),
+    so we write selection + tab together before the next rerun.
+
+    `tab_name` must be one of config.EDIT_PANEL_TABS."""
+    at.session_state[TABLE_KEY] = {
+        "selection": {"rows": [row_index], "columns": []}
+    }
+    at.session_state[TAB_SELECTOR_KEY] = tab_name
+    at.run()
+
+
 class TestOverviewSave:
 
     def test_save_persists_all_seven_fields(self, db):
@@ -1508,7 +1714,7 @@ class TestOverviewSave:
             "institute":     "Original Inst",
             "field":         "Original Field",
             "priority":      "Medium",
-            "status":        "[OPEN]",
+            "status":        "[SAVED]",
             "deadline_date": "2026-01-01",
             "link":          "https://old.example",
         })
@@ -1688,16 +1894,42 @@ class TestOverviewSave:
             "the pre-save render cycle."
         )
 
+    def test_save_persists_work_auth_and_note(self, db):
+        """Sub-task 7 / DESIGN §6.2 + §8.2: the Overview Save payload must
+        carry both work_auth and work_auth_note so the pair round-trips
+        through the full UI path. Seeds a row with no work auth info, edits
+        both widgets, clicks Save, and asserts the DB row reflects both —
+        guards against either field being added to the form but forgotten
+        in update_position's payload dict."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        sid = at.session_state["selected_position_id"]
+
+        at.selectbox(key=EDIT_KEYS["work_auth"]).set_value("Yes")
+        at.text_area(key=EDIT_KEYS["work_auth_note"]).set_value(
+            "green card required"
+        )
+        at.button(key=OVERVIEW_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception}"
+        row = database.get_position(sid)
+        assert row["work_auth"]      == "Yes"
+        assert row["work_auth_note"] == "green card required"
+
 
 # ── Requirements tab Save (T5-B) ──────────────────────────────────────────────
 # The Requirements form persists all req_* columns via database.update_position.
 # Critical contract: Requirements Save NEVER writes done_* columns. The payload
 # is built from config.REQUIREMENT_DOCS → req_col only, so update_position's
 # parameterised UPDATE leaves the done_* columns of the row untouched. Flipping
-# req_cv from 'Y' to 'N' preserves done_cv — the user's "I've prepared the CV"
+# req_cv from 'Yes' to 'No' preserves done_cv — the user's "I've prepared the CV"
 # status is independent of whether any given position requires it right now.
 # DESIGN.md §6: Materials is checkbox-only; the readiness computation hides
-# rows where req_* != 'Y' but the underlying value is preserved.
+# rows where req_* != 'Yes' but the underlying value is preserved.
 
 REQUIREMENTS_SUBMIT_KEY = "edit_requirements_submit"
 
@@ -1712,7 +1944,7 @@ class TestRequirementsSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         sid = at.session_state["selected_position_id"]
 
         # Set each req_* to a value drawn from config.REQUIREMENT_VALUES,
@@ -1744,31 +1976,31 @@ class TestRequirementsSave:
         """Critical contract pin: Requirements Save must NOT touch done_*
         columns. The user's "I've prepared the CV" status is independent of
         whether any given position currently requires a CV. Flipping
-        req_cv from 'Y' → 'N' and saving MUST leave done_cv == 1 in the DB.
+        req_cv from 'Yes' → 'No' and saving MUST leave done_cv == 1 in the DB.
 
         Rationale (DESIGN.md + user decision 2026-04-20): if req_cv later
-        flips back to 'Y', the Materials tab should again show 'CV: done'
+        flips back to 'Yes', the Materials tab should again show 'CV: done'
         without the user having to re-tick — the CV didn't un-prepare itself."""
         database.add_position({
             "position_name": "Alpha",
-            "req_cv":        "Y",
+            "req_cv":        "Yes",
             "done_cv":       1,
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         sid = at.session_state["selected_position_id"]
 
         # Flip req_cv to N.
-        at.radio(key=_req_key("req_cv")).set_value("N")
+        at.radio(key=_req_key("req_cv")).set_value("No")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception}"
         row = database.get_position(sid)
-        assert row["req_cv"] == "N", (
-            f"req_cv should have flipped to 'N', got {row['req_cv']!r}"
+        assert row["req_cv"] == "No", (
+            f"req_cv should have flipped to 'No', got {row['req_cv']!r}"
         )
         assert row["done_cv"] == 1, (
             f"done_cv MUST be preserved across a req flip (user-confirmed "
@@ -1788,8 +2020,8 @@ class TestRequirementsSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        at.radio(key=_req_key("req_cv")).set_value("Y")
+        _select_row_and_tab(at, 0, "Requirements")
+        at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
@@ -1815,9 +2047,9 @@ class TestRequirementsSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Requirements")
         sid_before = at.session_state["selected_position_id"]
-        at.radio(key=_req_key("req_cv")).set_value("Y")
+        at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
@@ -1841,8 +2073,8 @@ class TestRequirementsSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
-        at.radio(key=_req_key("req_cv")).set_value("Y")
+        _select_row_and_tab(at, 0, "Requirements")
+        at.radio(key=_req_key("req_cv")).set_value("Yes")
         at.button(key=REQUIREMENTS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
         at.run()
@@ -1861,7 +2093,7 @@ class TestRequirementsSave:
 # ── Materials tab Save (T5-C) ────────────────────────────────────────────────
 # The Materials form persists done_* columns via database.update_position.
 # Critical contract: the payload contains done_* keys ONLY for docs whose
-# matching req_* is currently 'Y' on the LIVE session_state (the state-driven
+# matching req_* is currently 'Yes' on the LIVE session_state (the state-driven
 # visibility pinned by T4-E). Any done_* for a non-visible doc is NEVER in the
 # payload, so the user's prepared-documents history survives a req Y→N flip
 # on this tab exactly as it does on the Requirements tab (T5-B contract,
@@ -1877,22 +2109,22 @@ MATERIALS_SUBMIT_KEY = "edit_materials_submit"
 class TestMaterialsSave:
 
     def test_save_persists_only_visible_done_fields(self, db):
-        """Round-trip: with two req_* = 'Y' and the rest = 'N', tick the two
+        """Round-trip: with two req_* = 'Yes' and the rest = 'No', tick the two
         visible checkboxes, click Save → the DB has done_* = 1 for the two
         visible docs and the hidden done_* columns are left at their prior DB
         values (here, 0 by schema default)."""
         # Pick the first two REQUIREMENT_DOCS entries as the 'required' pair;
-        # the remainder stay at the schema-default 'N' / 0.
+        # the remainder stay at the schema-default 'No' / 0.
         visible = config.REQUIREMENT_DOCS[:2]
         hidden  = config.REQUIREMENT_DOCS[2:]
         seed: dict[str, Any] = {"position_name": "Alpha"}
         for req_col, _done_col, _label in visible:
-            seed[req_col] = "Y"
+            seed[req_col] = "Yes"
         sid = database.add_position(seed)
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
 
         # Tick the visible checkboxes.
         for _req_col, done_col, _label in visible:
@@ -1910,7 +2142,7 @@ class TestMaterialsSave:
             )
         for _req_col, done_col, _label in hidden:
             assert row[done_col] == 0, (
-                f"{done_col} is hidden (req != 'Y') and must not be in the "
+                f"{done_col} is hidden (req != 'Yes') and must not be in the "
                 f"payload; schema default 0 must be preserved, got "
                 f"{row[done_col]!r}"
             )
@@ -1923,30 +2155,31 @@ class TestMaterialsSave:
     def test_save_preserves_done_fields_hidden_by_req_n(self, db):
         """Critical contract pin (mirror of T5-B's done_* preservation, from
         the Materials side): saving Materials MUST NOT touch any done_* whose
-        req_* is currently not 'Y'. Seed done_cv=1 while req_cv='N'; flip
-        req_research_statement to 'Y' live, tick that checkbox, save —
+        req_* is currently not 'Yes'. Seed done_cv=1 while req_cv='No'; flip
+        req_research_statement to 'Yes' live, tick that checkbox, save —
         done_cv must still be 1 in the DB. Prevents a regression where the
         page loops over ALL REQUIREMENT_DOCS and overwrites hidden done_*
         with their (possibly stale) seeded bool value."""
         sid = database.add_position({
             "position_name":            "Alpha",
-            "req_cv":                   "N",
+            "req_cv":                   "No",
             "done_cv":                  1,   # prepared earlier; currently hidden
-            "req_research_statement":   "N",
+            "req_research_statement":   "No",
             "done_research_statement":  0,
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
 
-        # Flip req_research_statement to 'Y' live via session_state directly —
+        # Flip req_research_statement to 'Yes' live via session_state directly —
         # the Requirements-tab radio is inside st.form("edit_requirements") so
         # widget values there do not commit to session_state until that form
         # is submitted. Writing session_state is how T4-E's
         # test_toggling_requirement_hides_checkbox drives the same
         # state-driven visibility.
-        at.session_state[_req_key("req_research_statement")] = "Y"
+        at.session_state[_req_key("req_research_statement")] = "Yes"
         _keep_selection(at, 0)
+        at.session_state[TAB_SELECTOR_KEY] = "Materials"
         at.run()
 
         # Tick the newly-visible checkbox and save.
@@ -1963,9 +2196,9 @@ class TestMaterialsSave:
         )
         assert row["done_cv"] == 1, (
             f"done_cv MUST be preserved across a Materials save when its "
-            f"req_cv is 'N' (user-confirmed contract 2026-04-20); got "
+            f"req_cv is 'No' (user-confirmed contract 2026-04-20); got "
             f"{row['done_cv']!r}. If this fails, the Materials-save payload "
-            f"is writing done_* for docs whose req_* != 'Y' — it must only "
+            f"is writing done_* for docs whose req_* != 'Yes' — it must only "
             f"include done_* for visible docs."
         )
 
@@ -1973,7 +2206,7 @@ class TestMaterialsSave:
         """Mirror the F1 failure contract on the Materials path: a raising
         update_position must surface a friendly st.error without re-raising.
         """
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
 
         def _boom(_position_id, _fields):
             raise RuntimeError("db unavailable")
@@ -1981,7 +2214,7 @@ class TestMaterialsSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         at.checkbox(key=_done_key("done_cv")).set_value(True)
         at.button(key=MATERIALS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2005,10 +2238,10 @@ class TestMaterialsSave:
         """After Materials save, the edit panel must re-render for the SAME
         position — selected_position_id must survive the post-save rerun via
         the T5-A _skip_table_reset one-shot."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         sid_before = at.session_state["selected_position_id"]
 
         at.checkbox(key=_done_key("done_cv")).set_value(True)
@@ -2027,17 +2260,17 @@ class TestMaterialsSave:
         )
         # Panel still rendered: the Materials checkbox is still there.
         assert _checkbox_rendered(at, _done_key("done_cv")), (
-            "Materials checkbox must still render after save (req_cv is 'Y')"
+            "Materials checkbox must still render after save (req_cv is 'Yes')"
         )
 
     def test_save_toast_survives_rerun(self, db):
         """Regression guard for the Tier-1 st.success-clobber bug on the
         Materials path: st.toast must still be in at.toast after the post-save
         rerun completes."""
-        database.add_position({"position_name": "Alpha", "req_cv": "Y"})
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Materials")
         at.checkbox(key=_done_key("done_cv")).set_value(True)
         at.button(key=MATERIALS_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2079,7 +2312,7 @@ class TestNotesSave:
         sid = database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
 
         at.text_area(key=NOTES_KEY).set_value(
             "Contact: jane@example.edu\nFollow up after Oct 15."
@@ -2110,7 +2343,7 @@ class TestNotesSave:
         })
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
 
         at.text_area(key=NOTES_KEY).set_value("")
         at.button(key=NOTES_SUBMIT_KEY).click()
@@ -2138,7 +2371,7 @@ class TestNotesSave:
 
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         at.text_area(key=NOTES_KEY).set_value("anything")
         at.button(key=NOTES_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2165,7 +2398,7 @@ class TestNotesSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         sid_before = at.session_state["selected_position_id"]
 
         at.text_area(key=NOTES_KEY).set_value("context")
@@ -2194,7 +2427,7 @@ class TestNotesSave:
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
-        _select_row(at, 0)
+        _select_row_and_tab(at, 0, "Notes")
         at.text_area(key=NOTES_KEY).set_value("context")
         at.button(key=NOTES_SUBMIT_KEY).click()
         _keep_selection(at, 0)
@@ -2566,8 +2799,11 @@ class TestPreSeedNaNCoercion:
             f"Saving Overview on row 0 unexpectedly raised: {at.exception}"
         )
 
-        # Row 1: this is what blew up before the fix.
-        _select_row(at, 1)
+        # Row 1: this is what blew up before the fix. Post-Sub-task-13 the
+        # Notes text_area only renders when active_tab == "Notes", so we
+        # combine row selection + tab switch so the text_area we're checking
+        # below actually renders.
+        _select_row_and_tab(at, 1, "Notes")
         assert not at.exception, (
             "Selecting row 1 after saving row 0 raised — NaN pre-seed "
             "regression:\n"
@@ -2584,8 +2820,9 @@ class TestPreSeedNaNCoercion:
         )
 
         # And row 2 for good measure — pandas hands back NaN for its
-        # text cells too.
-        _select_row(at, 2)
+        # text cells too. Keep the active tab at "Notes" so the pre-seed
+        # code path exercised is the one that bit the user (Notes text_area).
+        _select_row_and_tab(at, 2, "Notes")
         assert not at.exception, (
             f"Selecting row 2 also raised (NaN pre-seed regression): "
             f"{at.exception}"
@@ -2636,3 +2873,386 @@ class TestPreSeedNaNCoercion:
         assert _safe_str("") == ""
         assert _safe_str("hello") == "hello"
         assert _safe_str(42) == "42"
+
+
+# ── Sub-task 13: DESIGN §8.0 + §8.2 alignment ────────────────────────────────
+# Contract tests for the v1.3 alignment pass on pages/1_Opportunities.py:
+#
+#   • §8.0 page-config: st.set_page_config(layout="wide", ...) is the first
+#     Streamlit call on every page. Pinned via source-grep (AppTest does not
+#     surface set_page_config in the element tree — same precedent as
+#     test_app_page.py::TestT1AEmptyDbLayout::test_page_config_sets_wide_layout).
+#
+#   • §8.0 Status label convention: selectboxes use format_func=STATUS_LABELS.get
+#     (or an "All"-aware wrapper for the filter). UI shows labels, storage holds
+#     raw bracketed values.
+#
+#   • §8.2 Materials-tab predicate: visibility filter uses == "Yes" (the
+#     canonical REQUIREMENT_VALUES entry for a required doc). Pinned here so
+#     the DESIGN-contract is enforced regardless of vocabulary rewrites.
+#
+#   • §8.2 Delete-button placement: button renders BELOW the tab container
+#     (outside the panel box), visible ONLY when the active tab is Overview.
+#     Pin the tab-sensitivity by driving at.radio(key=edit_active_tab)
+#     through each of the four EDIT_PANEL_TABS and asserting Delete-button
+#     presence/absence accordingly.
+
+
+class TestPageConfigSetsWideLayout:
+    """Source-grep pin for DESIGN §8.0 + D14."""
+
+    def test_page_config_sets_wide_layout(self, db):
+        """DESIGN §8.0 requires `st.set_page_config(layout="wide", ...)` on
+        every page — the app is data-heavy (positions table + edit panel)
+        and needs horizontal room.
+
+        AppTest does not surface set_page_config in the element tree (the
+        call is consumed by the page-setup phase before widgets render),
+        so the contract is pinned at the source level — same precedent as
+        test_app_page.py::TestT1AEmptyDbLayout::test_page_config_sets_wide_layout.
+        Checking for the three keyword bindings together prevents a
+        partially-correct call (layout only, title only, …) from silently
+        passing.
+        """
+        import pathlib
+        src = pathlib.Path("pages/1_Opportunities.py").read_text(encoding="utf-8")
+        assert "st.set_page_config(" in src, (
+            "pages/1_Opportunities.py must call st.set_page_config(...) per DESIGN §8.0."
+        )
+        assert 'page_title="Postdoc Tracker"' in src, (
+            'set_page_config must bind page_title="Postdoc Tracker" per DESIGN §8.0.'
+        )
+        assert 'page_icon="📋"' in src, (
+            'set_page_config must bind page_icon="📋" per DESIGN §8.0.'
+        )
+        assert 'layout="wide"' in src, (
+            'set_page_config must bind layout="wide" per DESIGN §8.0 / D14.'
+        )
+
+
+class TestFilterStatusFormatFunc:
+    """DESIGN §8.0 + §8.2: filter_status selectbox shows display labels while
+    storing raw bracketed values. The "All" sentinel passes through unchanged
+    (STATUS_LABELS.get("All", "All") returns "All" by default).
+
+    AppTest surfaces .options as the format_func-applied display strings (per
+    TestRequirementsTabWidgets::test_radio_options_display_config_labels_in_order
+    precedent) and .value as the underlying raw option — so checking both
+    pins the storage/display split in a single test class.
+    """
+
+    def test_filter_status_options_display_labels(self, db):
+        """The filter_status selectbox's .options must be ["All"] + the
+        config.STATUS_LABELS[v] for each v in config.STATUS_VALUES — NOT
+        the raw bracketed values. A format_func that returns None on the
+        "All" sentinel (vanilla `STATUS_LABELS.get`) would leak `None` into
+        the rendered option list, so the implementation MUST wrap with a
+        default that passes "All" through. This test catches that regression.
+        """
+        at = _run_page()
+        options = list(at.selectbox(key="filter_status").options)
+        expected = ["All"] + [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        assert options == expected, (
+            f"filter_status options must be display labels via format_func "
+            f"(with 'All' passthrough).\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_filter_status_value_stays_raw_on_select(self, db):
+        """After selecting a specific status via the UI, the selectbox's
+        .value must be the raw storage string (brackets included) — the
+        filter predicate downstream compares raw values to df["status"]."""
+        database.add_position({"position_name": "Alpha", "status": "[APPLIED]"})
+        at = _run_page()
+        at.selectbox(key="filter_status").select(config.STATUS_APPLIED)
+        at.run()
+        assert not at.exception
+        assert at.selectbox(key="filter_status").value == config.STATUS_APPLIED, (
+            f"filter_status must store the raw status value (brackets included) "
+            f"so filter predicates compare storage keys; got "
+            f"{at.selectbox(key='filter_status').value!r}"
+        )
+
+    def test_filter_status_round_trip_filters_correctly(self, db):
+        """End-to-end: selecting the display-labelled status must narrow the
+        table to rows with the corresponding raw status — storage/display
+        split works transparently."""
+        database.add_position({"position_name": "Saved Row"})                       # [SAVED] by default
+        database.add_position({"position_name": "Applied Row", "status": config.STATUS_APPLIED})
+        at = _run_page()
+        at.selectbox(key="filter_status").select(config.STATUS_APPLIED)
+        at.run()
+        assert not at.exception
+        # One row after filtering to Applied.
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected exactly 1 applied row after filter, got: "
+            f"{at.caption[0].value!r}"
+        )
+
+
+class TestEditStatusFormatFunc:
+    """DESIGN §8.0 + §8.2: the Overview form's Status selectbox shows display
+    labels (format_func=config.STATUS_LABELS.get) while storing raw bracketed
+    values — mirrors the filter_status contract, minus the "All" sentinel.
+    """
+
+    def test_edit_status_options_display_labels(self, db):
+        """The edit_status selectbox's .options must be the ordered
+        config.STATUS_LABELS[v] for each v in config.STATUS_VALUES — NOT
+        the raw bracketed values."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        expected = [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        assert options == expected, (
+            f"edit_status options must be display labels via format_func.\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_edit_status_value_stays_raw_on_select(self, db):
+        """After selecting a specific status on the Overview form, the
+        selectbox's .value must be the raw storage string — the Save
+        handler writes the raw value into positions.status."""
+        database.add_position({"position_name": "Alpha", "status": config.STATUS_SAVED})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.selectbox(key=EDIT_KEYS["status"]).select(config.STATUS_APPLIED)
+        # Selection rerun needs the row kept (AppTest's on_select='rerun'
+        # single-run contract — see `_keep_selection` docstring) so the
+        # Overview form re-renders and the selectbox is reachable.
+        _keep_selection(at, 0)
+        at.run()
+        assert not at.exception
+        assert at.selectbox(key=EDIT_KEYS["status"]).value == config.STATUS_APPLIED, (
+            f"edit_status must store the raw status value (brackets included) "
+            f"so Save writes the storage key; got "
+            f"{at.selectbox(key=EDIT_KEYS['status']).value!r}"
+        )
+
+
+class TestStatusColumnDisplaysLabels:
+    """DESIGN §8.0 + §8.2: the positions table's Status column must render
+    `config.STATUS_LABELS[raw]` ("Saved", "Applied", ...), never the raw
+    bracketed storage value ("[SAVED]", "[APPLIED]", ...). The raw
+    `status` column stays on the underlying df for selection plumbing
+    (row-index → id) but is never shown to the user — DESIGN §8.0:
+    "Pages never render a raw status value".
+
+    Implemented by deriving `df_display["status_label"] = df_display[
+    "status"].map(config.STATUS_LABELS)` and swapping `status` →
+    `status_label` in both `display_cols` (column_order) and
+    `column_config`. AppTest surfaces `st.dataframe(..., column_order=...)`
+    as `at.dataframe[0].proto.column_order`, so we pin the displayed set
+    directly; cell values come from `at.dataframe[0].value`.
+    """
+
+    def test_status_label_is_in_display_order_not_raw_status(self, db):
+        """Displayed columns must include `status_label` and must NOT
+        include raw `status`. Pins DESIGN §8.0's "UI never renders raw
+        storage values" contract at the column-order level so a silent
+        revert to the raw column on a future edit trips the test."""
+        database.add_position({"position_name": "Pin"})
+        at = _run_page()
+        order = list(at.dataframe[0].proto.column_order)
+        assert "status_label" in order, (
+            f"Displayed columns must include 'status_label' per DESIGN §8.2 "
+            f"('Status column displays STATUS_LABELS[raw]'); got {order}"
+        )
+        assert "status" not in order, (
+            f"Displayed columns must NOT include raw 'status' per DESIGN §8.0 "
+            f"('Pages never render a raw status value'); got {order}"
+        )
+
+    def test_status_label_column_values_are_human_labels(self, db):
+        """For a position stored with status='[APPLIED]', the rendered
+        `status_label` cell must equal STATUS_LABELS['[APPLIED]'] ==
+        'Applied' — never the raw bracketed form. The negative pin on
+        the bracketed value catches a future regression where someone
+        aliases `status_label` back to `status`."""
+        database.add_position(
+            {"position_name": "LabelPin", "status": config.STATUS_APPLIED}
+        )
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == "LabelPin"]
+        assert len(row) == 1, f"Expected one row for LabelPin, got {len(row)}"
+        cell = row["status_label"].iloc[0]
+        expected = config.STATUS_LABELS[config.STATUS_APPLIED]
+        assert cell == expected, (
+            f"status_label must equal STATUS_LABELS[{config.STATUS_APPLIED!r}] "
+            f"({expected!r}); got {cell!r}"
+        )
+        assert cell != config.STATUS_APPLIED, (
+            f"status_label must not equal the raw bracketed storage value "
+            f"{config.STATUS_APPLIED!r} — DESIGN §8.0 forbids raw values in UI."
+        )
+
+    @pytest.mark.parametrize("raw_status", config.STATUS_VALUES)
+    def test_status_label_covers_every_status_value(self, db, raw_status):
+        """Parametrized over every entry in config.STATUS_VALUES: each
+        raw status must map to its labelled form in the rendered
+        `status_label` column. Config invariant #3 covers the map
+        itself; this pins the page-side wiring so a new pipeline stage
+        cannot ship without its column_label surface."""
+        pos_name = f"Pin-{raw_status}"
+        database.add_position({"position_name": pos_name, "status": raw_status})
+        at = _run_page()
+        df = at.dataframe[0].value
+        row = df[df["position_name"] == pos_name]
+        assert len(row) == 1
+        expected = config.STATUS_LABELS[raw_status]
+        assert row["status_label"].iloc[0] == expected, (
+            f"status_label for raw={raw_status!r} must be {expected!r}; "
+            f"got {row['status_label'].iloc[0]!r}"
+        )
+
+
+class TestMaterialsFilterPredicateIsYes:
+    """DESIGN §8.2 Materials-tab row: visibility filter is `session_state[
+    f"edit_{req_col}"] == "Yes"`. Pinned here independent of Sub-task 2's
+    own migration tests — this is the DESIGN-contract anchor for "Materials
+    shows a doc iff its requirement is marked Required"."""
+
+    def test_materials_tab_shows_only_docs_required_via_yes(self, db):
+        """Seed a position with mixed req_* values (Yes / Optional / No)
+        and assert the Materials tab renders checkboxes ONLY for the ones
+        whose session_state value is 'Yes'."""
+        database.add_position({
+            "position_name":       "Alpha",
+            "req_cv":              "Yes",        # visible
+            "req_cover_letter":    "Optional",   # hidden
+            "req_transcripts":     "No",         # hidden
+            "req_writing_sample":  "Yes",        # visible
+        })
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # Switch to Materials tab so its body renders. _select_row_and_tab
+        # handles the two-piece state (row selection + active tab) in one
+        # rerun so the Materials-tab code path is exercised.
+        _select_row_and_tab(at, 0, "Materials")
+        assert not at.exception, f"Page raised after tab switch: {at.exception}"
+        # CV + Writing Sample visible (req == "Yes"); Cover Letter (Optional)
+        # and Transcripts (No) hidden. _checkbox_rendered is defined earlier
+        # in the test module for exactly this kind of conditional-widget check.
+        assert _checkbox_rendered(at, "edit_done_cv"), (
+            "req_cv='Yes' must render a Materials-tab checkbox"
+        )
+        assert _checkbox_rendered(at, "edit_done_writing_sample"), (
+            "req_writing_sample='Yes' must render a Materials-tab checkbox"
+        )
+        assert not _checkbox_rendered(at, "edit_done_cover_letter"), (
+            "req_cover_letter='Optional' must NOT render a Materials-tab checkbox "
+            "(predicate is strictly == 'Yes' per DESIGN §8.2)"
+        )
+        assert not _checkbox_rendered(at, "edit_done_transcripts"), (
+            "req_transcripts='No' must NOT render a Materials-tab checkbox"
+        )
+
+
+# ── Delete-button tab-sensitivity (DESIGN §8.2) ──────────────────────────────
+# DESIGN §8.2 Delete row: "Button rendered below the edit panel (outside the
+# panel box), visible only when the active tab is Overview." Pre-Sub-task-13
+# the Delete button lived inside `with tabs[0]:` — the user never saw it
+# on non-Overview tabs (Streamlit's tab CSS hid it) but the button was still
+# in the DOM and clickable via AppTest regardless of active tab. Sub-task 13
+# moves the button BELOW the tab selector and gates its render on
+# session_state["edit_active_tab"] == "Overview", matching DESIGN's intent:
+# the button's scope is the whole position, so it only shows up on the tab
+# where the user reviews the position as a whole.
+
+def _delete_button_rendered(at: AppTest) -> bool:
+    """True iff the Overview Delete button (key=edit_delete) is on the page.
+
+    Mirrors _tab_selector_rendered / _checkbox_rendered — AppTest raises
+    KeyError for absent widget lookups, so the helper wraps the try/except."""
+    try:
+        at.button(key=DELETE_BUTTON_KEY)
+        return True
+    except KeyError:
+        return False
+
+
+class TestDeleteButtonTabSensitivity:
+
+    def test_delete_visible_when_active_tab_is_overview(self, db):
+        """With default tab selection (Overview, the first EDIT_PANEL_TABS
+        entry and the st.radio default), the Delete button must render
+        beneath the tab selector."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        assert not at.exception
+        # Precondition: default active tab is Overview.
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Overview", (
+            "Precondition: initial active tab should default to 'Overview'"
+        )
+        assert _delete_button_rendered(at), (
+            "Delete button must render when active tab is Overview "
+            "(DESIGN §8.2)"
+        )
+
+    def test_delete_absent_when_active_tab_is_requirements(self, db):
+        """Switching to Requirements via the tab selector must remove the
+        Delete button from the page — the button's scope is the whole
+        position, not the tab's data, so it only belongs on Overview."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Requirements")
+        assert not at.exception, f"Page raised after switch to Requirements: {at.exception}"
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Requirements"
+        assert not _delete_button_rendered(at), (
+            "Delete button must NOT render when active tab is Requirements "
+            "(DESIGN §8.2 — Delete is Overview-only)"
+        )
+
+    def test_delete_absent_when_active_tab_is_materials(self, db):
+        """Switching to Materials via the tab selector must remove the
+        Delete button from the page."""
+        database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert not at.exception, f"Page raised after switch to Materials: {at.exception}"
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Materials"
+        assert not _delete_button_rendered(at), (
+            "Delete button must NOT render when active tab is Materials "
+            "(DESIGN §8.2 — Delete is Overview-only)"
+        )
+
+    def test_delete_absent_when_active_tab_is_notes(self, db):
+        """Switching to Notes via the tab selector must remove the Delete
+        button from the page."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Notes")
+        assert not at.exception, f"Page raised after switch to Notes: {at.exception}"
+        assert at.radio(key=TAB_SELECTOR_KEY).value == "Notes"
+        assert not _delete_button_rendered(at), (
+            "Delete button must NOT render when active tab is Notes "
+            "(DESIGN §8.2 — Delete is Overview-only)"
+        )
+
+    def test_delete_reappears_when_returning_to_overview(self, db):
+        """Round-trip: user switches away from Overview (Delete hides), then
+        back (Delete reappears). Pins both directions of the gating."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        # Away
+        _select_row_and_tab(at, 0, "Notes")
+        assert not _delete_button_rendered(at)   # precondition
+        # Back
+        _select_row_and_tab(at, 0, "Overview")
+        assert not at.exception
+        assert _delete_button_rendered(at), (
+            "Delete button must render again when user returns to Overview"
+        )
