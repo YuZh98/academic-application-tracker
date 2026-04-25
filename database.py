@@ -706,11 +706,15 @@ def upsert_application(
                     (config.STATUS_APPLIED, position_id, config.STATUS_SAVED),
                 )
 
-            # R3: incoming response_type == "Offer". Terminal guard in
-            # the WHERE clause blocks regression; the self-assignment
-            # that runs when pre status IS already STATUS_OFFER is
-            # harmless (pre == post, so status_changed reads False).
-            if fields.get("response_type") == "Offer":
+            # R3: incoming response_type == config.RESPONSE_TYPE_OFFER.
+            # Terminal guard in the WHERE clause blocks regression; the
+            # self-assignment that runs when pre status IS already
+            # STATUS_OFFER is harmless (pre == post, so status_changed
+            # reads False). Trigger string sourced from config so a
+            # future rename of the 'Offer' entry in RESPONSE_TYPES
+            # surfaces at import (invariant #9) rather than as a
+            # silent R3 no-op.
+            if fields.get("response_type") == config.RESPONSE_TYPE_OFFER:
                 terminal = tuple(config.TERMINAL_STATUSES)
                 placeholder_list = ", ".join("?" * len(terminal))
                 conn.execute(
