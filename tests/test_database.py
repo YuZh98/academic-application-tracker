@@ -2465,6 +2465,40 @@ class TestConfirmationSplitMigration:
         assert row_second["confirmation_received"] == row_first["confirmation_received"]
         assert row_second["confirmation_date"]     == row_first["confirmation_date"]
 
+    def test_migration_null_clears_legacy_confirmation_email_column(
+        self, tmp_path, monkeypatch,
+    ):
+        """DESIGN §6.3 step (c): "leave the old column NULL until a
+        follow-up release rebuilds the table to drop it." After the
+        split UPDATEs land the legacy date-shaped value into the
+        (received, date) pair, the source column itself must be NULL —
+        parallels the interview1/2_date NULL-clear in the Sub-task 8
+        migration. Without this, the legacy column carries stale
+        post-split data that no caller reads but that violates the
+        literal DESIGN spec and risks accidental future reads of
+        post-split ghost values.
+        """
+        self._seed_pre_v1_3_applications(
+            tmp_path, monkeypatch, confirmation_email_value="2026-01-15"
+        )
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmation_email, confirmation_received, "
+                "       confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        # Sanity-pin the new columns first — the NULL-clear must not
+        # accidentally undo the translation done by the prior UPDATEs.
+        assert row["confirmation_received"] == 1
+        assert row["confirmation_date"]     == "2026-01-15"
+        # The DESIGN §6.3 step (c) NULL-clear:
+        assert row["confirmation_email"] is None, (
+            "Legacy confirmation_email must be NULL-cleared after the "
+            "split migration completes (DESIGN §6.3 step (c)). "
+            f"Got {row['confirmation_email']!r}"
+        )
+
 
 # ── recommenders rebuild: confirmed TEXT→INTEGER + reminder_sent split ────────
 # Sub-task 11 / DESIGN §6.2 + D19 + D20: SQLite lacks in-place column-type
