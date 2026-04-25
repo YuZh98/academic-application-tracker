@@ -1775,9 +1775,7 @@ class TestAddInterview:
         assert df.iloc[0]["sequence"] == 1
 
     def test_auto_assigns_next_sequence_for_subsequent_interviews(self, db):
-        """Second interview on the same position picks sequence=2. Gaps
-        in sequence (delete #1, add two more) are allowed — MAX+1 picks
-        past any leftover gap so the UNIQUE constraint never collides."""
+        """Second interview on the same position picks sequence=2."""
         pid = database.add_position(make_position())
         database.add_interview(pid, {"scheduled_date": "2026-05-01"})
         database.add_interview(pid, {"scheduled_date": "2026-06-01"})
@@ -1785,6 +1783,34 @@ class TestAddInterview:
         seqs = list(df["sequence"])
         assert seqs == [1, 2], (
             f"Second add_interview must auto-sequence to 2; got {seqs!r}"
+        )
+
+    def test_auto_sequence_picks_past_gap_after_delete(self, db):
+        """Gaps in sequence (delete #1, add two more) are allowed —
+        MAX+1 picks past any leftover gap so the UNIQUE constraint
+        never collides. A regression to MIN-style numbering would
+        re-use sequence=1 here and fail.
+
+        Also pins that the auto-sequencer reads from MAX over ALL rows,
+        not COUNT(*) — a COUNT-based variant would assign sequence=2
+        after the delete (one row remains), colliding with the existing
+        sequence=2."""
+        pid = database.add_position(make_position())
+        res1 = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-06-01"})
+        # Drop sequence=1; sequence=2 row stays. MAX(sequence)=2.
+        database.delete_interview(res1["id"])
+
+        # Two more inserts — auto-sequencer must pick past the surviving
+        # MAX(=2). Expected new sequences: 3 and 4.
+        database.add_interview(pid, {"scheduled_date": "2026-07-01"})
+        database.add_interview(pid, {"scheduled_date": "2026-08-01"})
+
+        seqs = list(database.get_interviews(pid)["sequence"])
+        assert seqs == [2, 3, 4], (
+            "Auto-sequence must pick MAX(sequence)+1 (past any gap from "
+            "a deleted row), not MIN-of-available or COUNT+1. Got "
+            f"{seqs!r}; expected [2, 3, 4] (the deleted #1 is not re-used)."
         )
 
     def test_explicit_sequence_override(self, db):
