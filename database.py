@@ -402,6 +402,15 @@ def init_db() -> None:
         #                 anything else -> reminder_sent=0,
         #                                  reminder_sent_date=NULL
         #
+        # Note: the date-shape -> flag=0 mapping above is the
+        # *conservative* choice and intentionally diverges from
+        # Sub-task 10's confirmation_email split (where date-shape
+        # -> received=1). See DESIGN §6.3 "Flag/date split divergence
+        # — confirmation_email vs reminder_sent" for the rationale —
+        # short version: pre-v1.3 reminder_sent saw both date-only
+        # and 'Y'-only legacy use without a clear "date implies sent"
+        # rule, so the user re-saves to flip the flag if intended.
+        #
         # All other columns (id, position_id, recommender_name,
         # relationship, asked_date, submitted_date, notes) copy
         # through verbatim; id values preserved so the
