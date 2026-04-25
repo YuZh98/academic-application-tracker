@@ -507,17 +507,22 @@ if "selected_position_id" in st.session_state:
         # tab is Overview. `st.tabs(key=...)` in Streamlit 1.56 accepts a
         # `key` keyword but doesn't actually populate session_state with the
         # active tab (verified via probe), so we use st.radio whose value
-        # lives in session_state["_active_edit_tab"] and can gate the Delete
+        # lives in session_state["edit_active_tab"] and can gate the Delete
         # button below. Visually the radio renders as a horizontal strip
         # (label collapsed), approximating the original tab-bar look while
         # giving the page programmatic active-tab access.
+        # Key follows DESIGN §8.0 widget-key scope (`edit_` prefix for
+        # edit-panel widgets); the `_active_edit_tab` form used pre-
+        # Sub-task-14-follow-up was a `_`-sentinel-style name that
+        # conflicted with the documented scope (the radio is a real
+        # widget, not a pure internal state slot).
         active_tab = st.radio(
             "Edit section",
             options=config.EDIT_PANEL_TABS,
             index=0,
             horizontal=True,
             label_visibility="collapsed",
-            key="_active_edit_tab",
+            key="edit_active_tab",
         )
 
         if active_tab == "Overview":   # T4-C + T5-A

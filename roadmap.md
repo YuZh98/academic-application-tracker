@@ -59,15 +59,17 @@ info + `[expand]` recovery button rather than rendering the figure, and
 `filter_status`/`edit_status` selectboxes gain `format_func` so the UI
 renders `STATUS_LABELS` while storage keeps raw bracketed values, and
 the edit-panel tab-strip swapped from `st.tabs` to
-`st.radio(horizontal=True, key="_active_edit_tab")` + branch-rendering
+`st.radio(horizontal=True, key="edit_active_tab")` + branch-rendering
 so the Delete button could be relocated BELOW the panel, gated by
 `active_tab == "Overview"` — on non-Overview tabs the button is no
 longer in the DOM at all (pre-Sub-task-13 it was CSS-hidden but still
 present), and the v1.3 doc-alignment sweep updating `GUIDELINES.md`
 (stage-0 alias + grep rule + status-selectbox example flipped from
 `STATUS_OPEN`/`[OPEN]` to `STATUS_SAVED`/`[SAVED]`;
-`format_func=STATUS_LABELS.get` + `_active_edit_tab` /
-`_funnel_expanded` sentinels added per DESIGN §8.0 + Sub-tasks 12/13),
+`format_func=STATUS_LABELS.get` + `edit_active_tab` widget key (per
+the post-Sub-task-14 follow-up landing it under DESIGN §8.0's
+`edit_` widget-key scope rather than the `_` sentinel scope) +
+`_funnel_expanded` sentinel added per DESIGN §8.0 + Sub-tasks 12/13),
 `CHANGELOG.md`, `TASKS.md`, and this file to match DESIGN v1.3 — pure
 docs change, no schema, no test drift. 441 tests green · zero
 deprecation warnings.

@@ -79,13 +79,13 @@ importing `exports` lazily inside each write function (not at module top).
 
 ### Streamlit widget keys and session-state
 - **Quick-add form** widgets: prefix `qa_` (`qa_position_name`, `qa_deadline_date`)
-- **Edit panel** widgets: prefix `edit_` (`edit_position_name`, `edit_notes`)
+- **Edit panel** widgets: prefix `edit_` (`edit_position_name`, `edit_notes`,
+  `edit_active_tab` for the tab selector)
 - **Filter bar** widgets: prefix `filter_` (`filter_status`, `filter_field`)
 - **Form ids** end with `_form` to avoid collision with widget keys inside:
   `edit_notes_form` contains the widget `edit_notes`
 - **Internal sentinels** start with `_` and describe state, not widgets:
   `_edit_form_sid`, `_delete_target_id`, `_skip_table_reset`,
-  `_active_edit_tab` (Opportunities edit-panel tab selector),
   `_funnel_expanded` (dashboard `[expand]` toggle)
 
 ### Page files
