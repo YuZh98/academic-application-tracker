@@ -757,18 +757,22 @@ class TestRowSelection:
 #
 # v1.3 Sub-task 13 (DESIGN §8.2): the tab selector is a config-driven
 # `st.radio(horizontal=True, label_visibility="collapsed",
-# key="_active_edit_tab")` — NOT `st.tabs(...)`. The swap is load-bearing:
+# key="edit_active_tab")` — NOT `st.tabs(...)`. The swap is load-bearing:
 # DESIGN §8.2 places the Delete button *outside* the tab container, visible
 # only when the active tab is Overview; `st.tabs` in Streamlit 1.56 has no
 # public active-tab API (the `key=` kwarg is accepted but does not populate
 # session_state), so we use st.radio whose active value lives in
-# session_state["_active_edit_tab"] and can gate the Delete button below.
+# session_state["edit_active_tab"] and can gate the Delete button below.
+# (The key migrated from `_active_edit_tab` to `edit_active_tab` in the
+# post-Sub-task-14 follow-up — DESIGN §8.0 reserves the `_` prefix for
+# internal sentinels; this is a real edit-panel widget so it follows the
+# `edit_` widget-key scope.)
 
-TAB_SELECTOR_KEY = "_active_edit_tab"
+TAB_SELECTOR_KEY = "edit_active_tab"
 
 
 def _tab_selector_rendered(at: AppTest) -> bool:
-    """True iff the edit-panel tab selector (st.radio key=_active_edit_tab)
+    """True iff the edit-panel tab selector (st.radio key=edit_active_tab)
     is present on the rendered page.
 
     AppTest's `at.radio(key=...)` raises KeyError when no such widget exists,
@@ -1680,11 +1684,11 @@ def _select_row_and_tab(at: AppTest, row_index: int, tab_name: str) -> None:
 
     Needed by tests that access widgets on a NON-Overview tab (Requirements,
     Materials, Notes). Sub-task 13 (DESIGN §8.2) swapped `st.tabs` for
-    `st.radio(horizontal=True, key="_active_edit_tab")` + branch-based tab
+    `st.radio(horizontal=True, key="edit_active_tab")` + branch-based tab
     rendering; unlike `st.tabs` — which used to render ALL tab bodies and
     CSS-hide the inactive ones — the radio-based panel renders ONLY the
     active tab's widgets, so a test that wants to access e.g. the
-    `edit_req_cv` radio MUST first set `_active_edit_tab = "Requirements"`.
+    `edit_req_cv` radio MUST first set `edit_active_tab = "Requirements"`.
 
     Writing session_state directly (rather than `at.radio(...).set_value(x)
     + at.run()`) keeps the single-rerun contract — the dataframe selection
@@ -2889,7 +2893,7 @@ class TestPreSeedNaNCoercion:
 #
 #   • §8.2 Delete-button placement: button renders BELOW the tab container
 #     (outside the panel box), visible ONLY when the active tab is Overview.
-#     Pin the tab-sensitivity by driving at.radio(key=_active_edit_tab)
+#     Pin the tab-sensitivity by driving at.radio(key=edit_active_tab)
 #     through each of the four EDIT_PANEL_TABS and asserting Delete-button
 #     presence/absence accordingly.
 
@@ -3158,7 +3162,7 @@ class TestMaterialsFilterPredicateIsYes:
 # on non-Overview tabs (Streamlit's tab CSS hid it) but the button was still
 # in the DOM and clickable via AppTest regardless of active tab. Sub-task 13
 # moves the button BELOW the tab selector and gates its render on
-# session_state["_active_edit_tab"] == "Overview", matching DESIGN's intent:
+# session_state["edit_active_tab"] == "Overview", matching DESIGN's intent:
 # the button's scope is the whole position, so it only shows up on the tab
 # where the user reviews the position as a whole.
 
