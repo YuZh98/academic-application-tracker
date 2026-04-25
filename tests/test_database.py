@@ -1135,13 +1135,14 @@ class TestUpsertApplicationR3:
         )
         assert result["new_status"] is None
 
-    @pytest.mark.parametrize("terminal_status", [
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
-    ])
+    @pytest.mark.parametrize("terminal_status", config.TERMINAL_STATUSES)
     def test_r3_blocked_on_terminal(self, db, terminal_status):
-        """DESIGN §9.3 R3 guard: the SQL WHERE excludes all three
-        terminals. A stray upsert with response_type=Offer on a terminal
-        row must not silently regress the decision."""
+        """DESIGN §9.3 R3 guard: the SQL WHERE excludes every terminal
+        status. A stray upsert with response_type=Offer on a terminal
+        row must not silently regress the decision.
+
+        Sourced from config so a future fourth terminal status flows
+        into coverage automatically."""
         pid = database.add_position(make_position())
         _force_position_status(pid, terminal_status)
         result = database.upsert_application(pid, {"response_type": "Offer"})
@@ -1227,12 +1228,13 @@ class TestUpsertApplicationR1R3Matrix:
         assert result["status_changed"] is False
         assert result["new_status"] is None
 
-    @pytest.mark.parametrize("terminal_status", [
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
-    ])
+    @pytest.mark.parametrize("terminal_status", config.TERMINAL_STATUSES)
     def test_matrix_terminal_unchanged(self, db, terminal_status):
         """Matrix row: any terminal pre-state — R1 blocked (status != SAVED),
-        R3 blocked (status IN TERMINAL_STATUSES). Post == pre."""
+        R3 blocked (status IN TERMINAL_STATUSES). Post == pre.
+
+        Sourced from config so a future fourth terminal status flows
+        into coverage automatically."""
         pid = database.add_position(make_position())
         _force_position_status(pid, terminal_status)
         result = self._upsert_both(pid)
@@ -2073,12 +2075,13 @@ class TestAddInterviewR2:
         assert database.get_position(pid)["status"] == config.STATUS_OFFER
         assert result["status_changed"] is False
 
-    @pytest.mark.parametrize("terminal_status", [
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
-    ])
+    @pytest.mark.parametrize("terminal_status", config.TERMINAL_STATUSES)
     def test_r2_noop_when_terminal(self, db, terminal_status):
         """Status guard blocks: a stray interview record on a
-        terminal-status position must not silently regress."""
+        terminal-status position must not silently regress.
+
+        Sourced from config so a future fourth terminal status flows
+        into coverage automatically."""
         pid = database.add_position(make_position())
         _force_position_status(pid, terminal_status)
         result = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
