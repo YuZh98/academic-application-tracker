@@ -17,6 +17,79 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Fixed — Sub-task 13 reverted: tab-switch widget state loss (branch `review/test-reliability-2026-04-25`)
+
+User-reported bugs (2026-04-25):
+- **Bug 1** — On the Opportunities page, after selecting an opportunity
+  and switching to the Requirements tab and back, the position name in
+  the Overview tab disappeared. Same on the second opportunity. Also
+  triggered by the cross-row sequence: select row A → Requirements →
+  click row B → Overview.
+- **Bug 2** — Requirements tab showed every doc as "Required" (the
+  radio's `index=0` default), not the DB's "No". Materials tab showed
+  all 7 doc checkboxes; ticking CV + clicking Save left only 6
+  checkboxes (CV vanished).
+
+**Root cause.** Sub-task 13 (commit `20c21b7`, 2026-04-24) swapped the
+edit panel's `st.tabs(...)` for `st.radio + conditional rendering` so
+the Delete button could be gated on a programmatically-readable
+`active_tab` variable. Conditional rendering unmounts each tab body's
+widgets when its tab is not active. Streamlit's documented v1.20+
+behaviour wipes `session_state` for unmounted widget keys; on remount
+the widget falls back to its `value=` default (empty for `text_input`,
+`index=0` for `radio` → "Required"). The pre-seed gate
+(`_edit_form_sid != sid`) only fires on row CHANGE, never on tab
+switch — so the cleaned-up keys were never restored on the same row.
+
+**Fix.** Reverted Sub-task 13's architecture change. Edit panel now
+uses `st.tabs(config.EDIT_PANEL_TABS)` again — every tab body renders
+on every script run (CSS hides inactive ones), so no widget unmount,
+no `session_state` cleanup, no cross-tab data loss. The Delete-button
+"visible only on Overview" requirement (DESIGN §8.2) is satisfied by
+placing the button inside `with tabs[0]:` after the form: `st.tabs`
+CSS-hides it on the other tabs naturally.
+
+The two-phase pre-seed (introduced in commit `e2bce18` as a defensive
+measure against the same cleanup mechanism) is **kept** — under
+`st.tabs` its second branch (restore-missing-keys) is essentially
+never exercised, but it is harmless and provides defence-in-depth
+against any future architectural drift.
+
+Files touched:
+- **`pages/1_Opportunities.py`** — `st.radio + if/elif active_tab` →
+  `st.tabs + with tabs[i]:`. Delete button moved from the trailing
+  `if active_tab == "Overview":` block back inside `with tabs[0]:`
+  after the form. Pre-seed canonical-dict + two-phase apply kept.
+- **`tests/test_opportunities_page.py`** — refactored `TestEditPanelShell`
+  tests to use `at.tabs` (a list of `Tab` elements with `.label`)
+  instead of `at.radio(key="edit_active_tab")`; replaced the
+  `_tab_selector_rendered` helper with `_tabs_rendered`; dropped the
+  Sub-task-13-specific tests (`test_default_active_tab_is_first_config_entry`
+  and four `TestDeleteButtonTabSensitivity` tests asserting DOM-absence
+  of the Delete button on non-Overview tabs) whose assertions no longer
+  match user-visible behaviour under `st.tabs`; soft-aliased
+  `_select_row_and_tab(at, i, tab)` to a no-op-on-tab call so the
+  ~30 existing call sites keep working without renames; updated
+  `test_one_radio_per_requirement_doc` to drop the `+ 1` for the
+  (now-gone) tab-selector radio; re-keyed
+  `test_text_area_renders_when_row_selected` from a count-of-1
+  assertion to a key-set assertion (Notes + Overview text_areas now
+  both render every run).
+- **`DESIGN.md`** — §8.2 Delete row clarified: "below the form
+  (outside the `st.form` box), inside the Overview tab body" — making
+  explicit that "panel box" means the form box, satisfied by `with
+  tabs[0]:` placement. New paragraph documents the `st.tabs` vs
+  `st.radio` architectural decision and pins the Sub-task-13 reversal
+  rationale (Streamlit cleanup behaviour) so a future contributor does
+  not re-attempt the same swap.
+
+Tests: 478 pass post-revert (was 483; 5 Sub-task-13-specific tests
+removed). The 8 `TestTabSwitchWidgetStateSurvival` tests added during
+the abortive Sub-task-13 fix are kept as architectural regression
+guards — they pass trivially under `st.tabs` (no unmount → values
+always survive) and would fail loudly if conditional tab rendering
+were ever re-introduced.
+
 ### Added — v1.3 alignment (branch `feature/align-v1.3`)
 
 Sub-task 1 of the DESIGN-to-codebase alignment pass. Pure additions to

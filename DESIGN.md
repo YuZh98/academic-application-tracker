@@ -724,7 +724,21 @@ Layout wireframe: [`docs/ui/wireframes.md#opportunities`](docs/ui/wireframes.md#
 | Requirements tab | One `st.radio` per `REQUIREMENT_DOCS` entry; options = `REQUIREMENT_VALUES`; `format_func=REQUIREMENT_LABELS.get`; Save writes only `req_*` keys so `done_*` survives flips between states |
 | Materials tab | Live-filtered: only docs with `session_state[f"edit_{req_col}"] == "Yes"` render a checkbox; Save writes only `done_*` for visible docs (hidden `done_*` preserved) |
 | Notes tab | Single `st.text_area` inside `st.form("edit_notes_form")`; empty input persists as `""` not `NULL` |
-| Delete | Button rendered **below the edit panel** (outside the panel box), **visible only when the active tab is Overview**. Clicking opens an `@st.dialog` confirmation (outside `st.form`); on Confirm, `delete_position(id)` runs and the FK cascade removes the position's `applications`, `interviews`, and `recommenders` rows atomically. The button's scope is the whole position, not the active tab's data — hence the Overview-only placement, matching the tab where the user is reviewing the position as a whole. |
+| Delete | Button rendered **below the form** (outside the `st.form` box), **inside the Overview tab body** (`with tabs[0]:`) so `st.tabs`'s natural CSS-hide makes it user-visible only when the Overview tab is active. Clicking opens an `@st.dialog` confirmation (outside `st.form`); on Confirm, `delete_position(id)` runs and the FK cascade removes the position's `applications`, `interviews`, and `recommenders` rows atomically. The button's scope is the whole position, not the active tab's data — hence the Overview-only placement, matching the tab where the user is reviewing the position as a whole. |
+
+**Edit-panel architecture.** The four tabs use `st.tabs(config.EDIT_PANEL_TABS)`,
+NOT `st.radio + conditional rendering`. `st.tabs` keeps every tab body
+mounted on every script run (CSS hides the inactive ones), which is
+load-bearing: Streamlit's documented v1.20+ behaviour wipes
+`session_state` for unmounted widget keys, so any conditional-render
+approach causes user-visible data loss across tab switches (the
+text_input's value silently resets to its `value=` default on remount).
+A short-lived 2026-04-25 experiment with `st.radio + conditional
+rendering` — which had been chosen to expose a programmatic
+`active_tab` for the Delete-button gate — was reverted after this
+class of bug surfaced. The Delete-button placement above does not
+require a programmatic active-tab signal: placing the button inside
+`with tabs[0]:` lets `st.tabs`'s CSS-hide handle visibility naturally.
 
 **Selection-survival invariant.** Save on any tab, filter change that
 still includes the selected row, and dialog-Cancel must all preserve
