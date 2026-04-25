@@ -162,12 +162,23 @@ class TestQuickAddFormBehaviour:
             f"Save handler must swallow the exception after st.error; "
             f"got uncaught: {at.exception}"
         )
+        # Contract 3: no success toast on the failure path. Mirrors all
+        # four Tier-5 _db_failure_shows_error_no_traceback tests so the
+        # success-path / failure-path split is symmetric across every
+        # write handler on the page.
+        assert not at.toast, (
+            f"No success toast may appear when add_position raises; got "
+            f"{[el.value for el in at.toast]}"
+        )
 
     def test_submit_with_whitespace_only_name_shows_error(self, db):
         """Whitespace-only position_name must be treated as empty (F3 fix).
 
         Before the fix, `not "   "` evaluates to False so the insert ran.
-        After stripping, `not "   ".strip()` is True and the error fires."""
+        After stripping, `not "   ".strip()` is True and the error fires.
+        The `not at.toast` check mirrors the Tier-5 save-validation tests
+        (test_save_whitespace_only_name_blocked) so the contract holds at
+        both ends: a validation failure NEVER fires the success toast."""
         at = _run_page()
         at.text_input(key="qa_position_name").input("   ")
         at.button(key=SUBMIT_KEY).click()
@@ -175,6 +186,10 @@ class TestQuickAddFormBehaviour:
         assert at.error, "Expected st.error for whitespace-only position_name"
         assert database.get_all_positions().empty, (
             "No row should be inserted for whitespace-only position_name"
+        )
+        assert not at.toast, (
+            f"No success toast may appear when validation rejects the input; "
+            f"got {[el.value for el in at.toast]}"
         )
 
     def test_submit_with_position_name_only_adds_position(self, db):
