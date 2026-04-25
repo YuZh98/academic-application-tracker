@@ -1018,6 +1018,43 @@ config edit, no test drift. Scope: `GUIDELINES.md`, `CHANGELOG.md`,
   Sub-task 14's stated scope; candidate for a separate sub-task
   if approved.
 
+### Fixed — v1.3 alignment post-Sub-task 14 follow-up (branch `feature/align-v1.3`)
+
+Code-review follow-up landing during the post-Sub-task-14 review pass.
+Brings the Sub-task 10 `confirmation_email` migration into parity with
+the Sub-task 8 `interview1_date` / `interview2_date` migration so both
+parallel "split a dual-purpose column" / "normalize flat columns into a
+sub-table" recipes honour DESIGN §6.3 step (c) verbatim ("leave the old
+column NULL until a follow-up release rebuilds the table to drop it").
+Pre-fix the legacy `confirmation_email` retained its post-split values
+('Y' or `YYYY-MM-DD` strings); no caller reads the column, but the
+literal-DESIGN drift was the kind of inconsistency the alignment pass
+exists to close.
+
+- **`database.init_db()`** — add a NULL-clear UPDATE inside the
+  existing `confirmation_split_needed` block, AFTER the two value-
+  extracting UPDATEs so they still see the original
+  `confirmation_email` contents. Clearing first would leave nothing to
+  translate. Idempotent by virtue of the outer gate — re-runs on a
+  migrated DB find both new columns already present, the gate is
+  False, and the whole block (including this UPDATE) is skipped.
+- **`tests/test_database.py`** — new
+  `test_migration_null_clears_legacy_confirmation_email_column` in
+  `TestConfirmationSplitMigration`. Seeds a date-shaped legacy value
+  so both the value extraction AND the NULL-clear are exercised; runs
+  `init_db()`; asserts the new (received, date) pair is populated AND
+  the legacy `confirmation_email` is NULL post-migration. The
+  section-header comment retiring the now-stale "NULL-cleared is not
+  required" justification (which tracked the prior code, not the
+  DESIGN literal) lands alongside.
+- **No other callers, no UI surface, no schema rebuild.** `add_position`
+  fresh-DB rows continue to insert with `confirmation_email = NULL` via
+  the absent DEFAULT, so the existing
+  `test_writes_confirmation_received_and_date_roundtrip` legacy-NULL
+  assertion still passes unchanged.
+
+452/452 pytest green (default + `-W error::DeprecationWarning`).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
@@ -1278,12 +1315,22 @@ UPDATE applications
    SET confirmation_received = 1
  WHERE confirmation_email = 'Y';
 
--- (c) The physical `confirmation_email` column stays in the
---     applications CREATE TABLE DDL per DESIGN §6.3 step (c)
+-- (c) NULL-clear the legacy column per DESIGN §6.3 step (c)
 --     "leave old columns NULL until a rebuild drops them".
---     No caller writes to it post-split; the column is dead
---     weight but preserved to avoid a table-rebuild migration
---     this release. Scheduled for physical drop in v1.0-rc.
+--     Runs LAST so the value-extracting UPDATEs above still
+--     see the original contents — clearing first would leave
+--     nothing to translate. Parallels the interview1_date /
+--     interview2_date NULL-clear in the Sub-task 8 migration.
+--     Landed in the post-Sub-task-14 follow-up; see the
+--     `### Fixed` entry above.
+UPDATE applications
+   SET confirmation_email = NULL
+ WHERE confirmation_email IS NOT NULL;
+
+-- The physical `confirmation_email` column stays in the
+-- applications CREATE TABLE DDL — dead weight but preserved
+-- to avoid a table-rebuild migration this release. Scheduled
+-- for physical drop in v1.0-rc.
 ```
 
 Idempotence follows the Sub-task 8 **migrate-once gate** shape:
@@ -1300,7 +1347,8 @@ two shapes D19 names.
 A dev DB that somehow has the new columns but legacy values still
 in `confirmation_email` (hand-built, partial failed migration) is
 out of scope for the auto-path; recover with a one-time manual run
-of the two UPDATEs above.
+of the UPDATEs above (the two value-extracting UPDATEs followed by
+the step (c) NULL-clear).
 
 **Sub-task 11** — schema migration rebuilding the `recommenders`
 table to convert `confirmed TEXT` → `confirmed INTEGER`,
