@@ -407,56 +407,87 @@ if "selected_position_id" in st.session_state:
         # the selection changes, tracked via the internal _edit_form_sid
         # sentinel. Stored values match widget types: str for text, date|None
         # for date_input, config-vocabulary strings for the selectboxes.
-        if st.session_state.get("_edit_form_sid") != sid:
-            # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
-            # (no DEFAULT in schema) and could theoretically hold an unknown
-            # status value (sqlite CLI, future migration). Coerce both to
-            # in-vocabulary values so the selectboxes never get an
-            # out-of-options session_state value — today Streamlit tolerates
-            # it silently, but the tolerance is undocumented.
-            safe_priority = (
-                r["priority"] if r["priority"] in config.PRIORITY_VALUES
-                else config.PRIORITY_VALUES[0]
+        #
+        # Two-phase apply — defence-in-depth against the unmount-cleanup
+        # bug class (the actual fix is the `st.tabs` architecture below;
+        # this is the safety net):
+        #   (a) Row CHANGE — force-overwrite every key so a fresh row's
+        #       data replaces the previously-cached values.
+        #   (b) Same row, key missing — restore from canonical (would
+        #       repair Streamlit's tab-unmount cleanup of widget
+        #       session_state IF a future architectural change ever
+        #       re-introduced conditional rendering).
+        #   (c) Same row, key present — leave it alone (preserves
+        #       AppTest set_value semantics and any in-flight form draft
+        #       commit).
+        #
+        # Background: a 2026-04-25 user report (position name vanishing
+        # on Overview→Requirements→Overview round-trip) traced to
+        # Sub-task 13's swap of `st.tabs` for `st.radio + conditional
+        # rendering`. Conditional rendering unmounts each tab body's
+        # widgets on tab switch, and Streamlit's documented v1.20+
+        # behaviour wipes session_state for unmounted widget keys
+        # (empirically confirmed for `st.text_input` on Streamlit 1.56
+        # + AppTest; see tests/test_opportunities_page.py::
+        # TestTabSwitchWidgetStateSurvival). The sid-only gate alone
+        # never re-seeded on tab switch, so the cleaned-up text_input
+        # rendered its empty default. Sub-task 13 was reverted to
+        # `st.tabs` (CSS-hide instead of unmount → no cleanup → no
+        # data loss); under that architecture the missing-key path
+        # below is effectively dead code. Kept anyway because the
+        # cost is microseconds and it absorbs any future Streamlit
+        # behaviour change or accidental re-introduction of
+        # conditional rendering.
+        # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
+        # (no DEFAULT in schema) and could theoretically hold an unknown
+        # status value (sqlite CLI, future migration). Coerce both to
+        # in-vocabulary values so the selectboxes never get an
+        # out-of-options session_state value — today Streamlit tolerates
+        # it silently, but the tolerance is undocumented.
+        safe_priority = (
+            r["priority"] if r["priority"] in config.PRIORITY_VALUES
+            else config.PRIORITY_VALUES[0]
+        )
+        safe_status = (
+            r["status"] if r["status"] in config.STATUS_VALUES
+            else config.STATUS_VALUES[0]
+        )
+        # Sub-task 7 / DESIGN §8.2: work_auth is the categorical
+        # three-value enum. Same F2-style coercion as priority /
+        # status — NULL on quick-add rows and any legacy-vocabulary
+        # string (Sub-task 3 collapsed the pre-v1.3 six-value list
+        # manually, so dev DBs can carry 'OPT' / 'H1B' / …) must
+        # drop to WORK_AUTH_OPTIONS[0] so the selectbox always
+        # reads a valid in-vocab value.
+        raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
+        safe_work_auth = (
+            raw_work_auth if raw_work_auth in config.WORK_AUTH_OPTIONS
+            else config.WORK_AUTH_OPTIONS[0]
+        )
+        # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
+        # one malformed deadline row should render an empty date input,
+        # not crash the whole page.
+        try:
+            safe_deadline = (
+                datetime.date.fromisoformat(r["deadline_date"])
+                if r["deadline_date"] else None
             )
-            safe_status = (
-                r["status"] if r["status"] in config.STATUS_VALUES
-                else config.STATUS_VALUES[0]
-            )
-            # Sub-task 7 / DESIGN §8.2: work_auth is the categorical
-            # three-value enum. Same F2-style coercion as priority /
-            # status — NULL on quick-add rows and any legacy-vocabulary
-            # string (Sub-task 3 collapsed the pre-v1.3 six-value list
-            # manually, so dev DBs can carry 'OPT' / 'H1B' / …) must
-            # drop to WORK_AUTH_OPTIONS[0] so the selectbox always
-            # reads a valid in-vocab value.
-            raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
-            safe_work_auth = (
-                raw_work_auth if raw_work_auth in config.WORK_AUTH_OPTIONS
-                else config.WORK_AUTH_OPTIONS[0]
-            )
-            # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
-            # one malformed deadline row should render an empty date input,
-            # not crash the whole page.
-            try:
-                safe_deadline = (
-                    datetime.date.fromisoformat(r["deadline_date"])
-                    if r["deadline_date"] else None
-                )
-            except (ValueError, TypeError):
-                safe_deadline = None
+        except (ValueError, TypeError):
+            safe_deadline = None
 
-            # _safe_str (not `r[col] or ""`) is load-bearing: pandas returns
-            # float('nan') for NULL text cells once any row has a real string,
-            # and NaN is truthy — `nan or ""` evaluates to `nan`, which then
-            # blows up st.text_input/text_area's protobuf str check with a
-            # bare "TypeError: bad argument type for built-in operation".
-            st.session_state["edit_position_name"] = _safe_str(r["position_name"])
-            st.session_state["edit_institute"]     = _safe_str(r["institute"])
-            st.session_state["edit_field"]         = _safe_str(r["field"])
-            st.session_state["edit_priority"]      = safe_priority
-            st.session_state["edit_status"]        = safe_status
-            st.session_state["edit_deadline_date"] = safe_deadline
-            st.session_state["edit_link"]          = _safe_str(r["link"])
+        # _safe_str (not `r[col] or ""`) is load-bearing: pandas returns
+        # float('nan') for NULL text cells once any row has a real string,
+        # and NaN is truthy — `nan or ""` evaluates to `nan`, which then
+        # blows up st.text_input/text_area's protobuf str check with a
+        # bare "TypeError: bad argument type for built-in operation".
+        canonical: dict[str, Any] = {
+            "edit_position_name":  _safe_str(r["position_name"]),
+            "edit_institute":      _safe_str(r["institute"]),
+            "edit_field":          _safe_str(r["field"]),
+            "edit_priority":       safe_priority,
+            "edit_status":         safe_status,
+            "edit_deadline_date":  safe_deadline,
+            "edit_link":           _safe_str(r["link"]),
             # Sub-task 7: work_auth selectbox + work_auth_note text_area.
             # _safe_str on work_auth_note handles both None (fresh row)
             # and pandas float('nan') (NULL cell in a mixed-dtype TEXT
@@ -464,68 +495,68 @@ if "selected_position_id" in st.session_state:
             # link pre-seeds). Without it, st.text_area's protobuf
             # serialisation raises "bad argument type for built-in
             # operation".
-            st.session_state["edit_work_auth"]      = safe_work_auth
-            st.session_state["edit_work_auth_note"] = (
+            "edit_work_auth":      safe_work_auth,
+            "edit_work_auth_note": (
                 _safe_str(r["work_auth_note"])
                 if "work_auth_note" in r.index else ""
-            )
-
-            # T4-D: pre-seed one session_state slot per req_* column so the
-            # Requirements-tab radios render with the row's current values.
-            # Same F2-style coercion as priority/status: if a column holds
-            # an unknown string (future migration, raw SQL edit) or is
-            # missing from the row (e.g. during a migration-in-progress
-            # test), fall back to 'No' — the schema default (DESIGN §5.1
-            # + D21 Yes/Optional/No vocabulary).
-            for req_col, done_col, _label in config.REQUIREMENT_DOCS:
-                v = r[req_col] if req_col in r.index else None
-                safe_v = v if v in config.REQUIREMENT_VALUES else "No"
-                st.session_state[f"edit_{req_col}"] = safe_v
-
-                # T4-E: pre-seed one bool per done_* column for the Materials
-                # checkboxes. done_* is INTEGER 0/1; anything else (None,
-                # unexpected values) coerces to False. The checkbox itself
-                # is only rendered by the Materials tab when its req_* is
-                # 'Yes' — but we seed unconditionally so switching a
-                # requirement on mid-edit doesn't flash an unseeded checkbox.
-                d = r[done_col] if done_col in r.index else 0
-                st.session_state[f"edit_{done_col}"] = (d == 1)
-
+            ),
             # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
             # NULL-able (schema: database.py ~line 84), so coerce None/NaN → ""
             # before it reaches st.text_area — the widget expects str, and
             # pandas hands back float('nan') for NULL cells on mixed-dtype
             # object columns (see _safe_str docstring for the TypeError).
-            st.session_state["edit_notes"] = _safe_str(r["notes"])
+            "edit_notes":          _safe_str(r["notes"]),
+        }
+        # T4-D / T4-E: one slot per req_* column for the Requirements radios
+        # and one slot per done_* column for the Materials checkboxes.
+        # Same F2-style coercion as priority/status: if a req_* column holds
+        # an unknown string (future migration, raw SQL edit) or is missing
+        # from the row (e.g. during a migration-in-progress test), fall back
+        # to 'No' — the schema default (DESIGN §5.1 + D21 Yes/Optional/No
+        # vocabulary). done_* is INTEGER 0/1; anything else coerces to
+        # False. The checkbox itself is only rendered by the Materials tab
+        # when its req_* is 'Yes', but we seed unconditionally so switching
+        # a requirement on mid-edit doesn't flash an unseeded checkbox.
+        for req_col, done_col, _label in config.REQUIREMENT_DOCS:
+            v = r[req_col] if req_col in r.index else None
+            canonical[f"edit_{req_col}"] = (
+                v if v in config.REQUIREMENT_VALUES else "No"
+            )
+            d = r[done_col] if done_col in r.index else 0
+            canonical[f"edit_{done_col}"] = (d == 1)
 
-            st.session_state["_edit_form_sid"]     = sid
+        # Two-phase apply (see Bug 1 / Bug 2 fix block above):
+        #   (a) Row CHANGE → force-overwrite every key so a fresh row's
+        #       data replaces the previously-cached values.
+        #   (b) Same row, key missing → restore from canonical (repairs
+        #       Streamlit's tab-unmount cleanup of widget session_state).
+        #   (c) Same row, key present → leave it alone (preserves AppTest
+        #       set_value semantics and any in-flight form draft commit).
+        sid_changed = st.session_state.get("_edit_form_sid") != sid
+        for _key, _value in canonical.items():
+            if sid_changed or _key not in st.session_state:
+                st.session_state[_key] = _value
+        st.session_state["_edit_form_sid"] = sid
 
-        # Sub-task 13 / DESIGN §8.2: the edit panel's tab selector is a
-        # config-driven `st.radio(horizontal=True, label_visibility="collapsed")`
-        # — NOT `st.tabs(...)`. This is load-bearing: DESIGN §8.2 places the
-        # Delete button BELOW the tab container, visible ONLY when the active
-        # tab is Overview. `st.tabs(key=...)` in Streamlit 1.56 accepts a
-        # `key` keyword but doesn't actually populate session_state with the
-        # active tab (verified via probe), so we use st.radio whose value
-        # lives in session_state["edit_active_tab"] and can gate the Delete
-        # button below. Visually the radio renders as a horizontal strip
-        # (label collapsed), approximating the original tab-bar look while
-        # giving the page programmatic active-tab access.
-        # Key follows DESIGN §8.0 widget-key scope (`edit_` prefix for
-        # edit-panel widgets); the `_active_edit_tab` form used pre-
-        # Sub-task-14-follow-up was a `_`-sentinel-style name that
-        # conflicted with the documented scope (the radio is a real
-        # widget, not a pure internal state slot).
-        active_tab = st.radio(
-            "Edit section",
-            options=config.EDIT_PANEL_TABS,
-            index=0,
-            horizontal=True,
-            label_visibility="collapsed",
-            key="edit_active_tab",
-        )
+        # DESIGN §8.2 + config.EDIT_PANEL_TABS: edit-panel tabs render via
+        # `st.tabs(...)`, which keeps every tab body mounted on every script
+        # run (CSS hides the inactive ones rather than unmounting them).
+        # This is load-bearing for state survival: Sub-task 13 originally
+        # swapped st.tabs for `st.radio + conditional rendering` so the
+        # Delete button could be gated on a programmatically-readable
+        # active_tab — but conditional rendering unmounted the inactive
+        # tab's widgets, and Streamlit's documented v1.20+ behaviour wipes
+        # `session_state` for unmounted widget keys. The result was
+        # cross-tab data loss (text_input contents disappearing on tab
+        # switch — user-reported 2026-04-25). The reversal restores the
+        # original architecture; the Delete-button placement (DESIGN §8.2
+        # "below the edit panel, outside the panel box, visible only when
+        # the active tab is Overview") is satisfied by placing the button
+        # inside `with tabs[0]:` after the form — st.tabs CSS-hides it on
+        # the other tabs naturally.
+        tabs = st.tabs(config.EDIT_PANEL_TABS)
 
-        if active_tab == "Overview":   # T4-C + T5-A
+        with tabs[0]:   # Overview — T4-C + T5-A
             # st.form batches edits so nothing writes on keystroke; the
             # submit button below is the only trigger that commits the
             # changes via database.update_position (T5-A).
@@ -624,7 +655,55 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save changes: {exc}")
 
-        elif active_tab == "Requirements":   # T4-D + T5-B
+            # ── Delete button (DESIGN §8.2) ─────────────────────────────────
+            # DESIGN §8.2 Delete row: the button renders BELOW the edit
+            # panel (outside the panel/form box), visible ONLY when the
+            # active tab is Overview. Placement inside `with tabs[0]:`
+            # after the form gives both: it is below the form box (✓
+            # "below the edit panel"), outside `st.form("edit_overview")`
+            # (✓ "outside the panel box"), and st.tabs CSS-hides it on
+            # the other tabs naturally (✓ "visible only when the active
+            # tab is Overview"). The Sub-task 13 refactor moved it out
+            # of `with tabs[0]:` and gated it on a `st.radio`-derived
+            # `active_tab` variable — that broke widget state survival
+            # across tab switches (text_input session_state cleanup on
+            # unmount), and the Delete-button gating was the only
+            # justification for that change. Reverted 2026-04-25.
+            #
+            # The button MUST live outside st.form("edit_overview") —
+            # st.form only permits st.form_submit_button inside; a plain
+            # st.button inside the form would raise. type='primary'
+            # marks the action as destructive in the UI.
+            #
+            # Dialog lifecycle: clicking Delete stashes the target id +
+            # name in session_state (_delete_target_id /
+            # _delete_target_name) and opens the dialog. The elif
+            # re-opens the same dialog on every subsequent rerun while
+            # those keys remain — without this, confirm/cancel clicks
+            # inside the dialog would not reach their branches in
+            # AppTest, because Streamlit's "dialog auto-re-renders
+            # across reruns" behaviour does not carry through AppTest's
+            # script-run model (verified by isolation probe 2026-04-20).
+            # Confirm and Cancel handlers inside the dialog clear the
+            # _delete_target_* pair themselves before st.rerun(), so
+            # the dialog disappears naturally on the next run.
+            #
+            # Review Fix #2 (phase-3-tier5-review.md): cross-row phantom
+            # dialogs (dismiss via X on row A, switch to row B, come
+            # back to row A, dialog reopens) are fixed by the row-change
+            # cleanup in the selection-resolution block above. Same-row
+            # phantom (dismiss via X on row A, stay on row A, reopens
+            # on next rerun) remains a known limitation — Streamlit
+            # 1.56 does not expose an on_close event for @st.dialog.
+            # Users can always click Cancel to dismiss cleanly.
+            if st.button("Delete", type="primary", key="edit_delete"):
+                st.session_state["_delete_target_id"]   = sid
+                st.session_state["_delete_target_name"] = r["position_name"]
+                _confirm_delete_dialog()
+            elif st.session_state.get("_delete_target_id") == sid:
+                _confirm_delete_dialog()
+
+        with tabs[1]:   # Requirements — T4-D + T5-B
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
             # session_state holds exactly what will go into the TEXT column
@@ -669,7 +748,7 @@ if "selected_position_id" in st.session_state:
                 except Exception as exc:
                     st.error(f"Could not save requirements: {exc}")
 
-        elif active_tab == "Materials":   # T4-E + T5-C
+        with tabs[2]:   # Materials — T4-E + T5-C
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
             # toggling a radio on the Requirements tab updates this tab on
@@ -721,7 +800,7 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save materials: {exc}")
 
-        elif active_tab == "Notes":   # T4-F + T5-D
+        with tabs[3]:   # Notes — T4-F + T5-D
             # Single free-form text_area for miscellaneous context (contact
             # details, interview prep hints, follow-up reminders). Pre-seeded
             # from the row's notes column via the _edit_form_sid block above,
@@ -762,50 +841,6 @@ if "selected_position_id" in st.session_state:
                 except Exception as exc:
                     st.error(f"Could not save notes: {exc}")
 
-        # ── Delete button (DESIGN §8.2) ──────────────────────────────────
-        # DESIGN §8.2 Delete row: the button renders BELOW the edit panel
-        # (outside the panel box), visible ONLY when the active tab is
-        # Overview. Pre-Sub-task-13 it sat inside `with tabs[0]:` so it
-        # was CSS-hidden on non-Overview tabs but still in the DOM. Moving
-        # it out of the tab branches above and gating on active_tab makes
-        # the rendering itself conditional: on non-Overview tabs the button
-        # is not emitted at all. Rationale (DESIGN §8.2): the button's
-        # scope is the whole position, not the active tab's data — so it
-        # only belongs on the tab where the user reviews the position as
-        # a whole.
-        #
-        # The button MUST live outside st.form("edit_overview") — st.form
-        # only permits st.form_submit_button inside; a plain st.button
-        # inside the form would raise. type='primary' marks the action as
-        # destructive in the UI.
-        #
-        # Dialog lifecycle: clicking Delete stashes the target id + name
-        # in session_state (_delete_target_id / _delete_target_name) and
-        # opens the dialog. The elif re-opens the same dialog on every
-        # subsequent rerun while those keys remain — without this,
-        # confirm/cancel clicks inside the dialog would not reach their
-        # branches in AppTest, because Streamlit's "dialog auto-re-renders
-        # across reruns" behaviour does not carry through AppTest's
-        # script-run model (verified by isolation probe 2026-04-20).
-        # Confirm and Cancel handlers inside the dialog clear the
-        # _delete_target_* pair themselves before st.rerun(), so the
-        # dialog disappears naturally on the next run.
-        #
-        # Review Fix #2 (phase-3-tier5-review.md): cross-row phantom
-        # dialogs (dismiss via X on row A, switch to row B, come back
-        # to row A, dialog reopens) are fixed by the row-change
-        # cleanup in the selection-resolution block above. Same-row
-        # phantom (dismiss via X on row A, stay on row A, reopens on
-        # next rerun) remains a known limitation — Streamlit 1.56 does
-        # not expose an on_close event for @st.dialog. Users can
-        # always click Cancel to dismiss cleanly.
-        if active_tab == "Overview":
-            if st.button("Delete", type="primary", key="edit_delete"):
-                st.session_state["_delete_target_id"]   = sid
-                st.session_state["_delete_target_name"] = r["position_name"]
-                _confirm_delete_dialog()
-            elif st.session_state.get("_delete_target_id") == sid:
-                _confirm_delete_dialog()
     else:
         # F3 (Tier-4 review): the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
