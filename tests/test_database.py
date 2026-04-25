@@ -1311,6 +1311,35 @@ class TestUpsertApplicationAtomicity:
         # And status remains at SAVED (the cascade never committed).
         assert database.get_position(pid)["status"] == config.STATUS_SAVED
 
+    def test_r3_cascade_failure_rolls_back_primary_write(self, db, monkeypatch):
+        """Companion to the R1 atomicity test above — pin R3's slice of
+        the same DESIGN §9.3 contract. R3 lives in its own
+        `conn.execute(...)` block (database.py upsert_application,
+        STATUS_OFFER cascade) so a regression that opened a new
+        connection or committed between R1 and R3 would only surface
+        here. Force R3 to fail by monkeypatching STATUS_OFFER to an
+        un-bindable sentinel; the primary applications upsert must roll
+        back along with the (failed) cascade."""
+        pid = database.add_position(make_position())
+
+        class NotBindable:
+            pass
+        monkeypatch.setattr(config, "STATUS_OFFER", NotBindable())
+
+        with pytest.raises(Exception):
+            database.upsert_application(pid, {"response_type": "Offer"})
+
+        # Primary write must have rolled back — no response_type.
+        app = database.get_application(pid)
+        assert app["response_type"] is None, (
+            "Primary applications UPDATE must roll back when the R3 "
+            f"cascade fails; got response_type={app['response_type']!r}. "
+            "DESIGN §9.3 atomicity — cascade inside the same transaction "
+            "as the primary write."
+        )
+        # And status stays at SAVED (R3 never committed).
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+
 
 # ── recommenders ─────────────────────────────────────────────────────────────
 
