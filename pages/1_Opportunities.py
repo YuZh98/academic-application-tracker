@@ -408,26 +408,36 @@ if "selected_position_id" in st.session_state:
         # sentinel. Stored values match widget types: str for text, date|None
         # for date_input, config-vocabulary strings for the selectboxes.
         #
-        # Bug 1 + Bug 2 fix (2026-04-25): Sub-task 13's swap from `st.tabs`
-        # to `st.radio + conditional rendering` means each tab body's widgets
-        # unmount on tab switch. Streamlit's documented v1.20+ behaviour is
-        # to remove session_state entries for unmounted widgets — empirically
-        # confirmed on Streamlit 1.56 + AppTest for `st.text_input`
-        # (edit_position_name, etc. silently reset to "" on remount; see
-        # tests/test_opportunities_page.py::TestTabSwitchWidgetStateSurvival).
-        # The original sid-only gate blocked re-seeding on tab switch, so a
-        # cleaned-up text_input would render its empty default and the user
-        # would see the position name "disappear" after Overview→Req→Overview.
-        # Fix: a two-phase apply — compute canonical row-derived values
-        # unconditionally, then reassign each key only when (a) the row
-        # actually changed (force overwrite, original behaviour) OR (b) the
-        # key is missing from session_state (cleanup recovery, NEW). The
-        # missing-key path NEVER overwrites an existing session_state value
-        # — so AppTest's set_value-then-submit path (which writes
-        # session_state[key] before the rerun) keeps working, and a real
-        # user's in-flight form draft (held in form-internal state, not
-        # session_state) is unaffected because Streamlit commits the draft
-        # AFTER the pre-seed runs.
+        # Two-phase apply — defence-in-depth against the unmount-cleanup
+        # bug class (the actual fix is the `st.tabs` architecture below;
+        # this is the safety net):
+        #   (a) Row CHANGE — force-overwrite every key so a fresh row's
+        #       data replaces the previously-cached values.
+        #   (b) Same row, key missing — restore from canonical (would
+        #       repair Streamlit's tab-unmount cleanup of widget
+        #       session_state IF a future architectural change ever
+        #       re-introduced conditional rendering).
+        #   (c) Same row, key present — leave it alone (preserves
+        #       AppTest set_value semantics and any in-flight form draft
+        #       commit).
+        #
+        # Background: a 2026-04-25 user report (position name vanishing
+        # on Overview→Requirements→Overview round-trip) traced to
+        # Sub-task 13's swap of `st.tabs` for `st.radio + conditional
+        # rendering`. Conditional rendering unmounts each tab body's
+        # widgets on tab switch, and Streamlit's documented v1.20+
+        # behaviour wipes session_state for unmounted widget keys
+        # (empirically confirmed for `st.text_input` on Streamlit 1.56
+        # + AppTest; see tests/test_opportunities_page.py::
+        # TestTabSwitchWidgetStateSurvival). The sid-only gate alone
+        # never re-seeded on tab switch, so the cleaned-up text_input
+        # rendered its empty default. Sub-task 13 was reverted to
+        # `st.tabs` (CSS-hide instead of unmount → no cleanup → no
+        # data loss); under that architecture the missing-key path
+        # below is effectively dead code. Kept anyway because the
+        # cost is microseconds and it absorbs any future Streamlit
+        # behaviour change or accidental re-introduction of
+        # conditional rendering.
         # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
         # (no DEFAULT in schema) and could theoretically hold an unknown
         # status value (sqlite CLI, future migration). Coerce both to
