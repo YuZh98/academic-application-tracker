@@ -2255,9 +2255,10 @@ class TestInterviewsMigration:
 # and runs the one-shot UPDATE only when the new columns are absent
 # pre-ALTER. Subsequent init_db() calls find them already present and
 # skip the translation entirely. DESIGN §6.3 step (c) applies: the
-# physical confirmation_email column stays in place (NULL-cleared is
-# not required for a flag/date split since we don't round-trip through
-# it) until the v1.0-rc rebuild drops it.
+# physical confirmation_email column is NULL-cleared after the value
+# extraction (matching the interview1_date / interview2_date NULL-clear
+# in the Sub-task 8 migration) and stays in place until the v1.0-rc
+# rebuild drops it.
 
 class TestConfirmationSplitMigration:
     """Sub-task 10 / DESIGN §6.3 split-a-dual-purpose-column pattern.

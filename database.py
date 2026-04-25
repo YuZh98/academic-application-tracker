@@ -336,6 +336,22 @@ def init_db() -> None:
                 "SET confirmation_received = 1 "
                 "WHERE confirmation_email = 'Y'"
             )
+            # NULL-clear the legacy column per DESIGN §6.3 step (c)
+            # ("leave the old column NULL until a follow-up release
+            # rebuilds the table to drop it") — parallels the
+            # interview1_date / interview2_date NULL-clear in the
+            # Sub-task 8 migration above. Runs LAST so the two
+            # value-extracting UPDATEs above still see the original
+            # confirmation_email contents; clearing first would leave
+            # nothing to translate. Idempotent by virtue of the outer
+            # `confirmation_split_needed` gate — on a re-run after
+            # migration, both new columns are already present, the
+            # gate is False, and this whole block is skipped.
+            conn.execute(
+                "UPDATE applications "
+                "SET confirmation_email = NULL "
+                "WHERE confirmation_email IS NOT NULL"
+            )
 
         # Migration (v1.3 Sub-task 11, DESIGN §6.2 + §6.3 + D19 + D20):
         # rebuild the recommenders table to translate the pre-v1.3
