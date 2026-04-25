@@ -1604,9 +1604,15 @@ class TestNotesTabWidgets:
         )
 
     def test_text_area_renders_when_row_selected(self, db):
-        """Baseline positive contract: switching to the Notes tab after a row
-        is selected must render exactly one text_area with key=edit_notes.
-        (Sub-task 13: Notes widgets only render when active_tab == 'Notes'.)"""
+        """Baseline positive contract: once a row is selected, a text_area
+        with key=edit_notes must be reachable. Post-Sub-task-13-revert:
+        st.tabs renders every tab body on every script run (CSS hides
+        the inactive ones), so the Notes text_area is in the DOM
+        whenever a row is selected — no explicit "switch to Notes"
+        step required. The key-set assertion below pins the WHICH
+        text_areas render, since post-revert both the Notes
+        text_area and the Overview work_auth_note text_area render
+        every run."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
