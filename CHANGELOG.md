@@ -1055,6 +1055,47 @@ exists to close.
 
 452/452 pytest green (default + `-W error::DeprecationWarning`).
 
+### Fixed — v1.3 alignment R3 cascade alias (branch `feature/align-v1.3`)
+
+Second code-review follow-up. Replaces the hardcoded literal `"Offer"`
+in the R3 cascade trigger with a `config.RESPONSE_TYPE_OFFER` alias on
+parity with the `STATUS_*` aliases that already insulate cascade code
+from `STATUS_VALUES` renames. Pre-fix, a future rename of the `'Offer'`
+entry inside `RESPONSE_TYPES` would have left R3 silently broken — the
+selectbox would render the new label, the user would pick it, and
+`upsert_application`'s literal-string match would never fire. New
+import-time invariant #9 catches the drift before any page renders.
+
+- **`config.py`** — add `RESPONSE_TYPE_OFFER: str = "Offer"` plus
+  invariant #9 `assert RESPONSE_TYPE_OFFER in RESPONSE_TYPES`. Literal
+  lives at the alias declaration (not as `RESPONSE_TYPES[i]`) because
+  RESPONSE_TYPES order is not a contract; only membership matters.
+- **`database.py`** — R3 condition swaps the literal `"Offer"` for
+  `config.RESPONSE_TYPE_OFFER`; inline comment cross-references
+  invariant #9 so the safety story is local to the cascade site.
+- **`DESIGN.md`** — patch §5.1 (new `RESPONSE_TYPE_OFFER` row +
+  cross-reference on `RESPONSE_TYPES`), §5.2 (invariant #9), §9.3
+  (placeholder convention extended; R3 condition uses
+  `<RESPONSE_TYPE_OFFER>` placeholder; prose at "next
+  upsert_application with response_type = …" uses the alias name
+  matching the section's existing alias-over-literal convention).
+  Small structural patches — no `Version:` bump per the doc-header
+  "small corrections land as patch-style edits" clause.
+- **`tests/test_config.py`** — three new tests pinning the alias
+  (`test_response_type_offer_value_is_offer`), the membership
+  positive case (`test_response_type_offer_is_member_of_response_types`),
+  and the synthetic-drift firing
+  (`test_invariant_9_fires_on_drift`). Mirrors the
+  `test_invariant_*_fires_on_drift` pattern used for invariants 1, 3,
+  6, 8 — replicates the guard logic on a synthetic bad value rather
+  than reloading config under mutation.
+- **No behavioural change for end-users.** `RESPONSE_TYPES` still
+  shows `'Offer'`; `database.upsert_application(... response_type =
+  "Offer" ...)` still fires R3 exactly as before; existing R3 tests
+  (incl. the 5-row per-state matrix) continue passing untouched.
+
+455/455 pytest green (default + `-W error::DeprecationWarning`).
+
 ### Migration
 
 **Sub-task 1** requires no migration — all additions are Python constants.
