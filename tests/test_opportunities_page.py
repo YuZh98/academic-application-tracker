@@ -1625,24 +1625,34 @@ class TestNotesTabWidgets:
             f"widget-value trap. Got {second!r}"
         )
 
-    def test_unwired_save_buttons_still_disabled(self, db):
-        """Remaining disabled Tier-5 save buttons must still carry the
-        'Coming in Tier 5' tooltip until every tab's save is wired.
+    def test_no_save_buttons_are_disabled_post_tier5(self, db):
+        """Tier 5 fully shipped — every per-tab save button must render
+        ENABLED. The previous form (test_unwired_save_buttons_still_disabled)
+        iterated the remaining-disabled list and tooltip-checked each;
+        once Tier 5 landed that list went empty and the for-loop became
+        a no-op, asserting nothing.
 
-        T5-A enabled Overview. T5-B enabled Requirements. T5-C enables
-        Materials. T5-D enables Notes. As each sub-task lands, the count
-        of disabled placeholders shrinks toward 0; this test pins that
-        every placeholder that IS still present carries the tooltip, so
-        no Tier-5 save ever renders enabled but broken."""
+        Inverting the assertion turns the same scaffolding into a real
+        regression guard: if anyone re-introduces a `disabled=True` save
+        button (e.g. by checking out an old branch and re-merging it
+        without conflict resolution), this test fails loudly."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
-        disabled = [b for b in at.button if getattr(b, "disabled", False)]
-        # The Tier-5 tooltip must appear on every disabled placeholder.
-        for b in disabled:
-            assert "Tier 5" in (b.help or ""), (
-                f"Disabled Save button missing Tier-5 tooltip: help={b.help!r}"
+        # Each tab has its own save button — exercise all four to cover
+        # every enabled-state.
+        for tab_name in config.EDIT_PANEL_TABS:
+            at.session_state[TAB_SELECTOR_KEY] = tab_name
+            at.run()
+            disabled = [
+                b for b in at.button if getattr(b, "disabled", False)
+            ]
+            assert disabled == [], (
+                f"On the {tab_name!r} tab, found disabled buttons "
+                f"post-Tier-5: {[b.label for b in disabled]!r}. "
+                "Tier 5 wired every per-tab save; a disabled save "
+                "would mean a sub-task regression."
             )
 
 
