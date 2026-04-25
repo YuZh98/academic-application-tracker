@@ -1604,6 +1604,33 @@ class TestGetUpcomingDeadlines:
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 1
 
+    def test_includes_deadline_exactly_at_window_boundary(self, db):
+        """SQL uses `deadline_date <= cutoff` where cutoff = today + days.
+        The exact boundary day must be included; a regression to `<`
+        would silently drop the last day of the window. Pin both sides
+        of the comparison together with the next test."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=30)).isoformat(),
+        }))
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 1, (
+            "Deadline exactly at the upper boundary (today + days) must "
+            "be included — SQL uses <=, not <."
+        )
+
+    def test_excludes_deadline_one_day_past_window(self, db):
+        """The companion to the boundary test above: today+days+1 must
+        be excluded. Pinning both rules together protects against an
+        off-by-one in either direction."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=31)).isoformat(),
+        }))
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 0, (
+            "Deadline one day past the window upper boundary must be "
+            "excluded."
+        )
+
     def test_excludes_closed_status(self, db):
         pos_id = database.add_position(make_position({
             "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
