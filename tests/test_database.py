@@ -3223,3 +3223,144 @@ class TestConnectContextManager:
                     "INSERT INTO recommenders (position_id, recommender_name) VALUES (?, ?)",
                     (999, "Ghost"),
                 )
+
+
+# ── DESIGN §7 database.py contract #1: writers swallow exports failures ───────
+# "Every public write function calls exports.write_all() as its last step,
+# inside a try/except that logs errors but does not re-raise. A write that
+# succeeded in the DB always reports success to its caller, even if markdown
+# regeneration failed."
+#
+# Tests below pin the wrapping for every writer that calls _exports.write_all()
+# (10 sites today: add_position, update_position, delete_position,
+# upsert_application, add_interview, update_interview, delete_interview,
+# add_recommender, update_recommender, delete_recommender). Each test forces
+# exports.write_all() to raise via monkeypatch, calls the writer, and asserts
+# the exception is swallowed AND a log entry was emitted.
+
+class TestExportsLogAndContinue:
+    """DESIGN §7 database.py contract #1 — every writer must swallow an
+    exports.write_all() failure, log it, and continue to report success
+    to its caller."""
+
+    @staticmethod
+    def _arm_boom(monkeypatch):
+        """Force exports.write_all() to raise on every call. Returns the
+        raised exception's message so tests can pin it loosely."""
+        import exports
+        msg = "simulated exports.write_all failure"
+
+        def _explode():
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr(exports, "write_all", _explode)
+        return msg
+
+    @pytest.mark.parametrize("writer_name", [
+        "add_position",
+        "update_position",
+        "delete_position",
+        "upsert_application",
+        "add_interview",
+        "update_interview",
+        "delete_interview",
+        "add_recommender",
+        "update_recommender",
+        "delete_recommender",
+    ])
+    def test_writer_swallows_exports_failure(
+        self, db, monkeypatch, caplog, writer_name,
+    ):
+        """The writer must NOT re-raise an exports.write_all() failure.
+        Parametrized so a single failure surfaces as a unique line in
+        pytest output, naming the offending writer."""
+        # Baseline rows BEFORE arming boom, so update/delete writers
+        # have something to act on. Each baseline write itself calls
+        # exports.write_all() — that's intentional happy-path coverage.
+        pid = database.add_position({"position_name": "Baseline"})
+        iid = database.add_interview(
+            pid, {"scheduled_date": "2026-12-01"}
+        )["id"]
+        rid = database.add_recommender(
+            pid, {"recommender_name": "Dr. Baseline"}
+        )
+
+        # Arm boom AFTER baseline so every subsequent exports.write_all()
+        # raises.
+        self._arm_boom(monkeypatch)
+
+        callers = {
+            "add_position":      lambda: database.add_position(
+                {"position_name": "Z"}
+            ),
+            "update_position":   lambda: database.update_position(
+                pid, {"position_name": "Y"}
+            ),
+            "delete_position":   lambda: database.delete_position(pid),
+            "upsert_application": lambda: database.upsert_application(
+                pid, {"applied_date": "2026-01-01"}
+            ),
+            "add_interview":     lambda: database.add_interview(
+                pid, {"scheduled_date": "2026-12-15"}
+            ),
+            "update_interview":  lambda: database.update_interview(
+                iid, {"notes": "updated"}
+            ),
+            "delete_interview":  lambda: database.delete_interview(iid),
+            "add_recommender":   lambda: database.add_recommender(
+                pid, {"recommender_name": "Dr. Y"}
+            ),
+            "update_recommender": lambda: database.update_recommender(
+                rid, {"notes": "updated"}
+            ),
+            "delete_recommender": lambda: database.delete_recommender(rid),
+        }
+
+        with caplog.at_level("ERROR"):
+            try:
+                callers[writer_name]()
+            except Exception as exc:
+                pytest.fail(
+                    f"{writer_name} re-raised exports.write_all() "
+                    f"failure: {exc!r}. DESIGN §7 database.py #1 "
+                    f"forbids this — DB write succeeded; markdown "
+                    f"regeneration is best-effort."
+                )
+
+        # Log captured. The exact wording is implementation-defined;
+        # what matters is that SOMETHING shows up in the error channel
+        # so operators can correlate a missing markdown file with a
+        # specific writer call.
+        assert any(
+            "export" in (r.message or "").lower()
+            for r in caplog.records
+        ), (
+            f"Expected at least one log entry mentioning 'export' "
+            f"after {writer_name} caught its exports.write_all() "
+            f"failure. Got: {[r.message for r in caplog.records]}"
+        )
+
+    def test_db_write_commits_even_when_exports_fails(
+        self, db, monkeypatch, caplog,
+    ):
+        """Load-bearing semantic pin: when exports.write_all() raises,
+        the DB write must STILL be committed and visible to subsequent
+        reads. Without this, a failed export would silently roll back
+        the user's data — the exact opposite of the §7 contract."""
+        self._arm_boom(monkeypatch)
+
+        with caplog.at_level("ERROR"):
+            pid = database.add_position(
+                {"position_name": "Persisted Despite Boom"}
+            )
+
+        assert isinstance(pid, int) and pid > 0, (
+            f"add_position must return a real id even when exports "
+            f"fails. Got {pid!r}"
+        )
+        # Read back via a DIFFERENT writer/reader to confirm the row
+        # was actually committed (not just returned in-memory).
+        row = database.get_position(pid)
+        assert row["position_name"] == "Persisted Despite Boom", (
+            f"Row must persist when exports fails. Got {row!r}"
+        )
