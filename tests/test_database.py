@@ -3134,6 +3134,46 @@ class TestComputeMaterialsReadiness:
             "from a hardcoded tuple literal."
         )
 
+    def test_empty_requirement_docs_returns_zero_counts(self, db, monkeypatch):
+        """Edge case: if `config.REQUIREMENT_DOCS` is empty (a valid
+        future profile-expansion state per DESIGN §12.1 — e.g. a
+        casual-tracker profile that ships without document
+        requirements), `compute_materials_readiness` must return zero
+        counts gracefully. The pre-fix SQL-fragment construction
+        produced invalid SQL (`... AND ()`) when both
+        `" OR ".join(...)` and `" AND ".join(...)` evaluated to empty
+        strings on an empty REQUIREMENT_DOCS, surfacing as
+        `sqlite3.OperationalError: near ")": syntax error`.
+
+        Today the constant has 7 entries by config.py so this branch
+        never fires in production, but a downstream caller (the
+        dashboard's Materials Readiness panel) would crash on first
+        load if a future profile shipped without docs. The defensive
+        early-return makes the function compose cleanly with
+        aggregator code that calls it unconditionally — same
+        permission-to-have-no-data shape as `count_by_status()` on
+        an empty DB."""
+        # Seed a real position so the test exercises the function on
+        # a non-empty DB — i.e., it's the empty REQUIREMENT_DOCS that
+        # forces the zero-count, not an empty positions table.
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"req_cv": "Yes", "done_cv": 1})
+        # Sanity: before patching, the position is ready (one Yes/done).
+        assert database.compute_materials_readiness() == {"ready": 1, "pending": 0}
+
+        # Force REQUIREMENT_DOCS empty for the call. The DB schema
+        # still carries the standard req_*/done_* columns from
+        # init_db's run with the real config — so the test verifies
+        # the function tolerates a config / schema mismatch without
+        # synthesising invalid SQL.
+        monkeypatch.setattr(config, "REQUIREMENT_DOCS", [])
+        result = database.compute_materials_readiness()
+        assert result == {"ready": 0, "pending": 0}, (
+            "Empty config.REQUIREMENT_DOCS must yield "
+            "{'ready': 0, 'pending': 0} without raising. "
+            f"Got {result!r}"
+        )
+
 
 # ── Edge cases for empty fields dicts (F2 / F3 fixes) ────────────────────────
 
