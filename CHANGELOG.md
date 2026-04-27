@@ -17,6 +17,23 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Changed — DESIGN.md §6.3 confirmation_email v1.0-rc drop committed (branch `docs/v1-planning-pins`)
+
+Documentation-only update closing the deferred-decision flagged in
+DESIGN §6.3 step (c) since the Sub-task 10 migration. No code, no
+schema, no test impact yet — the actual table rebuild lands during
+the v1.0-rc release.
+
+- **D-D — Pending column drops table for v1.0-rc**: §6.3 gains a new
+  paragraph between the "Flag/date split divergence" note and the
+  "Migration discipline" rule, naming `applications.confirmation_email`
+  as the single column scheduled for physical drop in v1.0-rc. The
+  paragraph spells out the SQLite table-rebuild SQL
+  (`CREATE TABLE applications_new AS SELECT <kept cols> ...`,
+  `DROP TABLE applications`, `ALTER TABLE ... RENAME TO ...`) wrapped
+  in one transaction, plus the `PRAGMA table_info` idempotence check.
+  Closes Q4 Option A from the 2026-04-27 planning session.
+
 ### Changed — DESIGN.md §8.4 Recommender mailto + LLM-prompts pattern (branch `docs/v1-planning-pins`)
 
 Documentation-only update locking the Recommenders-page reminder UX
