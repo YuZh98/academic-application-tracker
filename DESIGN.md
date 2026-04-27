@@ -490,6 +490,20 @@ respectively. A future maintainer reading the two tests side-by-side
 should expect the divergence rather than treat one as a bug relative
 to the other.
 
+**Pending column drops (committed for v1.0-rc).** After the v1.3
+alignment pass, one column remains physically present but operationally
+NULL: `applications.confirmation_email`, split into
+`confirmation_received` + `confirmation_date` in Sub-task 10. Per the
+"Remove a column" row above, SQLite requires a table rebuild; a single
+commit during the v1.0-rc release will run
+`CREATE TABLE applications_new AS SELECT <kept cols> FROM applications;
+DROP TABLE applications;
+ALTER TABLE applications_new RENAME TO applications;`
+inside one transaction. Idempotent via a `PRAGMA table_info(applications)`
+check on `confirmation_email` presence — a rerun on an already-dropped
+DB short-circuits. Migration SQL recorded in CHANGELOG under v1.0-rc.
+No other pending drops at this time.
+
 **Migration discipline:** every schema or vocabulary change lands with a
 `Migration:` note in `CHANGELOG.md` under the release that introduces
 it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between
