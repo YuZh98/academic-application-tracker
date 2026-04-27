@@ -777,7 +777,19 @@ Layout wireframe: [`docs/ui/wireframes.md#recommenders`](docs/ui/wireframes.md#r
 
 **Behaviour:**
 - **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); the page groups by `recommender_name` so one recommender who owes N letters appears as a single card listing all N positions.
-- **Compose reminder email:** opens a `mailto:` URL with subject pre-filled (e.g. "Following up: letters for N postdoc applications") and body listing the position names + deadlines. No outbound email integration — the OS hands off to the user's mail client.
+- **Reminder helpers** (per recommender card): two affordances — a quick mailto for the simple case, and an LLM-prompt expander for users who want a richer drafted email.
+  - **Primary `Compose reminder email` button** opens a `mailto:` URL with locked, professional copy:
+    - Subject: `Following up: letters for N postdoc applications` (where `N` is the position count for that recommender)
+    - Body: `Hi {recommender_name}, just a quick check-in on the letters of recommendation you offered. Thank you so much!`
+
+    The OS hands off to the user's default mail client; no outbound email integration. No signature is appended — the mail client appends one.
+  - **Secondary `LLM prompts (N tones)` expander** beneath the primary button reveals one or more pre-filled prompts the user can paste into Claude / ChatGPT for a richer email draft. Prompts render as `st.code(...)` blocks so Streamlit's built-in copy button on hover is available. Each prompt is filled with:
+    - the recommender's name + relationship,
+    - the positions owed (position name, institute, deadline),
+    - days since the recommender was asked,
+    - a target tone — one prompt per tone (gentle / urgent).
+
+    The expander label includes the prompt count, e.g. `LLM prompts (2 tones)`. The prompts ask the LLM to return both subject and body so the user can paste either / both into their mail client.
 - **Add-recommender form:** position dropdown shows `position_name` + institute; IDs never surface to the user.
 - **Inline edit** for each row: `asked_date`, `confirmed` (0/1/NULL), `submitted_date`, `reminder_sent` + `reminder_sent_date`, `notes`.
 
