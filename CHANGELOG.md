@@ -17,6 +17,25 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Changed — GUIDELINES.md hardening (branch `docs/v1-planning-pins`)
+
+Documentation-only update pinning the v1 plan locked at the 2026-04-27
+planning session. No code, no schema, no test impact.
+
+- **§3 Widget keys**: drop the stale `edit_active_tab` reference
+  (the radio-based tab selector was removed in PR #10 / Sub-task 13
+  reversal). Add `_delete_target_name` to the internal-sentinels list —
+  the sentinel is in code at `pages/1_Opportunities.py` lines 82, 115,
+  128, 357, 680, 701 but was absent from the convention list.
+- **§11 Pre-commit checklist**: add a sixth bullet cross-referencing §6's
+  status-literal grep rule (`grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]"
+  app.py pages/*.py` returns 0 hits) so it cannot be silently skipped at
+  commit time.
+- **New §13 "Adding a new page"**: procedural checklist for authoring a
+  new `pages/N_Title.py`. Locks the page-scoped widget-key prefix table
+  (`qa_`, `edit_`, `filter_`, `apps_`, `recs_`, `export_`) before Phase 5
+  starts so the new pages can adopt it without retrofit.
+
 ### Fixed — Sub-task 13 reverted: tab-switch widget state loss (branch `review/test-reliability-2026-04-25`)
 
 User-reported bugs (2026-04-25):
