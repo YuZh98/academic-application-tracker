@@ -17,6 +17,27 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Changed — DESIGN.md §8.3 Applications page UI contracts (branch `docs/v1-planning-pins`)
+
+Documentation-only update locking two previously-underspecified UI
+contracts on the Applications page before Phase 5 starts. No code,
+no schema, no test impact.
+
+- **D-A — Confirmation column display contract**: the bullet now pins
+  the glyph (`✓` / `—`) sourced from `confirmation_received`; the
+  tooltip uses `confirmation_date` when set (`Received {ISO date}`)
+  and falls back to `Received (no date recorded)` when the flag is
+  `1` but no date is recorded. Pre-empts a UX divergence where one
+  contributor might show the raw integer or print the bare date.
+- **D-B — Inline interview list UI**: lock the per-row widget shape
+  (`scheduled_date` / `format` / `notes` / `🗑️`), the primary-key-scoped
+  widget-key convention `apps_interview_{id}_{date|format|notes|delete}`,
+  the single-form save model (`apps_interviews_form`, one
+  `update_interview` per dirty row), the `@st.dialog`-gated delete, and
+  the R2-toast surfacing on add when `add_interview` returns
+  `status_changed=True` (§9.3). Closes the under-specification flagged
+  in the 2026-04-27 planning session (Q2 Option A).
+
 ### Changed — GUIDELINES.md hardening (branch `docs/v1-planning-pins`)
 
 Documentation-only update pinning the v1 plan locked at the 2026-04-27
