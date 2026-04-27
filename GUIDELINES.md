@@ -79,14 +79,13 @@ importing `exports` lazily inside each write function (not at module top).
 
 ### Streamlit widget keys and session-state
 - **Quick-add form** widgets: prefix `qa_` (`qa_position_name`, `qa_deadline_date`)
-- **Edit panel** widgets: prefix `edit_` (`edit_position_name`, `edit_notes`,
-  `edit_active_tab` for the tab selector)
+- **Edit panel** widgets: prefix `edit_` (`edit_position_name`, `edit_notes`)
 - **Filter bar** widgets: prefix `filter_` (`filter_status`, `filter_field`)
 - **Form ids** end with `_form` to avoid collision with widget keys inside:
   `edit_notes_form` contains the widget `edit_notes`
 - **Internal sentinels** start with `_` and describe state, not widgets:
-  `_edit_form_sid`, `_delete_target_id`, `_skip_table_reset`,
-  `_funnel_expanded` (dashboard `[expand]` toggle)
+  `_edit_form_sid`, `_delete_target_id`, `_delete_target_name`,
+  `_skip_table_reset`, `_funnel_expanded` (dashboard `[expand]` toggle)
 
 ### Page files
 - Filename format: `N_Title.py` where `N` is the sort-order integer (`1_Opportunities.py`)
@@ -389,6 +388,7 @@ applied: `v0.1.0` (Phase 3) · `v0.2.0`–`v0.4.0` (Phase 4 T1–T3).
 - [ ] `pytest tests/ -q` passes
 - [ ] `pytest -W error::DeprecationWarning tests/ -q` passes
 - [ ] No `print()` debug left in
+- [ ] §6 status-literal grep clean: `grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py` returns 0 hits
 - [ ] `git diff --staged` shows only intended changes
 - [ ] `postdoc.db` is not staged
 
@@ -412,3 +412,38 @@ tagging mechanics, "when you're stuck" — see
 | `use_container_width=True` | Deprecated → use `width="stretch"` |
 | `r[col] or ""` for DB text pre-seed | NaN is truthy — use `_safe_str(v)` |
 | Tagging new milestones as `v1-phase-N` | Superseded by `v0.x.y` scheme in v1.1 |
+
+---
+
+## 13. Adding a new page
+
+A procedural checklist for `pages/N_Title.py`. The list below is the
+mechanical sequence — see DESIGN §8.0 for cross-page conventions and
+DESIGN §8.x for each page's panel/widget contract.
+
+1. **Filename**: `pages/N_Title.py` where `N` is the next sort-order
+   integer (current map: `1_Opportunities`, `2_Applications`,
+   `3_Recommenders`, `4_Export`).
+2. **First Streamlit call**: `st.set_page_config(page_title="Postdoc Tracker", page_icon="📋", layout="wide")`
+   — DESIGN §8.0 + D14. Must precede every other `st.*` call; Streamlit
+   raises otherwise.
+3. **Schema bootstrap**: `database.init_db()` — idempotent; ensures
+   any pending migration loops run when the page is the first one
+   opened in a session.
+4. **Page heading**: `st.title("...")` as the next visible element.
+5. **Page-scoped widget-key prefix**: pick from the table below and
+   use it consistently for every widget key on the page.
+
+   | Page | Prefix |
+   |------|--------|
+   | Quick-add (Opportunities) | `qa_` |
+   | Edit panel (Opportunities) | `edit_` |
+   | Filter bar (any page) | `filter_` |
+   | Applications page | `apps_` |
+   | Recommenders page | `recs_` |
+   | Export page | `export_` |
+
+6. **Form ids**: suffix with `_form` to avoid collision with widget
+   keys inside (§3 + dev-notes gotcha #4).
+7. **Test file**: `tests/test_<page_name>.py`, one class per logical
+   unit (`TestApplicationsTable`, etc., per §9).
