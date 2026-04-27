@@ -17,6 +17,23 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Changed — DESIGN.md §8.4 Recommender mailto + LLM-prompts pattern (branch `docs/v1-planning-pins`)
+
+Documentation-only update locking the Recommenders-page reminder UX
+before Phase 5 starts. No code, no schema, no test impact.
+
+- **D-C — two-affordance reminder helper**: replace the single mailto
+  bullet with a primary `Compose reminder email` button (locked short
+  professional body, no signature — mail client appends one) plus a
+  secondary `LLM prompts (N tones)` expander rendering pre-filled
+  prompts as `st.code(...)` blocks (Streamlit's built-in hover-copy
+  button available). Prompts include the recommender's name +
+  relationship, positions owed (with deadlines), days since asked, and
+  one prompt per tone (gentle / urgent). Closes Q3 Option D from the
+  2026-04-27 planning session — gives users a quick path for the
+  simple case and an LLM-assisted path for richer drafts without
+  introducing an outbound email integration.
+
 ### Changed — DESIGN.md §8.3 Applications page UI contracts (branch `docs/v1-planning-pins`)
 
 Documentation-only update locking two previously-underspecified UI
