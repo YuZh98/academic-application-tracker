@@ -17,6 +17,80 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Changed — DESIGN.md §6.3 confirmation_email v1.0-rc drop committed (branch `docs/v1-planning-pins`)
+
+Documentation-only update closing the deferred-decision flagged in
+DESIGN §6.3 step (c) since the Sub-task 10 migration. No code, no
+schema, no test impact yet — the actual table rebuild lands during
+the v1.0-rc release.
+
+- **D-D — Pending column drops table for v1.0-rc**: §6.3 gains a new
+  paragraph between the "Flag/date split divergence" note and the
+  "Migration discipline" rule, naming `applications.confirmation_email`
+  as the single column scheduled for physical drop in v1.0-rc. The
+  paragraph spells out the SQLite table-rebuild SQL
+  (`CREATE TABLE applications_new AS SELECT <kept cols> ...`,
+  `DROP TABLE applications`, `ALTER TABLE ... RENAME TO ...`) wrapped
+  in one transaction, plus the `PRAGMA table_info` idempotence check.
+  Closes Q4 Option A from the 2026-04-27 planning session.
+
+### Changed — DESIGN.md §8.4 Recommender mailto + LLM-prompts pattern (branch `docs/v1-planning-pins`)
+
+Documentation-only update locking the Recommenders-page reminder UX
+before Phase 5 starts. No code, no schema, no test impact.
+
+- **D-C — two-affordance reminder helper**: replace the single mailto
+  bullet with a primary `Compose reminder email` button (locked short
+  professional body, no signature — mail client appends one) plus a
+  secondary `LLM prompts (N tones)` expander rendering pre-filled
+  prompts as `st.code(...)` blocks (Streamlit's built-in hover-copy
+  button available). Prompts include the recommender's name +
+  relationship, positions owed (with deadlines), days since asked, and
+  one prompt per tone (gentle / urgent). Closes Q3 Option D from the
+  2026-04-27 planning session — gives users a quick path for the
+  simple case and an LLM-assisted path for richer drafts without
+  introducing an outbound email integration.
+
+### Changed — DESIGN.md §8.3 Applications page UI contracts (branch `docs/v1-planning-pins`)
+
+Documentation-only update locking two previously-underspecified UI
+contracts on the Applications page before Phase 5 starts. No code,
+no schema, no test impact.
+
+- **D-A — Confirmation column display contract**: the bullet now pins
+  the glyph (`✓` / `—`) sourced from `confirmation_received`; the
+  tooltip uses `confirmation_date` when set (`Received {ISO date}`)
+  and falls back to `Received (no date recorded)` when the flag is
+  `1` but no date is recorded. Pre-empts a UX divergence where one
+  contributor might show the raw integer or print the bare date.
+- **D-B — Inline interview list UI**: lock the per-row widget shape
+  (`scheduled_date` / `format` / `notes` / `🗑️`), the primary-key-scoped
+  widget-key convention `apps_interview_{id}_{date|format|notes|delete}`,
+  the single-form save model (`apps_interviews_form`, one
+  `update_interview` per dirty row), the `@st.dialog`-gated delete, and
+  the R2-toast surfacing on add when `add_interview` returns
+  `status_changed=True` (§9.3). Closes the under-specification flagged
+  in the 2026-04-27 planning session (Q2 Option A).
+
+### Changed — GUIDELINES.md hardening (branch `docs/v1-planning-pins`)
+
+Documentation-only update pinning the v1 plan locked at the 2026-04-27
+planning session. No code, no schema, no test impact.
+
+- **§3 Widget keys**: drop the stale `edit_active_tab` reference
+  (the radio-based tab selector was removed in PR #10 / Sub-task 13
+  reversal). Add `_delete_target_name` to the internal-sentinels list —
+  the sentinel is in code at `pages/1_Opportunities.py` lines 82, 115,
+  128, 357, 680, 701 but was absent from the convention list.
+- **§11 Pre-commit checklist**: add a sixth bullet cross-referencing §6's
+  status-literal grep rule (`grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]"
+  app.py pages/*.py` returns 0 hits) so it cannot be silently skipped at
+  commit time.
+- **New §13 "Adding a new page"**: procedural checklist for authoring a
+  new `pages/N_Title.py`. Locks the page-scoped widget-key prefix table
+  (`qa_`, `edit_`, `filter_`, `apps_`, `recs_`, `export_`) before Phase 5
+  starts so the new pages can adopt it without retrofit.
+
 ### Fixed — Sub-task 13 reverted: tab-switch widget state loss (branch `review/test-reliability-2026-04-25`)
 
 User-reported bugs (2026-04-25):

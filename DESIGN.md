@@ -490,6 +490,20 @@ respectively. A future maintainer reading the two tests side-by-side
 should expect the divergence rather than treat one as a bug relative
 to the other.
 
+**Pending column drops (committed for v1.0-rc).** After the v1.3
+alignment pass, one column remains physically present but operationally
+NULL: `applications.confirmation_email`, split into
+`confirmation_received` + `confirmation_date` in Sub-task 10. Per the
+"Remove a column" row above, SQLite requires a table rebuild; a single
+commit during the v1.0-rc release will run
+`CREATE TABLE applications_new AS SELECT <kept cols> FROM applications;
+DROP TABLE applications;
+ALTER TABLE applications_new RENAME TO applications;`
+inside one transaction. Idempotent via a `PRAGMA table_info(applications)`
+check on `confirmation_email` presence — a rerun on an already-dropped
+DB short-circuits. Migration SQL recorded in CHANGELOG under v1.0-rc.
+No other pending drops at this time.
+
 **Migration discipline:** every schema or vocabulary change lands with a
 `Migration:` note in `CHANGELOG.md` under the release that introduces
 it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between
@@ -757,8 +771,13 @@ Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#a
 **Behaviour:**
 - **Default filter** excludes positions with status `STATUS_SAVED` or `STATUS_CLOSED` — they are pre-application or withdrawn and have no application data worth showing.
 - **"All recs submitted"** column is a live computation via `database.is_all_recs_submitted(position_id)`; no stored summary.
-- **"Confirmation"** column reads `confirmation_received` (flag) and displays its `confirmation_date` (if set) as a tooltip.
-- **Interviews** are edited as a list: one row per `interviews` record, ordered by `sequence`. Each row has `scheduled_date`, `format`, `notes`. Add appends a new interview with the next `sequence`. Delete removes one row (FK from `applications`).
+- **"Confirmation"** column displays `✓` when `confirmation_received == 1` and `—` when it's `0`. The cell carries `confirmation_date` as a tooltip (`Received {ISO date}`); when the flag is `1` but no date is recorded, the tooltip reads `Received (no date recorded)`. The raw integer is never shown.
+- **Interviews** are edited as an **inline list** under the application detail card:
+  - Each row in the list = one `interviews` record, ordered by `sequence`. Per-row widgets: `scheduled_date` (`st.date_input`), `format` (`st.selectbox` over `config.INTERVIEW_FORMATS`), `notes` (`st.text_input`), and a Delete `🗑️` button. Widget keys scope to the interview's primary key for stability across reruns: `apps_interview_{id}_{date|format|notes|delete}`.
+  - Below the list, an `Add another interview` button (`apps_add_interview`) appends a new row; `database.add_interview` computes the next `sequence` itself.
+  - Save commits all dirty rows in one click via an `apps_interviews_form` form (one `database.update_interview` call per dirty row).
+  - Delete on any row routes through a `@st.dialog` confirm before `database.delete_interview(id)`. The `interviews` FK CASCADE is rooted at `applications.position_id` per §6.2.
+  - On add, if `add_interview` returns `status_changed=True` (R2 fired, see §9.3), the page surfaces `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")`.
 - **Pipeline promotions** fire inside `database.upsert_application(propagate_status=True)` and `database.add_interview(propagate_status=True)` — see §9.3. The page does NOT detect transitions; it just calls the writer and reads the returned promotion indicator to surface a `st.toast`.
 - **Status selectbox** (read-only here; this page edits applications, not the pipeline) shows `STATUS_LABELS[raw]`.
 
@@ -772,7 +791,19 @@ Layout wireframe: [`docs/ui/wireframes.md#recommenders`](docs/ui/wireframes.md#r
 
 **Behaviour:**
 - **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); the page groups by `recommender_name` so one recommender who owes N letters appears as a single card listing all N positions.
-- **Compose reminder email:** opens a `mailto:` URL with subject pre-filled (e.g. "Following up: letters for N postdoc applications") and body listing the position names + deadlines. No outbound email integration — the OS hands off to the user's mail client.
+- **Reminder helpers** (per recommender card): two affordances — a quick mailto for the simple case, and an LLM-prompt expander for users who want a richer drafted email.
+  - **Primary `Compose reminder email` button** opens a `mailto:` URL with locked, professional copy:
+    - Subject: `Following up: letters for N postdoc applications` (where `N` is the position count for that recommender)
+    - Body: `Hi {recommender_name}, just a quick check-in on the letters of recommendation you offered. Thank you so much!`
+
+    The OS hands off to the user's default mail client; no outbound email integration. No signature is appended — the mail client appends one.
+  - **Secondary `LLM prompts (N tones)` expander** beneath the primary button reveals one or more pre-filled prompts the user can paste into Claude / ChatGPT for a richer email draft. Prompts render as `st.code(...)` blocks so Streamlit's built-in copy button on hover is available. Each prompt is filled with:
+    - the recommender's name + relationship,
+    - the positions owed (position name, institute, deadline),
+    - days since the recommender was asked,
+    - a target tone — one prompt per tone (gentle / urgent).
+
+    The expander label includes the prompt count, e.g. `LLM prompts (2 tones)`. The prompts ask the LLM to return both subject and body so the user can paste either / both into their mail client.
 - **Add-recommender form:** position dropdown shows `position_name` + institute; IDs never surface to the user.
 - **Inline edit** for each row: `asked_date`, `confirmed` (0/1/NULL), `submitted_date`, `reminder_sent` + `reminder_sent_date`, `notes`.
 

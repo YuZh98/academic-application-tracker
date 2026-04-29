@@ -16,67 +16,26 @@ without rewriting existing code.
 ## Current Status
 
 **v0.4.0** — Phase 4 Tier 3 (Materials Readiness) shipped to `main` at commit `5ac0f63`.
-v1.1 documentation refactor merged via PR #7 (`main @ cf45c09`).
+v1.1 documentation refactor merged via PR #7. The v1.3 DESIGN-to-codebase
+alignment cycle closed 2026-04-25 with three back-to-back PRs — PR #8
+(Sub-tasks 1–14), PR #9 (test-reliability sweep), PR #10 (Sub-task 13
+reverted: edit panel restored to `st.tabs`). `main` is now at `d7968e5`,
+478 tests green, zero deprecation warnings.
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** DESIGN-to-codebase alignment on branch `feature/align-v1.3` —
-Sub-tasks 1–14 shipped (config additions, `REQUIREMENT_VALUES` Y/N → Yes/No
-migration, `WORK_AUTH_OPTIONS` / `FULL_TIME_OPTIONS` vocabulary swap, DDL
-DEFAULT clauses f-string-interpolated from `config.STATUS_VALUES[0]` /
-`config.RESULT_DEFAULT` per DESIGN §6.2, `[OPEN]→[SAVED]` +
-`"Med"→"Medium"` renames with two idempotent `UPDATE positions` loops in
-`init_db()`, `positions.updated_at` column + `AFTER UPDATE` trigger per
-§6.2 + D25 with `ALTER TABLE ADD COLUMN` + backfill for pre-v1.3 DBs,
-`positions.work_auth_note TEXT` column + Overview-tab
-`work_auth`/`work_auth_note` selectbox+text_area pair per §6.2 + §8.2 +
-D22, the new `interviews` sub-table + CRUD + migrate-once one-shot
-copy from `applications.interview1_date`/`interview2_date` + row-per-
-interview rewrite of `get_upcoming_interviews` per §6.2 + D18 with
-`app.py._next_interview_display` migrated to single-`scheduled_date`
-scan, the R1/R2/R3 pipeline auto-promotion cascade wired across
-`upsert_application` + `add_interview` with atomic rollback,
-`is_all_recs_submitted` helper, and `compute_materials_readiness` alias
-swap per §9.3 + §7 + D12 + D23, the `applications.confirmation_email`
-TEXT split into `confirmation_received INTEGER DEFAULT 0` +
-`confirmation_date TEXT` per §6.2 + §6.3 + D19 + D20 with PRAGMA-guarded
-`ALTER ADD COLUMN` + migrate-once gate running GLOB-based translation
-for ISO-date values and a `'Y'`-only flag UPDATE (physical drop of the
-legacy column deferred to v1.0-rc), the `recommenders` table rebuild
-per §6.2 + D19 + D20 translating `confirmed TEXT` → `INTEGER` tri-state
-and splitting `reminder_sent TEXT` into `INTEGER DEFAULT 0` +
-`reminder_sent_date TEXT` via the CREATE-COPY-DROP-RENAME recipe inside
-one transaction — idempotence gate keyed on `confirmed`'s declared
-type, `app.py` alignment with DESIGN §8.0 + §8.1: `st.set_page_config`
-with wide layout + locked page_title/page_icon (D14), removal of the
-🔄 Refresh button (D13), Tracked KPI help-tooltip, `FUNNEL_BUCKETS`-
-driven funnel with the "Archived" bucket aggregating [REJECTED] +
-[DECLINED] (D17), single `[expand]` button + session flag
-`st.session_state["_funnel_expanded"]` (D24), and the three-branch
-empty-state matrix — terminal-only DB now lands in branch (b) with an
-info + `[expand]` recovery button rather than rendering the figure, and
-`pages/1_Opportunities.py` alignment with DESIGN §8.0 + §8.2:
-`st.set_page_config` with wide layout (D14),
-`filter_status`/`edit_status` selectboxes gain `format_func` so the UI
-renders `STATUS_LABELS` while storage keeps raw bracketed values, and
-the edit-panel tab-strip swapped from `st.tabs` to
-`st.radio(horizontal=True, key="edit_active_tab")` + branch-rendering
-so the Delete button could be relocated BELOW the panel, gated by
-`active_tab == "Overview"` — on non-Overview tabs the button is no
-longer in the DOM at all (pre-Sub-task-13 it was CSS-hidden but still
-present), and the v1.3 doc-alignment sweep updating `GUIDELINES.md`
-(stage-0 alias + grep rule + status-selectbox example flipped from
-`STATUS_OPEN`/`[OPEN]` to `STATUS_SAVED`/`[SAVED]`;
-`format_func=STATUS_LABELS.get` + `edit_active_tab` widget key (per
-the post-Sub-task-14 follow-up landing it under DESIGN §8.0's
-`edit_` widget-key scope rather than the `_` sentinel scope) +
-`_funnel_expanded` sentinel added per DESIGN §8.0 + Sub-tasks 12/13),
-`CHANGELOG.md`, `TASKS.md`, and this file to match DESIGN v1.3 — pure
-docs change, no schema, no test drift. 441 tests green · zero
-deprecation warnings.
+**In flight:** v1 planning pins on branch `docs/v1-planning-pins` —
+GUIDELINES.md hardening (sentinels list drift fix, pre-commit grep
+cross-reference, new §13 page-authoring procedure) and DESIGN.md
+contract pins for Phase 5+ (§8.3 D-A confirmation column, §8.3 D-B
+inline interview list UI, §8.4 D-C mailto + LLM-prompts pattern,
+§6.3 D-D confirmation_email v1.0-rc drop). Pure docs change; no code,
+no schema, no test impact.
 
-**Next up:** push branch, open PR, merge to main — all v1.3 alignment
-items now landed. After merge, resume Phase 4 Tier 4 (Upcoming
-timeline).
+**Next up:** Phase 4 finish (T4 Upcoming timeline → T5 Recommender
+alerts → T6 review + PR + tag `v0.5.0`) on a new
+`feature/phase-4-finish` branch off `main` at `d7968e5`. Per **Q1
+Option B** from the 2026-04-27 v1 planning session, the existing
+T4/T5/T6 roadmap structure is preserved (no re-tiering).
 
 ---
 
@@ -114,20 +73,29 @@ v1.0 ships when **all three** are true:
 
 | Tier | Scope | Status |
 |------|-------|--------|
-| T1 | Shell + 4 KPI cards + empty-DB hero (Tracked KPI help-tooltip + set_page_config + refresh-button removal applied as v1.3 Sub-task 12) | ✅ v0.2.0 (`f49ec5f`) · v1.3 updates on `feature/align-v1.3` |
-| T2 | Application funnel (Plotly + empty state + left half-column; FUNNEL_BUCKETS aggregation + [expand] toggle + 3-branch empty-state applied as v1.3 Sub-task 12) | ✅ v0.3.0 (`96a5c76`) · v1.3 updates on `feature/align-v1.3` |
+| T1 | Shell + 4 KPI cards + empty-DB hero | ✅ v0.2.0 + v1.3 updates merged |
+| T2 | Application funnel (FUNNEL_BUCKETS aggregation + [expand] toggle + 3-branch empty-state) | ✅ v0.3.0 + v1.3 updates merged |
 | T3 | Materials readiness (two progress bars + CTA + empty state) | ✅ v0.4.0 (`5ac0f63`) |
-| T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | 🟠 next |
-| T5 | Recommender alerts (grouped by person; `mailto:` link) | ⏳ pending |
-| T6 | Pre-merge review + PR | ⏳ pending |
+| T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | 🟠 next — branch `feature/phase-4-finish` |
+| T5 | Recommender alerts (grouped by person on dashboard; full mailto + LLM prompts on Phase 5 T6) | 🟠 next — same branch |
+| T6 | Pre-merge review + PR + tag `v0.5.0` | 🟠 next — same branch |
 
 ### Phase 5 — Applications + Recommenders (sketch)
 
-- `pages/2_Applications.py` — submission/response/interview/result tracking per position
-- `pages/3_Recommenders.py` — letter log; alerts grouped by recommender; `mailto:`
-- **Design TBD (C13):** cross-table cascade "response_type='Offer' → positions.status"
-  moves into `database.py` as a `propagate_status=True` kwarg on
-  `upsert_application`. An ADR will land when the decision is finalized.
+Per **Q5 Option A**, build Applications page first.
+
+- `pages/2_Applications.py` — submission/response/interview/result tracking
+  per position; **inline interview list UI** per DESIGN §8.3 D-B
+  (`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
+  delete, R2-toast surfacing on add)
+- `pages/3_Recommenders.py` — letter log; alerts grouped by recommender;
+  reminder helpers per DESIGN §8.4 D-C (locked-body mailto + `LLM prompts
+  (N tones)` expander)
+- The R1/R2/R3 cross-table cascade is already wired in `database.py`
+  (Sub-task 9, 2026-04-24). No ADR pending — pages call
+  `upsert_application(propagate_status=True)` /
+  `add_interview(propagate_status=True)` and surface a `st.toast` when
+  the writer's return value indicates promotion.
 
 ### Phase 6 — Exports (sketch)
 
