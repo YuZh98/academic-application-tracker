@@ -17,6 +17,93 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — `database.get_upcoming` for unified upcoming feed (T4-A, branch `feature/phase-4-tier4-UpcomingDeadline`)
+
+Phase 4 T4-A: new public API surfacing the data behind the dashboard's
+Upcoming panel (DESIGN §8.1). Thin projection layer over
+`get_upcoming_deadlines(days)` + `get_upcoming_interviews()` — no new
+SQL — returning a six-column DataFrame in storage form
+`(date, days_left, label, kind, status, urgency)` sorted by date asc.
+
+- `date` is a `datetime.date` object (not an ISO string) so a future
+  user-triggered column-header re-sort in the page renders
+  chronologically rather than lexicographically.
+- `days_left` is one of `"today"` (0d), `"in 1 day"` (1d singular),
+  `"in N days"` (N > 1) — singular/plural correct, derived once per
+  row from `(date - today).days`.
+- `urgency` is `"🔴"` / `"🟡"` / `""`, derived from the **same**
+  `days_away` int as `days_left` so the two columns cannot drift.
+  Thresholds (`DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS`) resolve
+  at call time via the private `_urgency_glyph` helper.
+- `label` is `f"{institute}: {position_name}"` when institute is
+  non-empty; bare `position_name` when institute is missing
+  (`pd.isna` covers None/NaN; whitespace-strip catches empty strings).
+- `kind` is `"Deadline for application"` for deadline rows or
+  `f"Interview {sequence}"` for interview rows (1-indexed sequence
+  pulled through from the interviews sub-table).
+- `status` is the raw bracketed sentinel — UI label mapping via
+  `STATUS_LABELS` is the page's job (T4-B).
+
+`get_upcoming_interviews` has no built-in `days` bound; `get_upcoming`
+applies one (`scheduled_date <= today + days`) so the "next N days"
+contract from DESIGN §8.1 holds for both kinds. Interview rows don't
+carry status from the underlying SQL; enrichment is a left-merge with
+`get_all_positions[['id', 'status']]` on `position_id`.
+
+19 new `TestGetUpcoming` tests pin the contract — including paired
+tests for `days_left` / `urgency` coherence and Date-as-`datetime.date`
+type. Suite total 478 → 497 passing under both `pytest -q` and
+`pytest -W error::DeprecationWarning -q`.
+
+### Changed — DESIGN.md §8.1 Upcoming-panel column contract locked (T4-0 + T4-0b, branch `feature/phase-4-tier4-UpcomingDeadline`)
+
+Documentation-only spec lock-down ahead of the T4-A implementation, so
+T4-A's tests bind to one unambiguous contract. Resolves the §8.1
+phrasing ambiguity that bit a prior T4 attempt
+("columns (Date, Label, Kind, Urgency); Status shown via
+STATUS_LABELS[raw]" admitted multiple readings on column count,
+ordering, and Status placement).
+
+§5.1 / §5.2 changes:
+
+- `DEADLINE_ALERT_DAYS` row reworded to call it the "default" window
+  and the upper edge of the 🟡 band; `DEADLINE_URGENT_DAYS` row gains
+  the explicit guarantee that urgency thresholds are FIXED in config
+  and do NOT track the user-selected window.
+- New constant `UPCOMING_WINDOW_OPTIONS: list[int]` defaulting to
+  `[30, 60, 90]` for the panel's window selectbox.
+- New §5.2 invariant #10:
+  `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS` — catches a config
+  edit that drops 30 from the offered list without updating the default.
+
+§8.1 changes:
+
+- Panel-table row (Upcoming) rewritten to name
+  `database.get_upcoming(days=selected_window)`, pin
+  `st.dataframe(width="stretch", hide_index=True)`, list the six
+  display headers in order (Date, Days left, Label, Kind, Status,
+  Urgency), point at the new column-contract sub-table, and clarify
+  that the urgency band is independent of the selected window.
+- New "Upcoming-panel column contract" sub-section between "Funnel
+  visibility rules" and "Empty-DB hero" with a per-column cell-format
+  + source table:
+    - **Date** — `'Apr 24'` display, no year; underlying `datetime.date`
+      for chronological sort
+    - **Days left** — `"today"` / `"in 1 day"` / `"in N days"`
+    - **Label** — `"{institute}: {position_name}"` with bare-name fallback
+    - **Kind** — `"Deadline for application"` / `f"Interview {sequence}"`
+    - **Status** — `STATUS_LABELS[raw]` per §8.0
+    - **Urgency** — `"🔴"` / `"🟡"` / `""` from same days_away as Days left
+- New "Window selector" paragraph: selectbox in a narrow right column
+  of an `st.columns([3, 1])` pair (header on the left), key
+  `upcoming_window`, label hidden, default = `DEADLINE_ALERT_DAYS`.
+- Empty-state branches table — Upcoming row interpolates
+  `selected_window` so the empty copy tracks the user's choice.
+
+§7 — `get_upcoming` added to the Dashboard-queries listing.
+
+No code in this commit pair (T4-0 + T4-0b) — pure documentation.
+
 ### Changed — DESIGN.md §6.3 confirmation_email v1.0-rc drop committed (branch `docs/v1-planning-pins`)
 
 Documentation-only update closing the deferred-decision flagged in
