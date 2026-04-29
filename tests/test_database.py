@@ -3068,6 +3068,332 @@ class TestGetUpcomingInterviews:
             )
 
 
+# ── get_upcoming ──────────────────────────────────────────────────────────────
+# T4-A: unified upcoming feed merging deadlines + interviews. Thin projection
+# over get_upcoming_deadlines + get_upcoming_interviews; powers the dashboard's
+# Upcoming panel (DESIGN §8.1). Spec lock-down for the column contract is in
+# DESIGN §8.1's "Upcoming-panel column contract" sub-table.
+
+class TestGetUpcoming:
+    """get_upcoming(days) returns six columns in storage form
+    (date, days_left, label, kind, status, urgency), sorted by date asc.
+
+    Per DESIGN §8.1 (T4-0 + T4-0b lock-down):
+      - `date` is a `datetime.date` object so column-header re-sort in
+        the page is chronological, not lexicographic.
+      - `days_left` is one of: 'today' (0 days), 'in 1 day' (singular),
+        'in N days' (N > 1).
+      - `label` is '{institute}: {position_name}' when institute is
+        non-empty; bare position_name otherwise.
+      - `kind` is 'Deadline for application' for deadline rows, or
+        f'Interview {sequence}' for interview rows (1-indexed).
+      - `status` is the raw bracketed sentinel — UI mapping is T4-B.
+      - `urgency` is '🔴' / '🟡' / '' from the SAME days_away integer
+        as `days_left`, so the two columns cannot drift by construction.
+        Thresholds resolve at call time from config.
+    """
+
+    EXPECTED_COLUMNS = ["date", "days_left", "label", "kind", "status", "urgency"]
+    URGENT = "🔴"
+    WARN   = "🟡"
+    DEADLINE_KIND = "Deadline for application"
+
+    def test_empty_db_returns_empty_dataframe_with_expected_columns(self, db):
+        """Six-column shape is part of the contract and must hold even
+        on an empty DB; T4-B's column rename binds to this exact list."""
+        df = database.get_upcoming()
+        assert len(df) == 0, f"Empty DB must return zero rows; got {len(df)}"
+        assert list(df.columns) == self.EXPECTED_COLUMNS, (
+            f"Columns must be {self.EXPECTED_COLUMNS!r} in this order, "
+            f"got {list(df.columns)!r}"
+        )
+
+    def test_deadline_row_projects_to_unified_shape(self, db):
+        """One deadline at +10d → one row with the deadline-flavoured
+        Kind, the date-object Date column, the institute-prefixed Label,
+        and the position's status."""
+        deadline_iso = (date.today() + timedelta(days=10)).isoformat()
+        database.add_position(make_position({
+            "position_name": "P-deadline",
+            "institute":     "Stanford",
+            "deadline_date": deadline_iso,
+        }))
+        df = database.get_upcoming()
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["date"]   == date.fromisoformat(deadline_iso)
+        assert row["label"]  == "Stanford: P-deadline"
+        assert row["kind"]   == self.DEADLINE_KIND
+        assert row["status"] == config.STATUS_SAVED
+
+    def test_interview_row_projects_to_unified_shape(self, db):
+        """One interview at +10d → one row with sequence-aware Kind
+        ('Interview 1' for the first interview), date-object Date,
+        institute-prefixed Label, and status enriched from the position
+        (R2 cascade does NOT fire from [SAVED] — position stays at
+        default)."""
+        interview_iso = (date.today() + timedelta(days=10)).isoformat()
+        pos_id = database.add_position(make_position({
+            "position_name": "P-int",
+            "institute":     "MIT",
+            "deadline_date": None,
+        }))
+        database.add_interview(pos_id, {"scheduled_date": interview_iso})
+        df = database.get_upcoming()
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["date"]   == date.fromisoformat(interview_iso)
+        assert row["label"]  == "MIT: P-int"
+        assert row["kind"]   == "Interview 1"
+        assert row["status"] == config.STATUS_SAVED
+
+    def test_date_column_holds_datetime_date_objects(self, db):
+        """DESIGN §8.1: underlying Date dtype is datetime.date so the
+        column header's user-triggered re-sort is chronological. Pandas
+        has no native date dtype — the column stays object-dtype but
+        every cell is a date instance. Per-element check is the
+        load-bearing assertion (a regression to ISO-string Dates would
+        not catch on a column.dtype check)."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+        }))
+        df = database.get_upcoming()
+        cells = list(df["date"])
+        assert all(isinstance(c, date) for c in cells), (
+            f"Every Date cell must be a datetime.date (not str / Timestamp / "
+            f"None). Got types: {[type(c).__name__ for c in cells]}"
+        )
+
+    def test_days_left_today_for_zero_days(self, db):
+        """+0d → 'today' — the no-arithmetic case for the user."""
+        database.add_position(make_position({
+            "deadline_date": date.today().isoformat(),
+        }))
+        df = database.get_upcoming()
+        assert df.iloc[0]["days_left"] == "today"
+
+    def test_days_left_singular_for_one_day(self, db):
+        """+1d → 'in 1 day' — pinned because singular/plural agreement
+        is locked DESIGN copy."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=1)).isoformat(),
+        }))
+        df = database.get_upcoming()
+        assert df.iloc[0]["days_left"] == "in 1 day"
+
+    def test_days_left_plural_for_multiple_days(self, db):
+        """+10d → 'in 10 days' — and the same template for any N > 1."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        df = database.get_upcoming()
+        assert df.iloc[0]["days_left"] == "in 10 days"
+
+    def test_label_falls_back_to_position_name_when_institute_missing(self, db):
+        """`institute` is nullable in `positions`; when None, the Label
+        drops the prefix and shows just the position name — the
+        colon-prefix would look broken otherwise."""
+        deadline_iso = (date.today() + timedelta(days=5)).isoformat()
+        database.add_position(make_position({
+            "position_name": "Standalone",
+            "institute":     None,
+            "deadline_date": deadline_iso,
+        }))
+        df = database.get_upcoming()
+        assert df.iloc[0]["label"] == "Standalone", (
+            f"Missing institute must produce bare position_name. "
+            f"Got: {df.iloc[0]['label']!r}"
+        )
+
+    def test_label_falls_back_when_institute_is_empty_string(self, db):
+        """Empty-string institute is the same UX as None — pinned
+        separately because get_all_positions / pandas may surface
+        '' rather than NaN/None depending on the round-trip."""
+        deadline_iso = (date.today() + timedelta(days=5)).isoformat()
+        database.add_position(make_position({
+            "position_name": "Standalone",
+            "institute":     "",
+            "deadline_date": deadline_iso,
+        }))
+        df = database.get_upcoming()
+        assert df.iloc[0]["label"] == "Standalone"
+
+    def test_kind_for_interview_row_uses_sequence_number(self, db):
+        """A position with two interviews → two rows whose Kind cells
+        are 'Interview 1' and 'Interview 2' (1-indexed), pulling from
+        interviews.sequence. Pinning both rows together protects against
+        a regression that hardcodes the sequence number."""
+        pos_id = database.add_position(make_position({
+            "position_name": "Multi",
+            "institute":     "U",
+            "deadline_date": None,
+        }))
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+        })
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=14)).isoformat(),
+        })
+        df = database.get_upcoming()
+        assert len(df) == 2
+        assert list(df["kind"]) == ["Interview 1", "Interview 2"], (
+            f"Expected sequence-aware Kind cells. Got: {list(df['kind'])}"
+        )
+        assert all(label == "U: Multi" for label in df["label"])
+
+    def test_merged_rows_sorted_by_date_asc(self, db):
+        """A's deadline at +20d, B's interview at +5d → B first (with
+        its 'Interview 1' Kind), then A (with the deadline Kind).
+        Sort key is the unified Date column."""
+        database.add_position(make_position({
+            "position_name": "A",
+            "institute":     "InstA",
+            "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
+        }))
+        b_id = database.add_position(make_position({
+            "position_name": "B",
+            "institute":     "InstB",
+            "deadline_date": None,
+        }))
+        database.add_interview(b_id, {
+            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+        })
+        df = database.get_upcoming()
+        assert list(df["kind"])  == ["Interview 1", self.DEADLINE_KIND]
+        assert list(df["label"]) == ["InstB: B", "InstA: A"]
+
+    def test_urgency_red_within_urgent_threshold(self, db):
+        """Days-away ≤ DEADLINE_URGENT_DAYS → URGENT, boundary inclusive."""
+        for offset in (0, config.DEADLINE_URGENT_DAYS):
+            database.add_position(make_position({
+                "position_name": f"P-{offset}",
+                "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+            }))
+        df = database.get_upcoming()
+        assert all(u == self.URGENT for u in df["urgency"]), (
+            f"Days-away ≤ DEADLINE_URGENT_DAYS={config.DEADLINE_URGENT_DAYS} "
+            f"must produce {self.URGENT!r}. Got: {list(df['urgency'])}"
+        )
+
+    def test_urgency_yellow_between_urgent_and_alert(self, db):
+        """Days-away in (DEADLINE_URGENT_DAYS, DEADLINE_ALERT_DAYS] → WARN.
+        Both boundaries pinned."""
+        for offset in (
+            config.DEADLINE_URGENT_DAYS + 1,
+            config.DEADLINE_ALERT_DAYS,
+        ):
+            database.add_position(make_position({
+                "position_name": f"P-{offset}",
+                "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+            }))
+        df = database.get_upcoming()
+        assert all(u == self.WARN for u in df["urgency"]), (
+            f"Days-away in ({config.DEADLINE_URGENT_DAYS}, "
+            f"{config.DEADLINE_ALERT_DAYS}] must produce {self.WARN!r}. "
+            f"Got: {list(df['urgency'])}"
+        )
+
+    def test_urgency_thresholds_resolve_at_call_time(self, db, monkeypatch):
+        """Tightening DEADLINE_URGENT_DAYS via monkeypatch flips the
+        urgency band on the very next call — proves the function reads
+        the config threshold at call time, not at import. Catches a
+        regression that hardcodes the comparison constant in the
+        function body."""
+        offset = config.DEADLINE_URGENT_DAYS
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+        }))
+        monkeypatch.setattr(config, "DEADLINE_URGENT_DAYS", offset - 1)
+        df = database.get_upcoming()
+        assert df.iloc[0]["urgency"] == self.WARN, (
+            f"Tightening DEADLINE_URGENT_DAYS to {offset - 1} must demote "
+            f"a deadline at +{offset}d from {self.URGENT!r} to {self.WARN!r}. "
+            f"Got {df.iloc[0]['urgency']!r}. Hardcoded thresholds break this."
+        )
+
+    def test_days_left_and_urgency_share_the_same_days_away(self, db):
+        """Both columns are derived from the same days_away int per
+        row; coherence guaranteed by construction. A row at exactly
+        DEADLINE_URGENT_DAYS shows '🔴' AND the days_left phrasing for
+        that exact offset — they cannot disagree."""
+        offset = config.DEADLINE_URGENT_DAYS
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+        }))
+        df = database.get_upcoming()
+        row = df.iloc[0]
+        assert row["urgency"] == self.URGENT
+        if offset == 0:
+            expected_days_left = "today"
+        elif offset == 1:
+            expected_days_left = "in 1 day"
+        else:
+            expected_days_left = f"in {offset} days"
+        assert row["days_left"] == expected_days_left, (
+            f"days_left and urgency must derive from the same days_away. "
+            f"At +{offset}d: expected days_left={expected_days_left!r}, "
+            f"urgency={self.URGENT!r}. Got days_left={row['days_left']!r}, "
+            f"urgency={row['urgency']!r}."
+        )
+
+    def test_default_days_bounds_interview_window(self, db):
+        """get_upcoming_interviews has no built-in days bound; DESIGN
+        §8.1's window contract applies it to interviews too. An
+        interview one day past the default window is excluded."""
+        pos_id = database.add_position(make_position({"deadline_date": None}))
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(
+                days=config.DEADLINE_ALERT_DAYS + 1
+            )).isoformat(),
+        })
+        df = database.get_upcoming()
+        assert len(df) == 0
+
+    def test_explicit_days_param_widens_window_for_both_kinds(self, db):
+        """The selectbox in T4-B passes its choice to days. Beyond the
+        DEADLINE_ALERT_DAYS band the urgency cell is empty (defensive),
+        but the row is still surfaced — the user asked for the wider
+        window explicitly. Days_left still renders correctly."""
+        pos_id = database.add_position(make_position({"deadline_date": None}))
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=60)).isoformat(),
+        })
+        df = database.get_upcoming(days=90)
+        assert len(df) == 1
+        assert df.iloc[0]["urgency"] == "", (
+            f"Days-away > DEADLINE_ALERT_DAYS={config.DEADLINE_ALERT_DAYS} "
+            f"must produce empty urgency. Got {df.iloc[0]['urgency']!r}."
+        )
+        assert df.iloc[0]["days_left"] == "in 60 days", (
+            f"Days_left should still render correctly even when the urgency "
+            f"band is exhausted. Got {df.iloc[0]['days_left']!r}."
+        )
+
+    def test_terminal_status_excludes_deadline_row(self, db):
+        """Terminal-status filtering passes through from
+        get_upcoming_deadlines — a [REJECTED] position's deadline does
+        NOT appear in the upcoming feed."""
+        pos_id = database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+        }))
+        database.update_position(pos_id, {"status": config.STATUS_REJECTED})
+        df = database.get_upcoming()
+        assert len(df) == 0
+
+    def test_status_column_carries_raw_bracketed_sentinel(self, db):
+        """T4-A is the storage layer; STATUS_LABELS mapping is T4-B's
+        responsibility. Pin that the raw bracketed sentinel makes it
+        through the projection unchanged."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+        }))
+        df = database.get_upcoming()
+        assert df.iloc[0]["status"] == config.STATUS_SAVED
+        assert df.iloc[0]["status"].startswith("["), (
+            "Raw sentinel form (bracketed) — UI label mapping happens in app.py."
+        )
+
+
 # ── get_pending_recommenders ──────────────────────────────────────────────────
 
 class TestGetPendingRecommenders:
