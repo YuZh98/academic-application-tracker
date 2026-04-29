@@ -275,9 +275,10 @@ auto-promotion rules). Longer enumerations are described by category
 
 | Constant | Type | Role |
 |----------|------|------|
-| `DEADLINE_ALERT_DAYS` | `int` | Upcoming-window width. A deadline within this many days surfaces on the Upcoming panel (§8.1). |
-| `DEADLINE_URGENT_DAYS` | `int` | Inner urgency band. A deadline within this many days is flagged 🔴; between this and `DEADLINE_ALERT_DAYS` is 🟡. Inclusive on the narrower band: exactly N days away → urgent. Ordering guarded by §5.2 invariant #8. |
+| `DEADLINE_ALERT_DAYS` | `int` | Default upcoming-window width and the upper edge of the 🟡 urgency band. A deadline within this many days surfaces on the Upcoming panel (§8.1) when the panel's window selectbox is at its default. |
+| `DEADLINE_URGENT_DAYS` | `int` | Inner urgency band. A deadline within this many days is flagged 🔴; between this and `DEADLINE_ALERT_DAYS` is 🟡. Inclusive on the narrower band: exactly N days away → urgent. Ordering guarded by §5.2 invariant #8. The urgency thresholds are **fixed in config** — they do not track the user-selected Upcoming window. |
 | `RECOMMENDER_ALERT_DAYS` | `int` | Recommender asked ≥ this many days ago with no submitted letter → surfaces on Recommender Alerts (§8.1). |
+| `UPCOMING_WINDOW_OPTIONS` | `list[int]` | User-selectable widths for the Upcoming panel's window selectbox (§8.1). Default values: `[30, 60, 90]`. The panel's selectbox defaults to `DEADLINE_ALERT_DAYS` (which must be in this list — §5.2 invariant #10) and lets the user widen the view to 60 or 90 days. The urgency-glyph band is NOT tied to this — selecting a wider window surfaces more rows but the band thresholds stay at `DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS`. |
 
 ### 5.2 Import-time invariants
 
@@ -294,6 +295,7 @@ before any page renders:
 7. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label
 8. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
 9. `RESPONSE_TYPE_OFFER in RESPONSE_TYPES` — the R3 cascade trigger (§9.3) must be a real `RESPONSE_TYPES` selectbox option; catches a rename that drops `"Offer"` without updating the alias
+10. `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS` — the Upcoming-panel selectbox default (= `DEADLINE_ALERT_DAYS`) must be a real option in the offered list; catches a config edit that removes 30 from the list without updating the default
 
 ### 5.3 Extension recipes
 
@@ -682,7 +684,7 @@ Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dash
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
 | Funnel `[expand]` button | Single button rendered below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty; clicking flips the session flag `st.session_state["_funnel_expanded"]` to `True`, which promotes every bucket in `FUNNEL_DEFAULT_HIDDEN` (currently Closed + Archived) to visible for the rest of the session. Replaces the earlier per-bucket checkbox model (one click reveals all hidden buckets at once). | Button label: `"[expand]"` | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
-| Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming()` (T4-A); `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty (only triggers if a caller passes `days > DEADLINE_ALERT_DAYS`) |
+| Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming(days=selected_window)` (T4-A); `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). Window controlled by an inline `st.selectbox` (key: `upcoming_window`) over `UPCOMING_WINDOW_OPTIONS`, default = `DEADLINE_ALERT_DAYS`; subheader text is dynamic: `f"Upcoming (next {selected_window} days)"`. | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty. Rows surfaced by a wider selected window (e.g. 60 / 90) but past `DEADLINE_ALERT_DAYS` show NO urgency glyph — the band is fixed in config, not tied to the user-selected window. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
 
 **Funnel visibility rules.** The funnel renders buckets in the order
@@ -698,21 +700,36 @@ order:
 
 | Header | Cell format | Source |
 |--------|-------------|--------|
-| **Date** | ISO `'YYYY-MM-DD'` string | `deadline_date` for deadline rows; `scheduled_date` for interview rows |
+| **Date** | Displayed as `f'{d.strftime("%b")} {d.day}'` — e.g. `'Apr 24'`, no year. Underlying dtype is `datetime.date` so column-header re-sort is chronological, not lexicographic. The "no year" choice is intentional: the panel covers a 30 / 60 / 90 day forward window, so the year is never ambiguous to the reader. | `deadline_date` for deadline rows; `scheduled_date` for interview rows |
 | **Days left** | `"today"` for 0 days; `"in 1 day"` for exactly 1; `"in N days"` for N > 1 | Derived once from `(date - today).days` per row; the same integer feeds **Urgency** so the two columns cannot drift |
-| **Label** | `position_name` (string) | Both kinds |
-| **Kind** | `"deadline"` or `"interview"` (literal lowercase) | Constant per row |
+| **Label** | `f"{institute}: {position_name}"` when `institute` is non-empty; bare `position_name` when institute is missing or `_safe_str`-coerced empty. The institute prefix lets the reader disambiguate two postings at different organizations sharing the same job-title text (e.g. "Stanford: Postdoc in Biostatistics" vs "MIT: Postdoc in Biostatistics"). | `position_name` + `institute` from positions (already in both helpers) |
+| **Kind** | `"Deadline for application"` for deadline rows; `f"Interview {sequence}"` for interview rows (e.g. `"Interview 1"`, `"Interview 2"`). The sequence number is 1-indexed, sourced from `interviews.sequence` so a position's three-interview sequence reads as three rows: `Interview 1`, `Interview 2`, `Interview 3`. | Constant string for deadlines; `interviews.sequence` for interviews |
 | **Status** | UI label via `STATUS_LABELS[raw]` (e.g. `"Saved"`) per §8.0 — never the raw bracketed sentinel | `positions.status` for deadlines (already in `get_upcoming_deadlines`); enriched via `get_all_positions` for interviews |
 | **Urgency** | `"🔴"` if days-away ≤ `DEADLINE_URGENT_DAYS`; `"🟡"` if ≤ `DEADLINE_ALERT_DAYS`; `""` otherwise | Same `days_away` integer as the **Days left** column — coherence guaranteed by construction |
 
-`database.get_upcoming(days=DEADLINE_ALERT_DAYS)` returns these six
+`database.get_upcoming(days=selected_window)` returns these six
 columns named in lowercase storage form
 (`date, days_left, label, kind, status, urgency`); the page renames
 them to the Title-Case headers above and maps `status` through
 `STATUS_LABELS` at render time. Empty result →
-`st.info(f"No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`.
-The subheader `"Upcoming"` renders in BOTH branches for page-height
-stability (T2/T3 precedent).
+`st.info(f"No deadlines or interviews in the next {selected_window} days.")`.
+The subheader `f"Upcoming (next {selected_window} days)"` renders in
+BOTH branches for page-height stability (T2/T3 precedent).
+
+**Window selector.** The panel renders a small `st.selectbox`
+(key: `upcoming_window`, label hidden via `label_visibility="collapsed"`)
+inline with the subheader, offering options from
+`config.UPCOMING_WINDOW_OPTIONS` (`[30, 60, 90]` by default). The selected
+value drives `database.get_upcoming(days=selected_window)`, the dynamic
+subheader, and the empty-state copy. Default selection =
+`DEADLINE_ALERT_DAYS`, pinned by §5.2 invariant #10
+(`DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS`). Streamlit persists
+the selection in `st.session_state["upcoming_window"]` for the session.
+Layout: place the selectbox in a narrow right-side column, subheader on
+the left — same `st.columns([3, 1])` weight pair on every render so the
+T2/T3 page-height-stability guarantee extends to this panel too. The
+Urgency band is **independent of** the selected window: a row 50 days
+away in a 60-day window shows no urgency glyph, by design.
 
 **Empty-DB hero.** When
 
@@ -734,7 +751,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 |-------|-----------------------|
 | Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")` and suppress the `[expand]` button (nothing to expand into). (b) *No visible data* — total is non-zero but every non-zero bucket lies in `FUNNEL_DEFAULT_HIDDEN` and `st.session_state["_funnel_expanded"]` is `False`: show `st.info("All your positions are in hidden buckets. Click [expand] below to reveal them.")` and render the `[expand]` button directly under the info. (c) *Otherwise* render the chart; the `[expand]` button renders below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty and not yet expanded. Subheader renders in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications would see a subheader above a chart of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the `[expand]` button). |
 | Materials Readiness | If `ready + pending == 0`, show `st.info("Materials readiness will appear once you've added positions with required documents.")`. Subheader renders in both branches. |
-| Upcoming | If merged DataFrame is empty, show `st.info("No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`. |
+| Upcoming | If merged DataFrame is empty, show `st.info(f"No deadlines or interviews in the next {selected_window} days.")` where `selected_window` is the current value of the panel's window selectbox (defaults to `DEADLINE_ALERT_DAYS`). The subheader and empty-state copy both interpolate the same `selected_window` so they stay coherent under any user choice. |
 | Recommender Alerts | If `get_pending_recommenders()` returns empty, show `st.info("No pending recommender follow-ups.")`. |
 
 ---
