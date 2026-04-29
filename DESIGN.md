@@ -544,7 +544,7 @@ return the new row id (inserts) or `None` (updates, deletes).
 | Applications | `get_application`, `upsert_application`, `is_all_recs_submitted` |
 | Interviews | `add_interview`, `get_interviews`, `update_interview`, `delete_interview` |
 | Recommenders | `add_recommender`, `get_recommenders`, `get_all_recommenders`, `update_recommender`, `delete_recommender` |
-| Dashboard queries | `count_by_status`, `get_upcoming_deadlines`, `get_upcoming_interviews`, `get_pending_recommenders`, `compute_materials_readiness` |
+| Dashboard queries | `count_by_status`, `get_upcoming_deadlines`, `get_upcoming_interviews`, `get_upcoming`, `get_pending_recommenders`, `compute_materials_readiness` |
 
 **Load-bearing contracts:**
 
@@ -682,7 +682,7 @@ Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dash
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
 | Funnel `[expand]` button | Single button rendered below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty; clicking flips the session flag `st.session_state["_funnel_expanded"]` to `True`, which promotes every bucket in `FUNNEL_DEFAULT_HIDDEN` (currently Closed + Archived) to visible for the rest of the session. Replaces the earlier per-bucket checkbox model (one click reveals all hidden buckets at once). | Button label: `"[expand]"` | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
-| Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` by date; `st.dataframe(width="stretch")`, columns (Date, Label, Kind, Urgency); Status shown via `STATUS_LABELS[raw]`; Kind ∈ {"deadline", "interview"} | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS` |
+| Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming()` (T4-A); `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty (only triggers if a caller passes `days > DEADLINE_ALERT_DAYS`) |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
 
 **Funnel visibility rules.** The funnel renders buckets in the order
@@ -692,6 +692,27 @@ the current session (flipping `st.session_state["_funnel_expanded"]`
 to `True` reveals every `FUNNEL_DEFAULT_HIDDEN` bucket at once).
 Hiding the terminal buckets by default keeps the dashboard focused on
 active work (D24).
+
+**Upcoming-panel column contract.** Six columns in left-to-right display
+order:
+
+| Header | Cell format | Source |
+|--------|-------------|--------|
+| **Date** | ISO `'YYYY-MM-DD'` string | `deadline_date` for deadline rows; `scheduled_date` for interview rows |
+| **Days left** | `"today"` for 0 days; `"in 1 day"` for exactly 1; `"in N days"` for N > 1 | Derived once from `(date - today).days` per row; the same integer feeds **Urgency** so the two columns cannot drift |
+| **Label** | `position_name` (string) | Both kinds |
+| **Kind** | `"deadline"` or `"interview"` (literal lowercase) | Constant per row |
+| **Status** | UI label via `STATUS_LABELS[raw]` (e.g. `"Saved"`) per §8.0 — never the raw bracketed sentinel | `positions.status` for deadlines (already in `get_upcoming_deadlines`); enriched via `get_all_positions` for interviews |
+| **Urgency** | `"🔴"` if days-away ≤ `DEADLINE_URGENT_DAYS`; `"🟡"` if ≤ `DEADLINE_ALERT_DAYS`; `""` otherwise | Same `days_away` integer as the **Days left** column — coherence guaranteed by construction |
+
+`database.get_upcoming(days=DEADLINE_ALERT_DAYS)` returns these six
+columns named in lowercase storage form
+(`date, days_left, label, kind, status, urgency`); the page renames
+them to the Title-Case headers above and maps `status` through
+`STATUS_LABELS` at render time. Empty result →
+`st.info(f"No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`.
+The subheader `"Upcoming"` renders in BOTH branches for page-height
+stability (T2/T3 precedent).
 
 **Empty-DB hero.** When
 
