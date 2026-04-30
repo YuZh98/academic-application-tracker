@@ -17,6 +17,55 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Fixed — Phase 4 T4 pre-merge polish (branch `feature/phase-4-tier4-UpcomingDeadline`)
+
+Skeptical pre-merge review of the T4-0 / T4-A / T4-B work landed in
+`reviews/phase-4-Tier4-review.md` (Exec summary → Findings → Q&A →
+Verdict, per GUIDELINES §10). One inline polish applied; four other
+findings deferred with documented rationale.
+
+`database.py`:
+
+- Drop the two no-op `.astype(str)` calls in `get_upcoming` —
+  `deadlines["status"].astype(str)` and `merged["status"].astype(str)`.
+  Both columns come from SQL TEXT with `NOT NULL` (`positions.status`)
+  joined under FK CASCADE; `pd.read_sql_query` produces object-dtype
+  `str` Series in every row by construction. The casts were defensive
+  against an impossible state and triggered the GUIDELINES §12 / system
+  anti-pattern *"don't add error handling, fallbacks, or validation for
+  scenarios that can't happen."* Removing them shaves two lines and
+  surfaces a real future regression (e.g. a JOIN weakening) loudly via
+  the existing `test_status_column_carries_raw_bracketed_sentinel` /
+  `test_status_column_shows_ui_labels_not_raw_sentinels` pair instead
+  of silently rendering the literal string `"nan"`.
+
+Findings inventory (full text in the review doc):
+
+- 🟡 #1 polish — `.astype(str)` no-ops in `get_upcoming` →
+  **fixed inline** (this commit's predecessor).
+- 🟡 #2 polish — sort tie-break (deadline vs interview on the same
+  date) is "implicit, not pinned by tests" → **kept by design**
+  (DESIGN §8.1 deliberately leaves the tie-break unspecified; pinning
+  would narrow the contract).
+- 🟢 #3 future — three `_connect()` opens per `get_upcoming` call →
+  **backlog** (negligible for v1's single-user local SQLite; matters
+  if the dataset ever exceeds ~10 k rows or moves to a remote DB).
+- 🟢 #4 future — `pd.to_datetime(...).dt.date` raises on a non-ISO row
+  → **backlog** (UI-side `st.date_input.isoformat()` covers all write
+  paths; only a manual SQL edit could trip it; loud crash beats silent
+  bad data for a personal tool).
+- ℹ️ #5 carry-over — `pages/1_Opportunities.py:395` comment trips the
+  GUIDELINES §6 status-literal grep (the comment exists *to document*
+  the literal it forbids) → **defer to Phase 4 T6 pre-merge sweep**;
+  same shape as the T2-C `st\.columns\(2\)` grep miscount logged at
+  `reviews/phase-4-Tier3-review.md` Q2.
+
+Tests: 519 passing under both `pytest -q` and
+`pytest -W error::DeprecationWarning -q`; also clean under
+`-W error::FutureWarning` on the `TestGetUpcoming` block. No test
+depended on the cast — the 22 T4-A / T4-B / invariant-#10 tests stay
+green unchanged.
+
 ### Added — Upcoming timeline panel + window selector on `app.py` (T4-B, branch `feature/phase-4-tier4-UpcomingDeadline`)
 
 Phase 4 T4-B: full-width Upcoming panel rendered below the funnel /
