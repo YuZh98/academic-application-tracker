@@ -14,8 +14,11 @@
 # `[None, *RESPONSE_TYPES]`, `apps_response_date`, `apps_result`
 # selectbox over `RESULT_VALUES`, `apps_result_notify_date`,
 # `apps_notes` text_area). Save calls
-# `database.upsert_application(propagate_status=True)`; the R1/R3
-# cascade-promotion toast lands in T2-B.
+# `database.upsert_application(propagate_status=True)`.
+# Phase 5 T2-B surfaces R1 / R3 pipeline promotions as a second
+# `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")` after the
+# Saved toast whenever `upsert_application` reports
+# `status_changed=True` (DESIGN §9.3).
 #
 # T3 will add an inline interview list as a SIBLING form
 # (`apps_interviews_form`) inside the same `st.container(border=True)`
@@ -451,6 +454,13 @@ if "applications_selected_position_id" in st.session_state:
             # Build the upsert payload. Date inputs return either
             # `datetime.date` or None; isoformat() handles only the
             # former, so guard with a truthiness check.
+            #
+            # The dict always carries 8 keys (every editable widget
+            # contributes one) — the empty-fields early-return path
+            # in `database.upsert_application` is unreachable from
+            # this page. Future maintainers extending the form should
+            # preserve that property so `result["status_changed"]`
+            # below stays meaningful.
             applied_d   = st.session_state["apps_applied_date"]
             conf_d      = st.session_state["apps_confirmation_date"]
             resp_d      = st.session_state["apps_response_date"]
@@ -467,10 +477,11 @@ if "applications_selected_position_id" in st.session_state:
             }
             try:
                 # propagate_status=True fires R1 + R3 cascades inside
-                # the same transaction; the returned indicator is
-                # ignored here in T2-A (T2-B will surface a second
-                # toast on `status_changed=True`).
-                database.upsert_application(sid, fields, propagate_status=True)
+                # the same transaction; the returned indicator drives
+                # the cascade-promotion toast surfaced below.
+                result = database.upsert_application(
+                    sid, fields, propagate_status=True,
+                )
                 # Set the skip-flag BEFORE st.rerun() so the
                 # selection-resolution block on the post-Save rerun
                 # preserves applications_selected_position_id (gotcha
@@ -481,6 +492,22 @@ if "applications_selected_position_id" in st.session_state:
                 st.session_state["_applications_skip_table_reset"] = True
                 st.session_state.pop("_applications_edit_form_sid", None)
                 st.toast(f'Saved "{r["position_name"]}".')
+                # T2-B: surface R1 / R3 pipeline promotions as a
+                # second toast (Saved-then-Promoted, chronological).
+                # `result["new_status"]` is non-None whenever
+                # status_changed=True per the upsert_application
+                # contract; trust the contract and let any future
+                # violation raise a KeyError loudly rather than
+                # swallowing it here. STATUS_LABELS.get(..., raw)
+                # passthrough is the project's status-display
+                # convention (matches the card header above and
+                # DESIGN §8.0); the fallback is unreachable in
+                # practice given config invariant #3.
+                if result["status_changed"]:
+                    promo_label = config.STATUS_LABELS.get(
+                        result["new_status"], result["new_status"]
+                    )
+                    st.toast(f"Promoted to {promo_label}.")
                 st.rerun()
             except Exception as e:
                 # GUIDELINES §8: surface failures via st.error, do NOT
