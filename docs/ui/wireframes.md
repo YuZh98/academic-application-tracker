@@ -98,12 +98,12 @@ Page source: `pages/2_Applications.py`. See
 ╔════════════════════════════════════════════════════════════════╗
 ║  Applications                                                  ║
 ║                                                                ║
-║  Filter: Status [Applied+ ▼]   Sort: [Deadline ▼]             ║
+║  Filter: Status [Active ▼]                                     ║
 ║                                                                ║
-║  Position           Applied    Recs  Conf.  Response  Result   ║
-║  ──────────────────────────────────────────────────────────── ║
-║  Stanford BioStats  Apr 18     ✓     ✓      Interview  Pending ║
-║  MIT CSAIL          ——         ——    ——      ——         ——      ║
+║  Position           Applied    Recs  Confirmation   Response   Result   ║
+║  ───────────────────────────────────────────────────────────────────── ║
+║  Stanford BioStats  Apr 18     ✓     ✓ Apr 19       Interview  Pending ║
+║  MIT CSAIL          —          —     —              —          Pending ║
 ║                                                                ║
 ║  ┌──── Stanford BioStats Postdoc ──────────────────────────┐  ║
 ║  │  Applied: Apr 18       All recs submitted: ✓            │  ║
@@ -119,6 +119,36 @@ Page source: `pages/2_Applications.py`. See
 ║  └──────────────────────────────────────────────────────────┘  ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
+
+**Filter selectbox (Phase 5 T1-B).** The `Status` filter offers, in
+display order: `Active` (default — excludes `STATUS_FILTER_ACTIVE_EXCLUDED
+= {STATUS_SAVED, STATUS_CLOSED}`), `All`, then each `STATUS_VALUES`
+entry rendered via `STATUS_LABELS`. Sentinel labels (`Active`, `All`)
+fall through `format_func=STATUS_LABELS.get(v, v)` because they aren't
+in `STATUS_LABELS`.
+
+**Confirmation column inline cell text (Phase 5 T1-C, DESIGN §8.3 D-A
+amendment).** Streamlit 1.56's `st.dataframe` does not expose a
+per-cell tooltip API; the column folds the original `Received {ISO date}`
+tooltip into inline cell content. Three states:
+
+| `confirmation_received` | `confirmation_date` | Cell text |
+|---|---|---|
+| `0` | — | `—` |
+| `1` | `2026-04-19` | `✓ Apr 19` |
+| `1` | NULL | `✓ (no date)` |
+
+Full resolution + four-option comparison in
+[`reviews/phase-5-tier1-review.md`](../../reviews/phase-5-tier1-review.md)
+Q3 + new gotcha #16 in
+[`docs/dev-notes/streamlit-state-gotchas.md`](../dev-notes/streamlit-state-gotchas.md).
+
+**Phase 5 status (2026-04-30).** T1 ships the **page shell** only —
+`set_page_config(layout="wide")`, title, status filter, and the
+read-only six-column table sorted `deadline_date ASC NULLS LAST,
+position_id ASC`. The detail card (T2) and inline interview list (T3)
+are pending; their wireframe appearance below remains the contract
+for those tiers.
 
 ---
 
