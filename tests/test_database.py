@@ -3866,3 +3866,174 @@ class TestExportsLogAndContinue:
         assert row["position_name"] == "Persisted Despite Boom", (
             f"Row must persist when exports fails. Got {row!r}"
         )
+
+
+# ── get_applications_table ────────────────────────────────────────────────────
+
+class TestGetApplicationsTable:
+    """get_applications_table() returns the joined positions × applications
+    view that backs the Applications page table (DESIGN §8.3, Phase 5 T1-A).
+
+    The reader is filter-agnostic — it returns every position; the page
+    layer applies the default 'exclude SAVED + CLOSED' filter
+    (DESIGN §8.3 + config.STATUS_FILTER_ACTIVE_EXCLUDED, added in T1-B).
+
+    Contract:
+      - Columns (in order): position_id, position_name, institute,
+        deadline_date, status, applied_date, confirmation_received,
+        confirmation_date, response_type, result.
+      - One row per position. add_position auto-creates the applications
+        row; the LEFT JOIN is defensive against a future migration that
+        could leave an orphan position.
+      - Sort: deadline_date ASC NULLS LAST, position_id ASC. The
+        position_id tiebreaker is part of the contract so equal-deadline
+        rows have a stable order across reruns (matches the selection-
+        survival invariant pinned by streamlit-state-gotchas #11/#12).
+    """
+
+    EXPECTED_COLUMNS = [
+        "position_id",
+        "position_name",
+        "institute",
+        "deadline_date",
+        "status",
+        "applied_date",
+        "confirmation_received",
+        "confirmation_date",
+        "response_type",
+        "result",
+    ]
+
+    def test_empty_db_returns_empty_dataframe_with_expected_columns(self, db):
+        """Empty DB must surface the column contract — the page's
+        downstream filter / rename / display-projection chain assumes
+        these columns exist on every render, not just rendering with
+        data. Mirrors the equivalent T4-B contract for get_upcoming."""
+        df = database.get_applications_table()
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 0
+        assert list(df.columns) == self.EXPECTED_COLUMNS, (
+            f"Columns must be {self.EXPECTED_COLUMNS!r} in this order, "
+            f"got {list(df.columns)!r}"
+        )
+
+    def test_one_row_per_position(self, db):
+        """Two positions → two rows. The LEFT JOIN must not duplicate
+        position rows; applications.position_id is a primary key so the
+        join cardinality stays 1:1."""
+        database.add_position(make_position({"position_name": "A"}))
+        database.add_position(make_position({"position_name": "B"}))
+        df = database.get_applications_table()
+        assert len(df) == 2
+
+    def test_position_fields_surface(self, db):
+        """The positions-side fields land in the joined view with
+        their stored values."""
+        pid = database.add_position(make_position({
+            "position_name": "BioStats",
+            "institute":     "Stanford",
+            "deadline_date": "2026-05-15",
+        }))
+        df = database.get_applications_table()
+        row = df.iloc[0]
+        assert row["position_id"]   == pid
+        assert row["position_name"] == "BioStats"
+        assert row["institute"]     == "Stanford"
+        assert row["deadline_date"] == "2026-05-15"
+        assert row["status"]        == config.STATUS_SAVED
+
+    def test_application_defaults_after_add_position(self, db):
+        """A freshly-added position has its applications row
+        auto-created with the schema DEFAULT clause: applied_date /
+        confirmation_date / response_type NULL; confirmation_received
+        = 0; result = config.RESULT_DEFAULT. The reader must surface
+        these unchanged so the page can rely on `result == 'Pending'`
+        (and friends) without coercion at the page layer."""
+        database.add_position(make_position())
+        df = database.get_applications_table()
+        row = df.iloc[0]
+        assert row["applied_date"]          is None
+        assert row["confirmation_received"] == 0
+        assert row["confirmation_date"]     is None
+        assert row["response_type"]         is None
+        assert row["result"]                == config.RESULT_DEFAULT
+
+    def test_application_fields_surface_after_upsert(self, db):
+        """upsert_application updates show up on the next read. Pin the
+        common fields that drive the Applications page table (Applied /
+        Confirmation / Response). Uses propagate_status=False so the
+        R-cascade side effects are tested elsewhere (TestUpsertApplication
+        R1/R3) rather than here — keeping the assertion focused on the
+        join + column-projection contract."""
+        pid = database.add_position(make_position())
+        database.upsert_application(pid, {
+            "applied_date":          "2026-04-18",
+            "confirmation_received": 1,
+            "confirmation_date":     "2026-04-19",
+            "response_type":         "Interview Invite",
+        }, propagate_status=False)
+        df = database.get_applications_table()
+        row = df.iloc[0]
+        assert row["applied_date"]          == "2026-04-18"
+        assert row["confirmation_received"] == 1
+        assert row["confirmation_date"]     == "2026-04-19"
+        assert row["response_type"]         == "Interview Invite"
+
+    def test_ordered_by_deadline_asc_nulls_last(self, db):
+        """Primary sort: deadline_date ASC NULLS LAST. NULL deadlines
+        sort to the bottom. Mirrors the get_all_positions contract
+        (§7 #5) so the two readers agree on row order."""
+        database.add_position(make_position({
+            "position_name": "Late",
+            "deadline_date": "2026-06-30",
+        }))
+        database.add_position(make_position({
+            "position_name": "No deadline",
+            "deadline_date": None,
+        }))
+        database.add_position(make_position({
+            "position_name": "Soon",
+            "deadline_date": "2026-04-15",
+        }))
+        df = database.get_applications_table()
+        assert list(df["position_name"]) == ["Soon", "Late", "No deadline"]
+
+    def test_position_id_breaks_deadline_ties(self, db):
+        """Two positions sharing the same deadline_date sort by
+        position_id ASC. The stable tiebreaker is part of the contract
+        — without it, SQLite is free to return ties in either order,
+        which would surface as a flickering selection across reruns
+        on the Applications page (per streamlit-state-gotchas #12)."""
+        pid_a = database.add_position(make_position({
+            "position_name": "A",
+            "deadline_date": "2026-05-01",
+        }))
+        pid_b = database.add_position(make_position({
+            "position_name": "B",
+            "deadline_date": "2026-05-01",
+        }))
+        df = database.get_applications_table()
+        ids = list(df["position_id"])
+        assert ids == sorted([pid_a, pid_b]), (
+            f"Equal-deadline rows must order by position_id ASC; "
+            f"got {ids!r}"
+        )
+
+    def test_includes_terminal_status_rows(self, db):
+        """The reader is filter-agnostic — terminal-status positions
+        ([CLOSED] / [REJECTED] / [DECLINED]) must be in the DataFrame
+        regardless of where they sit in the pipeline. The Applications
+        page layer applies the default 'exclude SAVED + CLOSED' filter
+        (DESIGN §8.3); the reader stays general so a future 'All'
+        filter selection can surface every row without a second query."""
+        database.add_position(make_position({"position_name": "Open"}))
+        pid_closed = database.add_position(
+            make_position({"position_name": "Closed-out"})
+        )
+        database.update_position(pid_closed, {"status": config.STATUS_CLOSED})
+
+        df = database.get_applications_table()
+        assert len(df) == 2
+        statuses = dict(zip(df["position_name"], df["status"]))
+        assert statuses["Open"]       == config.STATUS_SAVED
+        assert statuses["Closed-out"] == config.STATUS_CLOSED

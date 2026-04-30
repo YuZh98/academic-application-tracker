@@ -17,6 +17,89 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — Applications page shell + filter + read-only table (Phase 5 T1, branch `feature/phase-5-tier1-ApplicationsPageShell`)
+
+Phase 5 Tier 1 — first contact between users and the Applications
+view (DESIGN §8.3 + wireframe). Three sub-tasks shipped via TDD
+three-commit cadence per sub-task (`test:` red → `feat:` green →
+`chore:` rollup); 33 new tests; suite 553 → 586 under both
+pytest gates.
+
+`database.py`:
+
+- New public reader `get_applications_table() -> pd.DataFrame`
+  joining positions × applications via `LEFT JOIN`. Returns
+  10 columns in this order: `position_id, position_name,
+  institute, deadline_date, status, applied_date,
+  confirmation_received, confirmation_date, response_type,
+  result`. Sort `deadline_date ASC NULLS LAST, position_id ASC`
+  — the `position_id` tiebreaker is part of the contract so
+  equal-deadline rows have stable order across reruns
+  (selection-survival invariant per `streamlit-state-gotchas
+  #12`). Filter-agnostic (every position in the result; the page
+  applies the default exclusion).
+
+`config.py`:
+
+- New constants for the Applications page filter sentinel:
+    - `STATUS_FILTER_ACTIVE: str = "Active"` — UI sentinel for
+      the default selection. Encodes "every actionable status";
+      lives in config so future surfaces (e.g. a "Tracked: Active"
+      KPI variant on the dashboard) can reuse it without
+      hardcoding.
+    - `STATUS_FILTER_ACTIVE_EXCLUDED: frozenset[str] =
+      frozenset({STATUS_SAVED, STATUS_CLOSED})` — the exclusion
+      set. Frozen so a page cannot mutate it at runtime.
+- New §5.2 invariant #12:
+  `STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES)`. Catches
+  a typo in the exclusion set or a `STATUS_VALUES` rename that
+  doesn't propagate; without the guard, an unknown status would
+  silently no-op at the page filter (never match any row).
+
+`pages/2_Applications.py` (new file):
+
+- `set_page_config(page_title="Postdoc Tracker", page_icon="📋",
+  layout="wide")` per DESIGN §8.0 / D14 — first executable
+  Streamlit call.
+- `database.init_db()` — picks up any pending migrations on
+  first-page-open of a session.
+- `st.title("Applications")`.
+- Status filter selectbox keyed `apps_filter_status` (page-prefix
+  per GUIDELINES §13). Options:
+  `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]` in display
+  order; default index 0; `format_func = STATUS_LABELS.get(v, v)`
+  so the sentinels render as themselves.
+- Read-only `st.dataframe(width="stretch", hide_index=True,
+  key="apps_table")` with the six wireframe columns
+  `Position / Applied / Recs / Confirmation / Response / Result`
+  in display order. Filter resolved at render time
+  (Active → exclude `STATUS_FILTER_ACTIVE_EXCLUDED`; All → no
+  exclusion; specific → narrow). Empty post-filter →
+  `st.info("No applications match the current filter.")`,
+  table suppressed.
+
+DESIGN.md:
+
+- §5.1 row entries for the two new constants under
+  "Status pipeline".
+- §5.2 invariant #12 added.
+- §8.3 default-filter bullet now references
+  `config.STATUS_FILTER_ACTIVE_EXCLUDED` /
+  `STATUS_FILTER_ACTIVE` explicitly (the contract is one click
+  from the spec).
+- §8.3 **D-A amendment**: the original D-A spec carried
+  `confirmation_date` as a per-cell tooltip
+  (`Received {ISO date}` / `Received (no date recorded)`).
+  Streamlit 1.56's `st.dataframe` does not expose a per-cell
+  tooltip API — `st.column_config.Column(help=...)` is column-
+  header only, and pandas Styler tooltips do not transfer
+  through the Arrow protobuf. The amendment folds the tooltip
+  text into inline cell content via three states: `—` /
+  `✓ {Mon D}` / `✓ (no date)`. Every piece of D-A's information
+  stays visible at-a-glance and matches the T4 Upcoming
+  Date-column format (`MMM D`, no year). Resolution recorded in
+  `reviews/phase-5-tier1-review.md`.
+
 ### Changed — Funnel disclosure toggle: bidirectional + tertiary + subheader-row inline (T6 polish, branch `feature/phase-4-tier6-Cohesion`)
 
 Phase 4 T6 polish — closes two user-reported issues with the

@@ -15,23 +15,29 @@ without rewriting existing code.
 
 ## Current Status
 
-**Last shipped tag:** `v0.4.0` (Phase 4 Tier 3 — Materials Readiness,
-2026-04-22). Phase 4 T4 (Upcoming timeline) merged to `main` via
-PR #12 (`483efa9`); Phase 4 T5 (Recommender Alerts) merged via
-PR #13 (`c5a7c76`). `main` is currently at `c5a7c76`. The next tag
-is `v0.5.0` once T6 closes.
+**Last shipped tag:** `v0.5.0` (Phase 4 Tier 6 — Dashboard cohesion +
+funnel disclosure toggle, 2026-04-30). Phase 4 closes with this tag;
+the dashboard's five panels are complete (KPI grid, application funnel
+with bidirectional disclosure toggle, Materials Readiness, Upcoming
+timeline, Recommender Alerts). `main` is currently at `c93dec0`
+(PR #14 merge).
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** Phase 4 T6 — pre-merge close-out for the dashboard —
-on branch `feature/phase-4-tier6-Cohesion`. Three checkboxes: cross-
-panel cohesion smoke ✅ (`reviews/phase-4-finish-cohesion-smoke.md`);
-funnel disclosure-toggle polish ✅ (DESIGN §8.1 T6 amendment —
-bidirectional, tertiary, subheader-row inline); full review doc +
-PR + tag `v0.5.0` pending. 553 tests green under both pytest gates.
+**In flight:** Phase 5 T1 — Applications page shell — on branch
+`feature/phase-5-tier1-ApplicationsPageShell`. T1 ships in three
+sub-tasks (T1-A `database.get_applications_table()` joined reader;
+T1-B page shell + filter sentinel `STATUS_FILTER_ACTIVE` + invariant
+#12; T1-C read-only six-column table). Pre-merge review at
+`reviews/phase-5-tier1-review.md` (Approve, 0 🔴 / 0 🟠). One
+DESIGN §8.3 D-A amendment landed inline (per-cell tooltip → inline
+cell text, because Streamlit 1.56's `st.dataframe` exposes no
+per-cell tooltip API; resolution recorded in the review doc + new
+gotcha #16 in `docs/dev-notes/streamlit-state-gotchas.md`).
+586 tests green under both pytest gates. PR pending.
 
-**Next up after `v0.5.0`:** Phase 5 — Applications page
-(`pages/2_Applications.py`) per Q5 Option A from the 2026-04-27
-v1 planning session, then Recommenders page, then Phase 6 Exports.
+**Next up after Phase 5 T1:** Phase 5 T2 — Application detail card
+(DESIGN §8.3: Applied / Confirmation / Response / Result / Notes
+editable via `st.form`) on a fresh branch off `main` once T1 merges.
 
 ---
 
@@ -60,8 +66,8 @@ v1.0 ships when **all three** are true:
 | 1 | Environment & config | ✅ shipped (see CHANGELOG) |
 | 2 | Data layer (`database.py`, `exports.py` stub, `postdoc.db`) | ✅ shipped |
 | 3 | Opportunities page (quick-add, filter, table, edit, delete) | ✅ shipped @ v0.1.0 |
-| 4 | Dashboard (`app.py`) — 5 panels | 🔄 T1-T5 ✅ · T6 in flight (cohesion smoke + toggle polish ✅; review + PR + tag `v0.5.0` pending) |
-| 5 | Applications + Recommenders pages | ⏳ pending |
+| 4 | Dashboard (`app.py`) — 5 panels | ✅ shipped @ v0.5.0 (T1–T6 all merged) |
+| 5 | Applications + Recommenders pages | 🔄 T1 ✅ (PR pending — branch `feature/phase-5-tier1-ApplicationsPageShell`) · T2–T7 pending |
 | 6 | Full exports + Export page | ⏳ pending |
 | 7 | Polish (urgency colors, search, confirm dialogs, responsive) | ⏳ pending |
 
@@ -74,24 +80,26 @@ v1.0 ships when **all three** are true:
 | T3 | Materials readiness (two progress bars + CTA + empty state) | ✅ v0.4.0 (`5ac0f63`) |
 | T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | ✅ merged via PR #12 (`483efa9`) |
 | T5 | Recommender alerts (grouped by person on dashboard; full mailto + LLM prompts on Phase 5 T6) | ✅ merged via PR #13 (`c5a7c76`) |
-| T6 | Pre-merge review + PR + tag `v0.5.0` | 🔄 in flight — branch `feature/phase-4-tier6-Cohesion` (cohesion smoke ✅; funnel toggle polish ✅; full review + PR + tag pending) |
+| T6 | Pre-merge review + PR + tag `v0.5.0` | ✅ merged via PR #14 (`c93dec0`); tagged `v0.5.0` 2026-04-30 |
 
-### Phase 5 — Applications + Recommenders (sketch)
+### Phase 5 — Applications + Recommenders (detail)
 
 Per **Q5 Option A**, build Applications page first.
 
-- `pages/2_Applications.py` — submission/response/interview/result tracking
-  per position; **inline interview list UI** per DESIGN §8.3 D-B
-  (`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
-  delete, R2-toast surfacing on add)
-- `pages/3_Recommenders.py` — letter log; alerts grouped by recommender;
-  reminder helpers per DESIGN §8.4 D-C (locked-body mailto + `LLM prompts
-  (N tones)` expander)
-- The R1/R2/R3 cross-table cascade is already wired in `database.py`
-  (Sub-task 9, 2026-04-24). No ADR pending — pages call
-  `upsert_application(propagate_status=True)` /
-  `add_interview(propagate_status=True)` and surface a `st.toast` when
-  the writer's return value indicates promotion.
+| Tier | Scope | Status |
+|------|-------|--------|
+| T1 | Applications page shell (`pages/2_Applications.py`): `set_page_config`, title, default filter (`STATUS_FILTER_ACTIVE` excluding `STATUS_SAVED + STATUS_CLOSED`), read-only six-column table sorted by deadline | ✅ on branch `feature/phase-5-tier1-ApplicationsPageShell` (PR pending). New `database.get_applications_table()` reader; new config sentinel + invariant #12; DESIGN §8.3 D-A amended (per-cell tooltip → inline cell text). 33 new tests; suite 553 → 586 under both gates. |
+| T2 | Application detail card (Applied / Confirmation / Response / Result / Notes — editable via `st.form`) per DESIGN §8.3 D-A | ⏳ pending — next up after T1 merges |
+| T3 | Inline interview list UI (`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated delete, R2-toast on add) per DESIGN §8.3 D-B | ⏳ pending |
+| T4 | Recommender alert panel (`pages/3_Recommenders.py`) — grouped by recommender_name | ⏳ pending |
+| T5 | Recommenders table + add form + inline edit | ⏳ pending |
+| T6 | Reminder helpers per DESIGN §8.4 D-C — locked-body mailto + `LLM prompts (N tones)` expander | ⏳ pending |
+| T7 | Phase 5 review + PR + tag `v0.6.0` | ⏳ pending |
+
+The R1/R2/R3 cross-table cascade is already wired in `database.py`
+(v1.3 Sub-task 9). Pages call `upsert_application(propagate_status=True)`
+/ `add_interview(propagate_status=True)` and surface a `st.toast` when
+the writer's return value indicates promotion — no ADR pending.
 
 ### Phase 6 — Exports (sketch)
 
