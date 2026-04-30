@@ -333,6 +333,59 @@ strings. Discovered while writing
 
 ---
 
+## 16. `st.dataframe` does not support per-cell tooltips in Streamlit 1.56
+
+**Symptom:** A spec calls for "the cell carries `<field>` as a tooltip"
+or similar per-row hover text on a `st.dataframe`, and there's no
+visible Streamlit API to attach it. `st.column_config.Column(help=...)`
+shows up in the docs but only renders on the column header — every
+row in that column shares the same hover string.
+
+**Cause:** Streamlit's `st.dataframe` serializes the data through Arrow
+protobuf to the React frontend. Per-cell metadata (style, tooltip,
+custom click target) is not part of that protobuf. Two fallback paths
+that look like they should work also don't:
+
+- `pandas.io.formats.style.Styler.set_tooltips(...)` produces tooltip
+  metadata for the *HTML* render path; `st.dataframe` consumes the
+  Arrow representation, which strips Styler tooltips. Verified against
+  Streamlit 1.56.0 source (2026-04-30).
+- `st.column_config.TextColumn(help=...)` is column-header-only — same
+  as `Column(help=...)`. Streamlit 1.56 has no `cell_help` / `row_help`
+  parameter anywhere on the column-config types.
+
+**Workaround:** Fold the tooltip text into inline cell content. For the
+Applications-page Confirmation column (DESIGN §8.3 D-A amendment, T1-C):
+
+```python
+def _format_confirmation(received: Any, iso_str: Any) -> str:
+    if pd.isna(received) or not bool(received):
+        return EM_DASH                        # — (received = 0)
+    formatted = _format_date_or_em(iso_str)
+    if formatted == EM_DASH:
+        return "✓ (no date)"                  # received = 1, no date
+    return f"✓ {formatted}"                   # ✓ Apr 19
+```
+
+Three states cover what the original tooltip would have said. Reverse
+the workaround if a future Streamlit release adds per-cell tooltip
+support — the call site is one apply-call.
+
+**Alternatives considered + rejected:** rendering the table as
+`st.html(df.to_html(...))` with `<td title="...">` works but loses
+sort / selection / copy interactivity. Wrapping each row in
+`st.container(border=True)` (the T5 Recommender Alerts pattern)
+works for ≤ 10 rows but doesn't scale to a tabular data view. Full
+write-up + four-option comparison in
+`reviews/phase-5-tier1-review.md` (Q3).
+
+Discovered while implementing the Applications page Confirmation
+column (Phase 5 T1-C, 2026-04-30) — DESIGN §8.3 D-A had originally
+specified per-cell tooltip text; the amendment to inline-cell text is
+recorded inline in DESIGN §8.3.
+
+---
+
 ## When a new gotcha lands
 
 1. Reproduce it with an isolation probe (small throwaway script in `/tmp/`).
