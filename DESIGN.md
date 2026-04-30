@@ -239,7 +239,8 @@ auto-promotion rules). Longer enumerations are described by category
 | Constant | Type | Role |
 |----------|------|------|
 | `FUNNEL_BUCKETS` | `list[tuple[str, tuple[str, ...], str]]` | Presentation-layer grouping of raw statuses into funnel bars. Each entry: `(UI label, raw-status tuple, bucket color)`. Order = top-down display order (y-axis reversed). "Archived" aggregates `[REJECTED]` + `[DECLINED]` (D17); `[CLOSED]` stays its own bucket. Multiset coverage of `STATUS_VALUES` guarded by §5.2 invariant #5. |
-| `FUNNEL_DEFAULT_HIDDEN` | `set[str]` | Bucket labels hidden by default on the dashboard funnel. Revealed all at once by the single `[expand]` button; state held in `st.session_state["_funnel_expanded"]` for the current session only (D24, §8.1). Validated by §5.2 invariant #6. |
+| `FUNNEL_DEFAULT_HIDDEN` | `set[str]` | Bucket labels hidden by default on the dashboard funnel. The single disclosure toggle (DESIGN §8.1 T6 amendment) reveals/hides them as a group; state held in `st.session_state["_funnel_expanded"]` for the current session only (D24, §8.1). Validated by §5.2 invariant #6. |
+| `FUNNEL_TOGGLE_LABELS` | `dict[bool, str]` | State-keyed labels for the funnel disclosure toggle (§8.1). Indexed by the bool value of `st.session_state["_funnel_expanded"]`: `False` → `"+ Show all stages"` (collapsed; click invites expand); `True` → `"− Show fewer stages"` (expanded; click invites collapse). Symbols are U+002B `+` and U+2212 `−` — they encode the click's effect direction. Vocabulary follows the project's `<symbol> <verb-phrase>` CTA convention. Validated by §5.2 invariant #11. |
 
 #### Vocabularies (user-facing selectbox options)
 
@@ -296,6 +297,7 @@ before any page renders:
 8. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
 9. `RESPONSE_TYPE_OFFER in RESPONSE_TYPES` — the R3 cascade trigger (§9.3) must be a real `RESPONSE_TYPES` selectbox option; catches a rename that drops `"Offer"` without updating the alias
 10. `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS` — the Upcoming-panel selectbox default (= `DEADLINE_ALERT_DAYS`) must be a real option in the offered list; catches a config edit that removes 30 from the list without updating the default
+11. `set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}` — the funnel disclosure toggle (§8.1) reads its label as `FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]` per render. A missing key would surface as a render-time `KeyError` on first toggle into that state; an extra key would silently no-op. Caught at import.
 
 ### 5.3 Extension recipes
 
@@ -306,6 +308,7 @@ before any page renders:
 | Add a new pipeline status | (1) Append to `STATUS_VALUES` and add the matching `STATUS_<name>` alias; (2) add one entry each to `STATUS_COLORS` and `STATUS_LABELS`; (3) decide which `FUNNEL_BUCKETS` entry it belongs in — extend an existing bucket's tuple or add a new 3-tuple `(label, (raw,...), color)` in the right display position; (4) if terminal, append to `TERMINAL_STATUSES`. No DDL change. |
 | Rename a pipeline status | Edit `STATUS_VALUES[i]`, the matching alias, and the keys in `STATUS_COLORS` / `STATUS_LABELS` / `FUNNEL_BUCKETS` / `TERMINAL_STATUSES`. Write a one-shot migration in `CHANGELOG.md` under the release: `UPDATE positions SET status = '<new>' WHERE status = '<old>'`. The schema `DEFAULT` clause is config-driven; no DDL edit needed if renaming `STATUS_VALUES[0]`. |
 | Hide or un-hide a funnel bucket by default | Edit `FUNNEL_DEFAULT_HIDDEN`. Values must be existing bucket labels. |
+| Rephrase the funnel disclosure toggle | Edit both keys of `FUNNEL_TOGGLE_LABELS`. Stay within the `<symbol> <verb-phrase>` CTA convention (matches `+ Add your first position` and `→ Opportunities page`). The `+` / `−` pairing is recommended — the symbol encodes the click's effect direction — but invariant #11 only enforces dict shape, not symbol choice. Tests in `TestT6FunnelToggle` (`test_label_symbols_match_cta_convention`) pin the current `+` / `−` pair; relax that test if you adopt a different symbol pair. |
 | Change a dashboard threshold | Edit `DEADLINE_*` or `RECOMMENDER_ALERT_DAYS`. Import-time invariants catch inverted thresholds. |
 | Switch the tracker profile | See §12.1. |
 
@@ -682,18 +685,30 @@ Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dash
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
 | KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
-| Funnel `[expand]` button | Single button rendered below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty; clicking flips the session flag `st.session_state["_funnel_expanded"]` to `True`, which promotes every bucket in `FUNNEL_DEFAULT_HIDDEN` (currently Closed + Archived) to visible for the rest of the session. Replaces the earlier per-bucket checkbox model (one click reveals all hidden buckets at once). | Button label: `"[expand]"` | — |
+| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector (see "Window selector" below). Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. **T6 amendment (2026-04-30)** replaces the earlier unidirectional `[expand]` button (which had no companion `[collapse]`) and the pre-Sub-task-12 per-bucket checkbox model. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). The leading `+` (U+002B) and `−` (U+2212) match the project's `<symbol> <verb-phrase>` CTA convention used by `+ Add your first position` and `→ Opportunities page`. | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
 | Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming(days=selected_window)` (T4-A); `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). Window controlled by an inline `st.selectbox` (key: `upcoming_window`) over `UPCOMING_WINDOW_OPTIONS`, default = `DEADLINE_ALERT_DAYS`; subheader text is dynamic: `f"Upcoming (next {selected_window} days)"`. | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty. Rows surfaced by a wider selected window (e.g. 60 / 90) but past `DEADLINE_ALERT_DAYS` show NO urgency glyph — the band is fixed in config, not tied to the user-selected window. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
 
 **Funnel visibility rules.** The funnel renders buckets in the order
 listed in `FUNNEL_BUCKETS`. A bucket is visible when **not** in
-`FUNNEL_DEFAULT_HIDDEN`, or when the user has clicked `[expand]` in
-the current session (flipping `st.session_state["_funnel_expanded"]`
-to `True` reveals every `FUNNEL_DEFAULT_HIDDEN` bucket at once).
-Hiding the terminal buckets by default keeps the dashboard focused on
-active work (D24).
+`FUNNEL_DEFAULT_HIDDEN`, or when `st.session_state["_funnel_expanded"]`
+is `True` (which reveals every `FUNNEL_DEFAULT_HIDDEN` bucket at
+once). The disclosure toggle is **bidirectional**: clicking from the
+collapsed state expands; clicking from the expanded state collapses.
+The collapsed state is the *default-focused* view (active pipeline
+only, per D24); the expanded state is the *full-pipeline* view
+including terminal stages. Round-tripping between the two within a
+single session is supported and tested — a user verifying their
+archived count can return to the focused view without a fresh
+session.
+
+The toggle's *label* describes the action a click *will* perform, not
+the current state — `"+ Show all stages"` means *"clicking this will
+show all"* (you're currently collapsed); `"− Show fewer stages"`
+means *"clicking this will show fewer"* (you're currently expanded).
+Both labels are config-locked in `FUNNEL_TOGGLE_LABELS` (DESIGN §5.1)
+and follow the project's `<symbol> <verb-phrase>` CTA convention.
 
 **Upcoming-panel column contract.** Six columns in left-to-right display
 order:
@@ -749,7 +764,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 
 | Panel | Empty-state behaviour |
 |-------|-----------------------|
-| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")` and suppress the `[expand]` button (nothing to expand into). (b) *No visible data* — total is non-zero but every non-zero bucket lies in `FUNNEL_DEFAULT_HIDDEN` and `st.session_state["_funnel_expanded"]` is `False`: show `st.info("All your positions are in hidden buckets. Click [expand] below to reveal them.")` and render the `[expand]` button directly under the info. (c) *Otherwise* render the chart; the `[expand]` button renders below the chart whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty and not yet expanded. Subheader renders in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications would see a subheader above a chart of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the `[expand]` button). |
+| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")`. **Disclosure toggle is suppressed** (nothing to disclose into); the subheader row degrades from `st.columns([3, 1])` to a bare `st.subheader` so the right-column slot doesn't render an empty box. (b) *No visible data* — total is non-zero but every non-zero bucket lies in `FUNNEL_DEFAULT_HIDDEN` and `st.session_state["_funnel_expanded"]` is `False`: show `st.info("All your positions are in hidden buckets. Click 'Show all stages' to reveal them.")` and render the disclosure toggle in the **subheader row** (same `st.columns([3, 1])` placement as branch (c) — toggle position is invariant across (b) and (c) for layout stability, and the info copy points at the toggle by label rather than by spatial direction so the copy stays correct regardless of where the toggle sits). Clicking the toggle in branch (b) round-trips into branch (c). (c) *Otherwise* render the chart; the disclosure toggle renders in the subheader row whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty (in **both** collapsed and expanded states — the post-T6 contract is that the toggle persists post-click with a flipped label, so the user always has a return path). Subheader renders in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications would see a subheader above a chart of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the disclosure toggle); the T6 amendment makes that recovery a true round-trip rather than a one-way trapdoor. |
 | Materials Readiness | If `ready + pending == 0`, show `st.info("Materials readiness will appear once you've added positions with required documents.")`. Subheader renders in both branches. |
 | Upcoming | If merged DataFrame is empty, show `st.info(f"No deadlines or interviews in the next {selected_window} days.")` where `selected_window` is the current value of the panel's window selectbox (defaults to `DEADLINE_ALERT_DAYS`). The subheader and empty-state copy both interpolate the same `selected_window` so they stay coherent under any user choice. |
 | Recommender Alerts | If `get_pending_recommenders()` returns empty, show `st.info("No pending recommender follow-ups.")`. |
