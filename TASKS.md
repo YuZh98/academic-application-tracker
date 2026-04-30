@@ -82,6 +82,22 @@ DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
         sandbox blocks headless capture on this setup; boot smoke
         ran via Bash `streamlit run` (HTTP 200) + AppTest probes
         (no exception on populated or empty DB).
+  - [x] Funnel disclosure-toggle polish — replace pre-T6
+        unidirectional `[expand]` button with a bidirectional
+        toggle (DESIGN §8.1 T6 amendment 2026-04-30): single
+        `st.button(type="tertiary")` placed in the funnel
+        subheader row via `st.columns([3, 1])` (mirror of T4
+        Upcoming idiom); state-keyed labels in
+        `config.FUNNEL_TOGGLE_LABELS`
+        (`+ Show all stages` ↔ `− Show fewer stages`) following
+        the project's `<symbol> <verb-phrase>` CTA convention;
+        invariant #11 added to `config.py` + DESIGN §5.2; branch
+        (b) info copy updated to reference the toggle by label
+        rather than spatial direction. Three-commit TDD round
+        (`test:` red → `feat:` green → `chore:` rollup); 535 →
+        553 tests passing under both pytest gates. Solves the
+        two user-reported issues (no collapse path; button too
+        visually heavy for a chart control).
   - [ ] `reviews/phase-4-finish-review.md` (Exec summary → Findings →
         Junior-engineer Q&A → Verdict, per GUIDELINES §10)
   - [ ] PR; address review nits inline; merge; tag `v0.5.0`
@@ -201,6 +217,19 @@ _(none)_
 
 ## Recently done
 
+- 2026-04-30 — **Phase 4 T6 funnel disclosure-toggle polish complete**
+  on branch `feature/phase-4-tier6-Cohesion`: replaced the pre-T6
+  unidirectional `[expand]` button with a bidirectional disclosure
+  toggle (DESIGN §8.1 T6 amendment); `st.button(type="tertiary")`
+  placed in the funnel subheader row via `st.columns([3, 1])`
+  (mirror of T4 Upcoming idiom); state-keyed labels in
+  `config.FUNNEL_TOGGLE_LABELS` following the project's
+  `<symbol> <verb-phrase>` CTA convention. Solves two user-reported
+  issues — no collapse path + button too heavy for a chart control —
+  in one widget rework. Three-commit TDD round
+  (`test:` red → `feat:` green → `chore:` rollup); 535 → 553 tests
+  passing under both pytest gates. Live AppTest probe confirms the
+  round-trip (False → True → False) with zero exceptions.
 - 2026-04-30 — **Phase 4 T6 cohesion-smoke audit complete** on branch
   `feature/phase-4-tier6-Cohesion`: `reviews/phase-4-finish-cohesion-smoke.md`
   pins six cohesion dimensions across the dashboard's five panels with
@@ -241,4 +270,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 4 T6 cohesion-smoke audit complete on branch `feature/phase-4-tier6-Cohesion`; full review doc + PR + tag `v0.5.0` next)_
+_Updated: 2026-04-30 (Phase 4 T6 cohesion-smoke audit + funnel disclosure-toggle polish complete on branch `feature/phase-4-tier6-Cohesion`; full review doc + PR + tag `v0.5.0` next)_

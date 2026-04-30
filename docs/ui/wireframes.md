@@ -32,7 +32,7 @@ Page source: `app.py`. See
 ║  Applied     ██████    4    ║  Ready to submit:  3             ║
 ║  Interview   ████      2    ║  ███                             ║
 ║  Offer       ██        1    ║                                  ║
-║  [expand]                   ║  Still missing:    5             ║
+║  [+ Show all stages]        ║  Still missing:    5             ║
 ║                             ║  █████                           ║
 ║                             ║                                  ║
 ║                             ║  [→ Opportunities page]          ║
