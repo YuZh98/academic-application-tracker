@@ -85,7 +85,7 @@ importing `exports` lazily inside each write function (not at module top).
   `edit_notes_form` contains the widget `edit_notes`
 - **Internal sentinels** start with `_` and describe state, not widgets:
   `_edit_form_sid`, `_delete_target_id`, `_delete_target_name`,
-  `_skip_table_reset`, `_funnel_expanded` (dashboard `[expand]` toggle)
+  `_skip_table_reset`, `_funnel_expanded` (dashboard funnel disclosure toggle)
 
 ### Page files
 - Filename format: `N_Title.py` where `N` is the sort-order integer (`1_Opportunities.py`)

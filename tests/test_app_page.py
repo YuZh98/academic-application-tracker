@@ -466,13 +466,15 @@ class TestT2AFunnelBar:
     """T2-A: Plotly horizontal bar funnel built from `count_by_status()`
     aggregated into `config.FUNNEL_BUCKETS`.
 
-    Contract (DESIGN.md §8.1 + Sub-task 12):
+    Contract (DESIGN.md §8.1 + Sub-task 12 + T6 amendment 2026-04-30):
       - One bar per **visible** `FUNNEL_BUCKETS` entry, in the list's
         display order (so the pipeline reads top-to-bottom once the
         y-axis is reversed). A bucket is visible when its label is NOT
-        in `FUNNEL_DEFAULT_HIDDEN`, OR when the user has clicked
-        `[expand]` (`st.session_state["_funnel_expanded"] == True`) —
-        the latter is exercised in `TestT2DFunnelExpand`.
+        in `FUNNEL_DEFAULT_HIDDEN`, OR when
+        `st.session_state["_funnel_expanded"] == True` (set by clicking
+        the disclosure toggle) — the latter is exercised in
+        `TestT2DFunnelExpand` (collapsed → expanded half) and
+        `TestT6FunnelToggle` (expanded → collapsed half + round-trip).
       - A visible bucket with zero count renders as a zero-width bar
         so the chart shape stays stable as the pipeline fills up. This
         makes "no one applied yet" visually distinct from "bucket
@@ -1185,9 +1187,9 @@ class TestT2DFunnelExpand:
         assert len(buttons) == 1
         buttons[0].click().run()
         # AppTest captures callback exceptions on at.exception; assert it
-        # didn't fire so a broken _expand_funnel callback is visible
+        # didn't fire so a broken _toggle_funnel callback is visible
         # before the chart-presence assertion below.
-        assert not at.exception, f"[expand] click raised: {at.exception}"
+        assert not at.exception, f"Toggle click raised: {at.exception}"
         # Post-click: branch (c) with chart including all buckets.
         assert len(at.get("plotly_chart")) >= 1, (
             "Post-click from branch (b): chart must render."
