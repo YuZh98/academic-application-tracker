@@ -491,6 +491,58 @@ def test_invariant_9_fires_on_drift():
     )
 
 
+# ── UPCOMING_WINDOW_OPTIONS + invariant #10 (DESIGN §5.1, §5.2 #10) ───────────
+# T4-0b lock-down: the dashboard's Upcoming-panel selectbox offers a small
+# set of forward-looking windows (default [30, 60, 90]). The default
+# selection equals DEADLINE_ALERT_DAYS, which therefore must be a member
+# of the offered list — invariant #10 catches a config edit that drops
+# the default value from the options list.
+
+def test_upcoming_window_options_is_non_empty_int_list():
+    """DESIGN §5.1: UPCOMING_WINDOW_OPTIONS is the user-selectable widths
+    (in days) for the dashboard's Upcoming-panel selectbox. Must be a
+    non-empty list of positive ints — non-positive values would mean a
+    zero- or past-window which makes no sense for an 'upcoming' panel."""
+    assert isinstance(config.UPCOMING_WINDOW_OPTIONS, list)
+    assert len(config.UPCOMING_WINDOW_OPTIONS) > 0
+    assert all(
+        isinstance(v, int) and v > 0
+        for v in config.UPCOMING_WINDOW_OPTIONS
+    ), (
+        f"All entries must be positive ints; got "
+        f"{config.UPCOMING_WINDOW_OPTIONS!r}"
+    )
+
+
+def test_invariant_10_default_window_in_options():
+    """DESIGN §5.2 invariant #10: DEADLINE_ALERT_DAYS must be a member
+    of UPCOMING_WINDOW_OPTIONS — the panel's selectbox default uses
+    DEADLINE_ALERT_DAYS, so dropping it from the options list would
+    leave the default value unable to render. Positive-case assertion
+    that pairs with `test_invariant_10_fires_on_drift` below."""
+    assert config.DEADLINE_ALERT_DAYS in config.UPCOMING_WINDOW_OPTIONS, (
+        f"DEADLINE_ALERT_DAYS={config.DEADLINE_ALERT_DAYS} must appear in "
+        f"UPCOMING_WINDOW_OPTIONS={config.UPCOMING_WINDOW_OPTIONS!r}. "
+        f"The selectbox default uses DEADLINE_ALERT_DAYS — dropping it "
+        f"from the list would leave the default unable to render."
+    )
+
+
+def test_invariant_10_fires_on_drift():
+    """Replicate DESIGN §5.2 invariant #10 on a synthetic
+    UPCOMING_WINDOW_OPTIONS list that has dropped DEADLINE_ALERT_DAYS —
+    mirrors the test_invariant_*_fires_on_drift pattern (synthetic-drift,
+    no actual config reload)."""
+    broken_options = [
+        v for v in config.UPCOMING_WINDOW_OPTIONS
+        if v != config.DEADLINE_ALERT_DAYS
+    ]
+    assert config.DEADLINE_ALERT_DAYS not in broken_options, (
+        "Guard should fire: DEADLINE_ALERT_DAYS not in synthetic "
+        "broken_options (the entry was deliberately removed)"
+    )
+
+
 # ── Fresh import exercises every module-level assertion ──────────────────────
 
 def test_config_reimports_cleanly():
