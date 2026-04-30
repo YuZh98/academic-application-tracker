@@ -1288,3 +1288,311 @@ class TestApplicationsDetailCardSave:
             f"sid_before={sid_before!r}, after_failure="
             f"{_ss_or_none(at, EDIT_FORM_SID_KEY)!r}."
         )
+
+
+# ── Cascade-promotion toast (T2-B) ────────────────────────────────────────────
+
+class TestApplicationsCascadePromotionToast:
+    """T2-B: when ``database.upsert_application(propagate_status=True)``
+    returns ``status_changed=True``, the Save handler fires a SECOND
+    ``st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")`` after
+    the existing ``Saved "<name>"`` toast. DESIGN §9.3 names two
+    cascade rules R1 + R3 (R2 belongs to ``add_interview``, which is
+    T3 territory):
+
+      R1 — ``applied_date`` NULL → non-NULL on STATUS_SAVED →
+           STATUS_APPLIED
+      R3 — ``response_type == "Offer"`` on non-terminal status →
+           STATUS_OFFER
+
+    Both run inside the same DB transaction. status_changed compares
+    status STRINGS (so an Offer→Offer self-write reports no change).
+    Terminal guard on R3: positions in TERMINAL_STATUSES (CLOSED /
+    REJECTED / DECLINED) are NOT regressed by R3.
+
+    Tests source the expected promotion toast text through
+    ``config.STATUS_LABELS[<status>]`` rather than literal ``"Applied"``
+    / ``"Offer"`` strings — same convention as
+    ``test_card_header_uses_label_not_raw_status`` in the T2-A
+    detail-card render tests, so a future label rename surfaces here
+    as a clean test failure rather than a silent miss.
+    """
+
+    def _saved_toast_text(self, name: str) -> str:
+        """Build the canonical Saved-toast substring so tests don't
+        re-derive the format string."""
+        return f'Saved "{name}"'
+
+    def _promo_toast_text(self, raw_status: str) -> str:
+        """Build the canonical Promoted-toast substring sourced
+        through STATUS_LABELS — matches the page's format exactly."""
+        return f"Promoted to {config.STATUS_LABELS[raw_status]}"
+
+    def test_r1_only_promotes_saved_to_applied(self, db):
+        """R1 — STATUS_SAVED + applied_date NULL→non-NULL → STATUS_APPLIED.
+        Default filter is Active (excludes SAVED), so the test flips
+        the filter to All before selection so the SAVED row is
+        addressable."""
+        pid = database.add_position(make_position({"position_name": "R1Pos"}))
+        # add_position seeds STATUS_SAVED via the schema DEFAULT
+        # (config.STATUS_VALUES[0]) — no explicit update_position needed.
+
+        at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select("All")
+        at.run()
+        _select_row(at, 0)
+
+        at.session_state[W_APPLIED_DATE] = datetime.date(2026, 4, 18)
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        # Both toasts must be present.
+        assert any(self._saved_toast_text("R1Pos") in v for v in toast_values), (
+            f"Saved toast must fire on every successful save; "
+            f"got toasts={toast_values!r}."
+        )
+        expected_promo = self._promo_toast_text(config.STATUS_APPLIED)
+        assert any(expected_promo in v for v in toast_values), (
+            f"R1 cascade must fire promotion toast {expected_promo!r}; "
+            f"got toasts={toast_values!r}."
+        )
+        # And the position actually moved.
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED
+
+    def test_r3_only_promotes_applied_to_offer(self, db):
+        """R3 — response_type=Offer on non-terminal status (here
+        STATUS_APPLIED, with applied_date already set so R1 cannot
+        also fire) → STATUS_OFFER."""
+        pid = database.add_position(make_position({"position_name": "R3Pos"}))
+        # Pre-state: applied_date set + STATUS_APPLIED. Use
+        # propagate_status=False on this seeding upsert so we don't
+        # spuriously fire R1 / R3 during setup.
+        database.upsert_application(
+            pid, {"applied_date": "2026-04-15"}, propagate_status=False,
+        )
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Select "Offer" via the selectbox — the option list is
+        # [None, *RESPONSE_TYPES] in the page, so .select(...) takes
+        # the underlying value.
+        at.selectbox(key=W_RESPONSE_TYPE).select(config.RESPONSE_TYPE_OFFER)
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        assert any(self._saved_toast_text("R3Pos") in v for v in toast_values)
+        expected_promo = self._promo_toast_text(config.STATUS_OFFER)
+        assert any(expected_promo in v for v in toast_values), (
+            f"R3 cascade must fire promotion toast {expected_promo!r}; "
+            f"got toasts={toast_values!r}."
+        )
+        assert database.get_position(pid)["status"] == config.STATUS_OFFER
+
+    def test_r1_plus_r3_chained_promotes_saved_to_offer(self, db):
+        """R1 + R3 chained inside one transaction: STATUS_SAVED with
+        applied_date NULL→non-NULL AND response_type=Offer in the
+        SAME upsert call. Per the §9.3 per-state table, R1 fires
+        first (SAVED → APPLIED), R3 then fires (APPLIED → OFFER) —
+        post-state is OFFER. The test verifies BOTH the toast AND
+        the DB endpoint so a regression where R3 stalls on the
+        intermediate APPLIED state surfaces here (Sonnet plan-review
+        signal — the toast alone proves the endpoint, not the chain;
+        only the DB probe disambiguates 'R3 stalled' from 'R3
+        chained correctly')."""
+        pid = database.add_position(make_position({"position_name": "ChainPos"}))
+        # Default STATUS_SAVED post-add_position; no setup write.
+
+        at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select("All")
+        at.run()
+        _select_row(at, 0)
+
+        # Both R1 trigger (applied_date) AND R3 trigger (response_type)
+        # in the same form submit → one upsert_application call →
+        # one transaction → both cascades fire in §9.3 order.
+        at.session_state[W_APPLIED_DATE] = datetime.date(2026, 4, 18)
+        at.selectbox(key=W_RESPONSE_TYPE).select(config.RESPONSE_TYPE_OFFER)
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        # Final toast says OFFER (the post-state), not APPLIED (the
+        # intermediate). status_changed reports the pre→post diff —
+        # SAVED → OFFER → status_changed=True, new_status=OFFER.
+        expected_promo = self._promo_toast_text(config.STATUS_OFFER)
+        assert any(expected_promo in v for v in toast_values), (
+            f"R1+R3 chained must end at STATUS_OFFER (toast "
+            f"{expected_promo!r}); got toasts={toast_values!r}."
+        )
+        assert any(
+            self._promo_toast_text(config.STATUS_APPLIED) not in v
+            for v in toast_values
+        ), (
+            "Chained cascade must NOT surface an intermediate "
+            "'Promoted to Applied' toast — only the post-state."
+        )
+        # DB probe — proves R3 actually fired AFTER R1 (Sonnet
+        # signal). If R3 had stalled on STATUS_SAVED, the position
+        # would have ended at STATUS_APPLIED.
+        post_status = database.get_position(pid)["status"]
+        assert post_status == config.STATUS_OFFER, (
+            f"R1+R3 must land at STATUS_OFFER; got {post_status!r}. "
+            f"If APPLIED, R3 stalled on the intermediate state."
+        )
+
+    def test_terminal_guard_no_promotion_on_closed(self, db):
+        """R3 has a terminal guard:
+        ``WHERE status NOT IN TERMINAL_STATUSES``. Setting
+        response_type=Offer on a STATUS_CLOSED position must NOT
+        promote — but the Save itself MUST succeed (the application
+        row's response_type is updated; only the position's status
+        is preserved). Saved toast still fires; promotion toast does
+        not."""
+        pid = database.add_position(make_position({"position_name": "ClosedPos"}))
+        database.update_position(pid, {"status": config.STATUS_CLOSED})
+
+        at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select("All")
+        at.run()
+        _select_row(at, 0)
+
+        at.selectbox(key=W_RESPONSE_TYPE).select(config.RESPONSE_TYPE_OFFER)
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        # Saved toast fires (the Save itself succeeded).
+        assert any(
+            self._saved_toast_text("ClosedPos") in v for v in toast_values
+        ), (
+            f"Save on a CLOSED position must still fire the Saved "
+            f"toast (the application row was updated); got "
+            f"toasts={toast_values!r}."
+        )
+        # Promotion toast does NOT fire — terminal guard kicked in.
+        # Check against the Promoted prefix so any STATUS_LABELS
+        # value would be caught (defense against a future status
+        # rename).
+        assert not any("Promoted to" in v for v in toast_values), (
+            f"Terminal guard must suppress promotion toast on "
+            f"CLOSED → response_type=Offer; got toasts={toast_values!r}."
+        )
+        # DB probe — application row updated, but position status
+        # unchanged. Proves the Save persisted (the cascade is
+        # cosmetically suppressed, not the entire write).
+        assert database.get_application(pid)["response_type"] == config.RESPONSE_TYPE_OFFER
+        assert database.get_position(pid)["status"] == config.STATUS_CLOSED, (
+            "Terminal-status position must NOT be regressed by R3."
+        )
+
+
+# ── Cohesion sweep (T2-B) ─────────────────────────────────────────────────────
+
+class TestApplicationsCohesionSweep:
+    """T2-B cohesion bar: a small set of integration smoke tests
+    catching combination-level regressions that the per-feature tests
+    above don't. Per the 2026-04-30 Sonnet plan critique, the
+    `filter-narrowing keeps form values` combination is intentionally
+    OMITTED — the pre-seed gate `(sid != current OR key missing)`
+    means filter narrowing alone (which doesn't change pid or pop
+    widget keys) cannot corrupt pre-seeded values; the test would
+    just exercise Streamlit's session_state persistence, not page
+    code."""
+
+    @pytest.mark.parametrize("widget_key", [
+        W_APPLIED_DATE,
+        W_CONFIRMATION_DATE,
+        W_RESPONSE_DATE,
+        W_RESULT_NOTIFY_DATE,
+    ])
+    def test_null_date_field_preseeds_to_none(self, db, widget_key):
+        """All four ``st.date_input`` widgets pre-seed to ``None``
+        when the underlying DB cell is NULL. T2-A pinned the
+        applied_date and confirmation_date paths individually
+        (``test_preseed_applied_date_null``,
+        ``test_preseed_confirmation_received_zero``); the parametrize
+        here closes the cohesion gap on response_date and
+        result_notify_date too. ``_coerce_iso_to_date`` is the
+        load-bearing helper — without it, a malformed cell or NaN
+        would crash the page on ``date.fromisoformat``."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        # add_position auto-creates an applications row with every
+        # date column NULL — no upsert needed.
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        assert not at.exception, (
+            f"NULL pre-seed of {widget_key} must not raise; got "
+            f"exception={at.exception!r}."
+        )
+        v = at.session_state[widget_key]
+        assert v is None, (
+            f"NULL date cell must pre-seed widget {widget_key!r} as "
+            f"None; got {v!r} (type={type(v).__name__})."
+        )
+
+    def test_save_error_preserves_form_field_values(self, db, monkeypatch):
+        """Extends T2-A's ``test_save_db_failure_shows_error_no_toast``
+        (which asserts the sentinel survives) with a direct check on
+        the actual widget VALUES. T2-A's coverage proves the sentinel
+        survives — implying via the (sid_changed OR key missing)
+        pre-seed gate that the values stay — but doesn't directly
+        assert the user's dirty input is intact. This test closes
+        that loop: type something, fail the save, assert the form
+        still shows what the user typed so they can fix and retry."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Set distinguishable values across multiple widgets so we
+        # can verify ALL of them survive the failure (not just the
+        # one we typed last).
+        dirty_notes = "the save will fail"
+        dirty_applied = datetime.date(2026, 4, 18)
+        at.session_state[W_NOTES]        = dirty_notes
+        at.session_state[W_APPLIED_DATE] = dirty_applied
+        at.selectbox(key=W_RESPONSE_TYPE).select(config.RESPONSE_TYPE_OFFER)
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("simulated DB failure")
+        monkeypatch.setattr(database, "upsert_application", _boom)
+
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, (
+            f"Save failure must be caught (GUIDELINES §8 — no "
+            f"re-raise). Got exception={at.exception!r}."
+        )
+        # Every widget value the user typed must still be present
+        # after the failure rerun. Without this guarantee, a save
+        # error would silently wipe their work.
+        assert at.session_state[W_NOTES] == dirty_notes, (
+            f"Failed save must preserve text_area content; got "
+            f"{at.session_state[W_NOTES]!r}."
+        )
+        assert at.session_state[W_APPLIED_DATE] == dirty_applied, (
+            f"Failed save must preserve date_input content; got "
+            f"{at.session_state[W_APPLIED_DATE]!r}."
+        )
+        assert at.session_state[W_RESPONSE_TYPE] == config.RESPONSE_TYPE_OFFER, (
+            f"Failed save must preserve selectbox content; got "
+            f"{at.session_state[W_RESPONSE_TYPE]!r}."
+        )
