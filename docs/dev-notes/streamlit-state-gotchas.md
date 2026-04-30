@@ -299,6 +299,40 @@ refresh" immediately.
 
 ---
 
+## 15. AppTest `selectbox.options` is the protobuf string form, not the original Python type
+
+**Symptom:** a test that asserts
+`list(at.selectbox(key="x").options) == [30, 60, 90]` fails with
+`['30', '60', '90'] != [30, 60, 90]` even though the page passes the int
+list to `st.selectbox(options=[30, 60, 90], ...)`. Confusing because
+`at.selectbox(key="x").value` correctly returns the int `30`.
+
+**Cause:** Streamlit serializes selectbox options into the page protobuf as
+strings regardless of the original Python type. AppTest's `.options`
+attribute exposes that protobuf-serialized form; `.value` runs the
+round-trip back to the original type via the registered `format_func`,
+which is why the two attributes disagree about types.
+
+**Workaround:** compare against the stringified expected list, and cite the
+original list in the failure message for debug clarity:
+
+```python
+expected_strs = [str(v) for v in config.UPCOMING_WINDOW_OPTIONS]
+assert list(sb.options) == expected_strs, (
+    f"AppTest exposes selectbox options as strings; expected "
+    f"{expected_strs!r} (stringified config.UPCOMING_WINDOW_OPTIONS="
+    f"{config.UPCOMING_WINDOW_OPTIONS!r}). Got {list(sb.options)!r}"
+)
+```
+
+Trust `.value` for round-trip-correct type assertions
+(`assert sb.value == 30`); use `.options` only with awareness it returns
+strings. Discovered while writing
+`TestT4UpcomingTimeline::test_window_selector_offers_config_window_options`
+(Phase 4 T4-B, 2026-04-29).
+
+---
+
 ## When a new gotcha lands
 
 1. Reproduce it with an isolation probe (small throwaway script in `/tmp/`).
