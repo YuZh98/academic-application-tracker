@@ -138,7 +138,7 @@ DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
 
 Per **Q5 Option A**, build Applications page first.
 
-- [ ] **T1** Applications page shell (`pages/2_Applications.py`) —
+- [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
       `STATUS_SAVED + STATUS_CLOSED`, table view sorted by deadline
   - [x] T1-A `database.get_applications_table()` joined reader:
@@ -263,6 +263,37 @@ _(none)_
 
 ## Recently done
 
+- 2026-04-30 — **Phase 5 T1 Applications page shell complete** on
+  branch `feature/phase-5-tier1-ApplicationsPageShell`. Three
+  sub-tasks shipped via TDD three-commit cadence per sub-task
+  (9 commits total): T1-A `database.get_applications_table()`
+  joined reader (10-column projection over positions × applications;
+  sort `deadline_date ASC NULLS LAST, position_id ASC` with the
+  `position_id` tiebreaker pinned for selection survival across
+  reruns); T1-B page shell + filter (`set_page_config(layout="wide")`,
+  `st.title("Applications")`, status filter selectbox keyed
+  `apps_filter_status` with options
+  `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]` and default
+  `STATUS_FILTER_ACTIVE`); T1-C read-only table render with the
+  six wireframe columns (Position / Applied / Recs / Confirmation
+  / Response / Result), per-row `is_all_recs_submitted` glyph,
+  and an empty-state info message. New config constants +
+  invariant #12: `STATUS_FILTER_ACTIVE = "Active"`,
+  `STATUS_FILTER_ACTIVE_EXCLUDED = frozenset({STATUS_SAVED,
+  STATUS_CLOSED})`. **DESIGN §8.3 D-A amendment**: Confirmation
+  column folds the per-cell tooltip into inline cell text
+  (`—` / `✓ Mon D` / `✓ (no date)`) because Streamlit 1.56's
+  `st.dataframe` has no per-cell tooltip API; full resolution +
+  alternatives considered in `reviews/phase-5-tier1-review.md`.
+  33 new tests across `test_database.py` (8),
+  `test_config.py` (7), and `test_applications_page.py` (18 —
+  parametrize counts each row as a separate test); suite 553 →
+  586 green under both pytest gates. Boot smoke via Bash
+  `streamlit run` returned HTTP 200 on root + `/Applications`.
+- 2026-04-30 — **`v0.5.0` tagged** on `main` HEAD `c93dec0`
+  closing Phase 4 (Dashboard). Tag annotation lists the cohesion
+  smoke audit + bidirectional funnel disclosure toggle (T6
+  amendment) as the headline T6 deliverables.
 - 2026-04-30 — **Phase 4 T6 funnel disclosure-toggle polish complete**
   on branch `feature/phase-4-tier6-Cohesion`: replaced the pre-T6
   unidirectional `[expand]` button with a bidirectional disclosure
@@ -316,4 +347,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 4 T6 cohesion-smoke audit + funnel disclosure-toggle polish complete on branch `feature/phase-4-tier6-Cohesion`; full review doc + PR + tag `v0.5.0` next)_
+_Updated: 2026-04-30 (Phase 5 T1 Applications page shell complete on branch `feature/phase-5-tier1-ApplicationsPageShell`; suite 586 green under both pytest gates; review doc + PR + merge next)_
