@@ -1434,7 +1434,13 @@ class TestApplicationsCascadePromotionToast:
             f"R1+R3 chained must end at STATUS_OFFER (toast "
             f"{expected_promo!r}); got toasts={toast_values!r}."
         )
-        assert any(
+        # `all(... not in ...)` (NOT `any(... not in ...)`) — the `any`
+        # form is a tautology: it would pass whenever at least ONE toast
+        # lacks the substring (e.g. the Saved toast or the final Offer
+        # toast), which is true even when an intermediate "Promoted to
+        # Applied" IS present. `all` requires every toast to lack it,
+        # which is the actual no-intermediate-toast contract.
+        assert all(
             self._promo_toast_text(config.STATUS_APPLIED) not in v
             for v in toast_values
         ), (
