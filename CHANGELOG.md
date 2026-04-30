@@ -17,6 +17,62 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — Recommender Alerts panel on `app.py` (T5-A, branch `feature/phase-4-tier5-RecommenderAlerts`)
+
+Phase 4 T5-A: full-width Recommender Alerts panel rendered BELOW the
+Upcoming row on the dashboard (DESIGN §8.1). Surfaces every
+recommender whose letter is past `RECOMMENDER_ALERT_DAYS` of being
+asked and still has no `submitted_date`, grouped so each person
+appears in exactly one card.
+
+`app.py`:
+
+- Subheader `"Recommender Alerts"` renders in BOTH branches for
+  page-height stability (T2 / T3 / T4 precedent — without this, the
+  layout above shifts when the first owed letter lands).
+- Empty branch: `st.info("No pending recommender follow-ups.")`.
+- Populated branch: `database.get_pending_recommenders()` is grouped
+  by `recommender_name`. One `st.container(border=True)` per person;
+  each card body is a single `st.markdown` block:
+
+      **⚠ {Name}**
+      - {institute}: {position_name} (asked {N}d ago, due {Mon D})
+      - ...
+
+  Bare `{position_name}` when institute is empty (T4 Label
+  precedent — disambiguates same-titled postings at different orgs).
+  `due —` (em dash) for NULL deadline (mirrors `NEXT_INTERVIEW_EMPTY`).
+  `groupby(..., sort=False)` because `get_pending_recommenders()`
+  already orders by `recommender_name ASC, deadline_date ASC NULLS
+  LAST` — within-group bullet order is therefore deadline-asc and
+  across-group card order is alphabetical without any extra sort.
+- The DESIGN §8.4 D-C Compose-reminder-email button + LLM-prompts
+  expander deliberately stay OFF the dashboard — they live on the
+  Recommenders PAGE (Phase 5 T6).
+
+`tests/test_app_page.py`:
+
+- New `TestT5RecommenderAlerts` (15 tests) following the
+  class-constants pattern (`SUBHEADER`, `EMPTY_COPY`, `BORDER_SOURCE`,
+  `WARN_GLYPH`). Four groups:
+    A — subheader / layout (subheader present in both branches +
+        bordered-container source-grep with `count >= 2` so the
+        empty-DB hero's existing `st.container(border=True)` does
+        not vacuously satisfy the contract).
+    B — empty / populated branches (locked `EMPTY_COPY`; an
+        asked-today recommender stays in the empty branch since
+        `0d < RECOMMENDER_ALERT_DAYS`).
+    C — card content (bold warn-glyph header, T4 Label precedent
+        with bare-position fallback, "asked Nd ago" phrasing per
+        TASKS.md, due-date in `Mon D` form, em-dash for null
+        deadline).
+    D — grouping by `recommender_name` (one card per person
+        aggregating multiple positions; submitted letters absent
+        from the panel).
+
+Suite total 519 → 534 passing under both `pytest tests/ -q` and
+`pytest -W error::DeprecationWarning tests/ -q`.
+
 ### Fixed — Phase 4 T4 pre-merge polish (branch `feature/phase-4-tier4-UpcomingDeadline`)
 
 Skeptical pre-merge review of the T4-0 / T4-A / T4-B work landed in

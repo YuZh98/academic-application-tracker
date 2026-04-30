@@ -8,7 +8,7 @@
 #        [expand] toggle, 3-branch empty-state, columns wrap)    ✅ done
 #   T3 — materials readiness panel                              ✅ done
 #   T4 — upcoming timeline (full-width, dynamic window selector) ✅ done
-#   T5 — recommender alerts
+#   T5 — recommender alerts (cards grouped by recommender_name)  ✅ done
 
 from datetime import date
 
@@ -348,3 +348,69 @@ else:
             "Date": st.column_config.DateColumn(format="MMM D"),
         },
     )
+
+# ── Recommender Alerts (T5) ───────────────────────────────────────────────────
+# Full-width panel BELOW the Upcoming row. Surfaces every recommender whose
+# letter is past `RECOMMENDER_ALERT_DAYS` of being asked and still has no
+# `submitted_date`. DESIGN §8.1 + TASKS.md T5-A locked contract:
+#
+#   - Subheader 'Recommender Alerts' renders in BOTH branches for page-height
+#     stability (T2 / T3 / T4 precedent).
+#   - Empty branch: st.info("No pending recommender follow-ups.").
+#   - Populated branch: one st.container(border=True) per distinct
+#     recommender_name (groupby aggregates a person's multiple-letter cases
+#     into one card). Each card body is a single st.markdown call:
+#       **⚠ {Name}**
+#       - {institute}: {position_name} (asked {N}d ago, due {Mon D})
+#       - ...
+#     Bare {position_name} when institute is empty (T4 Label precedent);
+#     'due —' (em dash) for NULL deadline (mirrors NEXT_INTERVIEW_EMPTY).
+#
+# The Compose-reminder-email button + LLM-prompts expander (DESIGN §8.4 D-C)
+# live on the Recommenders PAGE (Phase 5 T6), NOT here — T5 only renders the
+# alert cards.
+st.subheader("Recommender Alerts")
+_pending_recs = database.get_pending_recommenders()
+if _pending_recs.empty:
+    st.info("No pending recommender follow-ups.")
+else:
+    _today = date.today()
+
+    def _format_label(institute: str | None, position_name: str) -> str:
+        """T4 Label precedent — '{institute}: {position_name}' when
+        institute is non-empty; bare position_name otherwise. _safe-str
+        coercion isn't needed here because get_pending_recommenders
+        already returns Python strings (or None) from the SQL projection;
+        pandas surfaces missing TEXT cells as None, which `or` treats as
+        falsy alongside empty string."""
+        if institute:
+            return f"{institute}: {position_name}"
+        return position_name
+
+    def _format_due(deadline_iso: str | None) -> str:
+        """Due-date in 'Mon D' form (T4 DateColumn precedent — no year,
+        since alerts surface near-future deadlines). Em-dash for NULL,
+        mirroring NEXT_INTERVIEW_EMPTY. pd.isna catches both None and
+        NaN-from-pandas (dev-notes gotcha #13)."""
+        if deadline_iso is None or pd.isna(deadline_iso) or deadline_iso == "":
+            return "—"
+        d = date.fromisoformat(deadline_iso)
+        return f"{d.strftime('%b')} {d.day}"
+
+    # Stable iteration order: get_pending_recommenders() already sorts by
+    # recommender_name ASC, deadline_date ASC NULLS LAST, so a plain groupby
+    # preserves both within-group order (deadline-asc) and across-group
+    # alphabetical order without any extra sort.
+    for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
+        with st.container(border=True):
+            _bullets = []
+            for _, _row in _group.iterrows():
+                _label = _format_label(_row["institute"], _row["position_name"])
+                _asked_iso = _row["asked_date"]
+                _days_ago = (_today - date.fromisoformat(_asked_iso)).days
+                _due = _format_due(_row["deadline_date"])
+                _bullets.append(
+                    f"- {_label} (asked {_days_ago}d ago, due {_due})"
+                )
+            _body = f"**⚠ {_name}**\n" + "\n".join(_bullets)
+            st.markdown(_body)
