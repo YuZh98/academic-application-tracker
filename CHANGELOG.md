@@ -17,6 +17,116 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — Cascade-promotion toast surfacing (Phase 5 T2-B, branch `feature/phase-5-tier2-ApplicationDetailCard`)
+
+Phase 5 Tier 2-B — the Applications-page Save handler now reads
+the upsert return value and surfaces R1 / R3 pipeline promotions
+as a second toast. The cascade machinery itself has been live in
+`database.py` since the v1.3 alignment (Sub-task 9 / DESIGN §9.3);
+T2-B closes the loop by making the pipeline-state change visible to
+the user the moment it happens.
+
+`pages/2_Applications.py`:
+
+- Save handler captures the dict returned by
+  `database.upsert_application(sid, fields, propagate_status=True)`.
+  When `result["status_changed"]` is True, a second toast fires
+  AFTER the existing `Saved "<name>"` toast:
+  ```python
+  if result["status_changed"]:
+      promo_label = config.STATUS_LABELS.get(
+          result["new_status"], result["new_status"]
+      )
+      st.toast(f"Promoted to {promo_label}.")
+  ```
+  Order is Saved-then-Promoted (chronological — Promoted is the
+  consequence of Save); the two toasts are separate rather than
+  merged because they're semantically distinct events
+  (persistence vs. pipeline state change), and merging would
+  force a conditional format string that future maintainers
+  would diverge on. Streamlit 1.56 queues toasts and shows them
+  in succession.
+
+- No defensive guard on `result["new_status"]`. The
+  `database.upsert_application` contract states
+  `status_changed=True ⇒ new_status non-None`; trusting the
+  contract means a future violation raises `KeyError` loudly
+  where the bug actually lives, rather than being silently
+  swallowed by an `and result.get("new_status")` check that
+  skips the toast. Decision recorded after the 2026-04-30
+  Sonnet plan critique flagged the defensive guard as
+  contradicting trust-the-contract discipline.
+
+- `STATUS_LABELS.get(..., raw)` passthrough is the project
+  status-display convention (matches the card header above and
+  the Opportunities-page edit-panel header per DESIGN §8.0).
+  The fallback is unreachable in practice given config
+  invariant #3 (`set(STATUS_VALUES) == set(STATUS_LABELS)`).
+
+- Inline comment near the fields-dict construction notes the
+  8-key invariant: every editable widget contributes one key,
+  so the empty-fields early-return path in `upsert_application`
+  is unreachable from this page. Future maintainers extending
+  the form should preserve that property so
+  `result["status_changed"]` stays meaningful.
+
+Tests — two new classes in `tests/test_applications_page.py`:
+
+- `TestApplicationsCascadePromotionToast` (4): pin all four
+  R1 / R3 paths from DESIGN §9.3.
+    - **R1-only** on STATUS_SAVED — `applied_date` NULL→non-NULL,
+      no Offer response → toast `f"Promoted to
+      {STATUS_LABELS[STATUS_APPLIED]}"` + DB row at STATUS_APPLIED.
+    - **R3-only** on STATUS_APPLIED (with `applied_date` already
+      set) — `response_type=Offer` → toast `f"Promoted to
+      {STATUS_LABELS[STATUS_OFFER]}"` + DB row at STATUS_OFFER.
+    - **R1 + R3 chained** from STATUS_SAVED — both triggers in
+      one Save → final state is STATUS_OFFER. The test asserts
+      the OFFER toast AND probes
+      `database.get_position(pid)["status"] == STATUS_OFFER` to
+      prove R3 actually ran AFTER R1 (without the DB probe the
+      toast alone is ambiguous between "R3 stalled on SAVED"
+      and "R3 chained correctly"). Sonnet plan-review signal.
+    - **Terminal guard** on STATUS_CLOSED — `response_type=Offer`
+      on a closed position fires NO promotion toast (the R3
+      guard `WHERE status NOT IN TERMINAL_STATUSES` blocks it),
+      but the Save itself still succeeds: the Saved toast fires,
+      the application row's response_type is updated, and the
+      position's status is preserved (no terminal regression).
+
+  Toast assertions source through `config.STATUS_LABELS[<status>]`
+  rather than literal `"Applied"` / `"Offer"` strings — same
+  convention as `test_card_header_uses_label_not_raw_status` from
+  T2-A, so a future label rename surfaces here as a clean
+  failure rather than a silent miss.
+
+- `TestApplicationsCohesionSweep` (5 with parametrize):
+    - **NaN-safe pre-seed** parametrized over all 4
+      `st.date_input` widgets. T2-A pinned `applied_date` and
+      `confirmation_date` individually; the parametrize closes
+      the cohesion gap on `response_date` and
+      `result_notify_date` so all four widgets get explicit
+      NULL-pre-seed coverage (the `_coerce_iso_to_date` helper
+      is the load-bearing piece — without it a malformed cell
+      would crash the page).
+    - **Save-error preserves form FIELD values** across
+      `text_area` + `date_input` + `selectbox`. Extends T2-A's
+      `test_save_db_failure_shows_error_no_toast` which checked
+      sentinel survival but not the actual widget values; this
+      test asserts the user's dirty input is intact across all
+      three widget types so they can fix and retry.
+
+  The originally-planned filter-narrowing-keeps-form-values
+  combination test was DROPPED per the Sonnet critique:
+  pre-seed gates on `(sid changed OR key missing)`, and filter
+  narrowing alone (which doesn't change pid or pop widget keys)
+  cannot corrupt pre-seeded values — the test would just
+  exercise Streamlit's `session_state` persistence, not page
+  code.
+
+Suite: 629 → 638 passed under both pytest gates. Sentinel grep
+clean for `pages/2_Applications.py`.
+
 ### Added — Application detail card + selection plumbing (Phase 5 T2-A, branch `feature/phase-5-tier2-ApplicationDetailCard`)
 
 Phase 5 Tier 2-A — selecting a row in the Applications table now
