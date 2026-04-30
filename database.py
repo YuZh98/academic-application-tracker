@@ -1262,7 +1262,7 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
                 axis=1,
             ),
             "kind":      "Deadline for application",
-            "status":    deadlines["status"].astype(str),
+            "status":    deadlines["status"],
             "urgency":   days_away_series.apply(_urgency_glyph),
         })
 
@@ -1293,7 +1293,7 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
                 axis=1,
             ),
             "kind":      merged["sequence"].apply(lambda n: f"Interview {n}"),
-            "status":    merged["status"].astype(str),
+            "status":    merged["status"],
             "urgency":   days_away_series.apply(_urgency_glyph),
         })
 
