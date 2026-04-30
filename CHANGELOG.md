@@ -17,6 +17,69 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — Upcoming timeline panel + window selector on `app.py` (T4-B, branch `feature/phase-4-tier4-UpcomingDeadline`)
+
+Phase 4 T4-B: full-width Upcoming panel rendered below the funnel /
+readiness `st.columns(2)` row on the dashboard (DESIGN §8.1).
+Consumes `database.get_upcoming(days=selected_window)` (T4-A) and is
+the dashboard's "what deadlines and interviews need my attention this
+window?" surface. Closes Phase 4 T4.
+
+`config.py`:
+
+- New constant `UPCOMING_WINDOW_OPTIONS: list[int] = [30, 60, 90]` —
+  the user-selectable widths for the Upcoming-panel selectbox.
+- New §5.2 invariant #10:
+  `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS`. Guards against a
+  config edit that drops 30 from the offered list without updating
+  the default — module won't load if violated.
+- `DEADLINE_ALERT_DAYS` doc comment reworded to call it the "default
+  Upcoming-panel window + upper edge of the 🟡 band" so its dual role
+  is explicit.
+
+`app.py`:
+
+- Panel layout: `st.columns([3, 1])` with the dynamic subheader on the
+  left and the window-width selectbox on the right. Defining
+  `selected_window` inside the right column first means the left
+  column can interpolate it into the subheader on the same render —
+  Python execution order is independent of visual placement (which is
+  determined by column index).
+- Selectbox: `key="upcoming_window"`, `options=UPCOMING_WINDOW_OPTIONS`,
+  default index pointing at `DEADLINE_ALERT_DAYS` (invariant #10
+  guarantees this value is in the list), `label_visibility="collapsed"`.
+- Subheader: `f"Upcoming (next {selected_window} days)"` — renders in
+  BOTH branches for page-height stability (T2/T3 precedent).
+- Empty branch: `st.info(f"No deadlines or interviews in the next
+  {selected_window} days.")` — empty copy tracks the user's choice.
+- Populated branch:
+    - Column rename T4-A's lowercase storage form → Title-Case display
+      headers (Date, Days left, Label, Kind, Status, Urgency).
+    - Status mapped via `STATUS_LABELS.get(raw, raw)` — `.get`'s default
+      keeps a stale value visible rather than producing NaN; matches
+      DESIGN §8.0's status-label convention.
+    - `st.dataframe(width="stretch", hide_index=True,
+      column_config={"Date": st.column_config.DateColumn(format="MMM D")})`.
+      The DateColumn moment.js format renders the underlying
+      `datetime.date` as 'Apr 24' (no year). Both kwargs and the
+      DateColumn format param verified against Streamlit 1.56's
+      signature via inspect probe before commit.
+- AppTest verification: `at.selectbox(key=...).set_value(60).run()`
+  chain triggers a rerun with the new value, confirming the
+  selectbox→`get_upcoming(days=...)` path drives subheader, empty
+  copy, and dataframe contents in sync.
+
+22 new tests pass (19 `TestT4UpcomingTimeline` + 3 invariant-#10
+tests). Suite total 497 → 519 passing under both `pytest -q` and
+`pytest -W error::DeprecationWarning -q`. Status-literal grep clean.
+
+A discovered AppTest 1.56 quirk is documented inline in the
+`test_window_selector_offers_config_window_options` test:
+`selectbox.options` returns the protobuf-serialized string form, while
+`.value` round-trips correctly to the original type. The assertion
+compares against the stringified config list with the original list
+shown in the failure message for debug clarity.
+
 ### Added — `database.get_upcoming` for unified upcoming feed (T4-A, branch `feature/phase-4-tier4-UpcomingDeadline`)
 
 Phase 4 T4-A: new public API surfacing the data behind the dashboard's

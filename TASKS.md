@@ -13,7 +13,7 @@ Per **Q1 Option B** from the 2026-04-27 v1 planning session, the
 existing T4/T5/T6 roadmap structure is preserved (no re-tiering).
 DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
 
-- [ ] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1 (locked T4-0 + T4-0b)
+- [x] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1 (locked T4-0 + T4-0b)
   - [x] T4-0 + T4-0b: lock §8.1 panel column contract — six columns
         `(date, days_left, label, kind, status, urgency)`; date as
         `datetime.date` for chronological sort; `days_left` phrased
@@ -30,18 +30,20 @@ DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
         above; both `days_left` and `urgency` derive from the same
         `days_away` int per row so the columns cannot drift; thresholds
         resolve at call time from config.
-  - [ ] T4-B render below the existing `st.columns(2)` row in `app.py`:
-        `st.columns([3, 1])` pair carrying the dynamic subheader on the
-        left and the `upcoming_window` selectbox on the right;
+  - [x] T4-B `app.py` panel: full-width below the funnel/readiness
+        `st.columns(2)` row; `st.columns([3, 1])` carries the dynamic
+        subheader (left) + `upcoming_window` selectbox (right);
         `st.dataframe(width="stretch", hide_index=True)` with display
         headers `(Date, Days left, Label, Kind, Status, Urgency)` —
-        Date rendered via `st.column_config.DateColumn` as 'MMM D';
-        Status via `STATUS_LABELS[raw]`; empty-state
-        `st.info(f"No deadlines or interviews in the next {selected_window} days.")`.
-        Add `config.UPCOMING_WINDOW_OPTIONS` and the §5.2 invariant #10.
-  - Tests: `tests/test_app_page.py::TestT4UpcomingTimeline` with class-
-    level `SUBHEADER` + `EMPTY_COPY` + `DISPLAY_COLUMNS` constants per
-    GUIDELINES §9.
+        Date rendered via `st.column_config.DateColumn(format="MMM D")`,
+        Status mapped via `STATUS_LABELS.get(raw, raw)`; empty-state
+        `f"No deadlines or interviews in the next {selected_window} days."`.
+        Adds `config.UPCOMING_WINDOW_OPTIONS = [30, 60, 90]` + §5.2
+        invariant #10.
+  - Tests: `tests/test_app_page.py::TestT4UpcomingTimeline` (19) with
+    class-level `SUBHEADER_DEFAULT` + `EMPTY_COPY_DEFAULT` +
+    `DISPLAY_COLUMNS` + `WINDOW_KEY` constants per GUIDELINES §9, plus
+    3 new `tests/test_config.py` invariant-#10 tests.
 - [ ] **T5** Recommender Alerts panel on `app.py` — DESIGN §8.1
   - [ ] T5-A: group `get_pending_recommenders()` by `recommender_name`;
         emit one `st.container(border=True)` per person with `⚠ {Name}`
