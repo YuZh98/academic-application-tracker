@@ -168,14 +168,25 @@ Per **Q5 Option A**, build Applications page first.
         13 new tests (7 in `test_config.py` + 6 in new
         `test_applications_page.py`); suite 561 → 574 under both
         pytest gates.
-  - [ ] T1-C Table render — `st.dataframe(width="stretch",
-        hide_index=True)` with display columns `Position / Applied
-        / Recs / Confirmation / Response / Result`; per-row
-        `is_all_recs_submitted`; empty-state `st.info`. Confirmation
-        column folds the per-cell tooltip into inline text
-        (DESIGN §8.3 D-A amendment — `st.dataframe` does not
-        support per-cell tooltips in Streamlit 1.56; resolution
-        documented in `reviews/phase-5-tier1-review.md`)
+  - [x] T1-C Table render — read-only `st.dataframe(width="stretch",
+        hide_index=True, key="apps_table")` with the six wireframe
+        columns `Position / Applied / Recs / Confirmation /
+        Response / Result` in display order; sort inherited from
+        `get_applications_table` (page does NOT re-sort). Filter
+        resolved at render time (Active → exclude
+        `STATUS_FILTER_ACTIVE_EXCLUDED`; All → no exclusion;
+        specific status → narrow). Per-row `is_all_recs_submitted`
+        glyph for the Recs column. Empty post-filter →
+        `st.info("No applications match the current filter.")`,
+        table suppressed. **DESIGN §8.3 D-A amendment**:
+        Confirmation column folds the per-cell tooltip into inline
+        cell text — three states (`—` / `✓ Mon D` / `✓ (no date)`)
+        — because Streamlit 1.56's `st.dataframe` has no per-cell
+        tooltip API; full resolution in
+        `reviews/phase-5-tier1-review.md`. 12 new tests in
+        `TestApplicationsPageTable` (parametrize counts each row
+        as a separate test); suite 574 → 586 under both pytest
+        gates.
 - [ ] **T2** Application detail card (Applied, Confirmation per DESIGN
       §8.3 D-A glyph + tooltip rules, Response, Result, Notes — all
       editable via `st.form`)
