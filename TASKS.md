@@ -67,8 +67,21 @@ DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
     layout, empty / populated branches, card content, grouping by
     recommender_name.
 - [ ] **T6** Phase 4 finish — pre-merge review + PR + tag `v0.5.0`
-  - [ ] Cross-panel cohesion smoke (manual browser at 1280 / 1440 /
-        1680 widths; screenshots to `docs/ui/screenshots/v0.5.0/`)
+  - [x] Cross-panel cohesion smoke — audit doc at
+        `reviews/phase-4-finish-cohesion-smoke.md`; verbatim AppTest
+        renders for both populated + empty DB pin every subheader,
+        KPI label, info-message, dataframe column, and recommender-
+        card markdown; six cohesion dimensions verified (subheader
+        rhythm, empty-state pattern, status-sentinel stripping,
+        label-format reuse, date-format reuse, layout hierarchy);
+        zero 🔴 / 🟠 + two 🟡 polish (wireframe ASCII drift; em-dash
+        literal-vs-constant) deferred. 1280 / 1440 / 1680 PNG
+        captures land in `docs/ui/screenshots/v0.5.0/` (with seed
+        snippet at `docs/ui/screenshots/v0.5.0/.seed-snippet.py`)
+        once the user runs them manually — preview-tool macOS
+        sandbox blocks headless capture on this setup; boot smoke
+        ran via Bash `streamlit run` (HTTP 200) + AppTest probes
+        (no exception on populated or empty DB).
   - [ ] `reviews/phase-4-finish-review.md` (Exec summary → Findings →
         Junior-engineer Q&A → Verdict, per GUIDELINES §10)
   - [ ] PR; address review nits inline; merge; tag `v0.5.0`
@@ -188,6 +201,16 @@ _(none)_
 
 ## Recently done
 
+- 2026-04-30 — **Phase 4 T6 cohesion-smoke audit complete** on branch
+  `feature/phase-4-tier6-Cohesion`: `reviews/phase-4-finish-cohesion-smoke.md`
+  pins six cohesion dimensions across the dashboard's five panels with
+  verbatim AppTest renders (populated + empty DB) as evidence; 535 tests
+  green under both pytest gates. Zero 🔴 / 🟠 + two 🟡 polish deferred.
+  Browser captures at 1280 / 1440 / 1680 land in
+  `docs/ui/screenshots/v0.5.0/` once the user runs them manually
+  (harness's macOS sandbox blocks headless screenshot via the preview
+  tool). T6 second + third checkboxes (full review doc + PR + tag
+  `v0.5.0`) still pending.
 - 2026-04-29 — **Phase 4 T5-A green** on branch
   `feature/phase-4-tier5-RecommenderAlerts`: Recommender Alerts panel
   wired below the Upcoming row. Subheader stable in both branches;
@@ -218,4 +241,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-29 (Phase 4 T5-A green on branch `feature/phase-4-tier5-RecommenderAlerts`; T6 next)_
+_Updated: 2026-04-30 (Phase 4 T6 cohesion-smoke audit complete on branch `feature/phase-4-tier6-Cohesion`; full review doc + PR + tag `v0.5.0` next)_
