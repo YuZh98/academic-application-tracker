@@ -155,10 +155,19 @@ Per **Q5 Option A**, build Applications page first.
         default `STATUS_FILTER_ACTIVE_EXCLUDED` filter on top
         (T1-B). 8 new tests in `TestGetApplicationsTable`; suite
         553 → 561 under both pytest gates.
-  - [ ] T1-B Page shell — `set_page_config`, `st.title`,
-        `STATUS_FILTER_ACTIVE` sentinel in `config.py` + invariant
-        #12, status filter selectbox with
-        `["Active", "All", *STATUS_VALUES]` options
+  - [x] T1-B Page shell + filter — `set_page_config(layout="wide")`,
+        `database.init_db()`, `st.title("Applications")`, and a
+        status filter selectbox keyed `apps_filter_status` whose
+        options are `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`
+        (default = `STATUS_FILTER_ACTIVE`, `format_func` =
+        `STATUS_LABELS.get(v, v)` for sentinel-safe identity
+        fallthrough). New config constants + invariant #12:
+        `STATUS_FILTER_ACTIVE = "Active"` and
+        `STATUS_FILTER_ACTIVE_EXCLUDED = frozenset({STATUS_SAVED,
+        STATUS_CLOSED})`; DESIGN §5.1 + §5.2 + §8.3 cross-referenced.
+        13 new tests (7 in `test_config.py` + 6 in new
+        `test_applications_page.py`); suite 561 → 574 under both
+        pytest gates.
   - [ ] T1-C Table render — `st.dataframe(width="stretch",
         hide_index=True)` with display columns `Position / Applied
         / Recs / Confirmation / Response / Result`; per-row
