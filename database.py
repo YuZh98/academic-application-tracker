@@ -1176,6 +1176,133 @@ def get_upcoming_interviews() -> pd.DataFrame:
     return df
 
 
+# ── get_upcoming (T4-A): unified upcoming feed ────────────────────────────────
+# Powers the dashboard's Upcoming panel (DESIGN §8.1). Thin projection layer
+# over get_upcoming_deadlines + get_upcoming_interviews — no new SQL.
+#
+# Column contract (locked in DESIGN §8.1 "Upcoming-panel column contract"):
+#   date       — datetime.date object (chronological column-header sort)
+#   days_left  — 'today' / 'in 1 day' / 'in N days'
+#   label      — '{institute}: {position_name}' or bare position_name fallback
+#   kind       — 'Deadline for application' or f'Interview {sequence}'
+#   status     — raw bracketed sentinel (UI mapping via STATUS_LABELS in T4-B)
+#   urgency    — '🔴' / '🟡' / ''
+#
+# `days_left` and `urgency` derive from the SAME `days_away` integer per row
+# so the two columns cannot drift — coherence is guaranteed by construction.
+
+_UPCOMING_COLUMNS: list[str] = [
+    "date", "days_left", "label", "kind", "status", "urgency",
+]
+
+
+def _days_left_label(days_away: int) -> str:
+    if days_away == 0:
+        return "today"
+    if days_away == 1:
+        return "in 1 day"
+    return f"in {days_away} days"
+
+
+def _urgency_glyph(days_away: int) -> str:
+    if days_away <= config.DEADLINE_URGENT_DAYS:
+        return "🔴"
+    if days_away <= config.DEADLINE_ALERT_DAYS:
+        return "🟡"
+    return ""
+
+
+def _label_for(institute: Any, position_name: str) -> str:
+    # institute is nullable; pandas may surface None / NaN / "" depending on
+    # round-trip. pd.isna catches None and NaN; the strip() check catches
+    # whitespace-only strings. Falling back to bare position_name when any
+    # of these holds avoids a "broken-looking" "<empty>: name" rendering.
+    if pd.isna(institute) or str(institute).strip() == "":
+        return position_name
+    return f"{institute}: {position_name}"
+
+
+def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
+    """Return the merged upcoming feed (deadlines + interviews) within
+    the next `days` days, projected to the six-column DESIGN §8.1
+    contract and sorted by date ascending.
+
+    Column contract — see `_UPCOMING_COLUMNS` and the module-level
+    comment above. Both `days_left` and `urgency` are derived once
+    per row from the same `days_away` int so the two columns cannot
+    drift; thresholds for the urgency band resolve at call time from
+    config so a runtime tweak is honoured without restart.
+
+    Implementation notes:
+      - get_upcoming_interviews has no built-in days bound;
+        get_upcoming applies one (`scheduled_date <= today + days`)
+        so DESIGN §8.1's 'next N days' contract holds for both kinds.
+      - Interview rows don't carry `status` from the underlying
+        query; enrichment is a left-merge with get_all_positions on
+        position_id, trimmed to id + status to keep the projection
+        clean.
+      - Sort is stable: within a tied date the per-helper ordering
+        survives (deadlines before interviews — implicit, not pinned
+        by tests)."""
+    today      = date.today()
+    cutoff_iso = (today + timedelta(days=days)).isoformat()
+
+    # ── Deadlines half ────────────────────────────────────────────────────
+    deadlines = get_upcoming_deadlines(days)
+    if deadlines.empty:
+        deadlines_proj = pd.DataFrame(columns=_UPCOMING_COLUMNS)
+    else:
+        date_series      = pd.to_datetime(deadlines["deadline_date"]).dt.date
+        days_away_series = date_series.apply(lambda d: (d - today).days)
+        deadlines_proj = pd.DataFrame({
+            "date":      date_series,
+            "days_left": days_away_series.apply(_days_left_label),
+            "label":     deadlines.apply(
+                lambda r: _label_for(r["institute"], r["position_name"]),
+                axis=1,
+            ),
+            "kind":      "Deadline for application",
+            "status":    deadlines["status"],
+            "urgency":   days_away_series.apply(_urgency_glyph),
+        })
+
+    # ── Interviews half ───────────────────────────────────────────────────
+    # Apply the days bound here (the helper itself doesn't bound) so the
+    # 'next N days' contract holds for both kinds.
+    interviews = get_upcoming_interviews()
+    if not interviews.empty:
+        interviews = interviews[interviews["scheduled_date"] <= cutoff_iso]
+
+    if interviews.empty:
+        interviews_proj = pd.DataFrame(columns=_UPCOMING_COLUMNS)
+    else:
+        # status is not part of get_upcoming_interviews' contract — enrich
+        # via the positions table. Trim to id + status so the merge doesn't
+        # pollute the projection with stray fields.
+        positions = get_all_positions()[["id", "status"]].rename(
+            columns={"id": "position_id"}
+        )
+        merged = interviews.merge(positions, on="position_id", how="left")
+        date_series      = pd.to_datetime(merged["scheduled_date"]).dt.date
+        days_away_series = date_series.apply(lambda d: (d - today).days)
+        interviews_proj = pd.DataFrame({
+            "date":      date_series,
+            "days_left": days_away_series.apply(_days_left_label),
+            "label":     merged.apply(
+                lambda r: _label_for(r["institute"], r["position_name"]),
+                axis=1,
+            ),
+            "kind":      merged["sequence"].apply(lambda n: f"Interview {n}"),
+            "status":    merged["status"],
+            "urgency":   days_away_series.apply(_urgency_glyph),
+        })
+
+    combined = pd.concat(
+        [deadlines_proj, interviews_proj], ignore_index=True
+    )
+    return combined.sort_values(by="date", kind="stable").reset_index(drop=True)
+
+
 def get_pending_recommenders(days: int = config.RECOMMENDER_ALERT_DAYS) -> pd.DataFrame:
     """Return recommender rows where asked_date was >= `days` ago and
     submitted_date IS NULL, joined with position_name and deadline_date."""

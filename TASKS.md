@@ -13,22 +13,37 @@ Per **Q1 Option B** from the 2026-04-27 v1 planning session, the
 existing T4/T5/T6 roadmap structure is preserved (no re-tiering).
 DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
 
-- [ ] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1
-  - [ ] T4-A `database.get_upcoming(days=DEADLINE_ALERT_DAYS)`: merges
-        `get_upcoming_deadlines(days)` + `get_upcoming_interviews()`
-        into one date-keyed DataFrame with columns
-        `(date, label, kind, urgency, status)`;
-        `kind ∈ {"deadline", "interview"}`; urgency derived from
-        days-away vs `DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS`;
-        sorted by date asc.
-  - [ ] T4-B render below the existing `st.columns(2)` row in `app.py`:
-        `st.subheader("Upcoming")` (renders in both empty and non-empty
-        branches for page-height stability), `st.dataframe(width="stretch")`,
-        columns `(Date, Label, Kind, Urgency)`; Status via
-        `STATUS_LABELS[raw]`; empty-state
-        `st.info("No deadlines or interviews in the next {DEADLINE_ALERT_DAYS} days.")`.
-  - Tests: `tests/test_app_page.py::TestT4UpcomingTimeline` with class-
-    level `SUBHEADER` + `EMPTY_COPY` constants per GUIDELINES §9.
+- [x] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1 (locked T4-0 + T4-0b)
+  - [x] T4-0 + T4-0b: lock §8.1 panel column contract — six columns
+        `(date, days_left, label, kind, status, urgency)`; date as
+        `datetime.date` for chronological sort; `days_left` phrased
+        `"today"` / `"in 1 day"` / `"in N days"`; Label as
+        `"{institute}: {position_name}"`; Kind as
+        `"Deadline for application"` / `f"Interview {sequence}"`;
+        window selector via `st.selectbox(UPCOMING_WINDOW_OPTIONS)`
+        with default `DEADLINE_ALERT_DAYS` and dynamic subheader
+        `f"Upcoming (next {selected_window} days)"`. New config invariant
+        #10: `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS`.
+  - [x] T4-A `database.get_upcoming(days=DEADLINE_ALERT_DAYS)`: thin
+        projection over `get_upcoming_deadlines(days)` +
+        `get_upcoming_interviews()` returning the six-column shape
+        above; both `days_left` and `urgency` derive from the same
+        `days_away` int per row so the columns cannot drift; thresholds
+        resolve at call time from config.
+  - [x] T4-B `app.py` panel: full-width below the funnel/readiness
+        `st.columns(2)` row; `st.columns([3, 1])` carries the dynamic
+        subheader (left) + `upcoming_window` selectbox (right);
+        `st.dataframe(width="stretch", hide_index=True)` with display
+        headers `(Date, Days left, Label, Kind, Status, Urgency)` —
+        Date rendered via `st.column_config.DateColumn(format="MMM D")`,
+        Status mapped via `STATUS_LABELS.get(raw, raw)`; empty-state
+        `f"No deadlines or interviews in the next {selected_window} days."`.
+        Adds `config.UPCOMING_WINDOW_OPTIONS = [30, 60, 90]` + §5.2
+        invariant #10.
+  - Tests: `tests/test_app_page.py::TestT4UpcomingTimeline` (19) with
+    class-level `SUBHEADER_DEFAULT` + `EMPTY_COPY_DEFAULT` +
+    `DISPLAY_COLUMNS` + `WINDOW_KEY` constants per GUIDELINES §9, plus
+    3 new `tests/test_config.py` invariant-#10 tests.
 - [ ] **T5** Recommender Alerts panel on `app.py` — DESIGN §8.1
   - [ ] T5-A: group `get_pending_recommenders()` by `recommender_name`;
         emit one `st.container(border=True)` per person with `⚠ {Name}`
