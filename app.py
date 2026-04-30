@@ -412,5 +412,5 @@ else:
                 _bullets.append(
                     f"- {_label} (asked {_days_ago}d ago, due {_due})"
                 )
-            _body = "**⚠ " + str(_name) + "**\n" + "\n".join(_bullets)
+            _body = f"**⚠ {_name}**\n" + "\n".join(_bullets)
             st.markdown(_body)
