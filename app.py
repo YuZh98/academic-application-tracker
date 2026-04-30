@@ -5,10 +5,12 @@
 # is layered in over several tiers (see PHASE_4_GUIDELINES.md):
 #   T1 — app shell + 4 KPI cards + empty-DB hero                ✅ done
 #   T2 — application funnel (Plotly bar, FUNNEL_BUCKETS aggregation,
-#        [expand] toggle, 3-branch empty-state, columns wrap)    ✅ done
+#        bidirectional disclosure toggle, 3-branch empty-state)   ✅ done
 #   T3 — materials readiness panel                              ✅ done
 #   T4 — upcoming timeline (full-width, dynamic window selector) ✅ done
 #   T5 — recommender alerts (cards grouped by recommender_name)  ✅ done
+#   T6 — disclosure-toggle polish (bidirectional, tertiary, subheader-
+#        row inline placement) — DESIGN §8.1 T6 amendment        ✅ done
 
 from datetime import date
 
@@ -150,7 +152,7 @@ with c4:
 _left_col, _right_col = st.columns(2)
 
 with _left_col:
-    # ── Application Funnel (T2-A + T2-B + T2-D) ───────────────────────────────
+    # ── Application Funnel (T2-A + T2-B + T2-D + T6 disclosure-toggle) ────────
     # Plotly horizontal bar driven by config.FUNNEL_BUCKETS. One bar per
     # VISIBLE bucket in list display order; the y-axis is reversed so the
     # pipeline reads top-down (first bucket at the top). Bar counts sum
@@ -164,31 +166,54 @@ with _left_col:
     #
     # Visibility follows DESIGN §8.1 "Funnel visibility rules":
     #   - Default-visible: buckets whose label is NOT in FUNNEL_DEFAULT_HIDDEN.
-    #   - After `[expand]`: every bucket is visible for the session.
+    #   - When the user has clicked the disclosure toggle and
+    #     st.session_state["_funnel_expanded"] is True: every bucket is
+    #     visible for the current session (until they click again to
+    #     collapse).
     #   State flag: st.session_state["_funnel_expanded"] — False by default.
     #
+    # Disclosure toggle (T6 amendment, DESIGN §8.1):
+    #   - Single `st.button(type="tertiary")` placed in the funnel
+    #     subheader row via `st.columns([3, 1])` (subheader left, toggle
+    #     right) — same idiom as the Upcoming panel's window selector.
+    #   - Bidirectional: clicking from collapsed → expand; clicking from
+    #     expanded → collapse. Solves the pre-T6 dead-end where
+    #     `[expand]` had no companion `[collapse]` and the only way back
+    #     to the focused view was a fresh session.
+    #   - Label sourced from config.FUNNEL_TOGGLE_LABELS keyed by the
+    #     state flag — describes what the click WILL do, not the
+    #     current state.
+    #   - Suppressed in branch (a) (nothing to disclose into) and when
+    #     FUNNEL_DEFAULT_HIDDEN is empty (no buckets to hide). Otherwise
+    #     the toggle persists across collapsed/expanded states so the
+    #     user always has a return path.
+    #
     # Three empty-state branches, evaluated in order (DESIGN §8.1):
-    #   (a) total == 0 (no positions at all): info + NO [expand] button —
-    #       nothing to expand into.
+    #   (a) total == 0 (no positions at all): info, NO toggle, bare
+    #       subheader (no [3,1] split — nothing to dock in the right slot).
     #   (b) total > 0, not expanded, every non-hidden bucket is zero:
-    #       info pointing at the [expand] recovery path + [expand] button.
-    #       Terminal-only DBs land here (all data in Closed + Archived).
-    #   (c) otherwise: render chart; [expand] button below whenever
-    #       FUNNEL_DEFAULT_HIDDEN is non-empty AND not yet expanded.
+    #       info pointing at the toggle by LABEL ("Click 'Show all stages'
+    #       to reveal them.") + toggle in the subheader row. Terminal-only
+    #       DBs land here.
+    #   (c) otherwise: render chart; toggle in the subheader row whenever
+    #       FUNNEL_DEFAULT_HIDDEN is non-empty (in BOTH collapsed and
+    #       expanded states — see toggle bullet above).
     # Subheader renders in ALL three branches for page-height stability.
-    st.subheader("Application Funnel")
 
     # Initialize the session flag once per session via setdefault so tests
     # (and the first render) see the canonical False rather than a KeyError.
     st.session_state.setdefault("_funnel_expanded", False)
     _funnel_expanded = st.session_state["_funnel_expanded"]
 
-    def _expand_funnel() -> None:
-        """on_click callback — flips the flag BEFORE the next rerun so the
-        funnel branches evaluate with expanded=True in the very same rerun
-        (a plain `if st.button(): set state; st.rerun()` would need an
-        extra pass and risks briefly drawing the old chart)."""
-        st.session_state["_funnel_expanded"] = True
+    def _toggle_funnel() -> None:
+        """on_click callback — flips the flag BEFORE the next rerun so
+        the funnel branches evaluate with the new value in the very
+        same rerun (a plain `if st.button(): set state; st.rerun()`
+        would need an extra pass and risks briefly drawing the old
+        chart). Bidirectional: True ↔ False on each click."""
+        st.session_state["_funnel_expanded"] = (
+            not st.session_state["_funnel_expanded"]
+        )
 
     # Per-bucket aggregated counts. A sparse-dict lookup (count_by_status
     # omits zero-count statuses) is fine — missing raws contribute 0.
@@ -210,16 +235,45 @@ with _left_col:
         if label not in config.FUNNEL_DEFAULT_HIDDEN
     )
 
+    # Toggle visibility predicate. Branch (a) is the only branch that
+    # suppresses the toggle entirely (see comment block above); a
+    # FUNNEL_DEFAULT_HIDDEN-empty config also suppresses it (nothing to
+    # disclose, even when data is present). Computed before the branch
+    # if/elif so the subheader-row layout uses one consistent rule.
+    _show_funnel_toggle = (_total > 0) and bool(config.FUNNEL_DEFAULT_HIDDEN)
+
+    if _show_funnel_toggle:
+        # Branches (b) and (c): subheader-row layout with toggle on the right.
+        # Mirrors the T4 Upcoming-panel idiom for chart-with-controls panels.
+        _funnel_header_col, _funnel_toggle_col = st.columns([3, 1])
+        with _funnel_header_col:
+            st.subheader("Application Funnel")
+        with _funnel_toggle_col:
+            st.button(
+                config.FUNNEL_TOGGLE_LABELS[_funnel_expanded],
+                key="funnel_toggle",
+                on_click=_toggle_funnel,
+                type="tertiary",
+            )
+    else:
+        # Branch (a) (or a hypothetical FUNNEL_DEFAULT_HIDDEN-empty
+        # config): bare subheader, no [3,1] split — leaving the right
+        # slot empty would render an awkward dead column.
+        st.subheader("Application Funnel")
+
     if _total == 0:
-        # Branch (a): no data anywhere — nothing to expand into.
+        # Branch (a): no data anywhere — nothing to disclose into.
         st.info("Application funnel will appear once you've added positions.")
     elif (not _funnel_expanded) and _all_visible_buckets_zero:
         # Branch (b): data exists but all of it sits in hidden buckets.
+        # Info copy points at the toggle by LABEL (not by spatial
+        # direction "above" / "below") — DESIGN §8.1 T6 amendment — so
+        # the copy stays correct regardless of where the toggle sits
+        # relative to the info block.
         st.info(
             "All your positions are in hidden buckets. "
-            "Click [expand] below to reveal them."
+            "Click 'Show all stages' to reveal them."
         )
-        st.button("[expand]", key="funnel_expand", on_click=_expand_funnel)
     else:
         # Branch (c): render the chart.
         _visible_buckets = [
@@ -242,15 +296,9 @@ with _left_col:
         # top-down — same reasoning as pre-Sub-task-12, just bucket-scoped).
         _funnel_fig.update_yaxes(autorange="reversed")
         st.plotly_chart(_funnel_fig, key="funnel_chart")
-
-        # [expand] button renders below the chart iff FUNNEL_DEFAULT_HIDDEN
-        # is non-empty AND we haven't expanded yet (DESIGN §8.1).
-        if config.FUNNEL_DEFAULT_HIDDEN and not _funnel_expanded:
-            st.button(
-                "[expand]",
-                key="funnel_expand",
-                on_click=_expand_funnel,
-            )
+        # The toggle has already been rendered above in the subheader row
+        # (whenever `_show_funnel_toggle` is True); branch (c) does not
+        # render its own button — that's the post-T6 placement contract.
 
 with _right_col:
     # ── Materials Readiness (T3) ──────────────────────────────────────────────

@@ -1578,15 +1578,26 @@ class TestT6FunnelToggle:
         `Button.type` reports the widget class name, not the
         Streamlit `type=` keyword (dev-notes gotcha #9). The assertion
         is structural: the only `type="tertiary"` button on the
-        dashboard is the funnel toggle, so an exact-count grep is
-        a precise pin."""
+        dashboard is the funnel toggle, so an exact-count grep on
+        executable code is a precise pin.
+
+        Comment-only lines are stripped before counting — same
+        carve-out as C.1 — so descriptive comments that quote
+        `type="tertiary"` (e.g. the section header explaining the
+        toggle) don't double-count."""
         src = self._read_app_source()
-        count = src.count('type="tertiary"')
+        code_lines = [
+            line for line in src.splitlines()
+            if not line.lstrip().startswith("#")
+        ]
+        code = "\n".join(code_lines)
+        count = code.count('type="tertiary"')
         assert count == 1, (
             f"DESIGN §8.1 T6 amendment: funnel toggle must be the only "
             f"`type=\"tertiary\"` button on app.py (a tertiary CTA "
             f"elsewhere would break the disclosure-affordance contract). "
-            f"Expected exactly 1 occurrence; found {count}."
+            f"Expected exactly 1 executable-code occurrence; found "
+            f"{count}. Comment-only lines were filtered before counting."
         )
 
     # ── Group D: empty-state matrix (re-pin under new contract) ───────────
