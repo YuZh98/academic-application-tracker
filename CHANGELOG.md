@@ -17,6 +17,125 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — Application detail card + selection plumbing (Phase 5 T2-A, branch `feature/phase-5-tier2-ApplicationDetailCard`)
+
+Phase 5 Tier 2-A — selecting a row in the Applications table now
+reveals an editable detail card below the table. DESIGN §8.3 + the
+wireframe call out the card's contents (Applied / Confirmation /
+Response / Result / Notes — all editable via `st.form`); T2-A ships
+the full surface minus the cascade-promotion toast, which lands in
+T2-B. Two-sub-task split (was three before the 2026-04-30 multi-agent
+plan critique) — the original "selection plumbing alone" sub-task
+would have shipped a placeholder UI surface deleted by the next
+commit, so plumbing + form + save merged into a single sub-task.
+
+`pages/2_Applications.py`:
+
+- **Selectable table.** `apps_table` carries `on_select="rerun"`,
+  `selection_mode="single-row"`, and a `column_config` block locking
+  per-column widths (Position large; Confirmation medium; the rest
+  small) so the six-column selectable table doesn't collapse to
+  equal-width cells. AppTest cannot see `column_config` (gotcha #15
+  — protobuf serializes data, not construction kwargs), so the
+  width contract is pinned at source level via
+  `TestApplicationsTableColumnConfig`.
+- **Selection resolution.** Mirror of Opportunities §8.2:
+  `event.selection.rows[0]` → `applications_selected_position_id`
+  when present; the elif branch consumes the
+  `_applications_skip_table_reset` one-shot when the dataframe
+  event resets across the post-Save rerun (gotcha #11); the else
+  branch pops both the selection key and the form-id sentinel
+  when the user clicks away. **Asymmetry vs. Opportunities §8.2**
+  at the empty-filter site: when `df_filtered.empty`, the page
+  does NOT pop selection — the detail card resolves against the
+  unfiltered `df`, so a filter narrowing that excludes the
+  selected row keeps the in-progress edit visible (DESIGN §8.3
+  applies the unfiltered-`df` rule at the input layer).
+- **Detail card.** Renders only when
+  `applications_selected_position_id` is set + the row resolves in
+  the unfiltered `df`. Wrapped in `st.container(border=True)`,
+  architected to accept T3's sibling `apps_interviews_form`
+  (DESIGN §8.3 D-B). Inside:
+    - Header `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`
+      via `_format_label` + `STATUS_LABELS.get(..., raw)` passthrough
+      (matches Opportunities §8.2 edit-panel header). The wireframe
+      shows just the position name; DESIGN §8.3 status-shows-`STATUS_LABELS`
+      rule overrides — the wireframe sketch is approximate.
+    - Inline `All recs submitted: ✓ / —` line via
+      `database.is_all_recs_submitted` (vacuous-true for zero recs,
+      D23) — same glyph pair as the table's Recs column.
+    - Pre-seed gates on `_applications_edit_form_sid` sentinel
+      (gotcha #2). `r` (from `get_applications_table`) carries the
+      position-side fields for the header; the form's editable
+      application fields come from a separate
+      `database.get_application(sid)` read since T1-A's 10-column
+      projection contract doesn't cover `response_date` /
+      `result_notify_date` / `notes`.
+    - `st.form("apps_detail_form")` with 8 widgets: `apps_applied_date`
+      (`date_input(value=None)`), `apps_confirmation_received`
+      (`checkbox`), `apps_confirmation_date`, `apps_response_type`
+      (`selectbox([None, *RESPONSE_TYPES])` with `format_func`
+      rendering None as `—`), `apps_response_date`, `apps_result`
+      (`selectbox(RESULT_VALUES)`), `apps_result_notify_date`,
+      `apps_notes` (`text_area`). Submit button keyed
+      `apps_detail_submit`. Form id ends in `_form` per gotcha #4.
+    - Save handler builds the upsert payload (date inputs
+      round-trip via `.isoformat() if d else None`; checkbox via
+      `int(...)`), calls
+      `database.upsert_application(sid, fields, propagate_status=True)`,
+      sets `_applications_skip_table_reset=True` (defense vs.
+      gotcha #11 in real-browser reruns), pops the form-id
+      sentinel so the post-rerun pre-seed re-fires with fresh DB
+      values, `st.toast(f'Saved "<name>".')`, `st.rerun()`.
+      Failure path → `st.error(...)` with no re-raise (GUIDELINES §8);
+      sentinel survives so the user's dirty form input is preserved
+      for retry.
+- **New helper** `_coerce_iso_to_date(v)` — mirror of the
+  Opportunities-page F5 fix: a malformed ISO cell would crash
+  `date.fromisoformat`; the helper swallows `ValueError` and
+  returns None so the date_input renders empty.
+
+**Naming locked** (per user direction 2026-04-30): widget keys keep
+the existing `apps_*` prefix (GUIDELINES §13 — already-shipped
+contract); internal sentinels use the long-form `_applications_*`
+prefix to avoid confusion with `app.py` / dashboard sentinels;
+selection state is `applications_selected_position_id` (no leading
+`_` — it's selection data, not a sentinel).
+
+Tests — five new classes in `tests/test_applications_page.py`:
+
+- `TestApplicationsTableColumnConfig` (2): source-grep — column_config
+  block present + Position width=large.
+- `TestApplicationsTableSelection` (4): row select captures
+  `applications_selected_position_id`; deselect clears it;
+  `_applications_skip_table_reset` one-shot preserves selection
+  across rerun and is consumed; filter narrowing that excludes
+  the selected row PRESERVES the selection.
+- `TestApplicationsDetailCardRender` (6): no card without selection;
+  card header includes institute · position · STATUS_LABELS[raw]
+  (NOT raw bracketed sentinel); inline "All recs submitted" line
+  emits ✓ when all submitted, — when some pending, ✓ vacuous-true
+  for zero recs.
+- `TestApplicationsDetailCardForm` (18 with parametrize): form id =
+  `apps_detail_form` (source-grep); 8 widgets render after row
+  select; pre-seed correctness across NULL / value / NaN-from-NULL
+  cases; sentinel set after pre-seed; row change forces full
+  re-seed.
+- `TestApplicationsDetailCardSave` (13 with parametrize): per-widget
+  save persists each editable field via `upsert_application`
+  (`propagate_status=True`); `st.toast("Saved …")` fires on
+  success; selection preserved post-Save (the
+  `_applications_skip_table_reset` flag's full life cycle is
+  not directly observable in AppTest because injected selection
+  state persists across reruns — covered by integration assertion
+  + source-grep on the flag-set assignment); DB-failure path
+  surfaces `st.error`, no toast, sentinel stays set.
+
+Suite: 586 (main) → 629 passed under both pytest gates. Sentinel
+grep clean for `pages/2_Applications.py` — vocabulary flows
+through `config.STATUS_LABELS`, `config.RESPONSE_TYPES`,
+`config.RESULT_VALUES`, `config.RESULT_DEFAULT`.
+
 ### Added — Applications page shell + filter + read-only table (Phase 5 T1, branch `feature/phase-5-tier1-ApplicationsPageShell`)
 
 Phase 5 Tier 1 — first contact between users and the Applications

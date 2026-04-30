@@ -10,10 +10,15 @@ _Scope: software for this application tracker only. Older completions move to
 Per **Q5 Option A** from the 2026-04-27 v1 planning session, build
 Applications page first.
 
-Branch (T1): `feature/phase-5-tier1-ApplicationsPageShell` (PR pending —
-all three sub-tasks complete; pre-merge review at
+Branch (T1): merged via PR #15 (`aebbb8b`); pre-merge review at
 [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md);
-suite 553 → 586 green under both pytest gates).
+suite 553 → 586 green under both pytest gates.
+
+Branch (T2): `feature/phase-5-tier2-ApplicationDetailCard` —
+T2-A green, T2-B pending. Per the 2026-04-30 multi-agent plan critique,
+T2 is split into 2 sub-tasks (was 3) since the original "selection
+plumbing alone" sub-task would have shipped a placeholder UI surface
+deleted by the next commit.
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -68,6 +73,64 @@ suite 553 → 586 green under both pytest gates).
 - [ ] **T2** Application detail card (Applied, Confirmation per DESIGN
       §8.3 D-A glyph + tooltip rules, Response, Result, Notes — all
       editable via `st.form`)
+  - [x] T2-A Selection plumbing + editable detail card. Convert
+        `apps_table` to selectable (`on_select="rerun"`,
+        `selection_mode="single-row"`); add `column_config` widths
+        (Position large, Confirmation medium, others small —
+        AppTest-invisible per gotcha #15, source-grep pinned).
+        Selection-resolution block mirrors Opportunities §8.2 with
+        page-prefixed sentinels per user direction (2026-04-30):
+        `applications_selected_position_id`,
+        `_applications_edit_form_sid`,
+        `_applications_skip_table_reset` — long-form `applications`
+        prefix avoids confusion with `app.py` / dashboard sentinels.
+        **Asymmetry vs. Opportunities §8.2** at `df_filtered.empty`:
+        Applications does NOT pop selection on filter narrowing —
+        the detail card resolves against the unfiltered `df` so an
+        in-progress edit survives a filter change. Detail card
+        wrapped in `st.container(border=True)` (architected for
+        T3's sibling `apps_interviews_form`); header reads
+        `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`;
+        inline "All recs submitted: ✓ / —" via
+        `is_all_recs_submitted` (vacuous-true for zero recs, D23).
+        `st.form("apps_detail_form")` with 8 widgets:
+        `apps_applied_date`, `apps_confirmation_received` (checkbox),
+        `apps_confirmation_date`, `apps_response_type`
+        (`[None, *RESPONSE_TYPES]` + `format_func` rendering None
+        as `—`), `apps_response_date`, `apps_result` over
+        `RESULT_VALUES`, `apps_result_notify_date`, `apps_notes`.
+        Pre-seed gates on the form-id sentinel (gotcha #2); `r`
+        from `get_applications_table` covers the position-side
+        header fields, and a separate `database.get_application(sid)`
+        read covers the application form fields not in T1-A's
+        10-column projection (`response_date`,
+        `result_notify_date`, `notes`). Save handler builds the
+        upsert payload (date inputs round-trip via `.isoformat() if
+        d else None`), calls
+        `database.upsert_application(propagate_status=True)`, sets
+        `_applications_skip_table_reset=True` (defense vs. gotcha
+        #11 in real-browser reruns), pops the form-id sentinel,
+        `st.toast(f'Saved "<name>".')`, `st.rerun()`. Failure path
+        → `st.error(...)`, no re-raise (GUIDELINES §8); sentinel
+        survives so the user's dirty form input is preserved for
+        retry. Cascade-promotion toast (R1/R3 surfacing on
+        `status_changed=True`) is T2-B's territory. New helper
+        `_coerce_iso_to_date(v)` mirrors Opportunities-page F5
+        defensive ISO parse. 43 new tests across five new classes
+        in `test_applications_page.py` (`TestApplicationsTableColumnConfig`,
+        `TestApplicationsTableSelection`,
+        `TestApplicationsDetailCardRender`,
+        `TestApplicationsDetailCardForm`,
+        `TestApplicationsDetailCardSave`); suite 586 → 629 under
+        both pytest gates.
+  - [ ] T2-B Cascade-promotion toast + cohesion sweep — second
+        `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")`
+        when `upsert_application` returns `status_changed=True`.
+        Pin all four R1/R3 paths from §9.3 (R1-only on `[SAVED]`,
+        R3-only on `[APPLIED]`, R1+R3 chained from `[SAVED]`,
+        terminal-guard no-op on `[CLOSED]`). Cohesion smoke:
+        filter-narrowing-keeps-card-open; no-selection-no-card;
+        NaN end-to-end safe; Save-error keeps form state.
 - [ ] **T3** Inline interview list UI (per DESIGN §8.3 D-B) —
       `apps_interview_{id}_*` keying, single Save form
       `apps_interviews_form`, `@st.dialog`-gated delete, R2-toast
@@ -225,6 +288,35 @@ _(none)_
 
 ## Recently done
 
+- 2026-04-30 — **Phase 5 T2-A green** on branch
+  `feature/phase-5-tier2-ApplicationDetailCard`: editable
+  Application detail card behind row selection. `apps_table` made
+  selectable (`on_select="rerun"`, `selection_mode="single-row"`,
+  `column_config` widths source-grep-pinned per gotcha #15);
+  selection-resolution block resolves to
+  `applications_selected_position_id` (page-prefixed sentinels
+  `_applications_edit_form_sid`, `_applications_skip_table_reset`
+  per user direction — long-form `applications` avoids confusion
+  with `app.py`). **Asymmetry vs. Opportunities §8.2**: filter
+  narrowing that excludes the selected row keeps the card open
+  (the page resolves against the unfiltered `df`). Detail card
+  in `st.container(border=True)` (architected for T3's sibling
+  `apps_interviews_form`); header
+  `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`; inline
+  "All recs submitted: ✓ / —". `st.form("apps_detail_form")` with
+  8 widgets; pre-seed gates on form-id sentinel; Save handler
+  calls `database.upsert_application(propagate_status=True)`,
+  fires `st.toast`, sets the skip-flag + pops the sentinel + reruns;
+  failure path → `st.error`, sentinel survives. New helper
+  `_coerce_iso_to_date(v)` mirrors Opportunities F5. R1/R3
+  cascade-promotion toast lands in T2-B. 43 new tests across five
+  classes in `test_applications_page.py`; suite 586 → 629 under
+  both pytest gates. Three commits: `test:` red,
+  `feat(applications):` green, `chore(tracker):` rollup. Multi-agent
+  plan critique (Sonnet, 2026-04-30) reshaped the original
+  3-sub-task split into 2 sub-tasks (T2-A includes both selection
+  plumbing AND form/save) since the plumbing-only sub-task would
+  have shipped a placeholder UI surface deleted by the next commit.
 - 2026-04-30 — **Phase 5 T1 Applications page shell complete** on
   branch `feature/phase-5-tier1-ApplicationsPageShell`. Three
   sub-tasks shipped via TDD three-commit cadence per sub-task
@@ -309,4 +401,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 5 T1 Applications page shell complete on branch `feature/phase-5-tier1-ApplicationsPageShell`; suite 586 green under both pytest gates; review doc + PR + merge next)_
+_Updated: 2026-04-30 (Phase 5 T2-A green on branch `feature/phase-5-tier2-ApplicationDetailCard`; suite 586 → 629 under both pytest gates; T2-B cascade toast + cohesion sweep next)_
