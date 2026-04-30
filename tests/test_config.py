@@ -543,6 +543,68 @@ def test_invariant_10_fires_on_drift():
     )
 
 
+# ── FUNNEL_TOGGLE_LABELS + invariant #11 (DESIGN §5.1, §5.2 #11) ──────────────
+# T6 polish (2026-04-30): the funnel disclosure toggle reads its label
+# from `config.FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]`
+# at render time. The dict MUST have exactly the keys {True, False} —
+# missing either would surface as a render-time KeyError; an extra key
+# would silently no-op. Invariant #11 catches both at import time.
+
+def test_funnel_toggle_labels_is_bool_keyed_dict():
+    assert isinstance(config.FUNNEL_TOGGLE_LABELS, dict), (
+        f"FUNNEL_TOGGLE_LABELS must be a dict; got "
+        f"{type(config.FUNNEL_TOGGLE_LABELS).__name__}"
+    )
+    assert all(isinstance(k, bool) for k in config.FUNNEL_TOGGLE_LABELS), (
+        "FUNNEL_TOGGLE_LABELS keys must be booleans (state flags) — "
+        f"got types: {sorted(type(k).__name__ for k in config.FUNNEL_TOGGLE_LABELS)}"
+    )
+    assert all(
+        isinstance(v, str) and v
+        for v in config.FUNNEL_TOGGLE_LABELS.values()
+    ), "Every label must be a non-empty string."
+
+
+def test_funnel_toggle_labels_spec_values():
+    """DESIGN §5.1 + §8.1 T6 amendment: the canonical labels follow the
+    project's <symbol> <verb-phrase> CTA convention (cohesion with
+    `+ Add your first position` and `→ Opportunities page`). False is
+    the collapsed state (label invites expand); True is expanded
+    (label invites collapse). Symbols `+` / `−` (U+002B / U+2212)
+    encode the click's effect direction — adding or removing buckets
+    from the view."""
+    assert config.FUNNEL_TOGGLE_LABELS == {
+        False: "+ Show all stages",
+        True:  "− Show fewer stages",
+    }, (
+        "FUNNEL_TOGGLE_LABELS drifted from spec values. Got: "
+        f"{config.FUNNEL_TOGGLE_LABELS!r}"
+    )
+
+
+def test_invariant_11_keys_exact():
+    """DESIGN §5.2 invariant #11: keys are exactly {True, False}.
+    Positive-case assertion that pairs with the
+    `test_invariant_11_fires_on_drift` synthetic-drift check below."""
+    assert set(config.FUNNEL_TOGGLE_LABELS.keys()) == {True, False}, (
+        f"FUNNEL_TOGGLE_LABELS keys must be exactly {{True, False}}. "
+        f"Got: {sorted(config.FUNNEL_TOGGLE_LABELS.keys())!r}"
+    )
+
+
+def test_invariant_11_fires_on_drift():
+    """Replicate DESIGN §5.2 invariant #11 on a synthetic dict missing
+    one of the two required keys — the page would KeyError on the
+    first render that hit the missing state. Same shape as the
+    `test_invariant_*_fires_on_drift` pattern used elsewhere in this
+    module."""
+    broken_labels = {False: config.FUNNEL_TOGGLE_LABELS[False]}  # missing True
+    assert set(broken_labels.keys()) != {True, False}, (
+        "Guard should fire: synthetic dict only has key False "
+        "(True deliberately removed)."
+    )
+
+
 # ── Fresh import exercises every module-level assertion ──────────────────────
 
 def test_config_reimports_cleanly():

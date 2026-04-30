@@ -466,13 +466,15 @@ class TestT2AFunnelBar:
     """T2-A: Plotly horizontal bar funnel built from `count_by_status()`
     aggregated into `config.FUNNEL_BUCKETS`.
 
-    Contract (DESIGN.md §8.1 + Sub-task 12):
+    Contract (DESIGN.md §8.1 + Sub-task 12 + T6 amendment 2026-04-30):
       - One bar per **visible** `FUNNEL_BUCKETS` entry, in the list's
         display order (so the pipeline reads top-to-bottom once the
         y-axis is reversed). A bucket is visible when its label is NOT
-        in `FUNNEL_DEFAULT_HIDDEN`, OR when the user has clicked
-        `[expand]` (`st.session_state["_funnel_expanded"] == True`) —
-        the latter is exercised in `TestT2DFunnelExpand`.
+        in `FUNNEL_DEFAULT_HIDDEN`, OR when
+        `st.session_state["_funnel_expanded"] == True` (set by clicking
+        the disclosure toggle) — the latter is exercised in
+        `TestT2DFunnelExpand` (collapsed → expanded half) and
+        `TestT6FunnelToggle` (expanded → collapsed half + round-trip).
       - A visible bucket with zero count renders as a zero-width bar
         so the chart shape stays stable as the pipeline fills up. This
         makes "no one applied yet" visually distinct from "bucket
@@ -707,8 +709,23 @@ class TestT2BFunnelEmptyState:
     """
 
     EMPTY_COPY_A = "Application funnel will appear once you've added positions."
-    EMPTY_COPY_B = "All your positions are in hidden buckets. Click [expand] below to reveal them."
-    EXPAND_LABEL = "[expand]"
+    # Branch (b) info copy points at the toggle by LABEL (not by spatial
+    # direction) so the copy stays correct regardless of where the toggle
+    # sits relative to the info — DESIGN §8.1 T6 amendment. Pre-T6 wording
+    # ("Click [expand] below to reveal them.") was tied to the old
+    # below-the-info placement.
+    EMPTY_COPY_B = (
+        "All your positions are in hidden buckets. "
+        "Click 'Show all stages' to reveal them."
+    )
+    # Toggle label literal — duplicated from config.FUNNEL_TOGGLE_LABELS[False]
+    # at class scope (rather than `config.FUNNEL_TOGGLE_LABELS[False]` directly)
+    # so test collection succeeds even when this file is imported before
+    # config has been re-imported with the new constant. The "literal matches
+    # config" invariant is pinned in TestT6FunnelToggle.test_label_*; if
+    # config drifts, that test catches it before this class's runtime
+    # assertions surface a less-informative "label not found" error.
+    EXPAND_LABEL = "+ Show all stages"
 
     @staticmethod
     def _info_bodies(at: AppTest) -> list[str]:
@@ -989,34 +1006,49 @@ class TestT2CFunnelLayout:
 # ── T2-D: Funnel [expand] toggle (Sub-task 12) ────────────────────────────────
 
 class TestT2DFunnelExpand:
-    """T2-D: single `[expand]` button + `st.session_state["_funnel_expanded"]`
-    flag that reveals every `FUNNEL_DEFAULT_HIDDEN` bucket for the rest of
-    the session (DESIGN §8.1 'Funnel visibility rules' + D24).
+    """T2-D: clicking the funnel disclosure toggle from its default
+    (collapsed) state reveals every `FUNNEL_DEFAULT_HIDDEN` bucket for
+    the rest of the session (DESIGN §8.1 'Funnel visibility rules' + D24).
 
-    Contract pins:
-      - Button label: exactly `"[expand]"` (literal brackets — matches the
-        affordance convention used in DESIGN's prose).
-      - Click flips `st.session_state["_funnel_expanded"]` to True (one-way;
-        no collapse). Implementation uses `on_click` callback so the flag
-        is set BEFORE the next script rerun — probed in AppTest before
+    **Scope after the T6 polish (DESIGN §8.1 T6 amendment):** this class
+    pins the *collapsed → expanded* half of the bidirectional contract —
+    label correctness in the collapsed state, click-flips-state, click-
+    reveals-buckets, branch-(a)-suppression, branch-(b) recovery path.
+    The *expanded → collapsed* half (round-trip, post-T6) is pinned by
+    the new `TestT6FunnelToggle` class below. The pre-T6 single-direction
+    `test_expand_button_hides_after_click` test was deleted because the
+    toggle no longer hides post-click — it relabels and stays put so the
+    user can collapse.
+
+    Contract pins (collapsed half):
+      - Toggle label in collapsed state: exactly
+        `config.FUNNEL_TOGGLE_LABELS[False]` (= "+ Show all stages" today,
+        but sourced from config so a relabel ripples).
+      - Click from collapsed flips `st.session_state["_funnel_expanded"]`
+        to True. Implementation uses `on_click` callback so the flag is
+        set BEFORE the next script rerun — probed in AppTest before
         writing this class.
-      - Post-click: all `FUNNEL_BUCKETS` entries are visible on the chart
-        (y-axis lists every bucket label in list order). Button no longer
-        renders (since `not expanded` predicate is now False).
-      - In branch (a) (no data), the button is SUPPRESSED regardless of
-        state — nothing to expand into.
-      - In branch (b), the button renders under the empty-state info.
-      - In branch (c), the button renders below the chart.
+      - Post-click: every `FUNNEL_BUCKETS` label is visible on the chart
+        in list order. The toggle PERSISTS at its subheader-row position
+        (this is the key behavioural difference from pre-T6).
+      - In branch (a) (no data), the toggle is SUPPRESSED regardless of
+        state — nothing to disclose into.
+      - In branch (b), clicking the toggle round-trips into branch (c)
+        with the chart drawn across all buckets.
 
     Branch-(a)-suppression is also covered in TestT2BFunnelEmptyState but
-    is re-pinned here to keep the expand-affordance contract in one place.
-    Branch-(b) button presence is covered there as well.
+    is re-pinned here to keep the disclosure-affordance contract close
+    to its click-behaviour pins.
 
     Visibility formula (applied after click):
       visible_bucket_labels = every label in FUNNEL_BUCKETS (in order).
     """
 
-    EXPAND_LABEL = "[expand]"
+    # Collapsed-state label literal — duplicated at class scope (not
+    # `config.FUNNEL_TOGGLE_LABELS[False]`) so test collection survives
+    # being run against a tree that hasn't re-imported config. Drift
+    # against config is pinned in TestT6FunnelToggle (Group A.3 + E).
+    EXPAND_LABEL = "+ Show all stages"
     STATE_KEY = "_funnel_expanded"
 
     @staticmethod
@@ -1129,24 +1161,14 @@ class TestT2DFunnelExpand:
             f"expected: {expected_post}\n got: {post}"
         )
 
-    def test_expand_button_hides_after_click(self, db):
-        """Once expanded, the `[expand]` button no longer renders —
-        DESIGN §8.1 says it renders 'whenever FUNNEL_DEFAULT_HIDDEN is
-        non-empty AND not yet expanded'; expansion flips the latter."""
-        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
-        at = _run_page()
-        buttons = self._expand_buttons(at)
-        assert len(buttons) == 1
-        buttons[0].click().run()
-        # The on_click callback runs inside Streamlit's widget pipeline;
-        # AppTest captures any callback exception on at.exception. Without
-        # this assertion a broken _expand_funnel callback would slip
-        # silently through to the post-click absence check below.
-        assert not at.exception, f"[expand] click raised: {at.exception}"
-        assert self._expand_buttons(at) == [], (
-            "Post-click: [expand] must not re-render (already expanded). "
-            f"Got button labels: {[b.label for b in at.button]}"
-        )
+    # NOTE: Pre-T6 `test_expand_button_hides_after_click` was deleted.
+    # Its premise (button disappears post-click) inverts under the
+    # bidirectional toggle contract — the toggle now PERSISTS post-click
+    # with a flipped label so the user can collapse. The "post-click
+    # toggle behaviour" is now pinned by `TestT6FunnelToggle`:
+    #   - test_click_when_expanded_collapses (collapse path)
+    #   - test_round_trip_returns_to_initial_state (involution)
+    #   - test_branch_c_renders_toggle_in_both_states (persistence)
 
     def test_clicking_expand_from_branch_b_renders_chart(self, db):
         """Click from branch (b): all-hidden data becomes visible, so the
@@ -1165,9 +1187,9 @@ class TestT2DFunnelExpand:
         assert len(buttons) == 1
         buttons[0].click().run()
         # AppTest captures callback exceptions on at.exception; assert it
-        # didn't fire so a broken _expand_funnel callback is visible
+        # didn't fire so a broken _toggle_funnel callback is visible
         # before the chart-presence assertion below.
-        assert not at.exception, f"[expand] click raised: {at.exception}"
+        assert not at.exception, f"Toggle click raised: {at.exception}"
         # Post-click: branch (c) with chart including all buckets.
         assert len(at.get("plotly_chart")) >= 1, (
             "Post-click from branch (b): chart must render."
@@ -1177,6 +1199,503 @@ class TestT2DFunnelExpand:
         assert post == expected_post, (
             f"Post-click y-axis must include every FUNNEL_BUCKETS label. "
             f"expected: {expected_post}\n got: {post}"
+        )
+
+
+# ── T6 polish: Funnel disclosure toggle (round-trip + tertiary + subheader-row)─
+
+class TestT6FunnelToggle:
+    """Phase 4 T6 polish — Funnel disclosure toggle: bidirectional state,
+    tertiary visual weight, subheader-row inline placement (DESIGN §8.1
+    'Funnel disclosure toggle' row + 'Funnel visibility rules' paragraph,
+    T6 amendment 2026-04-30).
+
+    This class pins the THREE new contract claims that the pre-T6
+    one-way `[expand]` button didn't carry:
+
+      1. **Bidirectional state.** The toggle has TWO labels, one per
+         state of `st.session_state["_funnel_expanded"]`, sourced from
+         `config.FUNNEL_TOGGLE_LABELS`. Clicking from the collapsed
+         state expands; clicking from the expanded state collapses. A
+         round-trip click returns the page to its initial state and
+         visible-bucket count (toggle is an involution modulo two
+         clicks). This solves the user-reported gap: pre-T6, after
+         clicking `[expand]` there was no way back to the focused view
+         without ending the session.
+
+      2. **Tertiary visual weight.** The button uses
+         `type="tertiary"` so it reads as a chart control rather than
+         a primary CTA (lighter than the Materials Readiness CTA's
+         default-typed `→ Opportunities page` button — the difference
+         in visual weight encodes the difference in role: disclosure
+         vs cross-page navigation). Pinned by source grep because
+         AppTest's `Button.type` attribute reports the widget class
+         name, not the Streamlit `type=` keyword (dev-notes
+         streamlit-state-gotchas.md §9).
+
+      3. **Subheader-row inline placement.** The toggle docks at the
+         right edge of the funnel subheader row via
+         `st.columns([3, 1])` — the same idiom T4 Upcoming uses to
+         place its window selector. The pre-T6 placement (button below
+         the chart in branch (c), button below the info in branch (b))
+         created an inconsistent affordance position across branches;
+         the subheader-row placement is invariant across branches
+         (b) and (c), so the user's eye doesn't have to re-locate the
+         control after a state change. Pinned by source grep alongside
+         the tertiary-type pin.
+
+    Group D coverage extends the empty-state matrix by re-asserting
+    the toggle's empty-DB suppression (branch (a) — D1) and verifying
+    the new branch (b) info copy that points at the toggle by label
+    rather than spatial direction (D2 / D3).
+
+    Group E pins the project's `<symbol> <verb-phrase>` CTA convention
+    (the leading `+` / `−` characters) so a future label rephrase can't
+    silently drift back to the bracket convention.
+    """
+
+    # ── Locked vocab + state ───────────────────────────────────────────────
+    # Class-scope literals (not `config.FUNNEL_TOGGLE_LABELS[...]`) so
+    # collection survives a tree where config hasn't been re-imported
+    # — same reasoning documented in TestT2BFunnelEmptyState. Drift
+    # against config is pinned by Group A.3 below + the invariant #11
+    # tests in test_config.py.
+    EXPAND_LABEL    = "+ Show all stages"
+    COLLAPSE_LABEL  = "− Show fewer stages"   # U+2212 minus, paired with U+002B '+'
+    STATE_KEY       = "_funnel_expanded"
+    SUBHEADER       = "Application Funnel"
+    BRANCH_B_COPY   = (
+        "All your positions are in hidden buckets. "
+        "Click 'Show all stages' to reveal them."
+    )
+
+    # ── Helpers ────────────────────────────────────────────────────────────
+    @staticmethod
+    def _toggle(at: AppTest, *, label: str | None = None):
+        """Return the toggle button (any state) — match by `label` if
+        given, else any of the two valid labels. Returns None when the
+        toggle is not rendered (branch (a) — D1)."""
+        valid = (
+            {label}
+            if label is not None
+            else {TestT6FunnelToggle.EXPAND_LABEL, TestT6FunnelToggle.COLLAPSE_LABEL}
+        )
+        matches = [b for b in at.button if b.label in valid]
+        return matches[0] if matches else None
+
+    @staticmethod
+    def _chart_bucket_count(at: AppTest) -> int:
+        """How many bars the funnel chart renders. Used by the
+        round-trip tests to verify the chart shrinks back to the
+        default-visible buckets after a collapse click."""
+        import json
+        charts = at.get("plotly_chart")
+        if not charts:
+            return 0
+        spec = json.loads(charts[0].proto.spec)
+        return len(spec["data"][0]["y"])
+
+    @staticmethod
+    def _read_app_source() -> str:
+        """Read app.py source for the C1/C2 source-grep tests. Sourced
+        once; sub-string assertions per call. The repo path is computed
+        from this test file's location so the test is robust to a
+        different cwd at runtime (project doesn't pin cwd in pytest
+        fixtures)."""
+        from pathlib import Path
+        repo_root = Path(__file__).resolve().parent.parent
+        return (repo_root / "app.py").read_text(encoding="utf-8")
+
+    # ── Group A: label correctness in each state ──────────────────────────
+
+    def test_collapsed_state_shows_expand_label(self, db):
+        """A.1 — Default render (collapsed) → toggle label is
+        `config.FUNNEL_TOGGLE_LABELS[False]`."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        assert at.session_state[self.STATE_KEY] is False
+        toggle = self._toggle(at)
+        assert toggle is not None, (
+            "Collapsed state: toggle must render. "
+            f"Got button labels: {[b.label for b in at.button]}"
+        )
+        assert toggle.label == self.EXPAND_LABEL, (
+            f"Collapsed state: label must be {self.EXPAND_LABEL!r}. "
+            f"Got {toggle.label!r}."
+        )
+
+    def test_expanded_state_shows_collapse_label(self, db):
+        """A.2 — After clicking expand → label flips to
+        `config.FUNNEL_TOGGLE_LABELS[True]`."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        at = _run_page()
+        toggle = self._toggle(at, label=self.EXPAND_LABEL)
+        assert toggle is not None
+        toggle.click().run()
+        assert not at.exception, f"Toggle click raised: {at.exception}"
+        assert at.session_state[self.STATE_KEY] is True
+        post = self._toggle(at, label=self.COLLAPSE_LABEL)
+        assert post is not None, (
+            f"Expanded state: label must flip to {self.COLLAPSE_LABEL!r}. "
+            f"Got button labels: {[b.label for b in at.button]}"
+        )
+
+    def test_class_literals_match_config(self, db):
+        """A.3a — The class-scope `EXPAND_LABEL` / `COLLAPSE_LABEL`
+        literals (duplicated at class scope for collection-time
+        stability) must equal the canonical values in
+        `config.FUNNEL_TOGGLE_LABELS`. Drift between this class and
+        config would silently weaken every other assertion in the
+        class (the buttons would carry config's label, but tests
+        would compare against the class literal). Pinned with a
+        single-line equality."""
+        assert config.FUNNEL_TOGGLE_LABELS[False] == self.EXPAND_LABEL, (
+            f"Class literal EXPAND_LABEL={self.EXPAND_LABEL!r} drifted "
+            f"from config.FUNNEL_TOGGLE_LABELS[False]="
+            f"{config.FUNNEL_TOGGLE_LABELS[False]!r}. Update both."
+        )
+        assert config.FUNNEL_TOGGLE_LABELS[True] == self.COLLAPSE_LABEL, (
+            f"Class literal COLLAPSE_LABEL={self.COLLAPSE_LABEL!r} drifted "
+            f"from config.FUNNEL_TOGGLE_LABELS[True]="
+            f"{config.FUNNEL_TOGGLE_LABELS[True]!r}. Update both."
+        )
+
+    def test_no_hardcoded_label_literal_in_app_source(self, db):
+        """A.3 — Source grep: app.py must not carry the literal
+        `[expand]` or `[collapse]` (pre-T6 pre-CTA-convention strings)
+        nor the new literals `+ Show all stages` / `− Show fewer stages`.
+        Both labels go through `config.FUNNEL_TOGGLE_LABELS` per
+        GUIDELINES §6 'no hardcoded vocab'.
+
+        The test guards two drift modes at once:
+          - Stale: someone re-introduces `[expand]` in a comment or
+            string when adding a feature.
+          - Fresh-but-wrong: someone copies the new literal directly
+            into app.py instead of reading from config.
+        """
+        src = self._read_app_source()
+        forbidden = [
+            # Pre-T6 bracket literals.
+            '"[expand]"',
+            "'[expand]'",
+            '"[collapse]"',
+            "'[collapse]'",
+            # New literals — must arrive via config, not as strings here.
+            f'"{self.EXPAND_LABEL}"',
+            f"'{self.EXPAND_LABEL}'",
+            f'"{self.COLLAPSE_LABEL}"',
+            f"'{self.COLLAPSE_LABEL}'",
+        ]
+        hits = [needle for needle in forbidden if needle in src]
+        assert hits == [], (
+            f"app.py carries forbidden hardcoded toggle label literal(s): "
+            f"{hits!r}. Use config.FUNNEL_TOGGLE_LABELS[bool] instead — "
+            f"GUIDELINES §6, DESIGN §8.1 T6 amendment."
+        )
+
+    # ── Group B: round-trip behaviour ─────────────────────────────────────
+
+    def test_click_when_collapsed_expands(self, db):
+        """B.1 — Click from collapsed → state True + visible-bucket
+        count jumps from `len(visible default buckets)` to
+        `len(FUNNEL_BUCKETS)`."""
+        # Seed across visible + hidden buckets so the count diff is
+        # non-trivial and visible.
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[CLOSED]"}))
+        database.add_position(make_position({"position_name": "C", "status": "[REJECTED]"}))
+        at = _run_page()
+        n_pre = self._chart_bucket_count(at)
+        expected_pre = len([
+            label for label, _, _ in config.FUNNEL_BUCKETS
+            if label not in config.FUNNEL_DEFAULT_HIDDEN
+        ])
+        assert n_pre == expected_pre, (
+            f"Pre-click: expected {expected_pre} default-visible bars; "
+            f"got {n_pre}."
+        )
+        toggle = self._toggle(at, label=self.EXPAND_LABEL)
+        assert toggle is not None
+        toggle.click().run()
+        assert not at.exception, f"Expand click raised: {at.exception}"
+        assert at.session_state[self.STATE_KEY] is True
+        n_post = self._chart_bucket_count(at)
+        assert n_post == len(config.FUNNEL_BUCKETS), (
+            f"Post-expand: expected all {len(config.FUNNEL_BUCKETS)} bars; "
+            f"got {n_post}."
+        )
+
+    def test_click_when_expanded_collapses(self, db):
+        """B.2 — Click from expanded → state False + visible-bucket
+        count drops back to default. **This is the test that pins the
+        user-reported bug fix** — pre-T6, no second click was possible."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[CLOSED]"}))
+        # First click to expand.
+        at = _run_page()
+        toggle = self._toggle(at, label=self.EXPAND_LABEL)
+        assert toggle is not None
+        toggle.click().run()
+        assert at.session_state[self.STATE_KEY] is True
+        # Second click to collapse.
+        toggle_post = self._toggle(at, label=self.COLLAPSE_LABEL)
+        assert toggle_post is not None, (
+            "After expand: collapse-labelled toggle must be present. "
+            f"Got: {[b.label for b in at.button]}"
+        )
+        toggle_post.click().run()
+        assert not at.exception, f"Collapse click raised: {at.exception}"
+        assert at.session_state[self.STATE_KEY] is False, (
+            "Post-collapse: state must flip back to False."
+        )
+        n_post = self._chart_bucket_count(at)
+        expected_post = len([
+            label for label, _, _ in config.FUNNEL_BUCKETS
+            if label not in config.FUNNEL_DEFAULT_HIDDEN
+        ])
+        assert n_post == expected_post, (
+            f"Post-collapse: visible-bar count must shrink back to "
+            f"default ({expected_post}); got {n_post}."
+        )
+
+    def test_round_trip_returns_to_initial_state(self, db):
+        """B.3 — Two clicks in succession → label, state flag, and
+        visible-bucket count are pixel-equal to the initial render
+        (toggle is a true involution modulo two clicks)."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[CLOSED]"}))
+        at = _run_page()
+        initial_label = self._toggle(at).label
+        initial_state = at.session_state[self.STATE_KEY]
+        initial_count = self._chart_bucket_count(at)
+        # Click 1 (expand).
+        self._toggle(at, label=self.EXPAND_LABEL).click().run()
+        assert not at.exception
+        # Click 2 (collapse) — state-aware lookup so a missing button
+        # surfaces a clearer assertion than a cryptic NoneType chain.
+        toggle_2 = self._toggle(at, label=self.COLLAPSE_LABEL)
+        assert toggle_2 is not None, (
+            "Round-trip click 2: collapse-labelled toggle must be "
+            f"available after click 1. Got: {[b.label for b in at.button]}"
+        )
+        toggle_2.click().run()
+        assert not at.exception
+        # Final state matches initial — involution.
+        final_label = self._toggle(at).label
+        final_state = at.session_state[self.STATE_KEY]
+        final_count = self._chart_bucket_count(at)
+        assert final_label == initial_label, (
+            f"Involution: label must return to {initial_label!r}; "
+            f"got {final_label!r}."
+        )
+        assert final_state == initial_state, (
+            f"Involution: state flag must return to {initial_state!r}; "
+            f"got {final_state!r}."
+        )
+        assert final_count == initial_count, (
+            f"Involution: visible-bar count must return to "
+            f"{initial_count}; got {final_count}."
+        )
+
+    def test_round_trip_through_branch_b(self, db):
+        """B.4 — Toggle works across the branch (b) ↔ (c) boundary.
+        Start: terminal-only DB → branch (b) (info, no chart). Click
+        once → branch (c) (chart with all buckets). Click again →
+        branch (b) (info reappears, chart gone). Pins that the toggle
+        round-trips through the empty-state matrix without trapping
+        the user in either branch."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        # Precondition: branch (b).
+        assert len(at.get("plotly_chart")) == 0, "Precondition: branch (b)."
+        assert any(i.value == self.BRANCH_B_COPY for i in at.info), (
+            "Precondition: branch (b) info copy must render."
+        )
+        # Click 1: expand → branch (c).
+        self._toggle(at, label=self.EXPAND_LABEL).click().run()
+        assert not at.exception
+        assert at.session_state[self.STATE_KEY] is True
+        assert len(at.get("plotly_chart")) >= 1, (
+            "Post-expand: branch (c) chart must render."
+        )
+        assert not any(i.value == self.BRANCH_B_COPY for i in at.info), (
+            "Post-expand: branch (b) info must NOT render alongside chart."
+        )
+        # Click 2: collapse → back to branch (b).
+        toggle_2 = self._toggle(at, label=self.COLLAPSE_LABEL)
+        assert toggle_2 is not None
+        toggle_2.click().run()
+        assert not at.exception
+        assert at.session_state[self.STATE_KEY] is False
+        assert len(at.get("plotly_chart")) == 0, (
+            "Post-collapse: chart must disappear (back to branch (b))."
+        )
+        assert any(i.value == self.BRANCH_B_COPY for i in at.info), (
+            "Post-collapse: branch (b) info must reappear."
+        )
+
+    # ── Group C: subheader-row placement (source-grep) ────────────────────
+
+    def test_subheader_row_uses_columns_3_1(self, db):
+        """C.1 — Source grep: app.py contains the `st.columns([3, 1])`
+        idiom in **executable code** (not just comments) at least
+        twice — once for the funnel subheader row (T6), once for the
+        Upcoming subheader row (pre-existing T4 idiom). The test
+        filters out comment lines first, mirroring the §6 status-
+        literal grep cleanup direction noted in `project_state.md`
+        (the project's existing comment-FP carry-over).
+
+        Why ≥ 2 not == 2: a future panel (e.g. Phase 7 T1 urgency-
+        color toggle on Opportunities, or Phase 5 Recommenders alert
+        filter) is encouraged to reuse the same idiom — DESIGN §8.1
+        T6 amendment establishes it as the canonical
+        chart-with-controls pattern. Allowing > 2 future-proofs the
+        test against incidental adoption."""
+        src = self._read_app_source()
+        # Strip comment-only lines so the comment at app.py:290
+        # ("# Layout: an st.columns([3, 1]) pair...") doesn't satisfy
+        # the count vacuously. Inline `# foo` after code is not stripped
+        # because the line still contains executable code; that's the
+        # right semantics — a real call would still count.
+        code_lines = [
+            line for line in src.splitlines()
+            if not line.lstrip().startswith("#")
+        ]
+        code = "\n".join(code_lines)
+        count = code.count("st.columns([3, 1])") + code.count("st.columns([3,1])")
+        assert count >= 2, (
+            f"DESIGN §8.1 T6 amendment: funnel must adopt the same "
+            f"`st.columns([3, 1])` subheader-row idiom as Upcoming. "
+            f"Expected ≥ 2 executable-code occurrences in app.py "
+            f"(Funnel + Upcoming); found {count}. Comment-only lines "
+            f"were filtered before counting."
+        )
+
+    def test_toggle_uses_tertiary_type(self, db):
+        """C.2 — Source grep: the funnel toggle is rendered with
+        `type="tertiary"`. Pinned by grep because AppTest's
+        `Button.type` reports the widget class name, not the
+        Streamlit `type=` keyword (dev-notes gotcha #9). The assertion
+        is structural: the only `type="tertiary"` button on the
+        dashboard is the funnel toggle, so an exact-count grep on
+        executable code is a precise pin.
+
+        Comment-only lines are stripped before counting — same
+        carve-out as C.1 — so descriptive comments that quote
+        `type="tertiary"` (e.g. the section header explaining the
+        toggle) don't double-count."""
+        src = self._read_app_source()
+        code_lines = [
+            line for line in src.splitlines()
+            if not line.lstrip().startswith("#")
+        ]
+        code = "\n".join(code_lines)
+        count = code.count('type="tertiary"')
+        assert count == 1, (
+            f"DESIGN §8.1 T6 amendment: funnel toggle must be the only "
+            f"`type=\"tertiary\"` button on app.py (a tertiary CTA "
+            f"elsewhere would break the disclosure-affordance contract). "
+            f"Expected exactly 1 executable-code occurrence; found "
+            f"{count}. Comment-only lines were filtered before counting."
+        )
+
+    # ── Group D: empty-state matrix (re-pin under new contract) ───────────
+
+    def test_branch_a_suppresses_toggle(self, db):
+        """D.1 — Empty DB → no toggle in either label form. (Re-pinned
+        from T2D under the renamed-contract docs; pre-T6 this asserted
+        absence of `[expand]`; post-T6 same suppression but covering
+        both labels in case state somehow flipped True before the
+        first render.)"""
+        at = _run_page()
+        assert self._toggle(at) is None, (
+            "Branch (a): toggle must be SUPPRESSED — nothing to "
+            f"disclose into. Got: {[b.label for b in at.button]}"
+        )
+
+    def test_branch_b_renders_toggle_with_collapsed_label(self, db):
+        """D.2 — Branch (b) (terminal-only DB) → toggle present with
+        the COLLAPSED label (state defaults False; user hasn't clicked
+        yet). New: the toggle now sits in the subheader row, not below
+        the info — but presence is what the matrix pins, not position
+        (position is C.1)."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        toggle = self._toggle(at)
+        assert toggle is not None, (
+            "Branch (b): toggle must render. "
+            f"Got: {[b.label for b in at.button]}"
+        )
+        assert toggle.label == self.EXPAND_LABEL, (
+            f"Branch (b) at default state: label must be "
+            f"{self.EXPAND_LABEL!r}; got {toggle.label!r}."
+        )
+
+    def test_branch_b_info_copy_is_spec_exact(self, db):
+        """D.3 — Branch (b) info copy points at the toggle by LABEL,
+        not by spatial direction. Pre-T6 wording said
+        `Click [expand] below to reveal them.` (tied to the now-
+        relocated below-the-info button); post-T6 wording references
+        the literal label so the copy stays correct regardless of where
+        the toggle sits visually."""
+        for term in config.TERMINAL_STATUSES:
+            database.add_position(
+                make_position({"position_name": f"P-{term}", "status": term})
+            )
+        at = _run_page()
+        matching = [i for i in at.info if i.value == self.BRANCH_B_COPY]
+        assert len(matching) == 1, (
+            f"Branch (b): expected exactly one info with copy "
+            f"{self.BRANCH_B_COPY!r}. Got info bodies: "
+            f"{[i.value for i in at.info]}"
+        )
+
+    def test_branch_c_renders_toggle_in_both_states(self, db):
+        """D.4 — Branch (c) renders the toggle in BOTH collapsed and
+        expanded states (the second is the user's reported bug fix —
+        post-T6 the toggle persists as `− Show fewer stages`)."""
+        database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
+        # Collapsed.
+        at = _run_page()
+        assert self._toggle(at, label=self.EXPAND_LABEL) is not None, (
+            "Branch (c) collapsed: expand-labelled toggle must render."
+        )
+        # Expanded — click to flip.
+        self._toggle(at, label=self.EXPAND_LABEL).click().run()
+        assert not at.exception
+        assert self._toggle(at, label=self.COLLAPSE_LABEL) is not None, (
+            "Branch (c) expanded: collapse-labelled toggle must render. "
+            "This is the user-reported bug fix — pre-T6 no toggle "
+            "persisted post-click."
+        )
+
+    # ── Group E: vocabulary cohesion across CTAs ──────────────────────────
+
+    def test_label_symbols_match_cta_convention(self, db):
+        """E.2 — The two toggle labels follow the project's
+        `<symbol> <verb-phrase>` CTA convention used by the empty-DB
+        hero (`+ Add your first position`) and the Materials Readiness
+        CTA (`→ Opportunities page`). Pinned here so a future
+        well-meaning rephrase (e.g. back to bracket form) trips the
+        test rather than silently drifting the four dashboard CTAs out
+        of cohesion."""
+        # `+` for collapsed (clicking adds buckets to the view) and
+        # `−` for expanded (clicking removes some) — the symbol is the
+        # delta direction the click will produce.
+        assert self.EXPAND_LABEL.startswith("+ "), (
+            f"CTA convention: collapsed label must start with '+ ' "
+            f"(symbol-prefix CTA). Got {self.EXPAND_LABEL!r}."
+        )
+        assert self.COLLAPSE_LABEL.startswith("− "), (  # U+2212 minus
+            f"CTA convention: expanded label must start with '− ' "
+            f"(U+2212 minus, paired with the '+' on the collapsed side "
+            f"for a + / − reversibility cue). Got {self.COLLAPSE_LABEL!r}."
         )
 
 

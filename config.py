@@ -136,12 +136,38 @@ FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
 ]
 
 # Buckets hidden by default on the dashboard funnel. Users reveal them
-# all at once via a single `[expand]` button rendered below the chart;
-# state persists as st.session_state["_funnel_expanded"] for the current
-# session only. Default-hiding the terminal outcomes keeps the dashboard
-# focused on active work (DESIGN D24). Values must be labels that exist
-# in FUNNEL_BUCKETS — enforced below.
+# (and re-hide them) via a single `st.button(type="tertiary")` rendered
+# in the funnel subheader row; state persists as
+# st.session_state["_funnel_expanded"] for the current session only.
+# Default-hiding the terminal outcomes keeps the dashboard focused on
+# active work (DESIGN D24). Values must be labels that exist in
+# FUNNEL_BUCKETS — enforced by invariant #6 below.
 FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
+
+# State-keyed labels for the funnel disclosure toggle (DESIGN §8.1
+# T6 amendment, 2026-04-30). The toggle reads its label at render time
+# via:
+#     config.FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]
+#
+# A label describes what the click WILL DO, not the current state:
+#   key=False (currently collapsed) → label invites EXPAND   ("+ Show all stages")
+#   key=True  (currently expanded ) → label invites COLLAPSE ("− Show fewer stages")
+#
+# Locked in config so the page file never carries a user-facing literal
+# (GUIDELINES §6 "no hardcoded vocab"). The `<symbol> <verb-phrase>`
+# shape matches the project's CTA convention used by the empty-DB hero
+# ("+ Add your first position") and the Materials Readiness CTA
+# ("→ Opportunities page") — visual-vocabulary cohesion across all four
+# dashboard CTAs. The leading `+` (U+002B) / `−` (U+2212 minus, NOT the
+# hyphen-minus U+002D) encode the click's effect direction: adds buckets
+# to the view / removes some from it.
+#
+# Invariant #11 below pins the dict to exactly the keys {True, False};
+# a missing key would surface as a render-time KeyError on first toggle.
+FUNNEL_TOGGLE_LABELS: dict[bool, str] = {
+    False: "+ Show all stages",
+    True:  "− Show fewer stages",
+}
 
 # Invariant (DESIGN §5.2 #5): flatten the raw-status tuples across all
 # FUNNEL_BUCKETS entries; the result must be a multiset-equal permutation
@@ -336,4 +362,16 @@ assert DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS, (
     f"UPCOMING_WINDOW_OPTIONS={UPCOMING_WINDOW_OPTIONS!r}. The "
     f"Upcoming-panel selectbox default uses DEADLINE_ALERT_DAYS — "
     f"dropping it from the list would leave the default unable to render."
+)
+
+# Invariant (DESIGN §5.2 #11): FUNNEL_TOGGLE_LABELS must have exactly
+# the keys {True, False}. The page reads it as
+# config.FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]] —
+# a missing key surfaces as a render-time KeyError on first toggle into
+# that state; an extra key would silently no-op (harmless but confusing
+# for a future maintainer). Caught at import before any page renders.
+assert set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}, (
+    f"FUNNEL_TOGGLE_LABELS must have exactly the keys {{True, False}}. "
+    f"Got: {sorted(FUNNEL_TOGGLE_LABELS.keys())!r}. The page indexes "
+    f"this dict by the bool value of st.session_state['_funnel_expanded']."
 )
