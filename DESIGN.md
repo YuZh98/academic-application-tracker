@@ -233,6 +233,8 @@ auto-promotion rules). Longer enumerations are described by category
 | `TERMINAL_STATUSES` | `list[str]` | Subset of `STATUS_VALUES` (`[CLOSED]` / `[REJECTED]` / `[DECLINED]`). Excluded from "active" queries (upcoming deadlines, materials readiness); also guards R3 auto-promotion against regression (§9.3). |
 | `STATUS_COLORS` | `dict[str, str]` | Per-status color for single-status surfaces (Opportunities-table badge, tooltips). Values drawn from the intersection of the `st.badge` color vocabulary and Plotly CSS color names. **Not** used for funnel bars — see `FUNNEL_BUCKETS`. Drift caught by §5.2 invariant #2. |
 | `STATUS_LABELS` | `dict[str, str]` | Storage-to-UI label. Storage keeps bracketed values as enum sentinels; UI strips the brackets via this dict. Every status surface rendered to a user MUST go through this map — never print a raw key. Drift caught by §5.2 invariant #3. |
+| `STATUS_FILTER_ACTIVE` | `str` | UI sentinel (`"Active"`) used as the default selection on the Applications page filter selectbox (§8.3, Phase 5 T1-B). Encodes "every actionable status" — the page resolves it to `set(STATUS_VALUES) - STATUS_FILTER_ACTIVE_EXCLUDED` at render time. The literal lives in config (not the page) so future surfaces — e.g. a "Tracked: Active" KPI variant on the dashboard — can reuse the same sentinel without hardcoding. Defensive guard in §5.2 invariant #12 ensures the sentinel does not collide with any real `STATUS_VALUES` entry. |
+| `STATUS_FILTER_ACTIVE_EXCLUDED` | `frozenset[str]` | Statuses removed by the `STATUS_FILTER_ACTIVE` sentinel — `{STATUS_SAVED, STATUS_CLOSED}` (pre-application + withdrawn). Frozen so a page cannot mutate it via `.add()`/`.remove()` and silently broaden the page's default filter at runtime. Membership is part of the spec (§8.3); broadening the exclusion (e.g. to also exclude `[REJECTED]`/`[DECLINED]`) is a deliberate spec amendment. Drift caught by §5.2 invariant #12. |
 
 #### Dashboard funnel (presentation layer)
 
@@ -298,6 +300,7 @@ before any page renders:
 9. `RESPONSE_TYPE_OFFER in RESPONSE_TYPES` — the R3 cascade trigger (§9.3) must be a real `RESPONSE_TYPES` selectbox option; catches a rename that drops `"Offer"` without updating the alias
 10. `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS` — the Upcoming-panel selectbox default (= `DEADLINE_ALERT_DAYS`) must be a real option in the offered list; catches a config edit that removes 30 from the list without updating the default
 11. `set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}` — the funnel disclosure toggle (§8.1) reads its label as `FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]` per render. A missing key would surface as a render-time `KeyError` on first toggle into that state; an extra key would silently no-op. Caught at import.
+12. `STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES)` — the Applications-page "Active" filter sentinel (§8.3) excludes statuses listed in this frozenset; every entry must be a real `STATUS_VALUES` member. An unknown entry would silently fail to filter at render time (the unknown status would never match a row), so the guard fires at import-time instead.
 
 ### 5.3 Extension recipes
 
@@ -822,7 +825,7 @@ the full interview sequence.
 Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#applications).
 
 **Behaviour:**
-- **Default filter** excludes positions with status `STATUS_SAVED` or `STATUS_CLOSED` — they are pre-application or withdrawn and have no application data worth showing.
+- **Default filter** excludes positions with status `STATUS_SAVED` or `STATUS_CLOSED` — they are pre-application or withdrawn and have no application data worth showing. The exclusion set is encoded in `config.STATUS_FILTER_ACTIVE_EXCLUDED` (§5.1) and exposed as a single selectbox sentinel `config.STATUS_FILTER_ACTIVE` (`"Active"`); the user can flip to the explicit `"All"` sentinel or a specific status to widen the view.
 - **"All recs submitted"** column is a live computation via `database.is_all_recs_submitted(position_id)`; no stored summary.
 - **"Confirmation"** column displays `✓` when `confirmation_received == 1` and `—` when it's `0`. The cell carries `confirmation_date` as a tooltip (`Received {ISO date}`); when the flag is `1` but no date is recorded, the tooltip reads `Received (no date recorded)`. The raw integer is never shown.
 - **Interviews** are edited as an **inline list** under the application detail card:
