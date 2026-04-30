@@ -17,6 +17,153 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Changed — Funnel disclosure toggle: bidirectional + tertiary + subheader-row inline (T6 polish, branch `feature/phase-4-tier6-Cohesion`)
+
+Phase 4 T6 polish — closes two user-reported issues with the
+pre-T6 unidirectional `[expand]` button:
+
+  1. After clicking `[expand]`, the button vanished and there was no
+     companion `[collapse]` to return to the focused view. The user
+     was stuck in the expanded state until a fresh session.
+  2. The default-typed button read as a primary CTA, visually too
+     heavy for what is semantically a chart control.
+
+The replacement is a single bidirectional disclosure toggle with
+state-keyed labels, `type="tertiary"` styling, and inline placement
+in the funnel subheader row via `st.columns([3, 1])` — same idiom T4
+Upcoming uses for its window selector.
+
+Three deliverables; one TDD round (`test:` red → `feat:` green →
+`chore:` rollup):
+
+`config.py`:
+
+- New `FUNNEL_TOGGLE_LABELS: dict[bool, str]`. State-keyed labels
+  describing the action a click *will perform*, not the current state:
+    - `False` (collapsed) → `"+ Show all stages"`
+    - `True` (expanded)  → `"− Show fewer stages"`
+  Symbols are U+002B `+` and U+2212 `−` (NOT hyphen-minus); they
+  encode the click's effect direction (adding / removing buckets
+  from view). Vocabulary follows the project's `<symbol> <verb-phrase>`
+  CTA convention used by `+ Add your first position` (empty-DB hero)
+  and `→ Opportunities page` (Materials Readiness CTA) — visual-
+  vocabulary cohesion across all four dashboard CTAs. Replaces the
+  orphan bracket convention `[expand]` / `[collapse]` (no other CTA
+  in the codebase used brackets).
+
+- New import-time invariant §5.2 #11:
+  `set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}` — the page
+  reads the dict as `FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]`.
+  A missing key would surface as a render-time `KeyError` on first
+  toggle into that state; an extra key would silently no-op. Caught
+  at import.
+
+- `FUNNEL_DEFAULT_HIDDEN` doc comment updated to describe the
+  bidirectional toggle (was: "Revealed all at once by the single
+  `[expand]` button"; now: "The single disclosure toggle reveals/hides
+  them as a group").
+
+`app.py`:
+
+- Replaced the unidirectional `_expand_funnel()` callback with
+  `_toggle_funnel()` that flips True ↔ False on each click. Same
+  `on_click` pattern (state set BEFORE the next rerun) so the chart
+  branches evaluate against the new value in the same rerun.
+- Replaced the two literal `"[expand]"` buttons (one in branch (b),
+  one in branch (c)) with a single button rendered ONCE in the
+  funnel subheader row via `st.columns([3, 1])`. The toggle label
+  resolves via `config.FUNNEL_TOGGLE_LABELS[_funnel_expanded]` at
+  render time. Widget key renamed `funnel_expand` → `funnel_toggle`
+  to match the bidirectional contract (no callers relied on the old
+  key — safe rename).
+- `type="tertiary"` so the button reads as a chart control rather
+  than a primary CTA. Distinct visual weight from the Materials
+  Readiness `→ Opportunities page` CTA (default type) reinforces
+  the role distinction: disclosure vs cross-page navigation.
+- Branch (a) (empty DB) keeps a bare `st.subheader` (no `[3, 1]`
+  split) so the right column slot isn't a dead box. Toggle
+  suppression in branch (a) is unchanged from pre-T6.
+- Branch (b) info copy updated to point at the toggle by LABEL
+  rather than spatial direction:
+  - Pre-T6: `"All your positions are in hidden buckets. Click [expand] below to reveal them."`
+  - Post-T6: `"All your positions are in hidden buckets. Click 'Show all stages' to reveal them."`
+  The new wording stays correct regardless of toggle placement.
+
+`tests/test_app_page.py`:
+
+- New `TestT6FunnelToggle` (15 tests across 5 groups):
+  - **A** (label correctness — 3 tests + class-literal drift check)
+  - **B** (round-trip — 4 tests including the involution and the
+    branch (b) ↔ (c) round-trip — the test that explicitly pins the
+    user-reported bug fix)
+  - **C** (placement — 2 source-grep tests, both with comment-line
+    stripping to avoid the same FP class flagged in the cohesion-
+    smoke audit)
+  - **D** (empty-state matrix re-pin under the new contract)
+  - **E** (CTA-convention symbol cohesion)
+- `TestT2BFunnelEmptyState`: `EMPTY_COPY_B` updated to the new
+  spatial-direction-free wording; `EXPAND_LABEL` re-pinned to the
+  new literal.
+- `TestT2DFunnelExpand`: deleted `test_expand_button_hides_after_click`
+  (premise inverts under the bidirectional contract). Kept the
+  collapsed-half coverage; class docstring rewritten to name its
+  post-T6 scope.
+
+`tests/test_config.py`:
+
+- Four new tests pinning `FUNNEL_TOGGLE_LABELS`:
+  `test_funnel_toggle_labels_is_bool_keyed_dict`,
+  `test_funnel_toggle_labels_spec_values`,
+  `test_invariant_11_keys_exact`,
+  `test_invariant_11_fires_on_drift`.
+
+`DESIGN.md`:
+
+- §5.1 symbol index: new `FUNNEL_TOGGLE_LABELS` row.
+- §5.2 invariants: new entry #11.
+- §5.3 extension recipes: new "Rephrase the funnel disclosure toggle"
+  row pointing at the symbol-pair convention.
+- §8.1 panel specs: "Funnel `[expand]` button" row replaced with
+  "Funnel disclosure toggle" row describing the bidirectional +
+  tertiary + subheader-row contract.
+- §8.1 "Funnel visibility rules" paragraph: rewritten to describe
+  the bidirectional contract and the action-not-state label
+  semantics.
+- §8.1 empty-state branches matrix: Funnel cell rewritten — branch
+  (a) keeps suppression and degrades the layout to a bare
+  subheader; branches (b) and (c) share the `st.columns([3, 1])`
+  subheader-row placement; branch (b) info copy updated; branch
+  (c) describes the post-click toggle persistence.
+
+`docs/ui/wireframes.md`:
+
+- Dashboard ASCII: toggle representation updated from `[expand]` to
+  `[+ Show all stages]`. The wireframe is intent-only (file
+  preamble) and a fuller reflow of the dashboard ASCII (Upcoming
+  column order, Recommender row contents) is bundled with the
+  publish-phase P5 doc-drift sweep already tracked.
+
+Test count: **535 → 553** passing under both `pytest -q` and
+`pytest -W error::DeprecationWarning -q` (+18 net: +15 in
+`TestT6FunnelToggle`, +4 in `test_config` invariant #11, −1 deleted
+`test_expand_button_hides_after_click`).
+
+Live AppTest probe confirms the round-trip end-to-end:
+
+```
+Initial:  state=False, label='+ Show all stages'
+Click 1:  state=True,  label='− Show fewer stages'
+Click 2:  state=False, label='+ Show all stages'
+```
+
+Zero exceptions across all renders.
+
+Migration: none. No DB schema change, no config-value rename, no
+existing widget-state collision (the `funnel_expand` widget key was
+renamed to `funnel_toggle`; a stale browser tab carrying the old
+key would just see a fresh False default — Streamlit doesn't
+persist widget keys across schema changes anyway).
+
 ### Added — Cross-panel cohesion smoke (T6 first checkbox, branch `feature/phase-4-tier6-Cohesion`)
 
 Phase 4 T6 first checkbox — the cross-panel cohesion audit that closes

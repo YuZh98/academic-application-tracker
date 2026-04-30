@@ -15,27 +15,23 @@ without rewriting existing code.
 
 ## Current Status
 
-**v0.4.0** — Phase 4 Tier 3 (Materials Readiness) shipped to `main` at commit `5ac0f63`.
-v1.1 documentation refactor merged via PR #7. The v1.3 DESIGN-to-codebase
-alignment cycle closed 2026-04-25 with three back-to-back PRs — PR #8
-(Sub-tasks 1–14), PR #9 (test-reliability sweep), PR #10 (Sub-task 13
-reverted: edit panel restored to `st.tabs`). `main` is now at `d7968e5`,
-478 tests green, zero deprecation warnings.
+**Last shipped tag:** `v0.4.0` (Phase 4 Tier 3 — Materials Readiness,
+2026-04-22). Phase 4 T4 (Upcoming timeline) merged to `main` via
+PR #12 (`483efa9`); Phase 4 T5 (Recommender Alerts) merged via
+PR #13 (`c5a7c76`). `main` is currently at `c5a7c76`. The next tag
+is `v0.5.0` once T6 closes.
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** v1 planning pins on branch `docs/v1-planning-pins` —
-GUIDELINES.md hardening (sentinels list drift fix, pre-commit grep
-cross-reference, new §13 page-authoring procedure) and DESIGN.md
-contract pins for Phase 5+ (§8.3 D-A confirmation column, §8.3 D-B
-inline interview list UI, §8.4 D-C mailto + LLM-prompts pattern,
-§6.3 D-D confirmation_email v1.0-rc drop). Pure docs change; no code,
-no schema, no test impact.
+**In flight:** Phase 4 T6 — pre-merge close-out for the dashboard —
+on branch `feature/phase-4-tier6-Cohesion`. Three checkboxes: cross-
+panel cohesion smoke ✅ (`reviews/phase-4-finish-cohesion-smoke.md`);
+funnel disclosure-toggle polish ✅ (DESIGN §8.1 T6 amendment —
+bidirectional, tertiary, subheader-row inline); full review doc +
+PR + tag `v0.5.0` pending. 553 tests green under both pytest gates.
 
-**Next up:** Phase 4 finish (T4 Upcoming timeline → T5 Recommender
-alerts → T6 review + PR + tag `v0.5.0`) on a new
-`feature/phase-4-finish` branch off `main` at `d7968e5`. Per **Q1
-Option B** from the 2026-04-27 v1 planning session, the existing
-T4/T5/T6 roadmap structure is preserved (no re-tiering).
+**Next up after `v0.5.0`:** Phase 5 — Applications page
+(`pages/2_Applications.py`) per Q5 Option A from the 2026-04-27
+v1 planning session, then Recommenders page, then Phase 6 Exports.
 
 ---
 
@@ -64,7 +60,7 @@ v1.0 ships when **all three** are true:
 | 1 | Environment & config | ✅ shipped (see CHANGELOG) |
 | 2 | Data layer (`database.py`, `exports.py` stub, `postdoc.db`) | ✅ shipped |
 | 3 | Opportunities page (quick-add, filter, table, edit, delete) | ✅ shipped @ v0.1.0 |
-| 4 | Dashboard (`app.py`) — 5 panels | 🔄 T1-T3 ✅ · T4-T6 pending |
+| 4 | Dashboard (`app.py`) — 5 panels | 🔄 T1-T5 ✅ · T6 in flight (cohesion smoke + toggle polish ✅; review + PR + tag `v0.5.0` pending) |
 | 5 | Applications + Recommenders pages | ⏳ pending |
 | 6 | Full exports + Export page | ⏳ pending |
 | 7 | Polish (urgency colors, search, confirm dialogs, responsive) | ⏳ pending |
@@ -74,11 +70,11 @@ v1.0 ships when **all three** are true:
 | Tier | Scope | Status |
 |------|-------|--------|
 | T1 | Shell + 4 KPI cards + empty-DB hero | ✅ v0.2.0 + v1.3 updates merged |
-| T2 | Application funnel (FUNNEL_BUCKETS aggregation + [expand] toggle + 3-branch empty-state) | ✅ v0.3.0 + v1.3 updates merged |
+| T2 | Application funnel (FUNNEL_BUCKETS aggregation + bidirectional disclosure toggle + 3-branch empty-state) | ✅ v0.3.0 + v1.3 updates merged + T6 toggle polish |
 | T3 | Materials readiness (two progress bars + CTA + empty state) | ✅ v0.4.0 (`5ac0f63`) |
-| T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | 🟠 next — branch `feature/phase-4-finish` |
-| T5 | Recommender alerts (grouped by person on dashboard; full mailto + LLM prompts on Phase 5 T6) | 🟠 next — same branch |
-| T6 | Pre-merge review + PR + tag `v0.5.0` | 🟠 next — same branch |
+| T4 | Upcoming timeline (merged deadlines + interviews; urgency column) | ✅ merged via PR #12 (`483efa9`) |
+| T5 | Recommender alerts (grouped by person on dashboard; full mailto + LLM prompts on Phase 5 T6) | ✅ merged via PR #13 (`c5a7c76`) |
+| T6 | Pre-merge review + PR + tag `v0.5.0` | 🔄 in flight — branch `feature/phase-4-tier6-Cohesion` (cohesion smoke ✅; funnel toggle polish ✅; full review + PR + tag pending) |
 
 ### Phase 5 — Applications + Recommenders (sketch)
 
