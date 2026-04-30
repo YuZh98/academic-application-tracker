@@ -1969,6 +1969,33 @@ class TestT5RecommenderAlerts:
             f"Got: {self._alert_markdowns(at)}"
         )
 
+    def test_asked_at_alert_boundary_fires(self, db):
+        """Boundary inclusivity: a recommender asked exactly
+        `RECOMMENDER_ALERT_DAYS` ago (the SQL cutoff `<=` is
+        inclusive) IS pending and produces a card. Pairs with
+        `test_unsubmitted_but_recent_ask_does_not_fire` to pin both
+        sides of the alert-days boundary; mirrors the two-sided
+        boundary coverage T4 lands in `TestGetUpcoming`
+        (`test_urgency_red_within_urgent_threshold`,
+        `test_urgency_yellow_between_urgent_and_alert`).
+
+        A future tightening of the SQL filter to `<` would silently
+        drop the at-the-boundary case — this test is the explicit
+        pin against that drift."""
+        self._seed_pending(days_ago=config.RECOMMENDER_ALERT_DAYS)
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert len(bodies) >= 1, (
+            f"At-the-boundary recommender (asked exactly "
+            f"{config.RECOMMENDER_ALERT_DAYS}d ago) should produce a "
+            f"card; SQL cutoff is `asked_date <= today - "
+            f"{config.RECOMMENDER_ALERT_DAYS}d`. Got bodies: {bodies}"
+        )
+        assert all(i.value != self.EMPTY_COPY for i in at.info), (
+            f"At-the-boundary populated DB: empty-state info must NOT "
+            f"render. Got info bodies: {[i.value for i in at.info]}"
+        )
+
     def test_populated_db_suppresses_empty_info(self, db):
         """Populated DB: at least one alert card renders, and the
         empty-state info must NOT appear (branches mutually exclusive)."""
