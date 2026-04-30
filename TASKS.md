@@ -141,6 +141,32 @@ Per **Q5 Option A**, build Applications page first.
 - [ ] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
       `STATUS_SAVED + STATUS_CLOSED`, table view sorted by deadline
+  - [x] T1-A `database.get_applications_table()` joined reader:
+        10-column projection over positions × applications LEFT JOIN
+        (`position_id, position_name, institute, deadline_date,
+        status, applied_date, confirmation_received,
+        confirmation_date, response_type, result`); sort
+        `deadline_date ASC NULLS LAST, position_id ASC` with the
+        `position_id` tiebreaker pinned by
+        `test_position_id_breaks_deadline_ties` so equal-deadline
+        rows stay stable across reruns (selection-survival
+        invariant, streamlit-state-gotchas #12). Filter-agnostic:
+        terminal-status rows are present; the page applies the
+        default `STATUS_FILTER_ACTIVE_EXCLUDED` filter on top
+        (T1-B). 8 new tests in `TestGetApplicationsTable`; suite
+        553 → 561 under both pytest gates.
+  - [ ] T1-B Page shell — `set_page_config`, `st.title`,
+        `STATUS_FILTER_ACTIVE` sentinel in `config.py` + invariant
+        #12, status filter selectbox with
+        `["Active", "All", *STATUS_VALUES]` options
+  - [ ] T1-C Table render — `st.dataframe(width="stretch",
+        hide_index=True)` with display columns `Position / Applied
+        / Recs / Confirmation / Response / Result`; per-row
+        `is_all_recs_submitted`; empty-state `st.info`. Confirmation
+        column folds the per-cell tooltip into inline text
+        (DESIGN §8.3 D-A amendment — `st.dataframe` does not
+        support per-cell tooltips in Streamlit 1.56; resolution
+        documented in `reviews/phase-5-tier1-review.md`)
 - [ ] **T2** Application detail card (Applied, Confirmation per DESIGN
       §8.3 D-A glyph + tooltip rules, Response, Result, Notes — all
       editable via `st.form`)
