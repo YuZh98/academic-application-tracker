@@ -44,17 +44,28 @@ DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
     class-level `SUBHEADER_DEFAULT` + `EMPTY_COPY_DEFAULT` +
     `DISPLAY_COLUMNS` + `WINDOW_KEY` constants per GUIDELINES §9, plus
     3 new `tests/test_config.py` invariant-#10 tests.
-- [ ] **T5** Recommender Alerts panel on `app.py` — DESIGN §8.1
-  - [ ] T5-A: group `get_pending_recommenders()` by `recommender_name`;
+- [x] **T5** Recommender Alerts panel on `app.py` — DESIGN §8.1
+  - [x] T5-A: group `get_pending_recommenders()` by `recommender_name`;
         emit one `st.container(border=True)` per person with `⚠ {Name}`
         header + bullet list of `{position} (asked {N}d ago, due {deadline})`
         lines; empty-state `st.info("No pending recommender follow-ups.")`.
+        Position label uses T4 precedent `{institute}: {position_name}`
+        (bare `position_name` when institute is empty); due-date renders
+        in `Mon D` form (T4 DateColumn precedent), `—` em-dash for NULL
+        deadline (mirrors `NEXT_INTERVIEW_EMPTY`). `groupby(sort=False)`
+        relies on the SQL-side `ORDER BY recommender_name ASC,
+        deadline_date ASC NULLS LAST` so within-group bullets are
+        deadline-asc and across-group cards are alphabetical without
+        any extra sort.
         **Note:** the `Compose reminder email` button + LLM-prompts
         expander (DESIGN §8.4 D-C) belong on the Recommenders **page**
         (Phase 5 T6), NOT on the dashboard. T5 only renders the alert
         cards.
-  - Tests: `tests/test_app_page.py::TestT5RecommenderAlerts` with the
-    same class-constants pattern.
+  - Tests: `tests/test_app_page.py::TestT5RecommenderAlerts` (15) with
+    class-level `SUBHEADER` + `EMPTY_COPY` + `BORDER_SOURCE` +
+    `WARN_GLYPH` constants per GUIDELINES §9. Four groups: subheader /
+    layout, empty / populated branches, card content, grouping by
+    recommender_name.
 - [ ] **T6** Phase 4 finish — pre-merge review + PR + tag `v0.5.0`
   - [ ] Cross-panel cohesion smoke (manual browser at 1280 / 1440 /
         1680 widths; screenshots to `docs/ui/screenshots/v0.5.0/`)
@@ -177,6 +188,15 @@ _(none)_
 
 ## Recently done
 
+- 2026-04-29 — **Phase 4 T5-A green** on branch
+  `feature/phase-4-tier5-RecommenderAlerts`: Recommender Alerts panel
+  wired below the Upcoming row. Subheader stable in both branches;
+  empty `st.info("No pending recommender follow-ups.")`; populated
+  branch groups `get_pending_recommenders()` by `recommender_name`
+  and emits one `st.container(border=True)` per person carrying a
+  `**⚠ {Name}**` header + bullet list of `{institute}: {position_name}
+  (asked {N}d ago, due {Mon D})` lines. 15 new `TestT5RecommenderAlerts`
+  tests green; suite total 519 → 534 under both pytest gates.
 - 2026-04-27 — **v1 plan locked** on branch `docs/v1-planning-pins`:
   GUIDELINES.md G1/G3/G4 (sentinels list, pre-commit grep, new §13
   page-authoring procedure); DESIGN.md D-A/D-B (§8.3 confirmation
@@ -198,4 +218,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-27 (v1 plan locked; Phase 4 T4 next on branch `feature/phase-4-finish`)_
+_Updated: 2026-04-29 (Phase 4 T5-A green on branch `feature/phase-4-tier5-RecommenderAlerts`; T6 next)_
