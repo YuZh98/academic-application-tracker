@@ -5,138 +5,15 @@ _Scope: software for this application tracker only. Older completions move to
 
 ---
 
-## Current sprint — Phase 4 finish (T4 + T5 + T6)
+## Current sprint — Phase 5 — Applications + Recommenders pages
 
-Branch: `feature/phase-4-finish` (to be created off `main` at `d7968e5`)
+Per **Q5 Option A** from the 2026-04-27 v1 planning session, build
+Applications page first.
 
-Per **Q1 Option B** from the 2026-04-27 v1 planning session, the
-existing T4/T5/T6 roadmap structure is preserved (no re-tiering).
-DESIGN.md §8.1 panel rows + empty-state matrix are the contract.
-
-- [x] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1 (locked T4-0 + T4-0b)
-  - [x] T4-0 + T4-0b: lock §8.1 panel column contract — six columns
-        `(date, days_left, label, kind, status, urgency)`; date as
-        `datetime.date` for chronological sort; `days_left` phrased
-        `"today"` / `"in 1 day"` / `"in N days"`; Label as
-        `"{institute}: {position_name}"`; Kind as
-        `"Deadline for application"` / `f"Interview {sequence}"`;
-        window selector via `st.selectbox(UPCOMING_WINDOW_OPTIONS)`
-        with default `DEADLINE_ALERT_DAYS` and dynamic subheader
-        `f"Upcoming (next {selected_window} days)"`. New config invariant
-        #10: `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS`.
-  - [x] T4-A `database.get_upcoming(days=DEADLINE_ALERT_DAYS)`: thin
-        projection over `get_upcoming_deadlines(days)` +
-        `get_upcoming_interviews()` returning the six-column shape
-        above; both `days_left` and `urgency` derive from the same
-        `days_away` int per row so the columns cannot drift; thresholds
-        resolve at call time from config.
-  - [x] T4-B `app.py` panel: full-width below the funnel/readiness
-        `st.columns(2)` row; `st.columns([3, 1])` carries the dynamic
-        subheader (left) + `upcoming_window` selectbox (right);
-        `st.dataframe(width="stretch", hide_index=True)` with display
-        headers `(Date, Days left, Label, Kind, Status, Urgency)` —
-        Date rendered via `st.column_config.DateColumn(format="MMM D")`,
-        Status mapped via `STATUS_LABELS.get(raw, raw)`; empty-state
-        `f"No deadlines or interviews in the next {selected_window} days."`.
-        Adds `config.UPCOMING_WINDOW_OPTIONS = [30, 60, 90]` + §5.2
-        invariant #10.
-  - Tests: `tests/test_app_page.py::TestT4UpcomingTimeline` (19) with
-    class-level `SUBHEADER_DEFAULT` + `EMPTY_COPY_DEFAULT` +
-    `DISPLAY_COLUMNS` + `WINDOW_KEY` constants per GUIDELINES §9, plus
-    3 new `tests/test_config.py` invariant-#10 tests.
-- [x] **T5** Recommender Alerts panel on `app.py` — DESIGN §8.1
-  - [x] T5-A: group `get_pending_recommenders()` by `recommender_name`;
-        emit one `st.container(border=True)` per person with `⚠ {Name}`
-        header + bullet list of `{position} (asked {N}d ago, due {deadline})`
-        lines; empty-state `st.info("No pending recommender follow-ups.")`.
-        Position label uses T4 precedent `{institute}: {position_name}`
-        (bare `position_name` when institute is empty); due-date renders
-        in `Mon D` form (T4 DateColumn precedent), `—` em-dash for NULL
-        deadline (mirrors `NEXT_INTERVIEW_EMPTY`). `groupby(sort=False)`
-        relies on the SQL-side `ORDER BY recommender_name ASC,
-        deadline_date ASC NULLS LAST` so within-group bullets are
-        deadline-asc and across-group cards are alphabetical without
-        any extra sort.
-        **Note:** the `Compose reminder email` button + LLM-prompts
-        expander (DESIGN §8.4 D-C) belong on the Recommenders **page**
-        (Phase 5 T6), NOT on the dashboard. T5 only renders the alert
-        cards.
-  - Tests: `tests/test_app_page.py::TestT5RecommenderAlerts` (15) with
-    class-level `SUBHEADER` + `EMPTY_COPY` + `BORDER_SOURCE` +
-    `WARN_GLYPH` constants per GUIDELINES §9. Four groups: subheader /
-    layout, empty / populated branches, card content, grouping by
-    recommender_name.
-- [ ] **T6** Phase 4 finish — pre-merge review + PR + tag `v0.5.0`
-  - [x] Cross-panel cohesion smoke — audit doc at
-        `reviews/phase-4-finish-cohesion-smoke.md`; verbatim AppTest
-        renders for both populated + empty DB pin every subheader,
-        KPI label, info-message, dataframe column, and recommender-
-        card markdown; six cohesion dimensions verified (subheader
-        rhythm, empty-state pattern, status-sentinel stripping,
-        label-format reuse, date-format reuse, layout hierarchy);
-        zero 🔴 / 🟠 + two 🟡 polish (wireframe ASCII drift; em-dash
-        literal-vs-constant) deferred. 1280 / 1440 / 1680 PNG
-        captures land in `docs/ui/screenshots/v0.5.0/` (with seed
-        snippet at `docs/ui/screenshots/v0.5.0/.seed-snippet.py`)
-        once the user runs them manually — preview-tool macOS
-        sandbox blocks headless capture on this setup; boot smoke
-        ran via Bash `streamlit run` (HTTP 200) + AppTest probes
-        (no exception on populated or empty DB).
-  - [x] Funnel disclosure-toggle polish — replace pre-T6
-        unidirectional `[expand]` button with a bidirectional
-        toggle (DESIGN §8.1 T6 amendment 2026-04-30): single
-        `st.button(type="tertiary")` placed in the funnel
-        subheader row via `st.columns([3, 1])` (mirror of T4
-        Upcoming idiom); state-keyed labels in
-        `config.FUNNEL_TOGGLE_LABELS`
-        (`+ Show all stages` ↔ `− Show fewer stages`) following
-        the project's `<symbol> <verb-phrase>` CTA convention;
-        invariant #11 added to `config.py` + DESIGN §5.2; branch
-        (b) info copy updated to reference the toggle by label
-        rather than spatial direction. Three-commit TDD round
-        (`test:` red → `feat:` green → `chore:` rollup); 535 →
-        553 tests passing under both pytest gates. Solves the
-        two user-reported issues (no collapse path; button too
-        visually heavy for a chart control).
-  - [ ] `reviews/phase-4-finish-review.md` (Exec summary → Findings →
-        Junior-engineer Q&A → Verdict, per GUIDELINES §10)
-  - [ ] PR; address review nits inline; merge; tag `v0.5.0`
-
-## Prior sprint — v1.1 doc refactor (merged via PR #7)
-
-- [x] Commit 1: DESIGN + GUIDELINES drift fixes (C1–C13)
-- [x] Commit 2: DESIGN restructure + `docs/adr/` skeleton
-- [x] Commit 3: GUIDELINES restructure + `docs/dev-notes/` extraction
-- [x] Commit 4: TASKS + roadmap + CHANGELOG + .gitignore
-- [x] Retroactive git tags: `v0.1.0` · `v0.2.0` · `v0.3.0` · `v0.4.0`
-- [x] Push branch; open PR; merge to main
-
-## Prior sprint — v1.3 alignment (merged via PR #8 + PR #9 + PR #10)
-
-- [x] Sub-tasks 1–14 (config additions, vocab migrations, schema
-      normalization, R1/R2/R3 cascade, confirmation_email split,
-      recommenders rebuild, dashboard + Opportunities page DESIGN-§8
-      alignment, doc sweep) — merged via PR #8 (`ace9acb`).
-- [x] Test-reliability + completeness review — 9 hardening commits;
-      merged via PR #9 (`0cb6f77`).
-- [x] Sub-task 13 reverted (edit panel restored to `st.tabs` after the
-      radio-based tab selector caused two user-reported widget-state-loss
-      bugs); merged via PR #10 (`d7968e5`). 478 tests green.
-
----
-
-## Up next (after Phase 4 finish)
-
-### Code carry-overs (deferrable)
-
-- [ ] **C2** Delete unused `TRACKER_PROFILE` from `config.py` — flagged
-      by v1.1 doc refactor; one-line removal but config invariant #1
-      (`TRACKER_PROFILE in VALID_PROFILES`) goes with it. Defer until a
-      cleanup tier; not blocking v1.0.
-
-### Phase 5 — Applications + Recommenders pages
-
-Per **Q5 Option A**, build Applications page first.
+Branch (T1): `feature/phase-5-tier1-ApplicationsPageShell` (PR pending —
+all three sub-tasks complete; pre-merge review at
+[`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md);
+suite 553 → 586 green under both pytest gates).
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -183,9 +60,10 @@ Per **Q5 Option A**, build Applications page first.
         cell text — three states (`—` / `✓ Mon D` / `✓ (no date)`)
         — because Streamlit 1.56's `st.dataframe` has no per-cell
         tooltip API; full resolution in
-        `reviews/phase-5-tier1-review.md`. 12 new tests in
-        `TestApplicationsPageTable` (parametrize counts each row
-        as a separate test); suite 574 → 586 under both pytest
+        `reviews/phase-5-tier1-review.md` + new gotcha #16 in
+        `docs/dev-notes/streamlit-state-gotchas.md`. 12 new tests
+        in `TestApplicationsPageTable` (parametrize counts each
+        row as a separate test); suite 574 → 586 under both pytest
         gates.
 - [ ] **T2** Application detail card (Applied, Confirmation per DESIGN
       §8.3 D-A glyph + tooltip rules, Response, Result, Notes — all
@@ -203,6 +81,90 @@ Per **Q5 Option A**, build Applications page first.
       subject + body for primary mailto; `LLM prompts (N tones)`
       expander rendering pre-filled prompts as `st.code(...)` blocks)
 - [ ] **T7** Phase 5 review + PR + tag `v0.6.0`
+
+## Prior sprint — Phase 4 finish (PR #12 + #13 + #14, tag `v0.5.0`)
+
+Per **Q1 Option B** from the 2026-04-27 v1 planning session, the
+existing T4/T5/T6 roadmap structure was preserved (no re-tiering).
+DESIGN.md §8.1 panel rows + empty-state matrix were the contract.
+
+- [x] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1
+      (T4-0/T4-0b column contract + T4-A `database.get_upcoming(days)`
+      six-column projection + T4-B `app.py` panel render with
+      `st.columns([3, 1])` subheader + window selector (default
+      `DEADLINE_ALERT_DAYS`)). New config constant
+      `UPCOMING_WINDOW_OPTIONS = [30, 60, 90]` + invariant #10.
+      Pinned by `tests/test_app_page.py::TestT4UpcomingTimeline` (19)
+      + 3 `test_config.py` invariant-#10 tests. Merged via PR #12
+      (`483efa9`).
+- [x] **T5** Recommender Alerts panel on `app.py` — DESIGN §8.1.
+      `get_pending_recommenders()` grouped by `recommender_name` with
+      one `st.container(border=True)` per person carrying a
+      `⚠ {Name}` header + bullet list of `{institute}: {position_name}
+      (asked {N}d ago, due {Mon D})` lines; empty-state info message.
+      Position label and date format reuse the T4 precedent for
+      cohesion. Pinned by `TestT5RecommenderAlerts` (15). Merged via
+      PR #13 (`c5a7c76`).
+- [x] **T6** Phase 4 finish — pre-merge close-out for the dashboard.
+      Cohesion-smoke audit at
+      [`reviews/phase-4-finish-cohesion-smoke.md`](reviews/phase-4-finish-cohesion-smoke.md)
+      (six cohesion dimensions, verbatim AppTest renders for
+      populated + empty DB, zero 🔴/🟠) + 7-findings review
+      (`01dc7b6`) — together satisfy the GUIDELINES §10 review
+      structure (no separate `phase-4-finish-review.md` file was
+      written; the work was distributed across the cohesion-smoke
+      audit + the inline 7-findings review). Funnel
+      disclosure-toggle polish (DESIGN §8.1 T6 amendment):
+      bidirectional `st.button(type="tertiary")` placed in the
+      subheader row via `st.columns([3, 1])` with state-keyed
+      labels in `config.FUNNEL_TOGGLE_LABELS` (`+ Show all stages`
+      ↔ `− Show fewer stages`) — invariant #11 added. Three-commit
+      TDD round (535 → 553 tests). Merged via PR #14 (`c93dec0`);
+      tagged `v0.5.0` 2026-04-30.
+
+## Prior sprint — v1.1 doc refactor (merged via PR #7)
+
+- [x] Commit 1: DESIGN + GUIDELINES drift fixes (C1–C13)
+- [x] Commit 2: DESIGN restructure + `docs/adr/` skeleton
+- [x] Commit 3: GUIDELINES restructure + `docs/dev-notes/` extraction
+- [x] Commit 4: TASKS + roadmap + CHANGELOG + .gitignore
+- [x] Retroactive git tags: `v0.1.0` · `v0.2.0` · `v0.3.0` · `v0.4.0`
+- [x] Push branch; open PR; merge to main
+
+## Prior sprint — v1.3 alignment (merged via PR #8 + PR #9 + PR #10)
+
+- [x] Sub-tasks 1–14 (config additions, vocab migrations, schema
+      normalization, R1/R2/R3 cascade, confirmation_email split,
+      recommenders rebuild, dashboard + Opportunities page DESIGN-§8
+      alignment, doc sweep) — merged via PR #8 (`ace9acb`).
+- [x] Test-reliability + completeness review — 9 hardening commits;
+      merged via PR #9 (`0cb6f77`).
+- [x] Sub-task 13 reverted (edit panel restored to `st.tabs` after the
+      radio-based tab selector caused two user-reported widget-state-loss
+      bugs); merged via PR #10 (`d7968e5`). 478 tests green.
+
+---
+
+## Up next (after Phase 5)
+
+### Code carry-overs (deferrable)
+
+- [ ] **C2** Delete unused `TRACKER_PROFILE` from `config.py` — flagged
+      by v1.1 doc refactor; one-line removal but config invariant #1
+      (`TRACKER_PROFILE in VALID_PROFILES`) goes with it. Defer until a
+      cleanup tier; not blocking v1.0.
+- [ ] **C3** Promote `"All"` filter sentinel to `config.py` — currently
+      a magic literal in `pages/1_Opportunities.py` and
+      `pages/2_Applications.py`. Asymmetric with `STATUS_FILTER_ACTIVE`
+      (in config). Project-wide refactor; not blocking. Logged as 🟡
+      finding 1 in [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md).
+- [ ] **C4** Split `CHANGELOG.md` `[Unreleased]` into a `[v0.5.0]`
+      release section. Post-v0.4.0 work (v1.3 alignment + Phase 4
+      T4/T5/T6 + this T1) accumulated under `[Unreleased]`; the
+      `v0.5.0` tag now exists but no `[v0.5.0]` section sits between
+      `[Unreleased]` and `[v0.4.0]`. Single housekeeping commit;
+      logged as 🟢 finding 3 in
+      [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md).
 
 ### Phase 6 — Exports
 
