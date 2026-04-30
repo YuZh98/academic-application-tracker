@@ -1383,3 +1383,45 @@ def compute_materials_readiness() -> dict[str, int]:
         "ready":   int(row["ready"]   or 0),
         "pending": int(row["pending"] or 0),
     }
+
+
+def get_applications_table() -> pd.DataFrame:
+    """Return the joined positions × applications view backing the
+    Applications page table (DESIGN §8.3, Phase 5 T1-A).
+
+    Columns (in order): position_id, position_name, institute,
+    deadline_date, status, applied_date, confirmation_received,
+    confirmation_date, response_type, result.
+
+    Sort: deadline_date ASC NULLS LAST, position_id ASC. The
+    position_id tiebreaker is part of the contract so equal-deadline
+    rows have a stable order across reruns — the Applications page
+    relies on this for selection survival across Save / filter-change
+    reruns, mirroring the Opportunities page pattern pinned by
+    streamlit-state-gotchas #11/#12.
+
+    LEFT JOIN over the auto-created applications row is defensive:
+    add_position creates the applications row in the same transaction,
+    so an INNER JOIN would also work in practice; LEFT JOIN keeps the
+    reader robust against a future migration that could leave an orphan
+    position. The reader is filter-agnostic — every position is in the
+    result; the page layer applies the default 'exclude SAVED + CLOSED'
+    filter via config.STATUS_FILTER_ACTIVE_EXCLUDED (T1-B)."""
+    sql = """
+        SELECT
+            p.id                    AS position_id,
+            p.position_name         AS position_name,
+            p.institute             AS institute,
+            p.deadline_date         AS deadline_date,
+            p.status                AS status,
+            a.applied_date          AS applied_date,
+            a.confirmation_received AS confirmation_received,
+            a.confirmation_date     AS confirmation_date,
+            a.response_type         AS response_type,
+            a.result                AS result
+        FROM positions p
+        LEFT JOIN applications a ON a.position_id = p.id
+        ORDER BY p.deadline_date ASC NULLS LAST, p.id ASC
+    """
+    with _connect() as conn:
+        return pd.read_sql_query(sql, conn)
