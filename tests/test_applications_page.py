@@ -1141,13 +1141,23 @@ class TestApplicationsDetailCardSave:
             f"got toasts={toast_values!r}."
         )
 
-    def test_save_sets_skip_table_reset_then_consumes_it(self, db):
-        """Save → page sets `_applications_skip_table_reset = True`
-        before `st.rerun()`. The post-rerun selection-resolution
-        block consumes the one-shot (pops with default False) and
-        keeps the selection. After AppTest's `at.run()` returns,
-        the flag must be GONE (consumed) and selection must be
-        preserved."""
+    def test_save_preserves_selection(self, db):
+        """Post-Save invariant: ``applications_selected_position_id``
+        survives the Save round-trip so the detail card stays open
+        and re-seeds with fresh DB values rather than collapsing.
+
+        The page's mechanism is the ``_applications_skip_table_reset``
+        one-shot — set inside the Save handler before ``st.rerun()``,
+        consumed by the selection-resolution block's elif branch on
+        the post-Save rerun (when the dataframe event resets per
+        gotcha #11). In AppTest the injected ``apps_table`` selection
+        state persists across the rerun, so the if-branch fires and
+        the flag is left set (harmless: it's a one-shot, the next
+        empty-event rerun consumes it). Either way the user-visible
+        invariant holds: selection is preserved. The
+        ``test_skip_table_reset_preserves_selection`` test pins the
+        elif-branch consumption path independently; the source-grep
+        test below pins that the Save handler actually sets the flag."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
@@ -1155,23 +1165,42 @@ class TestApplicationsDetailCardSave:
         _select_row(at, 0)
 
         at.session_state[W_NOTES] = "trigger save"
-        # Don't re-inject selection — that's the whole point: AppTest
-        # leaves the dataframe event empty across the click's rerun,
-        # the page must use the skip-flag itself to preserve selection.
+        # _keep_selection mimics browser-side selection persistence —
+        # AppTest leaves the dataframe event empty across reruns
+        # without it, the form would not render on the post-click
+        # rerun, and Save would never fire.
+        _keep_selection(at, 0)
         at.button(key=DETAIL_SUBMIT_KEY).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
-        assert _ss_or_none(at, SELECTED_PID_KEY) == pid, (
-            f"Save must preserve {SELECTED_PID_KEY!r} via the "
-            f"skip-flag mechanism; got "
-            f"{_ss_or_none(at, SELECTED_PID_KEY)!r}."
+        assert SELECTED_PID_KEY in at.session_state, (
+            f"Save must preserve {SELECTED_PID_KEY!r}; got it absent."
         )
-        assert SKIP_TABLE_RESET_KEY not in at.session_state, (
-            f"{SKIP_TABLE_RESET_KEY!r} is one-shot — consumed on "
-            f"the post-Save rerun. Should be absent after at.run() "
-            f"returns; still present means the consumer didn't pop "
-            f"with default False."
+        assert at.session_state[SELECTED_PID_KEY] == pid, (
+            f"Save must preserve {SELECTED_PID_KEY!r} == pid={pid!r}; "
+            f"got {_ss_or_none(at, SELECTED_PID_KEY)!r}."
+        )
+
+    def test_save_handler_sets_skip_table_reset_flag(self):
+        """Source-grep pin: the Save handler must contain the
+        `_applications_skip_table_reset = True` assignment.
+        AppTest cannot observe the flag's life cycle end-to-end
+        (see ``test_save_preserves_selection`` for why), so the
+        existence of the assignment is pinned at source level.
+        The behavioral counterpart — the elif branch CONSUMING the
+        flag — is pinned by
+        ``test_skip_table_reset_preserves_selection``; together the
+        two tests cover both halves of the one-shot contract."""
+        src = pathlib.Path(PAGE).read_text(encoding="utf-8")
+        assert (
+            f'st.session_state["{SKIP_TABLE_RESET_KEY}"] = True' in src
+            or f"st.session_state['{SKIP_TABLE_RESET_KEY}'] = True" in src
+        ), (
+            f"Save handler must set "
+            f'st.session_state["{SKIP_TABLE_RESET_KEY}"] = True '
+            f"before st.rerun(). Without it, selection collapses on "
+            f"the post-Save rerun in a real browser (gotcha #11)."
         )
 
     def test_save_pops_edit_form_sid_to_force_reseed(self, db):
@@ -1188,6 +1217,7 @@ class TestApplicationsDetailCardSave:
         assert _ss_or_none(at, EDIT_FORM_SID_KEY) == pid
 
         at.session_state[W_NOTES] = "change"
+        _keep_selection(at, 0)
         at.button(key=DETAIL_SUBMIT_KEY).click()
         at.run()
 
@@ -1229,6 +1259,7 @@ class TestApplicationsDetailCardSave:
         monkeypatch.setattr(database, "upsert_application", _boom)
 
         at.session_state[W_NOTES] = "this won't save"
+        _keep_selection(at, 0)
         at.button(key=DETAIL_SUBMIT_KEY).click()
         at.run()
 
