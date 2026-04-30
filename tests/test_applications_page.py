@@ -141,3 +141,250 @@ class TestApplicationsFilterBar:
             f"  Expected: {expected}\n"
             f"  Got:      {actual}"
         )
+
+
+# ── Table render (T1-C) ───────────────────────────────────────────────────────
+
+# Local copy of the conftest helper (imported lazily to keep the page-test
+# module self-contained; same shape as test_opportunities_page.py).
+from tests.conftest import make_position
+
+
+class TestApplicationsPageTable:
+    """T1-C: read-only Applications table per DESIGN §8.3 + wireframe.
+
+    Columns (display order, six total):
+      Position / Applied / Recs / Confirmation / Response / Result
+
+    Filter behaviour:
+      - Default = config.STATUS_FILTER_ACTIVE → hides
+        config.STATUS_FILTER_ACTIVE_EXCLUDED ({SAVED, CLOSED}).
+      - "All" sentinel → show every row.
+      - Specific STATUS_VALUES entry → narrow to exactly that status.
+
+    Confirmation column inline format (DESIGN §8.3 D-A amendment —
+    `st.dataframe` has no per-cell tooltip API in Streamlit 1.56;
+    full resolution recorded in reviews/phase-5-tier1-review.md):
+      - confirmation_received = 0 → "—"
+      - confirmation_received = 1, confirmation_date set → "✓ {Mon D}"
+      - confirmation_received = 1, confirmation_date NULL → "✓ (no date)"
+
+    Sort: deadline_date ASC NULLS LAST (matches the
+    get_applications_table contract pinned in T1-A)."""
+
+    TABLE_KEY = "apps_table"
+    EM_DASH = "—"
+
+    DISPLAY_COLUMNS = [
+        "Position", "Applied", "Recs", "Confirmation", "Response", "Result",
+    ]
+
+    EMPTY_COPY = "No applications match the current filter."
+
+    def test_table_renders_with_six_display_columns(self, db):
+        """The page must surface the six wireframe columns in this exact
+        order — column rename in T2's detail card or T3's interview list
+        should not silently shift the table's projection."""
+        pid = database.add_position(make_position({"position_name": "P"}))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        at = _run_page()
+        df = at.dataframe[0].value
+        assert list(df.columns) == self.DISPLAY_COLUMNS, (
+            f"Display columns must be {self.DISPLAY_COLUMNS!r} in this order; "
+            f"got {list(df.columns)!r}"
+        )
+
+    def test_default_filter_active_excludes_saved_and_closed(self, db):
+        """DESIGN §8.3: default filter excludes SAVED + CLOSED. The
+        Active sentinel resolves to
+        STATUS_VALUES \\ STATUS_FILTER_ACTIVE_EXCLUDED at render time —
+        a [SAVED] row (pre-application) and a [CLOSED] row (withdrawn)
+        must not appear, while [APPLIED] / [INTERVIEW] / [REJECTED] /
+        [DECLINED] rows DO appear (only SAVED + CLOSED are excluded)."""
+        # Seed one row per status so the test exercises the FULL exclusion
+        # set (not just SAVED) and the FULL inclusion set.
+        rows = {
+            "Saved Pos":     config.STATUS_SAVED,
+            "Applied Pos":   config.STATUS_APPLIED,
+            "Interview Pos": config.STATUS_INTERVIEW,
+            "Closed Pos":    config.STATUS_CLOSED,
+            "Rejected Pos":  config.STATUS_REJECTED,
+            "Declined Pos":  config.STATUS_DECLINED,
+        }
+        for name, status in rows.items():
+            pid = database.add_position(make_position({"position_name": name}))
+            if status != config.STATUS_SAVED:
+                database.update_position(pid, {"status": status})
+
+        at = _run_page()
+        names = list(at.dataframe[0].value["Position"])
+
+        # SAVED + CLOSED must be hidden (they're in
+        # STATUS_FILTER_ACTIVE_EXCLUDED); the four other statuses
+        # must all appear.
+        for name in ("Saved Pos", "Closed Pos"):
+            assert not any(name in n for n in names), (
+                f"Expected {name!r} hidden under default Active filter; "
+                f"got {names!r}"
+            )
+        for name in ("Applied Pos", "Interview Pos",
+                     "Rejected Pos", "Declined Pos"):
+            assert any(name in n for n in names), (
+                f"Expected {name!r} visible under default Active filter; "
+                f"got {names!r}"
+            )
+
+    def test_filter_all_shows_every_row(self, db):
+        """Switching to the 'All' sentinel must surface every row,
+        including the otherwise-hidden SAVED / CLOSED rows. This is the
+        primary recovery path for a user who needs to revisit a
+        pre-application or withdrawn position."""
+        for name, status in [
+            ("Saved Pos",   config.STATUS_SAVED),
+            ("Applied Pos", config.STATUS_APPLIED),
+            ("Closed Pos",  config.STATUS_CLOSED),
+        ]:
+            pid = database.add_position(make_position({"position_name": name}))
+            if status != config.STATUS_SAVED:
+                database.update_position(pid, {"status": status})
+
+        at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select("All")
+        at.run()
+
+        names = list(at.dataframe[0].value["Position"])
+        for name in ("Saved Pos", "Applied Pos", "Closed Pos"):
+            assert any(name in n for n in names), (
+                f"Expected {name!r} visible under 'All' filter; got {names!r}"
+            )
+
+    def test_filter_specific_status_narrows(self, db):
+        """Picking a specific STATUS_VALUES entry must narrow the table
+        to exactly that status — not approximately, not a superset."""
+        pid_app = database.add_position(make_position({"position_name": "App One"}))
+        database.update_position(pid_app, {"status": config.STATUS_APPLIED})
+        pid_int = database.add_position(make_position({"position_name": "Int One"}))
+        database.update_position(pid_int, {"status": config.STATUS_INTERVIEW})
+
+        at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select(config.STATUS_INTERVIEW)
+        at.run()
+
+        names = list(at.dataframe[0].value["Position"])
+        assert any("Int One" in n for n in names), (
+            f"Specific-status filter must retain matching row; got {names!r}"
+        )
+        assert not any("App One" in n for n in names), (
+            f"Specific-status filter must hide non-matching rows; got {names!r}"
+        )
+
+    @pytest.mark.parametrize("institute,expected_label", [
+        ("Stanford", "Stanford: Title One"),
+        ("",         "Title One"),
+        (None,       "Title One"),
+    ])
+    def test_position_column_format(self, db, institute, expected_label):
+        """DESIGN §8.3 + T4 precedent: Position cell is
+        f'{institute}: {position_name}' when institute is non-empty;
+        bare position_name when institute is missing or _safe_str-coerced
+        empty. Pinned across the three NULL/empty/populated cases so a
+        future _safe_str regression on the institute column shows up
+        here rather than as a silent display drift."""
+        pid = database.add_position(make_position({
+            "position_name": "Title One",
+            "institute":     institute,
+        }))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        labels = list(at.dataframe[0].value["Position"])
+        assert labels == [expected_label], (
+            f"Position label mismatch for institute={institute!r}: "
+            f"expected [{expected_label!r}]; got {labels!r}"
+        )
+
+    @pytest.mark.parametrize("received,date,expected_cell", [
+        (0, None,         "—"),
+        (1, "2026-04-19", "✓ Apr 19"),
+        (1, None,         "✓ (no date)"),
+    ])
+    def test_confirmation_column_inline_format(
+        self, db, received, date, expected_cell,
+    ):
+        """DESIGN §8.3 D-A amendment (Phase 5 T1-C): Streamlit 1.56's
+        st.dataframe does not expose a per-cell tooltip API, so the
+        original D-A tooltip text ('Received {ISO date}' / 'Received
+        (no date recorded)') folds into inline cell content. Three
+        cases pinned across the parametrize:
+          - flag=0          → '—' (em-dash, never received)
+          - flag=1, date    → '✓ Mon D' (matches T4 'Apr 24' format)
+          - flag=1, no date → '✓ (no date)' (explicit no-date marker)
+
+        Resolution recorded in reviews/phase-5-tier1-review.md."""
+        pid = database.add_position(make_position({"position_name": "P"}))
+        database.upsert_application(
+            pid,
+            {
+                "applied_date":          "2026-04-15",
+                "confirmation_received": received,
+                "confirmation_date":     date,
+            },
+            propagate_status=False,
+        )
+        # Force status off [SAVED] so the row passes the default filter.
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        cells = list(at.dataframe[0].value["Confirmation"])
+        assert cells == [expected_cell], (
+            f"Confirmation cell mismatch for "
+            f"(received={received!r}, date={date!r}): "
+            f"expected [{expected_cell!r}]; got {cells!r}"
+        )
+
+    def test_table_sort_by_deadline_asc_nulls_last(self, db):
+        """The table inherits get_applications_table's sort
+        (deadline_date ASC NULLS LAST, position_id ASC). The page
+        must NOT re-sort or apply its own ordering — the database
+        contract is the contract."""
+        pid_a = database.add_position(make_position({
+            "position_name": "Late Applicant",
+            "deadline_date": "2026-08-30",
+        }))
+        pid_b = database.add_position(make_position({
+            "position_name": "No Deadline",
+            "deadline_date": None,
+        }))
+        pid_c = database.add_position(make_position({
+            "position_name": "Soon Applicant",
+            "deadline_date": "2026-05-05",
+        }))
+        for pid in (pid_a, pid_b, pid_c):
+            database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        names = list(at.dataframe[0].value["Position"])
+        assert names == [
+            "Stanford: Soon Applicant",
+            "Stanford: Late Applicant",
+            "Stanford: No Deadline",
+        ], (
+            f"Sort must be deadline ASC NULLS LAST; got {names!r}"
+        )
+
+    def test_empty_state_info_when_filter_excludes_all(self, db):
+        """When the post-filter DataFrame is empty, the page must
+        surface an `st.info(...)` message — and the table must NOT
+        render (an empty st.dataframe with column headers but no rows
+        looks like a broken state). Mirrors the
+        Opportunities-page filter empty-state precedent
+        (test_filter_by_status_no_match_shows_info)."""
+        pid = database.add_position(make_position({"position_name": "Saved Only"}))
+        # Single SAVED row; default Active filter excludes it.
+
+        at = _run_page()
+        info_messages = [el.value for el in at.info]
+        assert any(self.EMPTY_COPY in m for m in info_messages), (
+            f"Expected info message {self.EMPTY_COPY!r} when default filter "
+            f"excludes every row; got info={info_messages!r}"
+        )
