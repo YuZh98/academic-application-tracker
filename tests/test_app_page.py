@@ -1808,3 +1808,347 @@ class TestT4UpcomingTimeline:
             f"After widening, expected the +50d 'Far' position in the "
             f"Label column. Got: {labels}"
         )
+
+
+# ── T5: Recommender Alerts panel ──────────────────────────────────────────────
+
+class TestT5RecommenderAlerts:
+    """T5-A: Recommender Alerts panel rendering on the dashboard.
+
+    DESIGN §8.1 (Recommender Alerts row): a single full-width section
+    BELOW the Upcoming row. Driven by `database.get_pending_recommenders()`
+    (default `RECOMMENDER_ALERT_DAYS`) and grouped by `recommender_name`
+    so each person appears in exactly one bordered card carrying every
+    letter they still owe.
+
+    Locked panel contract:
+      - Subheader 'Recommender Alerts' renders in BOTH empty and
+        populated branches for page-height stability (T2 / T3 / T4
+        precedent).
+      - Empty branch: `st.info(EMPTY_COPY)` verbatim, no markdown cards.
+      - Populated branch: one `st.container(border=True)` per distinct
+        `recommender_name`. Each card renders as a single
+        `st.markdown(...)` block whose body starts with `**⚠ {Name}**`
+        and lists each owed position on its own bullet line:
+        `- {institute}: {position_name} (asked {N}d ago, due {Mon D})`.
+        Bare `position_name` when institute is missing; `due —` when
+        deadline_date is NULL.
+      - The Compose-reminder-email button + LLM-prompts expander
+        (DESIGN §8.4 D-C) belong on the Recommenders PAGE (Phase 5 T6),
+        NOT on the dashboard. T5 only renders the alert cards.
+
+    AppTest access patterns (verified against Streamlit 1.56):
+      - `at.markdown[i].value` returns the raw markdown source string
+        passed to `st.markdown(...)` — multi-line content with `\\n`
+        between header and bullet lines comes back as one element.
+      - `st.container(border=True)` is a CSS-styled wrapper; AppTest
+        does not surface a distinct element for it, so the bordered
+        contract is pinned via a source-level grep (T1-E
+        `test_cta_targets_opportunities_page` precedent).
+    """
+
+    SUBHEADER = "Recommender Alerts"
+    EMPTY_COPY = "No pending recommender follow-ups."
+    BORDER_SOURCE = "st.container(border=True)"
+    WARN_GLYPH = "⚠"
+
+    @staticmethod
+    def _has_subheader(at: AppTest, value: str) -> bool:
+        return any(s.value == value for s in at.subheader)
+
+    @classmethod
+    def _alert_markdowns(cls, at: AppTest) -> list[str]:
+        """Markdown bodies that look like a Recommender-Alerts card.
+
+        Identified by the warn-glyph header — keeps the helper robust
+        against any future `st.markdown` calls landing elsewhere on the
+        page (e.g., Phase 7 polish)."""
+        return [m.value for m in at.markdown if cls.WARN_GLYPH in m.value]
+
+    @staticmethod
+    def _seed_pending(
+        days_ago: int = 14,
+        position_name: str = "BioStats Postdoc",
+        institute: str = "Stanford",
+        recommender_name: str = "Dr. Smith",
+        deadline_offset: int | None = 10,
+    ) -> int:
+        """Seed one pending recommender (asked >= RECOMMENDER_ALERT_DAYS
+        ago, no submitted_date yet) and return the recommender row id."""
+        pos_id = database.add_position(make_position({
+            "position_name": position_name,
+            "institute":     institute,
+            "deadline_date": (
+                (date.today() + timedelta(days=deadline_offset)).isoformat()
+                if deadline_offset is not None
+                else None
+            ),
+        }))
+        return database.add_recommender(pos_id, {
+            "recommender_name": recommender_name,
+            "asked_date": (date.today() - timedelta(days=days_ago)).isoformat(),
+        })
+
+    # ── Group A: subheader stability + layout ─────────────────────────────
+
+    def test_subheader_renders_on_empty_db(self, db):
+        """Page-height stability: the subheader renders even when the
+        pending list is empty, so the layout above doesn't shift when
+        the first owed letter lands."""
+        at = _run_page()
+        assert self._has_subheader(at, self.SUBHEADER), (
+            f"Empty DB: expected top-level {self.SUBHEADER!r} subheader. "
+            f"Got: {[s.value for s in at.subheader]}"
+        )
+
+    def test_subheader_renders_on_populated_db(self, db):
+        """Same page-height-stability invariant on the populated path."""
+        self._seed_pending()
+        at = _run_page()
+        assert self._has_subheader(at, self.SUBHEADER), (
+            f"Populated DB: expected top-level {self.SUBHEADER!r} "
+            f"subheader. Got: {[s.value for s in at.subheader]}"
+        )
+
+    def test_panel_uses_bordered_container_per_card(self, db):
+        """Each card wraps in `st.container(border=True)`. AppTest does
+        not surface bordered-container styling, so the contract is
+        pinned at the source level — same precedent as
+        TestT1EEmptyDbHero.test_cta_targets_opportunities_page for
+        st.switch_page and TestT4UpcomingTimeline for the DateColumn
+        format string.
+
+        Why `>= 2`: the empty-DB hero (T1-E) already calls
+        `st.container(border=True)` once. A single occurrence would
+        therefore pass vacuously without any T5 implementation. We
+        require AT LEAST TWO so the red→green transition actually
+        gates on the T5 panel adding its own bordered-container call.
+        """
+        import pathlib
+        src = pathlib.Path("app.py").read_text(encoding="utf-8")
+        count = src.count(self.BORDER_SOURCE)
+        assert count >= 2, (
+            f"app.py must call {self.BORDER_SOURCE!r} at least twice "
+            f"(once for the empty-DB hero, once for the Recommender-"
+            f"Alerts cards loop). Got {count} occurrence(s)."
+        )
+
+    # ── Group B: empty / populated branches ───────────────────────────────
+
+    def test_empty_db_renders_info_with_locked_copy(self, db):
+        """Empty DB: exactly one st.info matching EMPTY_COPY verbatim,
+        and no Recommender-Alerts markdown cards."""
+        at = _run_page()
+        matching = [i for i in at.info if i.value == self.EMPTY_COPY]
+        assert len(matching) == 1, (
+            f"Empty DB: expected exactly one st.info with copy "
+            f"{self.EMPTY_COPY!r}. Got info bodies: "
+            f"{[i.value for i in at.info]}"
+        )
+        assert self._alert_markdowns(at) == [], (
+            f"Empty DB: no alert cards should render. Got bodies: "
+            f"{self._alert_markdowns(at)}"
+        )
+
+    def test_unsubmitted_but_recent_ask_does_not_fire(self, db):
+        """Boundary check: a recommender asked TODAY (well inside
+        RECOMMENDER_ALERT_DAYS) is NOT yet pending. Pins that the
+        panel inherits the days-cutoff filter from
+        `get_pending_recommenders()` rather than firing on every
+        unsubmitted letter."""
+        self._seed_pending(days_ago=0)
+        at = _run_page()
+        matching = [i for i in at.info if i.value == self.EMPTY_COPY]
+        assert len(matching) == 1, (
+            f"Asked-today: expected the empty-state info to still fire "
+            f"(0d < RECOMMENDER_ALERT_DAYS={config.RECOMMENDER_ALERT_DAYS}). "
+            f"Got info bodies: {[i.value for i in at.info]}"
+        )
+        assert self._alert_markdowns(at) == [], (
+            f"Asked-today recommender should NOT produce a card. "
+            f"Got: {self._alert_markdowns(at)}"
+        )
+
+    def test_populated_db_suppresses_empty_info(self, db):
+        """Populated DB: at least one alert card renders, and the
+        empty-state info must NOT appear (branches mutually exclusive)."""
+        self._seed_pending()
+        at = _run_page()
+        assert len(self._alert_markdowns(at)) >= 1, (
+            f"Populated DB: expected at least one alert card. "
+            f"Got bodies: {self._alert_markdowns(at)}"
+        )
+        assert all(i.value != self.EMPTY_COPY for i in at.info), (
+            f"Populated DB: empty-state info must NOT render. "
+            f"Got info bodies: {[i.value for i in at.info]}"
+        )
+
+    # ── Group C: card content contract ────────────────────────────────────
+
+    def test_card_header_uses_warn_glyph_and_bold_name(self, db):
+        """`**⚠ {Name}**` header — bold so it stands apart from the
+        bullets visually, with the warn-glyph as the at-a-glance
+        signal that the card is an alert."""
+        self._seed_pending(recommender_name="Dr. Smith")
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any("**⚠ Dr. Smith**" in body for body in bodies), (
+            f"Expected '**⚠ Dr. Smith**' header in some card body. "
+            f"Got: {bodies}"
+        )
+
+    def test_card_bullet_includes_institute_and_position_name(self, db):
+        """Bullet uses the T4 Label precedent
+        '{institute}: {position_name}' so the user sees which posting
+        the letter is for, not just the job title."""
+        self._seed_pending(
+            position_name="BioStats Postdoc",
+            institute="Stanford",
+        )
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any("Stanford: BioStats Postdoc" in body for body in bodies), (
+            f"Expected 'Stanford: BioStats Postdoc' (T4 Label precedent) "
+            f"in some card body. Got: {bodies}"
+        )
+
+    def test_card_bullet_falls_back_to_position_name_when_institute_missing(self, db):
+        """T4 Label precedent: bare `position_name` when institute is
+        empty / missing — same fallback as the Upcoming panel."""
+        self._seed_pending(position_name="LonePost", institute="")
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any(
+            "LonePost" in body and "Stanford:" not in body
+            for body in bodies
+        ), (
+            f"Expected bare 'LonePost' (no institute prefix) when "
+            f"institute is empty. Got: {bodies}"
+        )
+
+    def test_card_bullet_includes_asked_days_phrasing(self, db):
+        """`asked Nd ago` phrasing per TASKS.md (supersedes the older
+        wireframe '14 days ago')."""
+        self._seed_pending(days_ago=14)
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any("asked 14d ago" in body for body in bodies), (
+            f"Expected 'asked 14d ago' in some card body. Got: {bodies}"
+        )
+
+    def test_card_bullet_includes_due_date_in_short_format(self, db):
+        """Due-date renders in Mon-D form (T4 DateColumn precedent —
+        no year, since the panel surfaces near-future deadlines)."""
+        target_date = date.today() + timedelta(days=10)
+        self._seed_pending(deadline_offset=10)
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        expected = f"due {target_date.strftime('%b')} {target_date.day}"
+        assert any(expected in body for body in bodies), (
+            f"Expected {expected!r} in some card body. Got: {bodies}"
+        )
+
+    def test_card_bullet_uses_em_dash_for_null_deadline(self, db):
+        """Em-dash glyph for missing deadline mirrors
+        NEXT_INTERVIEW_EMPTY in app.py (locked decision U3)."""
+        self._seed_pending(deadline_offset=None)
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any("due —" in body for body in bodies), (
+            f"Expected 'due —' (em dash) for null deadline. Got: {bodies}"
+        )
+
+    # ── Group D: grouping by recommender_name ─────────────────────────────
+
+    def test_two_letters_for_one_recommender_render_one_card(self, db):
+        """Two pending letters owed by Dr. Smith → exactly ONE card
+        with TWO bullet lines. Pins the group-by-recommender_name
+        contract — the user sees one row per person, not per letter."""
+        # Two distinct positions, same recommender.
+        pos1 = database.add_position(make_position({
+            "position_name": "Pos-A",
+            "institute":     "Stanford",
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        pos2 = database.add_position(make_position({
+            "position_name": "Pos-B",
+            "institute":     "MIT",
+            "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
+        }))
+        asked_iso = (date.today() - timedelta(days=14)).isoformat()
+        database.add_recommender(pos1, {
+            "recommender_name": "Dr. Smith",
+            "asked_date": asked_iso,
+        })
+        database.add_recommender(pos2, {
+            "recommender_name": "Dr. Smith",
+            "asked_date": asked_iso,
+        })
+
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        smith_cards = [b for b in bodies if "**⚠ Dr. Smith**" in b]
+        assert len(smith_cards) == 1, (
+            f"Two pending letters for Dr. Smith should produce ONE "
+            f"card (grouped by recommender_name). Got {len(smith_cards)} "
+            f"Smith card(s): {smith_cards}"
+        )
+        body = smith_cards[0]
+        assert "Stanford: Pos-A" in body and "MIT: Pos-B" in body, (
+            f"Single Smith card should list BOTH positions as bullets. "
+            f"Got body: {body!r}"
+        )
+
+    def test_two_recommenders_render_two_cards(self, db):
+        """Two distinct recommender names → two separate cards."""
+        pos1 = database.add_position(make_position({
+            "position_name": "Pos-A",
+            "institute":     "Stanford",
+        }))
+        pos2 = database.add_position(make_position({
+            "position_name": "Pos-B",
+            "institute":     "MIT",
+        }))
+        asked_iso = (date.today() - timedelta(days=14)).isoformat()
+        database.add_recommender(pos1, {
+            "recommender_name": "Dr. Smith",
+            "asked_date": asked_iso,
+        })
+        database.add_recommender(pos2, {
+            "recommender_name": "Dr. Jones",
+            "asked_date": asked_iso,
+        })
+
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        smith_cards = [b for b in bodies if "**⚠ Dr. Smith**" in b]
+        jones_cards = [b for b in bodies if "**⚠ Dr. Jones**" in b]
+        assert len(smith_cards) == 1, (
+            f"Expected exactly one Dr. Smith card. Got {len(smith_cards)}: "
+            f"{smith_cards}"
+        )
+        assert len(jones_cards) == 1, (
+            f"Expected exactly one Dr. Jones card. Got {len(jones_cards)}: "
+            f"{jones_cards}"
+        )
+
+    def test_submitted_letters_do_not_appear(self, db):
+        """A recommender whose `submitted_date` is set must NOT appear
+        in the alerts panel — the SQL filter `submitted_date IS NULL`
+        is doing the work, but pin it from the page side too."""
+        pos_id = database.add_position(make_position({
+            "position_name": "Done-Letter-Pos",
+        }))
+        rec_id = database.add_recommender(pos_id, {
+            "recommender_name": "Dr. Done",
+            "asked_date": (date.today() - timedelta(days=14)).isoformat(),
+        })
+        database.update_recommender(rec_id, {
+            "submitted_date": date.today().isoformat(),
+        })
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert all("Dr. Done" not in body for body in bodies), (
+            f"Submitted-letter recommender 'Dr. Done' must NOT appear. "
+            f"Got bodies: {bodies}"
+        )
