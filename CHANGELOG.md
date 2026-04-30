@@ -17,6 +17,53 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added — Cross-panel cohesion smoke (T6 first checkbox, branch `feature/phase-4-tier6-Cohesion`)
+
+Phase 4 T6 first checkbox — the cross-panel cohesion audit that closes
+the gap between the five panels each having shipped in isolation
+(T1–T5) and the dashboard composing as one cohesive surface. No code
+change to `app.py`; the contribution is the audit doc and the screenshot
+scaffolding.
+
+- **`reviews/phase-4-finish-cohesion-smoke.md`** — new findings doc
+  written in the GUIDELINES §10 review style (Exec summary → Findings
+  table → verbatim AppTest render dumps as cohesion evidence →
+  Junior-engineer Q&A → Capture instructions). Cites verbatim every
+  rendered subheader, KPI label, info message, dataframe column,
+  selectbox option, and recommender-card markdown for both populated
+  and empty-DB renders. Cohesion claim verified on six dimensions:
+  subheader rhythm (one `st.subheader` primitive across all 5 panels +
+  hero), empty-state pattern (one `st.info` primitive across all 4
+  empty branches), status sentinel stripping (no `[SAVED]`/`[APPLIED]`
+  literal leak — verified via dataframe Status column showing the
+  stripped UI labels), label-format reuse (three sites converging on
+  `{institute}: {position_name}` from independent code), date format
+  (three sites converging on `MMM D`), and layout-hierarchy progression
+  (4-col → 2-col → full-width × 2). Two 🟡 polish findings (wireframe
+  ASCII drift; em-dash literal-vs-constant) deferred per GUIDELINES
+  §10's defer-if-costly rule and the Phase 7 / publish-phase tier
+  alignment. Zero 🔴 / 🟠.
+- **`docs/ui/screenshots/v0.5.0/`** — new directory + a `.seed-snippet.py`
+  scratch script preserving the canonical fixture data so the user can
+  re-seed at capture time. The three PNGs themselves
+  (`dashboard-1280.png`, `dashboard-1440.png`, `dashboard-1680.png`)
+  are user-captures from a real desktop browser per the smoke doc's
+  capture instructions.
+- **`TASKS.md`** — first T6 checkbox flipped to `[x]`.
+- **No code changes** in `app.py` / `database.py` / `config.py` /
+  `pages/*.py` / `tests/*.py`; the audit is the deliverable. Both
+  `pytest tests/ -q` and `pytest -W error::DeprecationWarning tests/ -q`
+  remain green at **535 passing** on this branch.
+
+Process note: the harness preview tool's macOS sandbox blocks reading
+`.venv/pyvenv.cfg` (`com.apple.provenance` xattr), so headless
+screenshot capture from inside the agent harness is not available on
+this user's setup. Boot smoke + cohesion audit ran via Bash
+`streamlit run` (HTTP 200 verified) and AppTest probes
+(`Has any exception block: False` on both populated and empty DB);
+the 1280 / 1440 / 1680 PNGs are captured manually by the user per the
+smoke doc's "Capture instructions" section.
+
 ### Added — Recommender Alerts panel on `app.py` (T5-A, branch `feature/phase-4-tier5-RecommenderAlerts`)
 
 Phase 4 T5-A: full-width Recommender Alerts panel rendered BELOW the
