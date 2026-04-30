@@ -92,6 +92,25 @@ STATUS_DECLINED:  str = STATUS_VALUES[6]  # "[DECLINED]"
 # database.py reads this list; never hardcode these strings outside config.py.
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
+# Applications-page filter sentinel + exclusion set (DESIGN §8.3, Phase 5
+# T1-B). The Applications page selectbox offers an "Active" sentinel as
+# its default — semantically "every status that is still actionable"
+# (excludes pre-application STATUS_SAVED and withdrawn STATUS_CLOSED).
+# The literal lives in config (not the page) so a future surface — e.g.
+# a "Tracked: Active" KPI variant on the dashboard — can reference it
+# without hardcoding. Drift caught by §5.2 invariant #12.
+STATUS_FILTER_ACTIVE: str = "Active"
+
+# Statuses removed by the "Active" filter sentinel above. Frozen so a
+# page can't accidentally mutate it via .add()/.remove() and silently
+# broaden the page's default filter at runtime. The selectbox stores
+# the sentinel STATUS_FILTER_ACTIVE; the page resolves it to
+# `set(STATUS_VALUES) - STATUS_FILTER_ACTIVE_EXCLUDED` at render time.
+STATUS_FILTER_ACTIVE_EXCLUDED: frozenset[str] = frozenset({
+    STATUS_SAVED,
+    STATUS_CLOSED,
+})
+
 # Guard (DESIGN §5.2 #2): STATUS_COLORS must have exactly one entry per
 # STATUS_VALUES item. Catches drift at import time rather than as a
 # KeyError deep in page code.
@@ -374,4 +393,16 @@ assert set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}, (
     f"FUNNEL_TOGGLE_LABELS must have exactly the keys {{True, False}}. "
     f"Got: {sorted(FUNNEL_TOGGLE_LABELS.keys())!r}. The page indexes "
     f"this dict by the bool value of st.session_state['_funnel_expanded']."
+)
+
+# Invariant (DESIGN §5.2 #12): STATUS_FILTER_ACTIVE_EXCLUDED must be a
+# subset of STATUS_VALUES. Catches a typo in the exclusion set or a
+# rename of a STATUS_VALUES entry that doesn't propagate. Without this
+# guard, an unknown status in the exclusion set would surface as a
+# silent filter no-op (page hides nothing extra) rather than a clear
+# import-time AssertionError.
+assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
+    f"STATUS_FILTER_ACTIVE_EXCLUDED must be a subset of STATUS_VALUES. "
+    f"Unknown entries: "
+    f"{STATUS_FILTER_ACTIVE_EXCLUDED - set(STATUS_VALUES)!r}"
 )
