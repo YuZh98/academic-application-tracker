@@ -1451,3 +1451,360 @@ class TestT3MaterialsReadiness:
             f"app.py must call st.switch_page(\"{self.TARGET_PAGE}\") — "
             "T1-E precedent pins the route target at the source level."
         )
+
+
+# ── T4: Upcoming timeline panel ───────────────────────────────────────────────
+
+class TestT4UpcomingTimeline:
+    """T4-B: Upcoming panel rendering on the dashboard.
+
+    DESIGN §8.1 (T4-0 + T4-0b lock-down): a single full-width section
+    below the funnel/readiness `st.columns(2)` row. Layout is an
+    `st.columns([3, 1])` pair carrying the dynamic subheader on the
+    left and a window-width selectbox on the right.
+
+    Locked panel contract:
+      - Subheader 'Upcoming (next X days)' renders in BOTH empty and
+        populated branches for page-height stability (T2/T3 precedent).
+      - Window selectbox (key=`upcoming_window`) offers
+        `config.UPCOMING_WINDOW_OPTIONS`; default = DEADLINE_ALERT_DAYS.
+      - Empty branch: `st.info` with `EMPTY_COPY_DEFAULT` verbatim
+        (interpolating the selected window).
+      - Populated branch: `st.dataframe` with display headers
+        (Date, Days left, Label, Kind, Status, Urgency); Date column
+        rendered via `st.column_config.DateColumn(format="MMM D")`
+        for the spec'd 'Apr 24' phrasing; Status mapped through
+        STATUS_LABELS (DESIGN §8.0 — never raw bracketed sentinels);
+        Days left / Kind / Urgency / Label pass through T4-A's
+        projection unchanged.
+
+    AppTest access patterns (verified against Streamlit 1.56):
+      - `at.dataframe[0].value` returns the underlying pandas DataFrame
+        (Date column carries datetime.date objects; the DateColumn
+        format string is applied client-side and is invisible to AppTest,
+        so the format string is pinned via a source grep — T1-E precedent).
+      - `at.selectbox(key=...).value` returns the option (not the index);
+        `at.selectbox(key=...).set_value(v).run()` triggers a rerun
+        with the new value.
+    """
+
+    SUBHEADER_DEFAULT = f"Upcoming (next {config.DEADLINE_ALERT_DAYS} days)"
+    EMPTY_COPY_DEFAULT = (
+        f"No deadlines or interviews in the next "
+        f"{config.DEADLINE_ALERT_DAYS} days."
+    )
+    DISPLAY_COLUMNS = ["Date", "Days left", "Label", "Kind", "Status", "Urgency"]
+    WINDOW_KEY = "upcoming_window"
+    DATE_COLUMN_FORMAT_SOURCE = 'st.column_config.DateColumn(format="MMM D")'
+
+    @staticmethod
+    def _half_width_columns(at: AppTest):
+        return [c for c in at.columns if c.proto.weight == 0.5]
+
+    @classmethod
+    def _has_subheader(cls, container, value: str | None = None) -> bool:
+        target = value or cls.SUBHEADER_DEFAULT
+        return any(s.value == target for s in container.subheader)
+
+    # ── Group A: subheader stability + layout ─────────────────────────────
+
+    def test_subheader_renders_on_empty_db(self, db):
+        """Page-height stability: the subheader renders even when there
+        is nothing to show, so the layout above doesn't shift when the
+        first qualifying deadline lands."""
+        at = _run_page()
+        assert self._has_subheader(at), (
+            f"Empty DB: expected top-level {self.SUBHEADER_DEFAULT!r} "
+            f"subheader. Got: {[s.value for s in at.subheader]}"
+        )
+
+    def test_subheader_renders_on_populated_db(self, db):
+        """Same page-height-stability invariant on the populated path."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        at = _run_page()
+        assert self._has_subheader(at), (
+            f"Populated DB: expected top-level {self.SUBHEADER_DEFAULT!r} "
+            f"subheader. Got: {[s.value for s in at.subheader]}"
+        )
+
+    def test_panel_lives_outside_funnel_readiness_columns_pair(self, db):
+        """Layout: the T4 panel sits BELOW the funnel/readiness
+        st.columns(2) pair, NOT inside either half-column. Combines a
+        top-level existence check with two column-exclusion checks so
+        the test cannot pass vacuously when the panel is unwired."""
+        at = _run_page()
+        halves = self._half_width_columns(at)
+        assert len(halves) == 2, (
+            f"Precondition: T2-C creates exactly one st.columns(2) pair. "
+            f"Got {len(halves)} half-width columns."
+        )
+        left, right = halves
+        assert self._has_subheader(at), (
+            f"{self.SUBHEADER_DEFAULT!r} must appear on the page "
+            f"(existence check, guards against vacuous pass). Got "
+            f"top-level subheaders: {[s.value for s in at.subheader]}"
+        )
+        assert not self._has_subheader(left), (
+            f"{self.SUBHEADER_DEFAULT!r} must NOT appear in the left "
+            f"half-width column. Got left subheaders: "
+            f"{[s.value for s in left.subheader]}"
+        )
+        assert not self._has_subheader(right), (
+            f"{self.SUBHEADER_DEFAULT!r} must NOT appear in the right "
+            f"half-width column. Got right subheaders: "
+            f"{[s.value for s in right.subheader]}"
+        )
+
+    # ── Group B: window selectbox ─────────────────────────────────────────
+
+    def test_window_selector_default_is_deadline_alert_days(self, db):
+        """The selectbox lands at DEADLINE_ALERT_DAYS on first render —
+        the dashboard's default 'how far ahead am I looking?' answer
+        comes from a single config constant and stays in sync with the
+        urgency band."""
+        at = _run_page()
+        sb = at.selectbox(key=self.WINDOW_KEY)
+        assert sb.value == config.DEADLINE_ALERT_DAYS, (
+            f"Selectbox default must equal DEADLINE_ALERT_DAYS="
+            f"{config.DEADLINE_ALERT_DAYS}. Got {sb.value!r}"
+        )
+
+    def test_window_selector_offers_config_window_options(self, db):
+        """Selectbox options come from config.UPCOMING_WINDOW_OPTIONS —
+        no hardcoded list in app.py per GUIDELINES §6 (no hardcoded
+        vocab). Pins the spec→config→page chain.
+
+        AppTest 1.56 quirk: `selectbox.options` returns the
+        protobuf-serialized form (strings) regardless of the original
+        Python type, while `selectbox.value` round-trips correctly
+        back to the original type. Compare against the stringified
+        config list, with the original list shown in the message for
+        debug clarity."""
+        at = _run_page()
+        sb = at.selectbox(key=self.WINDOW_KEY)
+        expected_strs = [str(v) for v in config.UPCOMING_WINDOW_OPTIONS]
+        assert list(sb.options) == expected_strs, (
+            f"AppTest exposes selectbox options as strings; expected "
+            f"{expected_strs!r} (stringified config.UPCOMING_WINDOW_OPTIONS="
+            f"{config.UPCOMING_WINDOW_OPTIONS!r}). Got {list(sb.options)!r}"
+        )
+
+    # ── Group C: empty / populated branches ───────────────────────────────
+
+    def test_empty_db_renders_info_with_locked_copy(self, db):
+        """Empty DB at default window: exactly one st.info matching
+        EMPTY_COPY_DEFAULT verbatim, no st.dataframe."""
+        at = _run_page()
+        matching = [i for i in at.info if i.value == self.EMPTY_COPY_DEFAULT]
+        assert len(matching) == 1, (
+            f"Empty DB: expected exactly one st.info with copy "
+            f"{self.EMPTY_COPY_DEFAULT!r}. Got info bodies: "
+            f"{[i.value for i in at.info]}"
+        )
+        assert len(at.dataframe) == 0, (
+            f"Empty DB: no st.dataframe should render in the Upcoming "
+            f"panel. Got {len(at.dataframe)} dataframe(s)."
+        )
+
+    def test_populated_db_renders_dataframe(self, db):
+        """Populated DB: an st.dataframe renders; the empty-state info
+        must NOT appear (branches are mutually exclusive)."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        at = _run_page()
+        assert len(at.dataframe) == 1, (
+            f"Populated DB: expected exactly one dataframe in the "
+            f"Upcoming panel. Got {len(at.dataframe)}."
+        )
+        assert all(i.value != self.EMPTY_COPY_DEFAULT for i in at.info), (
+            f"Populated DB: empty-state info must NOT render. "
+            f"Got info bodies: {[i.value for i in at.info]}"
+        )
+
+    # ── Group D: display contract ─────────────────────────────────────────
+
+    def test_populated_dataframe_has_six_display_column_headers(self, db):
+        """Display-header rename contract: T4-A's lowercase
+        (date, days_left, label, kind, status, urgency) become
+        Title-Case headers in the rendered dataframe."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        at = _run_page()
+        df = at.dataframe[0].value
+        assert list(df.columns) == self.DISPLAY_COLUMNS, (
+            f"Expected display column headers {self.DISPLAY_COLUMNS!r}, "
+            f"got {list(df.columns)!r}"
+        )
+
+    def test_status_column_shows_ui_labels_not_raw_sentinels(self, db):
+        """DESIGN §8.0: pages NEVER render a raw bracketed status to
+        the user. T4-B maps T4-A's raw `status` through STATUS_LABELS
+        for the displayed Status column — both an equality check and a
+        belt-and-suspenders startswith('[') guard."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        at = _run_page()
+        df = at.dataframe[0].value
+        statuses = list(df["Status"])
+        expected_label = config.STATUS_LABELS[config.STATUS_SAVED]
+        assert all(s == expected_label for s in statuses), (
+            f"Status column must contain UI-mapped labels (e.g. "
+            f"{expected_label!r}), never raw bracketed sentinels. "
+            f"Got: {statuses}"
+        )
+        for s in statuses:
+            assert not (isinstance(s, str) and s.startswith("[")), (
+                f"Raw bracketed sentinel leaked into Status: {s!r}"
+            )
+
+    def test_date_column_carries_date_objects(self, db):
+        """T4-A's date-object contract must survive the column rename.
+        DateColumn formatting is applied client-side; the underlying
+        column dtype + cell types are what tests can see."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+        }))
+        at = _run_page()
+        df = at.dataframe[0].value
+        cells = list(df["Date"])
+        assert all(isinstance(c, date) for c in cells), (
+            f"Every Date cell must be a datetime.date. Got types: "
+            f"{[type(c).__name__ for c in cells]}"
+        )
+
+    def test_date_column_uses_moment_format_string(self, db):
+        """DateColumn `format=` is applied client-side; AppTest cannot
+        see the rendered string. Pin the moment.js format string at the
+        source level — same precedent as st.switch_page targets in T1-E."""
+        import pathlib
+        src = pathlib.Path("app.py").read_text(encoding="utf-8")
+        assert self.DATE_COLUMN_FORMAT_SOURCE in src, (
+            f"app.py must call {self.DATE_COLUMN_FORMAT_SOURCE!r} for "
+            f"the Date column so the dashboard renders dates as 'Apr 24'."
+        )
+
+    def test_kind_column_for_deadline_renders_friendly_string(self, db):
+        """T4-A returns 'Deadline for application' for deadline rows;
+        T4-B passes it through unchanged — the Kind cell reads as
+        natural language for the user."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        at = _run_page()
+        kinds = list(at.dataframe[0].value["Kind"])
+        assert "Deadline for application" in kinds, (
+            f"Deadline row Kind must read 'Deadline for application'. "
+            f"Got Kind cells: {kinds}"
+        )
+
+    def test_kind_column_for_interview_includes_sequence_number(self, db):
+        """Interview rows use the sequence-aware 'Interview N' phrasing.
+        Position with no deadline + one interview at +5d → exactly one
+        'Interview 1' row."""
+        pos_id = database.add_position(make_position({
+            "position_name": "P-int",
+            "deadline_date": None,
+        }))
+        database.add_interview(pos_id, {
+            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+        })
+        at = _run_page()
+        kinds = list(at.dataframe[0].value["Kind"])
+        assert kinds == ["Interview 1"], (
+            f"Single-interview row Kind must read ['Interview 1']. "
+            f"Got: {kinds}"
+        )
+
+    def test_label_column_includes_institute(self, db):
+        """Label format '{institute}: {position_name}' makes it through
+        T4-A's projection and T4-B's column rename without
+        modification."""
+        database.add_position(make_position({
+            "position_name": "Postdoc-X",
+            "institute":     "Stanford",
+            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+        }))
+        at = _run_page()
+        labels = list(at.dataframe[0].value["Label"])
+        assert "Stanford: Postdoc-X" in labels, (
+            f"Expected 'Stanford: Postdoc-X' label. Got: {labels}"
+        )
+
+    def test_urgency_column_passes_through_emoji_glyphs(self, db):
+        """T4-A returns '🔴' for in-7d rows; T4-B's column rename does
+        not strip the glyph."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=2)).isoformat(),
+        }))
+        at = _run_page()
+        urgencies = list(at.dataframe[0].value["Urgency"])
+        assert "🔴" in urgencies, (
+            f"In-2d row should show '🔴' in Urgency. Got: {urgencies}"
+        )
+
+    def test_days_left_column_passes_through_phrasing(self, db):
+        """T4-A's days_left phrasing ('in N days') makes it into the
+        rendered Days left column unchanged."""
+        database.add_position(make_position({
+            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+        }))
+        at = _run_page()
+        days_left = list(at.dataframe[0].value["Days left"])
+        assert "in 5 days" in days_left, (
+            f"Expected 'in 5 days' in Days left column. Got: {days_left}"
+        )
+
+    # ── Group E: selectbox interaction ────────────────────────────────────
+
+    def test_changing_window_updates_subheader(self, db):
+        """Selecting a wider window updates the dynamic subheader text.
+        Pins that the subheader is f-string-driven, not hardcoded."""
+        at = _run_page()
+        at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
+        expected_60 = "Upcoming (next 60 days)"
+        assert any(s.value == expected_60 for s in at.subheader), (
+            f"After selecting 60, expected subheader {expected_60!r}. "
+            f"Got: {[s.value for s in at.subheader]}"
+        )
+
+    def test_changing_window_updates_empty_copy(self, db):
+        """The empty-state copy interpolates the selected window — when
+        the user widens to 60 days, the empty info reflects that."""
+        at = _run_page()
+        at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
+        expected_60 = "No deadlines or interviews in the next 60 days."
+        assert any(i.value == expected_60 for i in at.info), (
+            f"After selecting 60 on empty DB, expected info "
+            f"{expected_60!r}. Got info bodies: "
+            f"{[i.value for i in at.info]}"
+        )
+
+    def test_changing_window_widens_data_fetch(self, db):
+        """A position at +50d sits OUTSIDE the default 30-day window
+        (empty state). After widening to 60-day, the row appears in
+        the dataframe — proves the selectbox value drives
+        get_upcoming(days=...)."""
+        database.add_position(make_position({
+            "position_name": "Far",
+            "deadline_date": (date.today() + timedelta(days=50)).isoformat(),
+        }))
+        at = _run_page()
+        assert len(at.dataframe) == 0, (
+            "Default 30-day window must NOT surface the +50d position "
+            "(it's outside the window)."
+        )
+        at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
+        assert len(at.dataframe) == 1, (
+            f"After widening to 60-day window, expected one dataframe. "
+            f"Got {len(at.dataframe)}."
+        )
+        labels = list(at.dataframe[0].value["Label"])
+        assert any("Far" in label for label in labels), (
+            f"After widening, expected the +50d 'Far' position in the "
+            f"Label column. Got: {labels}"
+        )
