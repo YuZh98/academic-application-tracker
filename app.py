@@ -7,7 +7,7 @@
 #   T2 — application funnel (Plotly bar, FUNNEL_BUCKETS aggregation,
 #        [expand] toggle, 3-branch empty-state, columns wrap)    ✅ done
 #   T3 — materials readiness panel                              ✅ done
-#   T4 — upcoming timeline
+#   T4 — upcoming timeline (full-width, dynamic window selector) ✅ done
 #   T5 — recommender alerts
 
 from datetime import date
@@ -281,3 +281,70 @@ with _right_col:
         st.progress(_pending / _total, text=f"Still missing: {_pending}")
         if st.button("→ Opportunities page", key="materials_readiness_cta"):
             st.switch_page("pages/1_Opportunities.py")
+
+# ── Upcoming (T4) ─────────────────────────────────────────────────────────────
+# Full-width panel BELOW the funnel/readiness st.columns(2) row, surfacing the
+# merged upcoming feed (deadlines + interviews) from database.get_upcoming()
+# (T4-A). DESIGN §8.1 + T4-0/T4-0b lock-down.
+#
+# Layout: an st.columns([3, 1]) pair carries the dynamic subheader on the left
+# and the window-width selectbox on the right. Defining selected_window inside
+# the right column first means the left column can interpolate it into the
+# subheader on the same render — Python execution order is independent of
+# visual placement, which is determined by column index.
+#
+# Display contract (DESIGN §8.1 "Upcoming-panel column contract"):
+#   - Six columns renamed from T4-A's lowercase storage form:
+#     date → Date (datetime.date, rendered 'Apr 24' via DateColumn(format="MMM D"))
+#     days_left → Days left ('today' / 'in 1 day' / 'in N days')
+#     label → Label ('{institute}: {position_name}' or bare position_name)
+#     kind → Kind ('Deadline for application' or 'Interview N')
+#     status → Status (mapped through STATUS_LABELS — DESIGN §8.0 strips
+#              the bracketed sentinel; '.get' default keeps an unrecognised
+#              status visible rather than producing NaN)
+#     urgency → Urgency ('🔴' / '🟡' / '')
+#   - Subheader 'Upcoming (next X days)' renders in BOTH branches for
+#     page-height stability (T2/T3 precedent — without this, the layout
+#     above shifts when the first qualifying row lands).
+#   - Empty-state copy interpolates the selected window so the message
+#     stays coherent under any user choice.
+_header_col, _control_col = st.columns([3, 1])
+with _control_col:
+    selected_window = st.selectbox(
+        "Window (days)",
+        options=config.UPCOMING_WINDOW_OPTIONS,
+        index=config.UPCOMING_WINDOW_OPTIONS.index(config.DEADLINE_ALERT_DAYS),
+        key="upcoming_window",
+        label_visibility="collapsed",
+    )
+with _header_col:
+    st.subheader(f"Upcoming (next {selected_window} days)")
+
+_upcoming = database.get_upcoming(days=selected_window)
+if _upcoming.empty:
+    st.info(
+        f"No deadlines or interviews in the next {selected_window} days."
+    )
+else:
+    _upcoming_display = _upcoming.rename(columns={
+        "date":      "Date",
+        "days_left": "Days left",
+        "label":     "Label",
+        "kind":      "Kind",
+        "status":    "Status",
+        "urgency":   "Urgency",
+    })
+    # Storage uses bracketed sentinels; UI strips them via STATUS_LABELS.
+    # `.get(raw, raw)` keeps a stale value visible rather than producing NaN —
+    # defensive belt-and-suspenders against an unrecognised status.
+    _upcoming_display["Status"] = _upcoming_display["Status"].map(
+        lambda raw: config.STATUS_LABELS.get(raw, raw)
+    )
+    st.dataframe(
+        _upcoming_display,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Date": st.column_config.DateColumn(format="MMM D"),
+        },
+    )

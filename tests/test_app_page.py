@@ -1574,12 +1574,21 @@ class TestT4UpcomingTimeline:
     def test_window_selector_offers_config_window_options(self, db):
         """Selectbox options come from config.UPCOMING_WINDOW_OPTIONS —
         no hardcoded list in app.py per GUIDELINES §6 (no hardcoded
-        vocab). Pins the spec→config→page chain."""
+        vocab). Pins the spec→config→page chain.
+
+        AppTest 1.56 quirk: `selectbox.options` returns the
+        protobuf-serialized form (strings) regardless of the original
+        Python type, while `selectbox.value` round-trips correctly
+        back to the original type. Compare against the stringified
+        config list, with the original list shown in the message for
+        debug clarity."""
         at = _run_page()
         sb = at.selectbox(key=self.WINDOW_KEY)
-        assert list(sb.options) == config.UPCOMING_WINDOW_OPTIONS, (
-            f"Selectbox options must equal config.UPCOMING_WINDOW_OPTIONS="
-            f"{config.UPCOMING_WINDOW_OPTIONS!r}. Got {list(sb.options)!r}"
+        expected_strs = [str(v) for v in config.UPCOMING_WINDOW_OPTIONS]
+        assert list(sb.options) == expected_strs, (
+            f"AppTest exposes selectbox options as strings; expected "
+            f"{expected_strs!r} (stringified config.UPCOMING_WINDOW_OPTIONS="
+            f"{config.UPCOMING_WINDOW_OPTIONS!r}). Got {list(sb.options)!r}"
         )
 
     # ── Group C: empty / populated branches ───────────────────────────────

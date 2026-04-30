@@ -305,9 +305,18 @@ QUICK_ADD_FIELDS: list[str] = [
 EDIT_PANEL_TABS: list[str] = ["Overview", "Requirements", "Materials", "Notes"]
 
 # ── Dashboard display thresholds ──────────────────────────────────────────────
-DEADLINE_ALERT_DAYS    = 30   # Show upcoming deadlines within this many days
+DEADLINE_ALERT_DAYS    = 30   # Default Upcoming-panel window + upper edge of 🟡 band
 DEADLINE_URGENT_DAYS   = 7    # Color a deadline red if it falls within this many days
 RECOMMENDER_ALERT_DAYS = 7    # Alert if a recommender was asked N+ days ago with no submission
+
+# User-selectable widths (in days) for the dashboard's Upcoming-panel
+# selectbox (DESIGN §8.1, T4-0b lock-down). The selectbox defaults to
+# DEADLINE_ALERT_DAYS and lets the user widen the view to see further
+# ahead. The urgency band (🔴 / 🟡) stays tied to DEADLINE_URGENT_DAYS /
+# DEADLINE_ALERT_DAYS regardless of the selected window — wider windows
+# surface more rows but do not lower urgency. Invariant #10 below
+# guarantees the default value is a real option.
+UPCOMING_WINDOW_OPTIONS: list[int] = [30, 60, 90]
 
 # Invariant (DESIGN §5.2 #8): urgency window cannot exceed the alert window.
 # Swapping these by accident would mark every upcoming deadline "urgent"
@@ -315,4 +324,16 @@ RECOMMENDER_ALERT_DAYS = 7    # Alert if a recommender was asked N+ days ago wit
 assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS, (
     f"DEADLINE_URGENT_DAYS={DEADLINE_URGENT_DAYS} must be <= "
     f"DEADLINE_ALERT_DAYS={DEADLINE_ALERT_DAYS}"
+)
+
+# Invariant (DESIGN §5.2 #10): the Upcoming-panel selectbox default
+# (= DEADLINE_ALERT_DAYS) must be a real option in the offered list,
+# otherwise the selectbox couldn't render at the spec'd default.
+# Catches a config edit that drops 30 from UPCOMING_WINDOW_OPTIONS
+# without updating the default.
+assert DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS, (
+    f"DEADLINE_ALERT_DAYS={DEADLINE_ALERT_DAYS} must appear in "
+    f"UPCOMING_WINDOW_OPTIONS={UPCOMING_WINDOW_OPTIONS!r}. The "
+    f"Upcoming-panel selectbox default uses DEADLINE_ALERT_DAYS — "
+    f"dropping it from the list would leave the default unable to render."
 )
