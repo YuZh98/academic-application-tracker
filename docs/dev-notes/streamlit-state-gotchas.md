@@ -275,8 +275,11 @@ NaN-from-NULL columns. `pd.isna` is the load-bearing guard anywhere a
 DataFrame cell feeds into session_state or string formatting.
 
 ```python
-for col in ("interview1_date", "interview2_date"):
-    v = row[col]
+# Example from app.py::_next_interview_display (post v1.3 Sub-task 8,
+# which normalized the flat interview1_date / interview2_date columns
+# into the interviews sub-table — single scheduled_date per row).
+for _, row in upcoming.iterrows():
+    v = row["scheduled_date"]
     if pd.isna(v) or v == "" or v < today_iso:
         continue
     # safe to use v as a string / date
@@ -292,10 +295,18 @@ visible bug but a slight performance cost.
 **Cause:** `st.button` already triggers a rerun on click; the explicit
 `st.rerun()` fires a second one.
 
-**Workaround:** leave it if the double-rerun is negligible. The 🔄 Refresh
-button in `app.py` keeps the explicit `st.rerun()` as a self-documenting
-intent marker — future contributors reading the code see "this is here to
-refresh" immediately.
+**Workaround:** drop the explicit `st.rerun()` after a plain `st.button`
+click — Streamlit's automatic rerun is sufficient. The pattern survives
+in the codebase only inside Save / Delete handlers wrapped in `st.form`
+or `@st.dialog`, where the explicit rerun IS required: form-submission
+and dialog Confirm events do not trigger a script rerun automatically,
+so the handler must call `st.rerun()` explicitly to refresh the UI
+after a write. Example sites: every Save handler in
+`pages/1_Opportunities.py`'s `st.form` blocks, the
+`_confirm_delete_dialog` handler.
+
+(Pre-v1.3 the canonical example was the dashboard's 🔄 Refresh button
+on `app.py`; that button was removed in Sub-task 12 per DESIGN D13.)
 
 ---
 

@@ -23,6 +23,10 @@ manual steps to run against a pre-existing database.
 - `docs/adr/README.md`: clarify post-v1.1 decision deferral policy; update D1–D10 references to acknowledge the D11–D25 additions in `DESIGN §10` as candidate ADR backfills. (branch `docs/guidelineupdate`)
 - `reviews/*.md` (all 20 files): harmonize front-matter to the new §14.1 schema — add missing `**Branch:**` / `**Scope:**` / `**Verdict:**` fields; preserve all existing fields. Pre-branch-workflow reviews (Phase 1–3 Tier 1–3) get `Branch: _(direct-to-main; pre-branch-workflow)_`. (branch `docs/guidelineupdate`)
 
+### Fixed
+- `docs/dev-notes/streamlit-state-gotchas.md` gotcha #13: replace stale `interview1_date` / `interview2_date` example with the post-v1.3-Sub-task-8 `scheduled_date` form (interviews sub-table). (branch `docs/guidelineupdate`)
+- `docs/dev-notes/streamlit-state-gotchas.md` gotcha #14: drop the obsolete 🔄 Refresh-button reference (button was deleted in Sub-task 12 per DESIGN D13); rewrite workaround to point at the surviving Save / Delete-handler use sites. (branch `docs/guidelineupdate`)
+
 ### Added — Cascade-promotion toast surfacing (Phase 5 T2-B, branch `feature/phase-5-tier2-ApplicationDetailCard`)
 
 Phase 5 Tier 2-B — the Applications-page Save handler now reads
