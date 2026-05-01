@@ -53,6 +53,35 @@ SELECTED_PID_KEY      = "applications_selected_position_id"
 EDIT_FORM_SID_KEY     = "_applications_edit_form_sid"
 SKIP_TABLE_RESET_KEY  = "_applications_skip_table_reset"
 
+# T3-A: Interview list widgets and sentinels (DESIGN §8.3 D-B). Per-row
+# widget keys scope to the interview's primary key for stability across
+# reruns: apps_interview_{id}_{date|format|notes}. Pre-seed sentinel
+# tracks which interview ids have been seeded so a freshly-Added row
+# gets pre-seeded without disturbing sibling rows mid-edit.
+INTERVIEWS_FORM_ID         = "apps_interviews_form"
+INTERVIEWS_SAVE_KEY        = "apps_interviews_save"
+ADD_INTERVIEW_KEY          = "apps_add_interview"
+INTERVIEWS_SEEDED_IDS_KEY  = "_apps_interviews_seeded_ids"
+
+# Em-dash glyph the page uses as a None-placeholder via format_func.
+# Hardcoded here (not imported from the page) because the page module
+# name starts with a digit and is not importable via dot syntax. Pinned
+# to the page's `EM_DASH = "—"` constant; a rename there must update
+# this constant too.
+EM_DASH_GLYPH = "—"
+
+
+def _w_interview_date(iid: int) -> str:
+    return f"apps_interview_{iid}_date"
+
+
+def _w_interview_format(iid: int) -> str:
+    return f"apps_interview_{iid}_format"
+
+
+def _w_interview_notes(iid: int) -> str:
+    return f"apps_interview_{iid}_notes"
+
 
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Applications page."""
@@ -1601,4 +1630,806 @@ class TestApplicationsCohesionSweep:
         assert at.session_state[W_RESPONSE_TYPE] == config.RESPONSE_TYPE_OFFER, (
             f"Failed save must preserve selectbox content; got "
             f"{at.session_state[W_RESPONSE_TYPE]!r}."
+        )
+
+
+# ── Interview list render (T3-A) ──────────────────────────────────────────────
+
+class TestApplicationsInterviewListRender:
+    """T3-A: under the existing T2 detail card (inside the same
+    `st.container(border=True)`), an Interviews section renders one
+    row of widgets per existing interview, ordered by sequence ASC.
+    Per-row widget keys: `apps_interview_{id}_{date|format|notes}`
+    (DESIGN §8.3 D-B). Empty interviews list → only the section
+    header + Add button render (no form, no Save submit button)."""
+
+    SECTION_HEADER_TEXT = "Interviews"
+
+    def test_section_header_renders(self, db):
+        """Selecting a position must surface the **Interviews** section
+        header inside the detail card. `st.markdown` is display-only
+        (no `key=`), so identification is by substring on the markdown
+        element list — same precedent as the dashboard's KPI labels."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        markdowns = [m.value for m in at.markdown]
+        assert any(self.SECTION_HEADER_TEXT in m for m in markdowns), (
+            f"Detail card must render the '**{self.SECTION_HEADER_TEXT}**' "
+            f"section header per DESIGN §8.3 D-B; got "
+            f"markdowns={markdowns!r}."
+        )
+
+    def test_empty_list_renders_no_form_only_add_button(self, db):
+        """Position with zero interviews → no per-row widgets, no Save
+        submit button, no form. Only the section header + the Add
+        button render. Sentinel ends as the empty frozenset."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Sentinel reflects empty interviews list.
+        sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
+        assert sentinel == frozenset(), (
+            f"Empty interviews list must yield empty seeded-ids "
+            f"sentinel; got {sentinel!r}."
+        )
+        # Add button renders.
+        at.button(key=ADD_INTERVIEW_KEY)  # raises KeyError if absent.
+        # Save submit button does NOT render (no form when empty).
+        with pytest.raises(KeyError):
+            at.button(key=INTERVIEWS_SAVE_KEY)
+
+    def test_three_interviews_render_three_rows(self, db):
+        """Three DB interviews → three sets of per-row widgets, one per
+        sequence. `get_interviews` orders by sequence ASC; the page
+        does not re-sort."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        # add_interview auto-assigns sequence 1, 2, 3 in insertion order.
+        i1 = database.add_interview(pid, {"scheduled_date": "2026-05-03"})["id"]
+        i2 = database.add_interview(pid, {"scheduled_date": "2026-05-10"})["id"]
+        i3 = database.add_interview(pid, {"scheduled_date": "2026-05-17"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Each interview id has its date / format / notes widget triple.
+        for iid in (i1, i2, i3):
+            try:
+                at.date_input(key=_w_interview_date(iid))
+                at.selectbox(key=_w_interview_format(iid))
+                at.text_input(key=_w_interview_notes(iid))
+            except KeyError as e:
+                pytest.fail(
+                    f"All three per-row widgets must render for "
+                    f"interview id={iid}; missing widget: {e}"
+                )
+
+    def test_widgets_pre_seed_from_db(self, db):
+        """Pre-seed canonical pattern: date_input / selectbox / text_input
+        load from the DB interview row on first render (gotcha #2 —
+        pre-seed runs BEFORE the widget renders, so session_state holds
+        the DB-derived value when the widget is constructed)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {
+            "scheduled_date": "2026-05-03",
+            "format":         "Video",
+            "notes":          "PI to call in",
+        })["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        assert at.session_state[_w_interview_date(iid)] == datetime.date(2026, 5, 3), (
+            f"date widget must pre-seed to DB scheduled_date "
+            f"(2026-05-03); got "
+            f"{_ss_or_none(at, _w_interview_date(iid))!r}."
+        )
+        assert at.session_state[_w_interview_format(iid)] == "Video", (
+            f"format widget must pre-seed to DB format ('Video'); got "
+            f"{_ss_or_none(at, _w_interview_format(iid))!r}."
+        )
+        assert at.session_state[_w_interview_notes(iid)] == "PI to call in", (
+            f"notes widget must pre-seed to DB notes ('PI to call in'); "
+            f"got {_ss_or_none(at, _w_interview_notes(iid))!r}."
+        )
+
+    def test_safe_str_handles_nan_notes_pre_seed(self, db):
+        """NULL notes in DB → pandas returns NaN (gotcha #1) → pre-seed
+        must coerce via `_safe_str` to `""`. Without the coercion, the
+        text_input pre-seed would assign `float('nan')` to session_state
+        and crash the widget protobuf serialiser. Format and date
+        widgets equally must not break on NULL: format → None,
+        date → None."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        # add_interview with no fields → date / format / notes all NULL.
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        assert not at.exception, (
+            f"Page must render without exception when interview row "
+            f"has all-NULL fields; got {at.exception!r}."
+        )
+        notes_val = at.session_state[_w_interview_notes(iid)]
+        assert notes_val == "", (
+            f"NULL notes must pre-seed as '' via _safe_str (gotcha #1); "
+            f"got {notes_val!r} (type={type(notes_val).__name__})."
+        )
+        assert at.session_state[_w_interview_date(iid)] is None, (
+            f"NULL scheduled_date must pre-seed as None via "
+            f"_coerce_iso_to_date; got "
+            f"{_ss_or_none(at, _w_interview_date(iid))!r}."
+        )
+        assert at.session_state[_w_interview_format(iid)] is None, (
+            f"NULL format must pre-seed as None (NOT the first "
+            f"INTERVIEW_FORMATS entry — Sonnet plan-critique signal); "
+            f"got {_ss_or_none(at, _w_interview_format(iid))!r}."
+        )
+
+    def test_format_selectbox_offers_none_plus_interview_formats(self, db):
+        """Per Sonnet plan-critique: a freshly-Added row has format=NULL.
+        Without a leading None option, the selectbox would default to
+        INTERVIEW_FORMATS[0] (e.g. 'Phone') and silently dirty-write a
+        format the user never chose. The page mirrors T2-A's
+        response_type pattern: `options=[None, *INTERVIEW_FORMATS]`
+        with `format_func=lambda v: EM_DASH if v is None else v`.
+        Per gotcha #15, AppTest exposes `.options` as protobuf-serialized
+        strings — the leading `None` renders via the format_func as
+        the em-dash glyph."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        sb = at.selectbox(key=_w_interview_format(iid))
+        expected_strs = [EM_DASH_GLYPH] + list(config.INTERVIEW_FORMATS)
+        assert list(sb.options) == expected_strs, (
+            f"format selectbox must offer [None, *INTERVIEW_FORMATS] "
+            f"with None rendered as em-dash via format_func; expected "
+            f"{expected_strs!r} (gotcha #15: protobuf-stringified), "
+            f"got {list(sb.options)!r}."
+        )
+
+
+# ── Interview Save handler (T3-A) ─────────────────────────────────────────────
+
+class TestApplicationsInterviewSave:
+    """T3-A: `apps_interviews_form` Save handler computes a per-row
+    dirty diff using `_safe_str`-normalized comparison so NaN-from-NULL
+    doesn't false-positive against an empty widget value, and calls
+    `database.update_interview(id, dirty_fields)` ONCE PER DIRTY ROW.
+    Clean rows skip; failure path uses `st.error` per GUIDELINES §8."""
+
+    def test_clean_form_makes_no_db_writes(self, db, monkeypatch):
+        """Save with no widget changes → 0 `update_interview` calls.
+        Pinned by counting calls via a monkeypatch wrapper."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        database.add_interview(pid, {
+            "scheduled_date": "2026-05-03",
+            "format":         "Video",
+            "notes":          "PI to call in",
+        })
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[tuple[int, dict]] = []
+        original = database.update_interview
+        def _spy(interview_id, fields):
+            calls.append((interview_id, dict(fields)))
+            return original(interview_id, fields)
+        monkeypatch.setattr(database, "update_interview", _spy)
+
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        assert calls == [], (
+            f"Clean form Save must make zero update_interview calls; "
+            f"got {calls!r}."
+        )
+
+    def test_dirty_date_calls_update_interview_with_scheduled_date_only(
+        self, db, monkeypatch,
+    ):
+        """Edit only the date → 1 `update_interview` call carrying ONLY
+        the `scheduled_date` field (format and notes unchanged → not
+        in dirty_fields)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {
+            "scheduled_date": "2026-05-03",
+            "format":         "Video",
+            "notes":          "x",
+        })["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[tuple[int, dict]] = []
+        original = database.update_interview
+        def _spy(interview_id, fields):
+            calls.append((interview_id, dict(fields)))
+            return original(interview_id, fields)
+        monkeypatch.setattr(database, "update_interview", _spy)
+
+        at.session_state[_w_interview_date(iid)] = datetime.date(2026, 5, 10)
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        assert calls == [(iid, {"scheduled_date": "2026-05-10"})], (
+            f"Dirty-date Save must call update_interview once with "
+            f"only scheduled_date; got {calls!r}."
+        )
+
+    def test_dirty_format_calls_update_interview_with_format_only(
+        self, db, monkeypatch,
+    ):
+        """Edit only the format selectbox → 1 `update_interview` call
+        carrying ONLY the `format` field."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {
+            "scheduled_date": "2026-05-03",
+            "format":         "Video",
+            "notes":          "x",
+        })["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[tuple[int, dict]] = []
+        original = database.update_interview
+        def _spy(interview_id, fields):
+            calls.append((interview_id, dict(fields)))
+            return original(interview_id, fields)
+        monkeypatch.setattr(database, "update_interview", _spy)
+
+        # Selectbox inside a form needs `.select(...)`, not direct
+        # session_state write — same precedent as
+        # test_save_persists_response_type in T2-A's save tests.
+        at.selectbox(key=_w_interview_format(iid)).select("Onsite")
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        assert calls == [(iid, {"format": "Onsite"})], (
+            f"Dirty-format Save must call update_interview once with "
+            f"only format; got {calls!r}."
+        )
+
+    def test_dirty_notes_calls_update_interview_with_notes_only(
+        self, db, monkeypatch,
+    ):
+        """Edit only notes → 1 `update_interview` call carrying ONLY
+        the `notes` field."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {
+            "scheduled_date": "2026-05-03",
+            "format":         "Video",
+            "notes":          "old",
+        })["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[tuple[int, dict]] = []
+        original = database.update_interview
+        def _spy(interview_id, fields):
+            calls.append((interview_id, dict(fields)))
+            return original(interview_id, fields)
+        monkeypatch.setattr(database, "update_interview", _spy)
+
+        at.session_state[_w_interview_notes(iid)] = "new"
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        assert calls == [(iid, {"notes": "new"})], (
+            f"Dirty-notes Save must call update_interview once with "
+            f"only notes; got {calls!r}."
+        )
+
+    def test_clear_notes_writes_none_not_empty_string(self, db):
+        """Sonnet plan-critique signal: clearing the notes text_input
+        leaves widget value `""`, but DB NULL comes back as NaN via
+        pandas. Naive `widget != db_value` compares `"" != NaN` → True
+        and dirty-writes `""` over NULL on every Save. Fix: normalize
+        both sides to (None | non-empty string) before comparison; the
+        write payload uses None when the widget is empty.
+
+        Pinned by checking the actual DB cell via `pd.isna` — if the
+        normalization regresses, the cell would hold `''` (empty
+        string) rather than NULL, and the next Save would diff
+        `""` vs `""` correctly, hiding the bug from coarser tests."""
+        import pandas as pd
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        # Start with notes="hello" so we have something to clear.
+        iid = database.add_interview(pid, {"notes": "hello"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        at.session_state[_w_interview_notes(iid)] = ""
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        rows = database.get_interviews(pid)
+        target = rows[rows["id"] == iid].iloc[0]
+        assert pd.isna(target["notes"]), (
+            f"Cleared notes must write NULL (not empty string) to keep "
+            f"the normalized invariant 'empty == NULL'; got "
+            f"notes={target['notes']!r}."
+        )
+
+    def test_format_back_to_none_writes_null(self, db):
+        """Same normalization-bug class as `clear_notes`, but for the
+        format selectbox: changing the value to None must write NULL
+        to DB (not the first INTERVIEW_FORMATS entry)."""
+        import pandas as pd
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {"format": "Video"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        at.selectbox(key=_w_interview_format(iid)).select(None)
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        rows = database.get_interviews(pid)
+        target = rows[rows["id"] == iid].iloc[0]
+        assert pd.isna(target["format"]), (
+            f"Clearing format selectbox to None must write NULL to DB; "
+            f"got format={target['format']!r}."
+        )
+
+    def test_two_dirty_rows_call_update_interview_twice(
+        self, db, monkeypatch,
+    ):
+        """Two rows, both dirty → 2 update_interview calls, one per
+        dirty row (DESIGN §8.3 D-B: 'one update_interview call per
+        dirty row')."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {"notes": "a"})["id"]
+        i2 = database.add_interview(pid, {"notes": "b"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[int] = []
+        original = database.update_interview
+        def _spy(interview_id, fields):
+            calls.append(interview_id)
+            return original(interview_id, fields)
+        monkeypatch.setattr(database, "update_interview", _spy)
+
+        at.session_state[_w_interview_notes(i1)] = "a-edited"
+        at.session_state[_w_interview_notes(i2)] = "b-edited"
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        # Order is by sequence ASC (matches `get_interviews` ordering).
+        assert calls == [i1, i2], (
+            f"Two-dirty-rows Save must call update_interview twice in "
+            f"sequence order; got calls={calls!r}."
+        )
+
+    def test_clean_row_skipped_when_other_dirty(self, db, monkeypatch):
+        """Two rows; only one dirty → 1 call (not 2). Pins the per-row
+        dirty-diff invariant — a clean row must NOT generate a spurious
+        write just because a sibling row is dirty."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i_dirty = database.add_interview(pid, {"notes": "old"})["id"]
+        i_clean = database.add_interview(pid, {"notes": "stays"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[int] = []
+        original = database.update_interview
+        def _spy(interview_id, fields):
+            calls.append(interview_id)
+            return original(interview_id, fields)
+        monkeypatch.setattr(database, "update_interview", _spy)
+
+        at.session_state[_w_interview_notes(i_dirty)] = "new"
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        assert calls == [i_dirty], (
+            f"Save must call update_interview only for the dirty row "
+            f"(id={i_dirty}); the clean row (id={i_clean}) must skip. "
+            f"Got calls={calls!r}."
+        )
+
+    def test_save_failure_uses_st_error_no_reraise(self, db, monkeypatch):
+        """`update_interview` raises → page surfaces `st.error`, does
+        NOT re-raise. Per GUIDELINES §8 — re-raise would render the
+        very traceback the handler exists to hide."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {"notes": "old"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("interview update on fire")
+        monkeypatch.setattr(database, "update_interview", _boom)
+
+        at.session_state[_w_interview_notes(iid)] = "trigger"
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.run()
+
+        assert not at.exception, (
+            f"Save failure must be caught (GUIDELINES §8 — no "
+            f"re-raise); got exception={at.exception!r}."
+        )
+        error_values = [el.value for el in at.error]
+        assert (
+            any("interview update on fire" in v for v in error_values)
+            or any("Could not save" in v for v in error_values)
+        ), (
+            f"Save failure must surface via st.error containing the "
+            f"underlying message; got errors={error_values!r}."
+        )
+
+
+# ── Interview Add handler (T3-A) ──────────────────────────────────────────────
+
+class TestApplicationsInterviewAdd:
+    """T3-A: Add button (`apps_add_interview`) outside the form calls
+    `database.add_interview(sid, {})` which auto-assigns the next
+    sequence and returns `{"id", "status_changed", "new_status"}`. R2
+    cascade fires when status was STATUS_APPLIED → STATUS_INTERVIEW
+    (DESIGN §9.3); page surfaces `st.toast(f'Promoted to {label}.')`
+    when `status_changed=True`."""
+
+    def _promo_toast_text(self, raw_status: str) -> str:
+        """Same canonical form as `TestApplicationsCascadePromotionToast`
+        — sourced through STATUS_LABELS so a future label rename
+        surfaces here as a clean test failure."""
+        return f"Promoted to {config.STATUS_LABELS[raw_status]}"
+
+    def test_add_button_renders_when_position_selected(self, db):
+        """The Add button is unconditional inside the detail card —
+        visible even when the interviews list is empty (so the user
+        can create the first interview)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        try:
+            at.button(key=ADD_INTERVIEW_KEY)
+        except KeyError:
+            pytest.fail(
+                f"Add button (key={ADD_INTERVIEW_KEY!r}) must render "
+                "when a position is selected, regardless of interviews "
+                "count (DESIGN §8.3 D-B)."
+            )
+
+    def test_add_calls_add_interview_with_empty_fields(
+        self, db, monkeypatch,
+    ):
+        """Add inserts a blank row via `add_interview(sid, {})`; the
+        function auto-assigns sequence and writes NULL date/format/notes
+        (the schema DEFAULTs)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        calls: list[tuple[int, dict, bool]] = []
+        original = database.add_interview
+        def _spy(application_id, fields, *, propagate_status=True):
+            calls.append((application_id, dict(fields), propagate_status))
+            return original(
+                application_id, fields, propagate_status=propagate_status,
+            )
+        monkeypatch.setattr(database, "add_interview", _spy)
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Add raised: {at.exception!r}"
+        assert calls == [(pid, {}, True)], (
+            f"Add must call database.add_interview(sid, {{}}, "
+            f"propagate_status=True); got {calls!r}."
+        )
+
+    def test_add_on_status_applied_fires_r2_promo_toast(self, db):
+        """R2 — STATUS_APPLIED + first interview added → STATUS_INTERVIEW.
+        Page surfaces 'Promoted to Interview.' toast when
+        `add_interview` returns `status_changed=True`."""
+        pid = database.add_position(make_position({"position_name": "R2Pos"}))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Add raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        expected_promo = self._promo_toast_text(config.STATUS_INTERVIEW)
+        assert any(expected_promo in v for v in toast_values), (
+            f"R2 cascade must fire promotion toast {expected_promo!r}; "
+            f"got toasts={toast_values!r}."
+        )
+        # And the position actually moved.
+        assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
+
+    def test_add_on_status_saved_no_promo_toast(self, db):
+        """Control: STATUS_SAVED + Add → R2 status guard
+        ('AND status = STATUS_APPLIED') prevents promotion. The
+        'Added interview.' toast still fires (Add itself succeeded);
+        the 'Promoted to ...' toast does NOT.
+
+        Default filter is Active (excludes SAVED), so the test flips
+        the filter to All before selection so the SAVED row is
+        addressable — same precedent as
+        `test_r1_only_promotes_saved_to_applied` in T2-B."""
+        pid = database.add_position(make_position({"position_name": "SavedPos"}))
+        # add_position seeds STATUS_SAVED via the schema DEFAULT — no
+        # explicit update_position needed.
+
+        at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select("All")
+        at.run()
+        _select_row(at, 0)
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Add raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        assert any("Added interview" in v for v in toast_values), (
+            f"Add success must fire the 'Added interview' toast; got "
+            f"toasts={toast_values!r}."
+        )
+        # No promotion toast — R2 guard rejected.
+        assert not any("Promoted to" in v for v in toast_values), (
+            f"R2 must NOT fire on STATUS_SAVED + Add (status guard "
+            f"requires STATUS_APPLIED); got toasts={toast_values!r}."
+        )
+        # Position is unchanged.
+        assert database.get_position(pid)["status"] == config.STATUS_SAVED
+
+    def test_add_on_status_interview_no_promo_toast(self, db):
+        """R2 idempotency: a second Add on a STATUS_INTERVIEW position
+        does NOT re-promote (status guard 'AND status = STATUS_APPLIED'
+        is no-op once status is INTERVIEW). 'Added interview.' toast
+        still fires; 'Promoted to ...' does not."""
+        pid = database.add_position(make_position({"position_name": "IntPos"}))
+        database.update_position(pid, {"status": config.STATUS_INTERVIEW})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Add raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        assert any("Added interview" in v for v in toast_values), (
+            f"Add success must fire the 'Added interview' toast; got "
+            f"toasts={toast_values!r}."
+        )
+        assert not any("Promoted to" in v for v in toast_values), (
+            f"R2 must NOT re-fire on STATUS_INTERVIEW; got "
+            f"toasts={toast_values!r}."
+        )
+
+    def test_add_failure_uses_st_error_no_reraise(self, db, monkeypatch):
+        """`add_interview` raises → page surfaces `st.error`, does NOT
+        re-raise, does NOT fire either toast (the Add did not succeed).
+        Mirrors the Save-failure precedent (GUIDELINES §8)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("interviews insert on fire")
+        monkeypatch.setattr(database, "add_interview", _boom)
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, (
+            f"Add failure must be caught (GUIDELINES §8 — no "
+            f"re-raise); got exception={at.exception!r}."
+        )
+        error_values = [el.value for el in at.error]
+        assert (
+            any("interviews insert on fire" in v for v in error_values)
+            or any("Could not add" in v for v in error_values)
+        ), (
+            f"Add failure must surface via st.error containing the "
+            f"underlying message; got errors={error_values!r}."
+        )
+        toast_values = [el.value for el in at.toast]
+        assert not any("Added interview" in v for v in toast_values), (
+            f"Failed Add must NOT fire the 'Added interview' toast; "
+            f"got toasts={toast_values!r}."
+        )
+        assert not any("Promoted to" in v for v in toast_values), (
+            f"Failed Add must NOT fire any promotion toast; got "
+            f"toasts={toast_values!r}."
+        )
+
+
+# ── Interview pre-seed sentinel lifecycle (T3-A) ──────────────────────────────
+
+class TestApplicationsInterviewSentinelLifecycle:
+    """T3-A: the `_apps_interviews_seeded_ids` sentinel (frozenset of
+    seeded interview ids) governs per-row pre-seed firing. Per rerun:
+    `seeded_ids = saved_sentinel & current_ids` (prunes any deleted
+    ids); for any `id ∈ current_ids - seeded_ids`, pre-seed runs;
+    sentinel is updated to `seeded_ids | current_ids`. Properties
+    pinned here:
+
+      - First render: sentinel == frozenset(current_ids).
+      - Add: new id appears in sentinel on the post-Add rerun.
+      - Direct DB delete: id pruned from sentinel on next rerun
+        (Sonnet plan-critique signal — the intersection step prevents
+        zombie ids from accumulating).
+      - Position selection change: sentinel resets to the new
+        position's interview ids only."""
+
+    def test_first_render_seeds_all_existing_ids(self, db):
+        """Initial render with N interviews → sentinel = frozenset of
+        all N ids. Pre-seed fired for every id (current_ids - seeded_ids
+        = current_ids on first render, since the saved sentinel
+        defaults to the empty frozenset)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {})["id"]
+        i2 = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
+        assert sentinel == frozenset({i1, i2}), (
+            f"First render must seed every existing interview id; "
+            f"expected frozenset({{{i1}, {i2}}}), got {sentinel!r}."
+        )
+
+    def test_added_id_added_to_sentinel(self, db):
+        """User clicks Add → new interview row inserted; sentinel on
+        the post-Add rerun must include the new id alongside the
+        previously-seeded ids."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        # Sanity: starts with just i1.
+        assert at.session_state[INTERVIEWS_SEEDED_IDS_KEY] == frozenset({i1})
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Add raised: {at.exception!r}"
+        new_ids = frozenset(
+            int(i) for i in database.get_interviews(pid)["id"]
+        )
+        sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
+        assert sentinel == new_ids, (
+            f"After Add, sentinel must include all current interview "
+            f"ids (including the newly-inserted one). Expected "
+            f"{new_ids!r}, got {sentinel!r}."
+        )
+
+    def test_directly_deleted_id_pruned_from_sentinel(self, db):
+        """Sonnet plan-critique signal: an ever-growing sentinel would
+        leave zombie ids behind after delete. The intersection step
+        (`saved_sentinel & current_ids`) prunes them on the next
+        rerun. Pinned by deleting via `database.delete_interview`
+        directly (T3-B's UI affordance is not yet in place; the
+        sentinel-pruning invariant is a UI property independent of
+        how the row got deleted)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {})["id"]
+        i2 = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        assert at.session_state[INTERVIEWS_SEEDED_IDS_KEY] == frozenset({i1, i2})
+
+        # Delete i2 directly via the DB API.
+        database.delete_interview(i2)
+        # Re-render the page with the updated DB state.
+        _keep_selection(at, 0)
+        at.run()
+
+        sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
+        assert sentinel == frozenset({i1}), (
+            f"Deleted interview id must be pruned from sentinel on "
+            f"next rerun (intersection step). Expected "
+            f"frozenset({{{i1}}}), got {sentinel!r}."
+        )
+
+    def test_changing_position_resets_sentinel(self, db):
+        """Selecting a different position changes sid → that position's
+        interview ids replace the previous set. Intersection of the
+        old sentinel with the new ids yields empty → all new ids get
+        re-seeded; final sentinel = new ids only."""
+        # Two positions, both visible under default Active filter.
+        pid_a = database.add_position(make_position({
+            "position_name": "A",
+            "deadline_date": (
+                datetime.date.today() + datetime.timedelta(days=20)
+            ).isoformat(),
+        }))
+        pid_b = database.add_position(make_position({
+            "position_name": "B",
+            "deadline_date": (
+                datetime.date.today() + datetime.timedelta(days=40)
+            ).isoformat(),
+        }))
+        database.update_position(pid_a, {"status": config.STATUS_APPLIED})
+        database.update_position(pid_b, {"status": config.STATUS_APPLIED})
+        ia = database.add_interview(pid_a, {})["id"]
+        ib = database.add_interview(pid_b, {})["id"]
+
+        at = _run_page()
+        # Position A has the earlier deadline → renders at row 0.
+        _select_row(at, 0)
+        assert at.session_state[INTERVIEWS_SEEDED_IDS_KEY] == frozenset({ia})
+
+        # Switch to position B (row 1).
+        _select_row(at, 1)
+        sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
+        assert sentinel == frozenset({ib}), (
+            f"Switching positions must reset sentinel to the new "
+            f"position's interview ids only. Expected "
+            f"frozenset({{{ib}}}), got {sentinel!r}."
         )
