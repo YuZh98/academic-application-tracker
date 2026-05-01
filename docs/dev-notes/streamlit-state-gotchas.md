@@ -9,6 +9,30 @@ All notes verified against **Streamlit 1.56.0** (2026-04-23).
 
 ---
 
+## Index
+
+Source comments and review docs cite gotchas by number — use this
+index to jump to the right entry.
+
+1. **NaN in `session_state`** crashes widget serialisation (use `_safe_str`)
+2. **Widget-value trap on selection change** — the `_edit_form_sid` sentinel
+3. **`@st.dialog`** does not auto-re-render across AppTest reruns
+4. **Form id collision** — must not match any widget key inside the form
+5. **`st.metric`** has no `key=` parameter (identify by label / position)
+6. **`AppTest.session_state`** does not support `.get()`
+7. **`KeyError` on conditional widgets** in AppTest — use try/except helpers
+8. **`numpy.bool_`** is not `True` identity-wise (use `bool(...)` or `==`)
+9. **`Button.type`** in AppTest reports widget-class name, not the `type=` param
+10. **`use_container_width=True`** deprecated — use `width="stretch"`
+11. **`st.dataframe` selection** doesn't persist across data-change reruns
+12. **`get_all_positions()` ordering** shifts row indices on insert
+13. **`pd.isna`** catches both `None` and `float('nan')` — truthy check misses NaN
+14. **`if st.button(...): st.rerun()`** double-reruns (drop explicit rerun for plain buttons)
+15. **`AppTest selectbox.options`** is protobuf string form, not original Python type
+16. **`st.dataframe`** has no per-cell tooltip API in Streamlit 1.56
+
+---
+
 ## 1. `pandas.NaN` in `session_state` breaks widget serialisation
 
 **Symptom:** `TypeError: bad argument type for built-in operation` with no
