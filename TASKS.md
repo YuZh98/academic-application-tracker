@@ -14,11 +14,15 @@ Branch (T1): merged via PR #15 (`aebbb8b`); pre-merge review at
 [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md);
 suite 553 → 586 green under both pytest gates.
 
-Branch (T2): `feature/phase-5-tier2-ApplicationDetailCard` —
-T2-A green, T2-B pending. Per the 2026-04-30 multi-agent plan critique,
-T2 is split into 2 sub-tasks (was 3) since the original "selection
-plumbing alone" sub-task would have shipped a placeholder UI surface
-deleted by the next commit.
+Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
+[`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md);
+suite 586 → 638 green under both pytest gates.
+
+Branch (T3): not yet started — next functional work after the
+`docs/guidelineupdate` doc-cleanup branch merges. T3 implements the
+inline interview list UI per DESIGN §8.3 D-B
+(`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
+delete, R2-toast surfacing on add).
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -317,37 +321,11 @@ _(none)_
 
 ## Recently done
 
-- 2026-04-30 — **Phase 5 T2-B green** on branch
-  `feature/phase-5-tier2-ApplicationDetailCard`: cascade-promotion
-  toast surfacing in the Applications-page Save handler. When
-  `database.upsert_application(propagate_status=True)` returns
-  `status_changed=True`, a SECOND `st.toast(f"Promoted to
-  {STATUS_LABELS[new_status]}.")` fires after the Saved toast.
-  Two toasts kept separate (semantically distinct: data persistence
-  vs. pipeline state change); order is Saved-then-Promoted
-  (chronological — Promoted is the consequence of Save).
-  No defensive `and result.get("new_status")` guard per the
-  Sonnet plan critique — trust the upsert contract; a violation
-  surfaces loudly via `KeyError` rather than silently skipping
-  the toast. All four R1/R3 paths from DESIGN §9.3 pinned
-  (R1-only on SAVED → APPLIED, R3-only on APPLIED → OFFER, R1+R3
-  chained from SAVED → OFFER with a DB-state probe confirming R3
-  ran AFTER R1, terminal-guard no-op on CLOSED where Save still
-  succeeds + application row still updates but no promotion
-  toast fires). Cohesion sweep: NaN-safe pre-seed parametrized
-  over all 4 date widgets (closes the cohesion gap on
-  response_date and result_notify_date); save-error preserves
-  form FIELD values across text_area + date_input + selectbox
-  (extends T2-A's sentinel-only check). The
-  filter-narrowing-keeps-form-values combination test was DROPPED
-  per Sonnet — pre-seed gates on (sid changed OR key missing);
-  filter narrowing alone changes neither, so the test would just
-  exercise Streamlit session_state. 9 new tests across 2 classes
-  (`TestApplicationsCascadePromotionToast`,
-  `TestApplicationsCohesionSweep`); suite 629 → 638 under both
-  pytest gates. Three commits: `test:` red,
-  `feat(applications):` green, `chore(tracker):` rollup. T2 (T2-A
-  + T2-B) now complete; pre-merge review + PR pending.
+- 2026-04-30 — **PR #16 merged** (`b9a2c82`): Phase 5 T2 (T2-A + T2-B)
+  shipped — editable Application detail card behind row selection +
+  cascade-promotion toast surfacing. Suite 586 → 638 under both pytest
+  gates. Detailed forensic record in commit messages + the
+  [`phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md) review.
 - 2026-04-30 — **Phase 5 T2-A green** on branch
   `feature/phase-5-tier2-ApplicationDetailCard`: editable
   Application detail card behind row selection. `apps_table` made
@@ -421,4 +399,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 5 T2 complete — T2-A + T2-B both shipped on branch `feature/phase-5-tier2-ApplicationDetailCard`; suite 586 → 638 under both pytest gates; pre-merge review + PR next)_
+_Updated: 2026-04-30 (Phase 5 T2 merged via PR #16 (`b9a2c82`); doc-cleanup branch `docs/guidelineupdate` in flight; Phase 5 T3 next functional work after that branch merges)_

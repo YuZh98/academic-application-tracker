@@ -51,6 +51,9 @@ manual steps to run against a pre-existing database.
 - `docs/dev-notes/{dev-setup, extending, git-workflow-depth, streamlit-state-gotchas}.md`: one-sentence italicized "what this is" header under each title — folder-scan readability per the post-PR-#17 audit. The existing intro prose is preserved beneath; the new line is purpose-only.
 
 ### Changed
+- `TASKS.md` + `roadmap.md`: chore tracker update to reflect post-PR-#16 state. PR #16 (Phase 5 T2, `b9a2c82`) merged 2026-04-30; main HEAD now at `b9a2c82`. TASKS current sprint shows Branch (T2) merged + Branch (T3) as next functional work; Recently done collapses the per-sub-task T2-A/T2-B essays into a single PR #16 bullet (per §14.4 spirit). roadmap "In flight" → `docs/guidelineupdate`; "Next up" → Phase 5 T3 (inline interview list per DESIGN §8.3 D-B); Phase 5 detail table marks T1 + T2 ✅ via their PR numbers.
+
+### Changed
 - `DESIGN §8.3` Status filter selectbox bullet: expand to capture the option list (`[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`), default value, and the `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule moved from `docs/ui/wireframes.md`. Per §14.8: page-by-page UI contracts live in DESIGN §8.x.
 
 ## [v0.5.0] — 2026-04-30 — Phase 4 close (T4–T6) + v1.3 alignment + funnel toggle polish

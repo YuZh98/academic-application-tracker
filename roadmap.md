@@ -19,25 +19,21 @@ without rewriting existing code.
 funnel disclosure toggle, 2026-04-30). Phase 4 closes with this tag;
 the dashboard's five panels are complete (KPI grid, application funnel
 with bidirectional disclosure toggle, Materials Readiness, Upcoming
-timeline, Recommender Alerts). `main` is currently at `c93dec0`
-(PR #14 merge).
+timeline, Recommender Alerts). Since v0.5.0, three more PRs have
+merged: PR #15 (Phase 5 T1, `aebbb8b`), PR #16 (Phase 5 T2, `b9a2c82`),
+PR #17 (v1 doc-pins, `40b67e3`). `main` is currently at `b9a2c82`.
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** Phase 5 T1 — Applications page shell — on branch
-`feature/phase-5-tier1-ApplicationsPageShell`. T1 ships in three
-sub-tasks (T1-A `database.get_applications_table()` joined reader;
-T1-B page shell + filter sentinel `STATUS_FILTER_ACTIVE` + invariant
-#12; T1-C read-only six-column table). Pre-merge review at
-`reviews/phase-5-tier1-review.md` (Approve, 0 🔴 / 0 🟠). One
-DESIGN §8.3 D-A amendment landed inline (per-cell tooltip → inline
-cell text, because Streamlit 1.56's `st.dataframe` exposes no
-per-cell tooltip API; resolution recorded in the review doc + new
-gotcha #16 in `docs/dev-notes/streamlit-state-gotchas.md`).
-586 tests green under both pytest gates. PR pending.
+**In flight:** `docs/guidelineupdate` — documentation conventions
+cleanup branch. The post-PR-#17 audit identified 8 follow-up cleanups
+(A/B/C/E/F/G/H/D); they're shipping in three Sonnet-evaluated batches.
+Pure docs change; no code/schema/test impact. PR pending after batch 3
+closes.
 
-**Next up after Phase 5 T1:** Phase 5 T2 — Application detail card
-(DESIGN §8.3: Applied / Confirmation / Response / Result / Notes
-editable via `st.form`) on a fresh branch off `main` once T1 merges.
+**Next up after the doc-cleanup branch merges:** Phase 5 T3 — Inline
+interview list UI on `pages/2_Applications.py` per DESIGN §8.3 D-B
+(`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
+delete, R2-toast surfacing on add).
 
 ---
 
@@ -67,7 +63,7 @@ v1.0 ships when **all three** are true:
 | 2 | Data layer (`database.py`, `exports.py` stub, `postdoc.db`) | ✅ shipped |
 | 3 | Opportunities page (quick-add, filter, table, edit, delete) | ✅ shipped @ v0.1.0 |
 | 4 | Dashboard (`app.py`) — 5 panels | ✅ shipped @ v0.5.0 (T1–T6 all merged) |
-| 5 | Applications + Recommenders pages | 🔄 T1 ✅ (PR pending — branch `feature/phase-5-tier1-ApplicationsPageShell`) · T2–T7 pending |
+| 5 | Applications + Recommenders pages | 🔄 T1 ✅ (PR #15) · T2 ✅ (PR #16) · T3–T7 pending |
 | 6 | Full exports + Export page | ⏳ pending |
 | 7 | Polish (urgency colors, search, confirm dialogs, responsive) | ⏳ pending |
 
@@ -88,8 +84,8 @@ Per **Q5 Option A**, build Applications page first.
 
 | Tier | Scope | Status |
 |------|-------|--------|
-| T1 | Applications page shell (`pages/2_Applications.py`): `set_page_config`, title, default filter (`STATUS_FILTER_ACTIVE` excluding `STATUS_SAVED + STATUS_CLOSED`), read-only six-column table sorted by deadline | ✅ on branch `feature/phase-5-tier1-ApplicationsPageShell` (PR pending). New `database.get_applications_table()` reader; new config sentinel + invariant #12; DESIGN §8.3 D-A amended (per-cell tooltip → inline cell text). 33 new tests; suite 553 → 586 under both gates. |
-| T2 | Application detail card (Applied / Confirmation / Response / Result / Notes — editable via `st.form`) per DESIGN §8.3 D-A | ⏳ pending — next up after T1 merges |
+| T1 | Applications page shell (`pages/2_Applications.py`): `set_page_config`, title, default filter (`STATUS_FILTER_ACTIVE` excluding `STATUS_SAVED + STATUS_CLOSED`), read-only six-column table sorted by deadline | ✅ merged via PR #15 (`aebbb8b`). New `database.get_applications_table()` reader; new config sentinel + invariant #12; DESIGN §8.3 D-A amended (per-cell tooltip → inline cell text). 33 new tests; suite 553 → 586 under both gates. |
+| T2 | Application detail card (Applied / Confirmation / Response / Result / Notes — editable via `st.form`) per DESIGN §8.3 D-A | ✅ merged via PR #16 (`b9a2c82`). Editable detail card behind row selection (T2-A) + cascade-promotion toast surfacing on R1/R3 (T2-B). 52 new tests; suite 586 → 638. |
 | T3 | Inline interview list UI (`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated delete, R2-toast on add) per DESIGN §8.3 D-B | ⏳ pending |
 | T4 | Recommender alert panel (`pages/3_Recommenders.py`) — grouped by recommender_name | ⏳ pending |
 | T5 | Recommenders table + add form + inline edit | ⏳ pending |
