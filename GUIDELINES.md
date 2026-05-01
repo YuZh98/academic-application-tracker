@@ -20,7 +20,7 @@ source .venv/bin/activate
 
 **Pinned minimum versions** (exact pins in `requirements.txt` after first install):
 
-| Package | Required ≥ | Tested with (v0.4.0) |
+| Package | Required ≥ | Tested with (latest tag) |
 |---------|-----------|----------------------|
 | streamlit | 1.50 | 1.56.0 |
 | plotly | 5.22 | 6.7.0 |
@@ -90,7 +90,7 @@ importing `exports` lazily inside each write function (not at module top).
 ### Page files
 - Filename format: `N_Title.py` where `N` is the sort-order integer (`1_Opportunities.py`)
 - Page title set with `st.title()` as the first visible element
-- From v1.1, `st.set_page_config(page_title=..., layout=...)` sits at the top
+- `st.set_page_config(page_title=..., layout=...)` sits at the top
 
 ---
 
@@ -231,7 +231,7 @@ Failures use `st.error()` with a friendly message.
 Delete confirmations use a modal dialog (see Opportunities-page
 `_confirm_delete_dialog`). AppTest has a quirk here — the outer script must
 re-open the dialog on every rerun while the pending flag is set.
-See `docs/dev-notes/streamlit-state-gotchas.md §3`.
+See dev-notes gotcha #3.
 
 ### Cross-page navigation via `st.switch_page`
 ```python
@@ -242,11 +242,11 @@ if st.button("→ Opportunities"):
 ### Pre-seeding edit forms — use the `_edit_form_sid` sentinel
 Re-seeding widget session_state only works when gated by a selection-id
 sentinel — otherwise Streamlit's widget-value trap keeps the old values.
-See `docs/dev-notes/streamlit-state-gotchas.md §2`.
+See dev-notes gotcha #2.
 
 ### Coerce NaN cells with `_safe_str` before feeding into widgets
 Pandas returns `float('nan')` for NULL TEXT cells, which crashes widget
-protobuf serialisation. See `docs/dev-notes/streamlit-state-gotchas.md §1`.
+protobuf serialisation. See dev-notes gotcha #1.
 
 ---
 
@@ -282,8 +282,6 @@ except Exception as e:
 **Layout**
 
 - Test files live at `tests/test_<module>.py` or `tests/test_<page>.py`.
-  Current files: `test_config.py`, `test_database.py`, `test_exports.py`,
-  `test_opportunities_page.py`, `test_app_page.py`.
 - One test class per logical unit: `Test<TierOrFeature>` (e.g.,
   `TestT3MaterialsReadiness`, `TestQuickAddFormBehaviour`).
 
@@ -307,8 +305,8 @@ except Exception as e:
 - Seed data via `database.add_position()` / `upsert_application()` —
   **never raw SQL** in tests.
 - Shared DB isolation via the `db` fixture in `conftest.py`.
-- `pytest.ini` has `pythonpath = .` so `pytest` runs without `PYTHONPATH=.`
-  prefix (fix scheduled for v1.1 ship-prep).
+- `pytest.ini` has `pythonpath = .` so `pytest` runs without a `PYTHONPATH=.`
+  prefix.
 
 **Element lookup**
 
@@ -361,10 +359,10 @@ Every tier ends with a pre-merge review doc at
 
 **Status column values**: `Fixed inline` · `Deferred` · `Backlog` ·
 `Kept by design` · `Carry-over`. Use `Carry-over` for pre-existing items
-the current change does not regress (e.g. the §6 grep miscount has
-appeared in T3/T4/T5/T6/T1 reviews). `Kept by design` observations
-belong in the Q&A section, not in the Findings table — they are not
-defects.
+the current change does not regress (e.g. an inherited inconsistency
+that previous reviews logged but didn't fix). `Kept by design`
+observations belong in the Q&A section, not in the Findings table —
+they are not defects.
 
 ---
 
@@ -384,12 +382,11 @@ defects.
 
 **TDD cadence:** `test:` (red) → `feat:` (green) → `chore:` (tracker rollup).
 
-**Version tags (from v1.1):** `v0.x.0` for each phase shipped; `v1.0.0` at
-first publishable release; `v1.x.y` post-v1. Retroactive tags have been
-applied: `v0.1.0` (Phase 3) · `v0.2.0`–`v0.4.0` (Phase 4 T1–T3).
+**Version tags:** `v0.x.0` for each phase shipped; `v1.0.0` at first
+publishable release; `v1.x.y` post-v1.
 
 **What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/`
-· `CLAUDE.md` · `PHASE_*_GUIDELINES.md` (gitignored from v1.1).
+· `CLAUDE.md` · `PHASE_*_GUIDELINES.md`.
 
 **Pre-commit checklist:**
 - [ ] `pytest tests/ -q` passes
@@ -418,7 +415,7 @@ tagging mechanics, "when you're stuck" — see
 | Modifying `exports/` files by hand | They are generated; edits will be overwritten |
 | `use_container_width=True` | Deprecated → use `width="stretch"` |
 | `r[col] or ""` for DB text pre-seed | NaN is truthy — use `_safe_str(v)` |
-| Tagging new milestones as `v1-phase-N` | Superseded by `v0.x.y` scheme in v1.1 |
+| Tagging new milestones as `v1-phase-N` | Use `v0.x.y` scheme instead (see §11) |
 
 ---
 
@@ -429,8 +426,7 @@ mechanical sequence — see DESIGN §8.0 for cross-page conventions and
 DESIGN §8.x for each page's panel/widget contract.
 
 1. **Filename**: `pages/N_Title.py` where `N` is the next sort-order
-   integer (current map: `1_Opportunities`, `2_Applications`,
-   `3_Recommenders`, `4_Export`).
+   integer.
 2. **First Streamlit call**: `st.set_page_config(page_title="Postdoc Tracker", page_icon="📋", layout="wide")`
    — DESIGN §8.0 + D14. Must precede every other `st.*` call; Streamlit
    raises otherwise.
@@ -478,10 +474,6 @@ title. Required fields by doc class:
 Tracker docs (`TASKS.md`, `roadmap.md`, `CHANGELOG.md`) keep their
 existing section conventions — they are not authoring-class.
 
-Existing files that pre-date this convention are harmonised in the
-`docs/guidelineupdate` cleanup branch; new files conform from this
-point.
-
 ### 14.2 Cross-reference canonical form
 
 Lock one form: `DESIGN §8.1`, `GUIDELINES §11`, `dev-notes gotcha #16`.
@@ -513,8 +505,7 @@ This project follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.
   `Security`. One sentence is the target.
 - **Rationale and the deeper "why" live in the commit message and the
   review doc — not the changelog.** Multi-paragraph essays under
-  `[Unreleased]` are the documented anti-pattern this project has
-  drifted into; new entries resist it.
+  `[Unreleased]` are an anti-pattern; new entries resist them.
 - Cite the commit hash when it aids navigation, e.g. `(aebbb8b)`.
 - **Migration notes** (project-local extension; not part of KaC 1.1.0):
   each version section needing them ends with a single `**Migration:**`
@@ -550,8 +541,7 @@ file timestamps order naturally, so the index is reverse-chronological
 or chronological by author preference.
 
 Naming: `phase-<N>-tier<M>-review.md` (lowercase `tier`); date-stamped
-one-offs use `<topic>-YYYY-MM-DD-review.md`. Mixed casing in legacy
-filenames is left alone — new files conform.
+one-offs use `<topic>-YYYY-MM-DD-review.md`.
 
 ### 14.8 What lives where
 
@@ -559,9 +549,7 @@ Decision-class content has competing homes. Resolve in this order:
 
 | Content | Home | Why |
 |---|---|---|
-| Original v1.0 architectural decisions | `DESIGN §10` D1–D10 (frozen v1.0 batch) | Historical record |
-| Post-v1.1 architectural decisions made before the ADR ledger was active | `DESIGN §10` D11–D25 | Candidate ADR backfills (see `docs/adr/README.md`) |
-| New cross-cutting architectural decisions (going forward) | `docs/adr/` | Forward-only ADR ledger per `docs/adr/README.md` |
+| Cross-cutting architectural decisions | `docs/adr/` | Forward-only ADR ledger per `docs/adr/README.md` |
 | Tier-local implementation choices | `reviews/phase-*.md` Q&A | Bound to the change that introduced them |
 | Streamlit / library quirks | `docs/dev-notes/streamlit-state-gotchas.md` | Per-quirk Symptom / Cause / Workaround |
 | Config-extension procedural recipes | `docs/dev-notes/extending.md` | "How": step-by-step walkthrough |
