@@ -241,7 +241,7 @@ auto-promotion rules). Longer enumerations are described by category
 | Constant | Type | Role |
 |----------|------|------|
 | `FUNNEL_BUCKETS` | `list[tuple[str, tuple[str, ...], str]]` | Presentation-layer grouping of raw statuses into funnel bars. Each entry: `(UI label, raw-status tuple, bucket color)`. Order = top-down display order (y-axis reversed). "Archived" aggregates `[REJECTED]` + `[DECLINED]` (D17); `[CLOSED]` stays its own bucket. Multiset coverage of `STATUS_VALUES` guarded by §5.2 invariant #5. |
-| `FUNNEL_DEFAULT_HIDDEN` | `set[str]` | Bucket labels hidden by default on the dashboard funnel. The single disclosure toggle (DESIGN §8.1 T6 amendment) reveals/hides them as a group; state held in `st.session_state["_funnel_expanded"]` for the current session only (D24, §8.1). Validated by §5.2 invariant #6. |
+| `FUNNEL_DEFAULT_HIDDEN` | `set[str]` | Bucket labels hidden by default on the dashboard funnel. The single disclosure toggle (§8.1) reveals/hides them as a group; state held in `st.session_state["_funnel_expanded"]` for the current session only (D24, §8.1). Validated by §5.2 invariant #6. |
 | `FUNNEL_TOGGLE_LABELS` | `dict[bool, str]` | State-keyed labels for the funnel disclosure toggle (§8.1). Indexed by the bool value of `st.session_state["_funnel_expanded"]`: `False` → `"+ Show all stages"` (collapsed; click invites expand); `True` → `"− Show fewer stages"` (expanded; click invites collapse). Symbols are U+002B `+` and U+2212 `−` — they encode the click's effect direction. Vocabulary follows the project's `<symbol> <verb-phrase>` CTA convention. Validated by §5.2 invariant #11. |
 
 #### Vocabularies (user-facing selectbox options)
@@ -480,38 +480,6 @@ evolution happens in one of three shapes:
 | Normalize flat columns into a sub-table | (a) `CREATE TABLE` the new sub-table; (b) `INSERT INTO` copying old columns; (c) leave old columns NULL until a rebuild drops them; (d) update application code to read from the sub-table. |
 | Remove a column | SQLite requires a table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM <t>; DROP TABLE <t>; ALTER TABLE new RENAME TO <t>`. Breaking change — document in CHANGELOG. |
 
-**Flag/date split divergence — `confirmation_email` vs `reminder_sent`.**
-Both migrations split a dual-purpose TEXT column into a
-`(flag INTEGER, date TEXT)` pair but translate a date-shaped legacy
-value differently — intentionally, not by accident.
-`applications.confirmation_email`'s date-shape lands as `received = 1`
-+ `date = value` because pre-v1.3 semantics tied a recorded date
-strongly to "received" (a user wouldn't write a date if no receipt
-happened). `recommenders.reminder_sent`'s date-shape lands as
-`reminder_sent = 0` + `reminder_sent_date = value` (the conservative
-reading) because pre-v1.3 reminder_sent saw both date-only and
-`'Y'`-only legacy use without a clear "date implies sent" rule; the
-user re-saves to flip the flag if intended. Pinned by
-`test_migration_copies_date_string_to_both_fields` and
-`test_migration_splits_date_shaped_reminder_sent_into_new_column`
-respectively. A future maintainer reading the two tests side-by-side
-should expect the divergence rather than treat one as a bug relative
-to the other.
-
-**Pending column drops (committed for v1.0-rc).** After the v1.3
-alignment pass, one column remains physically present but operationally
-NULL: `applications.confirmation_email`, split into
-`confirmation_received` + `confirmation_date` in Sub-task 10. Per the
-"Remove a column" row above, SQLite requires a table rebuild; a single
-commit during the v1.0-rc release will run
-`CREATE TABLE applications_new AS SELECT <kept cols> FROM applications;
-DROP TABLE applications;
-ALTER TABLE applications_new RENAME TO applications;`
-inside one transaction. Idempotent via a `PRAGMA table_info(applications)`
-check on `confirmation_email` presence — a rerun on an already-dropped
-DB short-circuits. Migration SQL recorded in CHANGELOG under v1.0-rc.
-No other pending drops at this time.
-
 **Migration discipline:** every schema or vocabulary change lands with a
 `Migration:` note in `CHANGELOG.md` under the release that introduces
 it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between
@@ -688,7 +656,7 @@ Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dash
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
 | KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
-| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector (see "Window selector" below). Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. **T6 amendment (2026-04-30)** replaces the earlier unidirectional `[expand]` button (which had no companion `[collapse]`) and the pre-Sub-task-12 per-bucket checkbox model. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). The leading `+` (U+002B) and `−` (U+2212) match the project's `<symbol> <verb-phrase>` CTA convention used by `+ Add your first position` and `→ Opportunities page`. | — |
+| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector (see "Window selector" below). Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). The leading `+` (U+002B) and `−` (U+2212) match the project's `<symbol> <verb-phrase>` CTA convention used by `+ Add your first position` and `→ Opportunities page`. | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
 | Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming(days=selected_window)` (T4-A); `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). Window controlled by an inline `st.selectbox` (key: `upcoming_window`) over `UPCOMING_WINDOW_OPTIONS`, default = `DEADLINE_ALERT_DAYS`; subheader text is dynamic: `f"Upcoming (next {selected_window} days)"`. | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty. Rows surfaced by a wider selected window (e.g. 60 / 90) but past `DEADLINE_ALERT_DAYS` show NO urgency glyph — the band is fixed in config, not tied to the user-selected window. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
@@ -767,7 +735,7 @@ still triggers the hero — nothing actionable remains on the dashboard.
 
 | Panel | Empty-state behaviour |
 |-------|-----------------------|
-| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")`. **Disclosure toggle is suppressed** (nothing to disclose into); the subheader row degrades from `st.columns([3, 1])` to a bare `st.subheader` so the right-column slot doesn't render an empty box. (b) *No visible data* — total is non-zero but every non-zero bucket lies in `FUNNEL_DEFAULT_HIDDEN` and `st.session_state["_funnel_expanded"]` is `False`: show `st.info("All your positions are in hidden buckets. Click 'Show all stages' to reveal them.")` and render the disclosure toggle in the **subheader row** (same `st.columns([3, 1])` placement as branch (c) — toggle position is invariant across (b) and (c) for layout stability, and the info copy points at the toggle by label rather than by spatial direction so the copy stays correct regardless of where the toggle sits). Clicking the toggle in branch (b) round-trips into branch (c). (c) *Otherwise* render the chart; the disclosure toggle renders in the subheader row whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty (in **both** collapsed and expanded states — the post-T6 contract is that the toggle persists post-click with a flipped label, so the user always has a return path). Subheader renders in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications would see a subheader above a chart of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the disclosure toggle); the T6 amendment makes that recovery a true round-trip rather than a one-way trapdoor. |
+| Funnel | **Three branches, evaluated in order.** (a) *No data anywhere* — `sum(count_by_status().values()) == 0`: show `st.info("Application funnel will appear once you've added positions.")`. **Disclosure toggle is suppressed** (nothing to disclose into); the subheader row degrades from `st.columns([3, 1])` to a bare `st.subheader` so the right-column slot doesn't render an empty box. (b) *No visible data* — total is non-zero but every non-zero bucket lies in `FUNNEL_DEFAULT_HIDDEN` and `st.session_state["_funnel_expanded"]` is `False`: show `st.info("All your positions are in hidden buckets. Click 'Show all stages' to reveal them.")` and render the disclosure toggle in the **subheader row** (same `st.columns([3, 1])` placement as branch (c) — toggle position is invariant across (b) and (c) for layout stability, and the info copy points at the toggle by label rather than by spatial direction so the copy stays correct regardless of where the toggle sits). Clicking the toggle in branch (b) round-trips into branch (c). (c) *Otherwise* render the chart; the disclosure toggle renders in the subheader row whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty (in **both** collapsed and expanded states — the toggle persists post-click with a flipped label, so the user always has a return path). Subheader renders in all three branches for page-height stability. Rationale: without branch (b), a user returning mid-cycle with only archived / closed applications would see a subheader above a chart of zero-width bars — a broken-looking state. Branch (b) explains what's happening and points at the recovery path (the disclosure toggle), which is bidirectional. |
 | Materials Readiness | If `ready + pending == 0`, show `st.info("Materials readiness will appear once you've added positions with required documents.")`. Subheader renders in both branches. |
 | Upcoming | If merged DataFrame is empty, show `st.info(f"No deadlines or interviews in the next {selected_window} days.")` where `selected_window` is the current value of the panel's window selectbox (defaults to `DEADLINE_ALERT_DAYS`). The subheader and empty-state copy both interpolate the same `selected_window` so they stay coherent under any user choice. |
 | Recommender Alerts | If `get_pending_recommenders()` returns empty, show `st.info("No pending recommender follow-ups.")`. |
@@ -803,12 +771,6 @@ load-bearing: Streamlit's documented v1.20+ behaviour wipes
 `session_state` for unmounted widget keys, so any conditional-render
 approach causes user-visible data loss across tab switches (the
 text_input's value silently resets to its `value=` default on remount).
-A short-lived 2026-04-25 experiment with `st.radio + conditional
-rendering` — which had been chosen to expose a programmatic
-`active_tab` for the Delete-button gate — was reverted after this
-class of bug surfaced. The Delete-button placement above does not
-require a programmatic active-tab signal: placing the button inside
-`with tabs[0]:` lets `st.tabs`'s CSS-hide handle visibility naturally.
 
 **Selection-survival invariant.** Save on any tab, filter change that
 still includes the selected row, and dialog-Cancel must all preserve
@@ -835,7 +797,7 @@ Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#a
     | `confirmation_received == 1`, `confirmation_date` set | `✓ {Mon D}` (e.g. `✓ Apr 19`) |
     | `confirmation_received == 1`, `confirmation_date` NULL | `✓ (no date)` |
 
-    The raw integer is never shown. **D-A amendment (Phase 5 T1-C, 2026-04-30):** the original D-A wording specified a per-cell tooltip (`Received {ISO date}` / `Received (no date recorded)`), but Streamlit 1.56's `st.dataframe` does not expose a per-cell tooltip API — `st.column_config.Column(help=...)` is column-header only, and pandas Styler tooltips do not transfer through the Arrow protobuf. Folding the tooltip text into inline cell content honors every piece of D-A's information visibly at-a-glance and matches the T4 Upcoming Date-column format (`MMM D`, no year). Resolution recorded in `reviews/phase-5-tier1-review.md`.
+    The raw integer is never shown.
 - **Interviews** are edited as an **inline list** under the application detail card:
   - Each row in the list = one `interviews` record, ordered by `sequence`. Per-row widgets: `scheduled_date` (`st.date_input`), `format` (`st.selectbox` over `config.INTERVIEW_FORMATS`), `notes` (`st.text_input`), and a Delete `🗑️` button. Widget keys scope to the interview's primary key for stability across reruns: `apps_interview_{id}_{date|format|notes|delete}`.
   - Below the list, an `Add another interview` button (`apps_add_interview`) appends a new row; `database.add_interview` computes the next `sequence` itself.
@@ -939,11 +901,7 @@ the target stage. R2 does **not** inspect the interview count: the
 status guard alone delivers the correct semantics (first interview on a
 `STATUS_APPLIED` position promotes; subsequent interviews on a
 `STATUS_INTERVIEW` position are no-ops; a position at `STATUS_OFFER` or
-terminal is not regressed). An earlier draft of R2 counted interviews
-("exactly one after insert") but that over-restricts: if the user
-back-edits status to `STATUS_APPLIED` while retaining existing
-interviews, adding another interview would fail to promote. The
-count-free form avoids this.
+terminal is not regressed).
 
 **R3 overrides non-terminal stages but guards against terminals.**
 Receiving an Offer while at `STATUS_SAVED`, `STATUS_APPLIED`, or
