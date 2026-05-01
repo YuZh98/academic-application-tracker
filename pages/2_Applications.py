@@ -20,9 +20,17 @@
 # Saved toast whenever `upsert_application` reports
 # `status_changed=True` (DESIGN §9.3).
 #
-# T3 will add an inline interview list as a SIBLING form
-# (`apps_interviews_form`) inside the same `st.container(border=True)`
-# — see DESIGN §8.3 D-B.
+# Phase 5 T3 adds the inline interview list inside the same
+# `st.container(border=True)` (DESIGN §8.3 D-B). T3-rev-B refactored
+# the list architecture from a single page-level `apps_interviews_form`
+# (Save batches every row in one click) to per-row blocks: each
+# interview owns its own `apps_interview_{id}_form` (`border=False`)
+# carrying heading + detail row + per-row Save submit, plus a per-row
+# Delete button outside the form (Streamlit 1.56 forbids `st.button`
+# inside `st.form`). Save commits ONLY the clicked row's dirty fields
+# via `database.update_interview`; sibling rows' in-flight drafts
+# survive the rerun via the per-row pre-seed sentinel
+# `_apps_interviews_seeded_ids` (frozenset, intersection-pruned).
 
 import datetime
 import math
@@ -633,87 +641,83 @@ if "applications_selected_position_id" in st.session_state:
                 seeded_ids | current_ids
             )
 
-            # ── Per-row edit form ─────────────────────────────────────
+            # ── Per-row blocks (T3-rev-B) ────────────────────────────
             #
-            # Form id `apps_interviews_form` ends in `_form` so it
-            # cannot collide with any widget key inside (gotcha #4).
-            # Save batches every per-row widget change into one Save
-            # click; the handler below computes a per-row dirty diff.
+            # DESIGN §8.3 D-B per-row block architecture: each interview
+            # is a self-contained block of {Interview number heading +
+            # Detail row + per-row Save submit + per-row Delete}. The
+            # single page-level `apps_interviews_form` from T3-A was
+            # retired; each row now owns `apps_interview_{id}_form`
+            # (`border=False` so the parent st.container(border=True)
+            # stays the only visual frame).
             #
-            # The form is suppressed entirely when the interviews list
-            # is empty — a Save button with no rows above would be
-            # meaningless. The Add button below still renders so the
-            # user can create the first interview.
-            if not interviews_df.empty:
-                with st.form("apps_interviews_form"):
-                    for _, _iv_row in interviews_df.iterrows():
-                        _iid = int(_iv_row["id"])
-                        _seq = int(_iv_row["sequence"])
-                        st.markdown(f"**Interview {_seq}**")
-                        _cols = st.columns([2, 2, 4])
-                        with _cols[0]:
-                            st.date_input(
-                                "Date",
-                                value=None,
-                                key=f"apps_interview_{_iid}_date",
-                            )
-                        with _cols[1]:
-                            # Mirror of T2-A's response_type selectbox:
-                            # leading None makes "no format chosen" a
-                            # legal pre-seed value; format_func renders
-                            # None as the em-dash glyph.
-                            st.selectbox(
-                                "Format",
-                                options=[None, *config.INTERVIEW_FORMATS],
-                                format_func=lambda v: EM_DASH if v is None else v,
-                                key=f"apps_interview_{_iid}_format",
-                            )
-                        with _cols[2]:
-                            st.text_input(
-                                "Notes",
-                                key=f"apps_interview_{_iid}_notes",
-                            )
-                    interviews_submitted = st.form_submit_button(
-                        "Save", key="apps_interviews_save",
-                    )
-            else:
-                interviews_submitted = False
+            # Streamlit guarantees at most ONE form's submit fires per
+            # click rerun, so `saves_clicked` is either empty or carries
+            # exactly one `(iid, seq)` tuple — the post-container handler
+            # processes it without ambiguity.
+            #
+            # Delete button stays OUTSIDE the per-row form (Streamlit
+            # 1.56 forbids `st.button` inside `st.form` — only
+            # `st.form_submit_button` is allowed). It renders
+            # immediately below the row's form so the per-row block
+            # reads top-to-bottom: heading → detail → Save → Delete.
+            saves_clicked: list[tuple[int, int]] = []
+            for _i, (_, _iv_row) in enumerate(interviews_df.iterrows()):
+                _iid = int(_iv_row["id"])
+                _seq = int(_iv_row["sequence"])
 
-            # ── Per-row Delete buttons (T3-B; outside the form) ──────
-            #
-            # st.form forbids st.button inside (only st.form_submit_
-            # button is allowed), so the per-row Delete affordances
-            # render in a single horizontal `st.columns(N)` row BELOW
-            # the form rather than inline with each row's widgets.
-            # Each button is labelled `🗑️ Delete Interview {seq}` so
-            # the per-row association stays unambiguous despite the
-            # vertical separation from the form widgets — wireframe
-            # deviation documented in the T3 review (wireframes.md
-            # is intent-only for layout per its line 3).
-            #
-            # Click handler sets the two pending-target sentinels
-            # (`_apps_interview_delete_target_id` + `..._seq`); the
-            # dialog itself opens via the post-loop guard below so
-            # there is exactly one call site for the dialog,
-            # regardless of which button was clicked.
-            if not interviews_df.empty:
-                _delete_cols = st.columns(len(interviews_df))
-                for _col, (_, _iv_row) in zip(
-                    _delete_cols, interviews_df.iterrows(),
+                if _i > 0:
+                    # Visual separator between blocks. The first row
+                    # has the **Interviews** section header above it
+                    # already, so no leading divider.
+                    st.divider()
+
+                with st.form(f"apps_interview_{_iid}_form", border=False):
+                    st.markdown(f"**Interview {_seq}**")
+                    _cols = st.columns([2, 2, 4])
+                    with _cols[0]:
+                        st.date_input(
+                            "Date",
+                            value=None,
+                            key=f"apps_interview_{_iid}_date",
+                        )
+                    with _cols[1]:
+                        # Mirror of T2-A's response_type selectbox:
+                        # leading None makes "no format chosen" a
+                        # legal pre-seed value; format_func renders
+                        # None as the em-dash glyph.
+                        st.selectbox(
+                            "Format",
+                            options=[None, *config.INTERVIEW_FORMATS],
+                            format_func=lambda v: EM_DASH if v is None else v,
+                            key=f"apps_interview_{_iid}_format",
+                        )
+                    with _cols[2]:
+                        st.text_input(
+                            "Notes",
+                            key=f"apps_interview_{_iid}_notes",
+                        )
+                    if st.form_submit_button(
+                        "Save", key=f"apps_interview_{_iid}_save",
+                    ):
+                        saves_clicked.append((_iid, _seq))
+
+                # Delete OUTSIDE the form, immediately below the Save
+                # line. Click handler sets the two pending-target
+                # sentinels (`_apps_interview_delete_target_id` +
+                # `..._seq`); the dialog itself opens via the post-loop
+                # guard below so there is exactly one call site for
+                # the dialog, regardless of which button was clicked.
+                if st.button(
+                    f"🗑️ Delete Interview {_seq}",
+                    key=f"apps_interview_{_iid}_delete",
                 ):
-                    _iid = int(_iv_row["id"])
-                    _seq = int(_iv_row["sequence"])
-                    with _col:
-                        if st.button(
-                            f"🗑️ Delete Interview {_seq}",
-                            key=f"apps_interview_{_iid}_delete",
-                        ):
-                            st.session_state[
-                                "_apps_interview_delete_target_id"
-                            ] = _iid
-                            st.session_state[
-                                "_apps_interview_delete_target_seq"
-                            ] = _seq
+                    st.session_state[
+                        "_apps_interview_delete_target_id"
+                    ] = _iid
+                    st.session_state[
+                        "_apps_interview_delete_target_seq"
+                    ] = _seq
 
             # ── Dialog re-open guard (T3-B; gotcha #3) ───────────────
             #
@@ -824,70 +828,74 @@ if "applications_selected_position_id" in st.session_state:
                 # the user's dirty form input is preserved for retry.
                 st.error(f"Could not save: {e}")
 
-        # ── T3-A: interviews Save handler ────────────────────────────
+        # ── T3-rev-B: per-row interviews Save handler ────────────────
         #
-        # Per-row dirty diff using _safe_str-normalized comparison so
-        # NaN-from-NULL on the DB side doesn't false-positive against
-        # an empty widget value (Sonnet plan-critique signal — without
-        # normalization, "" != float('nan') would dirty-write empty
-        # strings over NULL on every Save). Calls update_interview
-        # ONCE PER DIRTY ROW; clean rows skip.
+        # Per-row Save. Streamlit fires at most one form's submit per
+        # click rerun, so `saves_clicked` is either empty or carries
+        # exactly one `(iid, seq)` tuple — the click that just landed.
+        # The handler computes a per-row dirty diff using _safe_str-
+        # normalized comparison so NaN-from-NULL on the DB side doesn't
+        # false-positive against an empty widget value (T3 review
+        # carry-over from the T3-A single-form architecture; the same
+        # diff logic now scoped to one row).
         #
-        # The Saved toast fires unconditionally (the user clicked Save
-        # and expects feedback even when nothing changed); update_
-        # interview is only called for actually-dirty rows.
+        # Toast wording: `Saved interview {seq}.` (singular + sequence,
+        # symmetric with the existing `Deleted interview {seq}.` toast
+        # — addresses T3 review Finding #6 wording asymmetry by
+        # side-effect of the architectural refactor).
         #
         # The seeded-ids sentinel is intentionally NOT popped here:
         # update_interview is a direct write with no normalization, so
         # the widget already reflects DB state after Save. Popping
-        # would force every row to re-seed on the post-Save rerun and
-        # clobber unsaved drafts on sibling rows — different from the
-        # T2-A detail-form pop pattern, where upsert_application can
-        # potentially normalize values.
-        if interviews_submitted:
+        # would force EVERY row to re-seed on the post-Save rerun and
+        # clobber unsaved drafts on sibling rows — load-bearing for
+        # the per-row block architecture (a sibling row whose user
+        # just typed a draft must survive the rerun untouched).
+        if saves_clicked:
+            _iid, _seq = saves_clicked[0]
             try:
-                for _, _iv_row in interviews_df.iterrows():
-                    _iid = int(_iv_row["id"])
-                    _w_date = st.session_state.get(
-                        f"apps_interview_{_iid}_date",
-                    )
-                    _w_format = st.session_state.get(
-                        f"apps_interview_{_iid}_format",
-                    )
-                    _w_notes_str = _safe_str(
-                        st.session_state.get(
-                            f"apps_interview_{_iid}_notes", "",
-                        )
-                    )
-                    _w_date_iso = _w_date.isoformat() if _w_date else None
-                    _w_notes = _w_notes_str if _w_notes_str else None
+                _db_row = interviews_df[interviews_df["id"] == _iid].iloc[0]
 
-                    _db_date_str = _safe_str(_iv_row["scheduled_date"])
-                    _db_date_iso = _db_date_str if _db_date_str else None
-                    _db_fmt_str = _safe_str(_iv_row["format"])
-                    _db_format = (
-                        _db_fmt_str
-                        if _db_fmt_str in config.INTERVIEW_FORMATS
-                        else None
+                _w_date = st.session_state.get(
+                    f"apps_interview_{_iid}_date",
+                )
+                _w_format = st.session_state.get(
+                    f"apps_interview_{_iid}_format",
+                )
+                _w_notes_str = _safe_str(
+                    st.session_state.get(
+                        f"apps_interview_{_iid}_notes", "",
                     )
-                    _db_notes_str = _safe_str(_iv_row["notes"])
-                    _db_notes = _db_notes_str if _db_notes_str else None
+                )
+                _w_date_iso = _w_date.isoformat() if _w_date else None
+                _w_notes = _w_notes_str if _w_notes_str else None
 
-                    _dirty: dict[str, Any] = {}
-                    if _w_date_iso != _db_date_iso:
-                        _dirty["scheduled_date"] = _w_date_iso
-                    if _w_format != _db_format:
-                        _dirty["format"] = _w_format
-                    if _w_notes != _db_notes:
-                        _dirty["notes"] = _w_notes
-                    if _dirty:
-                        database.update_interview(_iid, _dirty)
+                _db_date_str = _safe_str(_db_row["scheduled_date"])
+                _db_date_iso = _db_date_str if _db_date_str else None
+                _db_fmt_str = _safe_str(_db_row["format"])
+                _db_format = (
+                    _db_fmt_str
+                    if _db_fmt_str in config.INTERVIEW_FORMATS
+                    else None
+                )
+                _db_notes_str = _safe_str(_db_row["notes"])
+                _db_notes = _db_notes_str if _db_notes_str else None
+
+                _dirty: dict[str, Any] = {}
+                if _w_date_iso != _db_date_iso:
+                    _dirty["scheduled_date"] = _w_date_iso
+                if _w_format != _db_format:
+                    _dirty["format"] = _w_format
+                if _w_notes != _db_notes:
+                    _dirty["notes"] = _w_notes
+                if _dirty:
+                    database.update_interview(_iid, _dirty)
 
                 st.session_state["_applications_skip_table_reset"] = True
-                st.toast("Saved interviews.")
+                st.toast(f"Saved interview {_seq}.")
                 st.rerun()
             except Exception as e:
-                st.error(f"Could not save interviews: {e}")
+                st.error(f"Could not save interview {_seq}: {e}")
 
         # ── T3-A: interviews Add handler ─────────────────────────────
         #
