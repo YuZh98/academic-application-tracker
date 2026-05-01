@@ -419,11 +419,12 @@ else:
 # edit (the asymmetry-vs-Opportunities note above is the input-side
 # half of the same contract).
 #
-# `st.container(border=True)` is the outer wrapper — T3 adds a sibling
-# `apps_interviews_form` inside the same container above the detail
-# form (DESIGN §8.3 D-B). The container is intentionally architected
-# to accept N siblings so T3's interleaving is a pure addition rather
-# than a refactor of T2's container boundaries.
+# `st.container(border=True)` is the outer wrapper — T3 adds per-row
+# `apps_interview_{id}_form` blocks (T3-rev-B; the T3-A single-form
+# `apps_interviews_form` was retired) inside the same container after
+# the detail form (DESIGN §8.3 D-B). The container is intentionally
+# architected to accept N siblings so T3's interleaving is a pure
+# addition rather than a refactor of T2's container boundaries.
 
 if "applications_selected_position_id" in st.session_state:
     sid = st.session_state["applications_selected_position_id"]
@@ -575,15 +576,16 @@ if "applications_selected_position_id" in st.session_state:
                     "Save", key="apps_detail_submit"
                 )
 
-            # ── Interviews list (T3-A) ───────────────────────────────
+            # ── Interviews list (T3-A / T3-rev-B) ───────────────────
             #
             # DESIGN §8.3 D-B: an inline interview list under the app
-            # detail card. Per-row widgets (date_input, selectbox,
-            # text_input) live inside `apps_interviews_form`; the Add
-            # button lives OUTSIDE the form (Streamlit 1.56 forbids
-            # st.button inside st.form). add_interview auto-assigns
-            # the next sequence and writes NULL date/format/notes
-            # (the schema DEFAULTs).
+            # detail card. T3-rev-B: each interview is a self-contained
+            # per-row block — `apps_interview_{id}_form` (border=False)
+            # holding heading + detail row + per-row Save submit, plus a
+            # per-row Delete button OUTSIDE the form (Streamlit 1.56
+            # forbids st.button inside st.form). add_interview
+            # auto-assigns the next sequence and writes NULL date/
+            # format/notes (the schema DEFAULTs).
             #
             # Visual placement vs wireframe: docs/ui/wireframes.md
             # shows interviews interleaved between Response and Result
