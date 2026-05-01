@@ -342,9 +342,11 @@ Every tier ends with a pre-merge review doc at
 
 1. **Executive summary** — 2–3 sentences; verdict upfront.
 2. **Findings table** — numbered rows, each with file/line, description,
-   severity, status (fixed inline / deferred / kept-by-design).
-3. **Junior-engineer Q&A** — 5–10 questions a reviewer new to the code
-   might ask, answered in the didactic style. This is the teaching layer.
+   severity (icons below), and status (see Status column values below).
+3. **Junior-engineer Q&A** — 5–8 questions for standard reviews; none
+   required for trivial reviews; no hard ceiling for deep reviews
+   (per §14.3 doc tiering). Answered in the didactic style — this is
+   the teaching layer.
 4. **Verdict** — Approve / Approve with nits / Request changes.
 
 **Severity scale**
@@ -355,9 +357,14 @@ Every tier ends with a pre-merge review doc at
 | 🟠 | Drift (doc↔code or code↔code inconsistency) | Fix before merge |
 | 🟡 | Polish (readability, naming, comment gap) | Fix if cheap; defer if costly |
 | 🟢 | Future (post-v1 or v2 concern) | Log in backlog |
+| ℹ️ | Observation (no defect; reader awareness) | None — informational only |
 
-**Kept-by-design observations** belong in the Q&A section, not Findings —
-they are not defects.
+**Status column values**: `Fixed inline` · `Deferred` · `Backlog` ·
+`Kept by design` · `Carry-over`. Use `Carry-over` for pre-existing items
+the current change does not regress (e.g. the §6 grep miscount has
+appeared in T3/T4/T5/T6/T1 reviews). `Kept by design` observations
+belong in the Q&A section, not in the Findings table — they are not
+defects.
 
 ---
 
@@ -447,3 +454,123 @@ DESIGN §8.x for each page's panel/widget contract.
    keys inside (§3 + dev-notes gotcha #4).
 7. **Test file**: `tests/test_<page_name>.py`, one class per logical
    unit (`TestApplicationsTable`, etc., per §9).
+
+---
+
+## 14. Documentation Conventions
+
+The project's narrative lives in markdown. This section sets the rules
+that keep markdown files coherent across phases. For review-doc structure
+see §10; for git-side rules (commit-prefix, tagging) see §11.
+
+### 14.1 File-header schema
+
+Every authoring-class doc opens with metadata immediately under the
+title. Required fields by doc class:
+
+| Doc class | Required header fields |
+|---|---|
+| Spec / guideline (`DESIGN`, `GUIDELINES`) | **Version:** · **Last updated:** · **Status:** (the doc's own status taxonomy) |
+| Dev-note (`docs/dev-notes/*`) | Title only; cross-refs in body |
+| Review (`reviews/*`) | **Branch:** · **Scope:** · **Stats:** (optional) · **Verdict:** |
+| ADR (`docs/adr/ADR-*.md`) | **Status:** · **Date:** · **Deciders:** (per `docs/adr/README.md` template) |
+
+Tracker docs (`TASKS.md`, `roadmap.md`, `CHANGELOG.md`) keep their
+existing section conventions — they are not authoring-class.
+
+Existing files that pre-date this convention are harmonised in the
+`docs/guidelineupdate` cleanup branch; new files conform from this
+point.
+
+### 14.2 Cross-reference canonical form
+
+Lock one form: `DESIGN §8.1`, `GUIDELINES §11`, `dev-notes gotcha #16`.
+No `.md` suffix, no `#anchor`, no markdown link unless navigation is
+load-bearing. Mixed shapes in the same prose are a 🟠 drift finding.
+
+### 14.3 Doc tiering — when to add depth
+
+| Class | Length budget | When to expand |
+|---|---|---|
+| Spec (`DESIGN`) | Whatever the spec needs | Architectural change |
+| Guideline (this file) | Scannable; bullets > prose | New convention |
+| Dev-note | One topic per file; 50–400 lines | Reproduced + pinned by test |
+| ADR | 1–3 pages with template | Hard-to-reverse architectural decision |
+| Review (trivial: ≤ 3 findings, no surprises) | Exec summary → findings → verdict; no Q&A | Routine merges |
+| Review (standard) | + 5–8 Q&A | Default for tier work |
+| Review (deep: > 8 findings, bug repro, architecture) | + verbatim source dumps OK | Bug-fix rounds, DESIGN reviews |
+
+The schema is locked at §10; this table sets the depth default.
+
+### 14.4 CHANGELOG discipline
+
+This project follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
+
+- `[Unreleased]` collects entries before they ship. On release it
+  rotates to the version header with a date.
+- Each entry is a **short bullet** under one of the six standard
+  categories: `Added` · `Changed` · `Deprecated` · `Removed` · `Fixed` ·
+  `Security`. One sentence is the target.
+- **Rationale and the deeper "why" live in the commit message and the
+  review doc — not the changelog.** Multi-paragraph essays under
+  `[Unreleased]` are the documented anti-pattern this project has
+  drifted into; new entries resist it.
+- Cite the commit hash when it aids navigation, e.g. `(aebbb8b)`.
+- **Migration notes** (project-local extension; not part of KaC 1.1.0):
+  each version section needing them ends with a single `**Migration:**`
+  block — once per release, not once per entry.
+
+### 14.5 TASKS.md scope rules
+
+`TASKS.md` is a sprint tracker, not a project history. The
+`Recently done` section caps at the **10 most recent items**; items
+older than the last shipped version tag are trimmed (they live in
+`CHANGELOG.md` under their version block — that's the durable record).
+
+`Current sprint` uses `- [ ]` / `- [x]` checkboxes — top-level boxes
+are tiers; sub-task boxes nest. When all sub-tasks under a tier check,
+the tier rolls up to `Recently done` on the next `chore:` commit.
+
+### 14.6 Wireframe scope
+
+`docs/ui/wireframes.md` is "intent-only — not pixel-exact" for visual
+layout (column widths, exact emoji choice, ASCII alignment).
+
+It is NOT intent-only for **column order**, **panel ordering**, or
+**panel presence**. A wireframe whose Date column appears before the
+Days-Left column when `DESIGN §8.1` specifies the opposite is a 🟠
+finding (drift), not 🟡 (polish). Treat structural divergences from
+`DESIGN` as bugs.
+
+### 14.7 Reviews folder index
+
+`reviews/` carries a `README.md` index — one row per review, columns
+`(date, scope, branch, verdict, link)`. Append on each new review;
+file timestamps order naturally, so the index is reverse-chronological
+or chronological by author preference.
+
+Naming: `phase-<N>-tier<M>-review.md` (lowercase `tier`); date-stamped
+one-offs use `<topic>-YYYY-MM-DD-review.md`. Mixed casing in legacy
+filenames is left alone — new files conform.
+
+### 14.8 What lives where
+
+Decision-class content has competing homes. Resolve in this order:
+
+| Content | Home | Why |
+|---|---|---|
+| Original v1.0 architectural decisions | `DESIGN §10` D1–D10 (frozen v1.0 batch) | Historical record |
+| Post-v1.1 architectural decisions made before the ADR ledger was active | `DESIGN §10` D11–D25 | Candidate ADR backfills (see `docs/adr/README.md`) |
+| New cross-cutting architectural decisions (going forward) | `docs/adr/` | Forward-only ADR ledger per `docs/adr/README.md` |
+| Tier-local implementation choices | `reviews/phase-*.md` Q&A | Bound to the change that introduced them |
+| Streamlit / library quirks | `docs/dev-notes/streamlit-state-gotchas.md` | Per-quirk Symptom / Cause / Workaround |
+| Config-extension procedural recipes | `docs/dev-notes/extending.md` | "How": step-by-step walkthrough |
+| Config-extension architectural index | `DESIGN §5.3` | "What changes where": one row per goal |
+| User-facing release narrative | `CHANGELOG.md` | Keep-a-Changelog formatted |
+| Sprint state | `TASKS.md` | Hand-maintained per §14.5 |
+| Phase planning | `roadmap.md` | Phases + ship criteria + post-v1 backlog |
+
+When the same decision could land in two of these, pick the one higher
+on the table. Content that belongs in the index (`DESIGN §5.3`) but
+lands only in the recipe file (`extending.md`), or vice versa, is a
+🟠 drift finding.
