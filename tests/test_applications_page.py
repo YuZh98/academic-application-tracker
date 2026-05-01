@@ -83,6 +83,20 @@ def _w_interview_notes(iid: int) -> str:
     return f"apps_interview_{iid}_notes"
 
 
+# T3-B: per-row Delete button + @st.dialog confirm. Click sets the
+# pending-target sentinels (id + seq); a single dialog call site
+# post-loop opens the dialog while the sentinels are set, which
+# satisfies gotcha #3's re-open trick across AppTest reruns.
+INTERVIEW_DELETE_TARGET_ID_KEY  = "_apps_interview_delete_target_id"
+INTERVIEW_DELETE_TARGET_SEQ_KEY = "_apps_interview_delete_target_seq"
+INTERVIEW_DELETE_CONFIRM_KEY    = "apps_interview_delete_confirm"
+INTERVIEW_DELETE_CANCEL_KEY     = "apps_interview_delete_cancel"
+
+
+def _w_interview_delete(iid: int) -> str:
+    return f"apps_interview_{iid}_delete"
+
+
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Applications page."""
     at = AppTest.from_file(PAGE, default_timeout=10)
@@ -2432,4 +2446,501 @@ class TestApplicationsInterviewSentinelLifecycle:
             f"Switching positions must reset sentinel to the new "
             f"position's interview ids only. Expected "
             f"frozenset({{{ib}}}), got {sentinel!r}."
+        )
+
+
+# ── Interview Delete button (T3-B) ────────────────────────────────────────────
+
+class TestApplicationsInterviewDeleteButton:
+    """T3-B: per-row Delete button outside the form (Streamlit 1.56
+    forbids `st.button` inside `st.form` — only `st.form_submit_button`
+    is allowed). Each button is keyed `apps_interview_{id}_delete`
+    per DESIGN §8.3 D-B and labelled with the row's sequence number
+    for unambiguous per-row association. Click sets the pending
+    target sentinels (id + sequence); the dialog itself opens via
+    a separate post-loop guard tested in
+    `TestApplicationsInterviewDeleteDialog`."""
+
+    def test_delete_buttons_render_per_row(self, db):
+        """N interviews → N Delete buttons, one per row, keyed
+        `apps_interview_{id}_delete`."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {})["id"]
+        i2 = database.add_interview(pid, {})["id"]
+        i3 = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        for iid in (i1, i2, i3):
+            try:
+                at.button(key=_w_interview_delete(iid))
+            except KeyError:
+                pytest.fail(
+                    f"Delete button (key={_w_interview_delete(iid)!r}) "
+                    f"must render for every interview row "
+                    f"(DESIGN §8.3 D-B)."
+                )
+
+    def test_no_delete_buttons_when_empty(self, db):
+        """Position with zero interviews → no Delete buttons. The Add
+        button still renders (T3-A), so the section is not entirely
+        empty; only the per-row delete affordances are absent."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # No `apps_interview_*_delete` button should exist when no
+        # interviews are present. Probe by listing button keys.
+        for btn in at.button:
+            key = getattr(btn, "key", None) or ""
+            assert not (
+                key.startswith("apps_interview_") and key.endswith("_delete")
+            ), (
+                f"No per-row Delete button should render for an "
+                f"empty interviews list; found unexpected key={key!r}."
+            )
+
+    def test_delete_button_label_includes_sequence_number(self, db):
+        """Button label embeds the interview's sequence number — the
+        per-row association mechanism, since all delete buttons live
+        in a single horizontal row of columns and a label like 'Delete'
+        alone would be ambiguous."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {})["id"]
+        i2 = database.add_interview(pid, {})["id"]
+        # Sequences are 1, 2 (auto-assigned via add_interview).
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        btn1_label = at.button(key=_w_interview_delete(i1)).label or ""
+        btn2_label = at.button(key=_w_interview_delete(i2)).label or ""
+        assert "1" in btn1_label, (
+            f"Delete button for interview 1 must include '1' in its "
+            f"label; got {btn1_label!r}."
+        )
+        assert "2" in btn2_label, (
+            f"Delete button for interview 2 must include '2' in its "
+            f"label; got {btn2_label!r}."
+        )
+
+    def test_click_sets_pending_target_sentinels(self, db):
+        """Clicking a Delete button writes the row's id + sequence to
+        the two pending-target session_state sentinels. The dialog
+        then opens via the post-loop guard."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        # Sanity: sentinels are absent on first render.
+        assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state
+        assert INTERVIEW_DELETE_TARGET_SEQ_KEY not in at.session_state
+
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_delete(iid)).click()
+        at.run()
+
+        assert not at.exception, f"Delete click raised: {at.exception!r}"
+        assert at.session_state[INTERVIEW_DELETE_TARGET_ID_KEY] == iid, (
+            f"Click must set pending-id sentinel to the row's id "
+            f"({iid}); got "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_ID_KEY)!r}."
+        )
+        assert at.session_state[INTERVIEW_DELETE_TARGET_SEQ_KEY] == 1, (
+            f"Click must set pending-seq sentinel to the row's "
+            f"sequence (1); got "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_SEQ_KEY)!r}."
+        )
+
+    def test_clicking_different_button_overwrites_pending_target(self, db):
+        """Subsequent click on a different row replaces the pending
+        target. Pinned so a future regression where the click handler
+        accidentally checks-then-writes (rather than unconditional
+        write) surfaces here."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {})["id"]
+        i2 = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # First click: row 1.
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_delete(i1)).click()
+        at.run()
+        assert at.session_state[INTERVIEW_DELETE_TARGET_ID_KEY] == i1
+
+        # Second click: row 2 — overwrites the pending target.
+        # _keep_selection is required across the rerun (gotcha #11).
+        # Cancel the open dialog first to avoid interference.
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEW_DELETE_CANCEL_KEY).click()
+        at.run()
+        assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state, (
+            "Cancel must clear the pending-target sentinel before the "
+            "second click is exercised."
+        )
+
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_delete(i2)).click()
+        at.run()
+        assert at.session_state[INTERVIEW_DELETE_TARGET_ID_KEY] == i2, (
+            f"Second click on a different row must overwrite the "
+            f"pending-id sentinel; expected {i2}, got "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_ID_KEY)!r}."
+        )
+        assert at.session_state[INTERVIEW_DELETE_TARGET_SEQ_KEY] == 2
+
+
+# ── Interview Delete dialog (T3-B) ────────────────────────────────────────────
+
+class TestApplicationsInterviewDeleteDialog:
+    """T3-B: `@st.dialog`-decorated `_confirm_interview_delete_dialog`
+    helper. Re-open trick (gotcha #3) is implemented via a single
+    post-loop guard (`if pending_id in current_ids:
+    _confirm_interview_delete_dialog()`) so AppTest's script-run
+    model can reach Confirm/Cancel handlers across reruns. The
+    `pending_id in current_ids` check additionally provides
+    automatic stale-target cleanup when the user navigates to a
+    different position.
+
+    Confirm path: `database.delete_interview(id)` → toast + sentinel
+    cleanup + selection preserved + `st.rerun()`.
+    Cancel path: sentinel cleanup + selection preserved +
+    `st.rerun()`. No DB write.
+    Failure path: `st.error`, no re-raise per GUIDELINES §8;
+    sentinels SURVIVE so the dialog re-opens for retry (matches
+    the Opportunities-page failure-preserves-state precedent)."""
+
+    def _click_delete(self, at, iid):
+        """Click the per-row Delete button + run the page so the
+        dialog opens via the post-loop guard. Mirrors the
+        Opportunities-page two-rerun pattern (button click then
+        confirm/cancel click) — the open-dialog state must persist
+        across the rerun for AppTest to reach the dialog buttons."""
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_delete(iid)).click()
+        at.run()
+
+    def test_dialog_opens_with_warning_mentioning_sequence(self, db):
+        """Click Delete → dialog opens → `st.warning` text contains
+        the interview's sequence number AND a 'cannot be undone'
+        irreversibility signal. Pinned so a regression that drops
+        either fragment surfaces here (the warning is the user's
+        last chance to back out)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        self._click_delete(at, iid)
+
+        assert not at.exception, f"Delete-click raised: {at.exception!r}"
+        assert at.warning, (
+            f"Delete dialog must render an st.warning so the user "
+            f"sees what is about to happen; got "
+            f"{[el.value for el in at.warning]!r}."
+        )
+        warning_text = " ".join(el.value for el in at.warning)
+        # Sequence number is the per-row identifier — the user's only
+        # cue to which row is about to be deleted, since all delete
+        # buttons share a single `Delete` action archetype.
+        assert "1" in warning_text, (
+            f"Dialog warning must reference the interview's sequence "
+            f"number (1) so the user knows which row is targeted; "
+            f"got warning={warning_text!r}."
+        )
+        # Irreversibility signal — without it the user has no warning
+        # there is no undo path (mirrors the Opportunities-page pin).
+        assert "cannot be undone" in warning_text.lower(), (
+            f"Dialog warning must signal irreversibility; got "
+            f"warning={warning_text!r}."
+        )
+
+    def test_confirm_deletes_from_db_and_fires_toast(self, db):
+        """Confirm path: row removed from DB AND a 'Deleted interview
+        {seq}.' toast fires. The two assertions together prevent a
+        regression where the toast shows but the row stays (e.g.,
+        a missing pop or a wrong id)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        self._click_delete(at, iid)
+
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEW_DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete confirm raised: {at.exception!r}"
+        # DB row gone.
+        rows = database.get_interviews(pid)
+        assert iid not in set(int(i) for i in rows["id"]), (
+            f"After Confirm, interview id {iid} must be gone from DB; "
+            f"got remaining ids={list(rows['id'])!r}."
+        )
+        # Toast fires with sequence in the copy.
+        toast_values = [el.value for el in at.toast]
+        assert any("Deleted interview" in v and "1" in v for v in toast_values), (
+            f"Confirm must fire a 'Deleted interview {{seq}}.' toast; "
+            f"got toasts={toast_values!r}."
+        )
+
+    def test_confirm_clears_pending_sentinels(self, db):
+        """After successful confirm, both pending-target sentinels
+        must be popped — otherwise the next rerun's post-loop guard
+        would re-open the dialog with a now-deleted id, leading to
+        either the stale-target silent-pop branch (if guarded) or
+        a 'Delete target lost' error (if guarded that way)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        self._click_delete(at, iid)
+
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEW_DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete confirm raised: {at.exception!r}"
+        assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state, (
+            f"Confirm must pop {INTERVIEW_DELETE_TARGET_ID_KEY!r}; "
+            f"got it still set to "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_ID_KEY)!r}."
+        )
+        assert INTERVIEW_DELETE_TARGET_SEQ_KEY not in at.session_state, (
+            f"Confirm must pop {INTERVIEW_DELETE_TARGET_SEQ_KEY!r} "
+            f"alongside the id sentinel (paired-cleanup convention); "
+            f"got it still set to "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_SEQ_KEY)!r}."
+        )
+
+    def test_confirm_preserves_position_selection(self, db):
+        """Post-Confirm invariant: `applications_selected_position_id`
+        survives the rerun so the detail card stays open with the
+        remaining interviews. Mechanism is the same
+        `_applications_skip_table_reset` one-shot the T2-A Save uses
+        (gotcha #11) — the dataframe-event-reset rerun would
+        otherwise pop selection in the else branch."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        # Two interviews so the detail card remains relevant after
+        # one is deleted (avoids confounding with empty-list state).
+        i1 = database.add_interview(pid, {})["id"]
+        database.add_interview(pid, {})
+
+        at = _run_page()
+        _select_row(at, 0)
+        self._click_delete(at, i1)
+
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEW_DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Delete confirm raised: {at.exception!r}"
+        assert SELECTED_PID_KEY in at.session_state, (
+            f"Delete confirm must preserve {SELECTED_PID_KEY!r}; got "
+            f"it absent."
+        )
+        assert at.session_state[SELECTED_PID_KEY] == pid, (
+            f"Delete confirm must preserve "
+            f"{SELECTED_PID_KEY!r} == pid={pid!r}; got "
+            f"{_ss_or_none(at, SELECTED_PID_KEY)!r}."
+        )
+
+    def test_cancel_clears_sentinels_no_db_write(self, db):
+        """Cancel path: dialog closes, both sentinels popped, and
+        the DB row is UNTOUCHED. The data-state invariant is
+        load-bearing — Cancel must be safely no-op so a misclick
+        on Delete is recoverable."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        self._click_delete(at, iid)
+
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEW_DELETE_CANCEL_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Cancel raised: {at.exception!r}"
+        # Sentinels gone.
+        assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state
+        assert INTERVIEW_DELETE_TARGET_SEQ_KEY not in at.session_state
+        # DB row untouched.
+        rows = database.get_interviews(pid)
+        assert iid in set(int(i) for i in rows["id"]), (
+            f"Cancel must NOT delete the row; expected id {iid} still "
+            f"present, got remaining ids={list(rows['id'])!r}."
+        )
+        # No toast — Cancel is silent.
+        toast_values = [el.value for el in at.toast]
+        assert not any("Deleted" in v for v in toast_values), (
+            f"Cancel must NOT fire any deletion toast; got "
+            f"toasts={toast_values!r}."
+        )
+
+    def test_dialog_reopens_across_reruns_per_gotcha_3(self, db):
+        """Re-open trick: after the initial click, every subsequent
+        rerun while the pending sentinels are set must re-open the
+        dialog — without this, AppTest's script-run model would lose
+        the dialog after the first rerun and the Confirm/Cancel
+        buttons inside would be unreachable. Pinned by directly
+        injecting the sentinels into session_state and running the
+        page WITHOUT a click; the dialog must still open."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Inject sentinels directly — this mimics the post-rerun
+        # state that a real click would produce, but skips the click
+        # so we test the re-open path in isolation from the click
+        # path (which is covered by the click tests above).
+        at.session_state[INTERVIEW_DELETE_TARGET_ID_KEY] = iid
+        at.session_state[INTERVIEW_DELETE_TARGET_SEQ_KEY] = 1
+        _keep_selection(at, 0)
+        at.run()
+
+        assert not at.exception, f"Re-open raised: {at.exception!r}"
+        # Dialog elements are reachable.
+        try:
+            at.button(key=INTERVIEW_DELETE_CONFIRM_KEY)
+            at.button(key=INTERVIEW_DELETE_CANCEL_KEY)
+        except KeyError as e:
+            pytest.fail(
+                f"Re-open trick must keep Confirm + Cancel buttons "
+                f"reachable across reruns while pending sentinels are "
+                f"set (gotcha #3); missing: {e}"
+            )
+
+    def test_stale_target_after_position_change_clears_silently(self, db):
+        """When the user selects a different position with a pending
+        delete target whose interview belongs to the OLD position,
+        the post-loop guard's `pending_id in current_ids` check
+        must silently pop the sentinels — no error, no toast, no
+        dialog. This prevents a stale dialog from appearing on
+        the new position's view."""
+        pid_a = database.add_position(make_position({
+            "position_name": "A",
+            "deadline_date": (
+                datetime.date.today() + datetime.timedelta(days=20)
+            ).isoformat(),
+        }))
+        pid_b = database.add_position(make_position({
+            "position_name": "B",
+            "deadline_date": (
+                datetime.date.today() + datetime.timedelta(days=40)
+            ).isoformat(),
+        }))
+        database.update_position(pid_a, {"status": config.STATUS_APPLIED})
+        database.update_position(pid_b, {"status": config.STATUS_APPLIED})
+        ia = database.add_interview(pid_a, {})["id"]
+        database.add_interview(pid_b, {})
+
+        at = _run_page()
+        # Select pos A (row 0; earlier deadline).
+        _select_row(at, 0)
+
+        # Inject a pending target for pos A's interview, then switch
+        # to pos B without confirming.
+        at.session_state[INTERVIEW_DELETE_TARGET_ID_KEY] = ia
+        at.session_state[INTERVIEW_DELETE_TARGET_SEQ_KEY] = 1
+        _select_row(at, 1)  # pos B — ia is not in current_ids
+
+        assert not at.exception, (
+            f"Stale-target cleanup must not raise; got {at.exception!r}."
+        )
+        # Sentinels silently popped.
+        assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state, (
+            f"Stale pending-id (id from a different position) must be "
+            f"silently popped; got it still set to "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_ID_KEY)!r}."
+        )
+        assert INTERVIEW_DELETE_TARGET_SEQ_KEY not in at.session_state
+        # No error, no toast, no dialog.
+        assert [el.value for el in at.error] == [], (
+            f"Stale-target cleanup must not surface any error; got "
+            f"{[el.value for el in at.error]!r}."
+        )
+        assert [el.value for el in at.toast] == [], (
+            f"Stale-target cleanup must not fire any toast; got "
+            f"{[el.value for el in at.toast]!r}."
+        )
+        # Confirm button must NOT be present (no dialog opened).
+        with pytest.raises(KeyError):
+            at.button(key=INTERVIEW_DELETE_CONFIRM_KEY)
+
+    def test_delete_failure_uses_st_error_no_reraise(self, db, monkeypatch):
+        """`database.delete_interview` raises → page surfaces
+        `st.error`, does NOT re-raise (GUIDELINES §8). Pending
+        sentinels SURVIVE so the dialog re-opens on the next rerun
+        and the user can retry — matches the Opportunities-page
+        failure-preserves-state precedent (no DB rollback to undo;
+        the user just gets to try again)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+        self._click_delete(at, iid)
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("delete on fire")
+        monkeypatch.setattr(database, "delete_interview", _boom)
+
+        _keep_selection(at, 0)
+        at.button(key=INTERVIEW_DELETE_CONFIRM_KEY).click()
+        at.run()
+
+        assert not at.exception, (
+            f"Delete failure must be caught (GUIDELINES §8 — no "
+            f"re-raise); got exception={at.exception!r}."
+        )
+        error_values = [el.value for el in at.error]
+        assert (
+            any("delete on fire" in v for v in error_values)
+            or any("Could not delete" in v for v in error_values)
+        ), (
+            f"Delete failure must surface via st.error containing "
+            f"the underlying message; got errors={error_values!r}."
+        )
+        # No deletion toast.
+        toast_values = [el.value for el in at.toast]
+        assert not any("Deleted" in v for v in toast_values), (
+            f"Failed delete must NOT fire a deletion toast; got "
+            f"toasts={toast_values!r}."
+        )
+        # DB row still present.
+        rows = database.get_interviews(pid)
+        assert iid in set(int(i) for i in rows["id"]), (
+            f"Failed delete must leave the row in DB; expected id "
+            f"{iid} still present, got "
+            f"remaining ids={list(rows['id'])!r}."
+        )
+        # Sentinels survive so the dialog re-opens on the next rerun
+        # (Opportunities-page failure-preserves-state precedent).
+        assert at.session_state[INTERVIEW_DELETE_TARGET_ID_KEY] == iid, (
+            f"Failed delete must keep "
+            f"{INTERVIEW_DELETE_TARGET_ID_KEY!r} set so the dialog "
+            f"re-opens for retry; got "
+            f"{_ss_or_none(at, INTERVIEW_DELETE_TARGET_ID_KEY)!r}."
         )
