@@ -18,11 +18,11 @@ Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
 [`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md);
 suite 586 → 638 green under both pytest gates.
 
-Branch (T3): not yet started — next functional work after the
-`docs/guidelineupdate` doc-cleanup branch merges. T3 implements the
-inline interview list UI per DESIGN §8.3 D-B
-(`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
-delete, R2-toast surfacing on add).
+Branch (T3): T3-A + T3-B + T3 review (9 findings, 2 inline fixes) +
+T3-rev (T3-rev-A column split + T3-rev-B per-row block refactor) +
+pre-merge review addendum (Findings #10–#13, 2 inline fixes) all on
+`feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 683
+green under both pytest gates. Pre-merge review done; PR pending.
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -95,8 +95,8 @@ delete, R2-toast surfacing on add).
         Applications does NOT pop selection on filter narrowing —
         the detail card resolves against the unfiltered `df` so an
         in-progress edit survives a filter change. Detail card
-        wrapped in `st.container(border=True)` (architected for
-        T3's sibling `apps_interviews_form`); header reads
+        wrapped in `st.container(border=True)` (architected to hold
+        T3's per-row interview blocks); header reads
         `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`;
         inline "All recs submitted: ✓ / —" via
         `is_all_recs_submitted` (vacuous-true for zero recs, D23).
@@ -164,10 +164,109 @@ delete, R2-toast surfacing on add).
         (`TestApplicationsCascadePromotionToast`,
         `TestApplicationsCohesionSweep`); suite 629 → 638 under
         both pytest gates.
-- [ ] **T3** Inline interview list UI (per DESIGN §8.3 D-B) —
-      `apps_interview_{id}_*` keying, single Save form
-      `apps_interviews_form`, `@st.dialog`-gated delete, R2-toast
-      surfacing on add when `add_interview` returns `status_changed=True`
+- [x] **T3** Inline interview list UI (per DESIGN §8.3 D-B) —
+      per-row `apps_interview_{id}_form` blocks (T3-rev-B; retired
+      the T3-A single-form `apps_interviews_form`), `@st.dialog`-
+      gated delete, R2-toast surfacing on add when `add_interview`
+      returns `status_changed=True`. T3-A + T3-B + T3-rev-A +
+      T3-rev-B all shipped on branch
+      `feature/phase-5-tier3-InterviewManagementUI`. Pre-merge
+      review done (9+4 findings, 4 inline fixes across 2 passes);
+      PR pending.
+  - [x] T3-A Interview list + per-row edit form + Save + Add +
+        R2 toast — `apps_interviews_form` with date/format/notes
+        per row inside the existing T2 `st.container(border=True)`,
+        `_safe_str`-normalized dirty-diff Save calling
+        `database.update_interview` per dirty row only (clean rows
+        skip), Add button outside the form (Streamlit 1.56 forbids
+        `st.button` inside `st.form`) calling
+        `database.add_interview(sid, {}, propagate_status=True)`
+        with R2 promotion toast on `status_changed=True`. Format
+        selectbox mirrors T2-A's `response_type` pattern:
+        `[None, *INTERVIEW_FORMATS]` with `format_func` rendering
+        `None` as the em-dash glyph — without the leading `None`,
+        a freshly-Added row (`format=NULL`) would default to
+        `INTERVIEW_FORMATS[0]` and silently dirty-write a value
+        the user never chose (Sonnet plan-critique signal).
+        Per-row pre-seed sentinel `_apps_interviews_seeded_ids`
+        (frozenset of seeded ids; pruned via
+        `saved_sentinel & current_ids` on every rerun) preserves
+        sibling-row drafts across Add and prevents zombie ids
+        after delete (Sonnet plan-critique signal). Save handler
+        does NOT pop the sentinel after success (different from
+        T2-A's pop pattern): `update_interview` is a direct write
+        with no normalization, so the widget already reflects DB
+        state — popping would re-seed sibling rows and clobber
+        unsaved drafts. 25 new tests across 4 new classes
+        (`TestApplicationsInterviewListRender`,
+        `TestApplicationsInterviewSave`,
+        `TestApplicationsInterviewAdd`,
+        `TestApplicationsInterviewSentinelLifecycle`); suite
+        638 → 663 under both pytest gates.
+  - [x] T3-B Per-row Delete via `@st.dialog` confirm before
+        `database.delete_interview(id)` — module-level
+        `_confirm_interview_delete_dialog` helper at the page's
+        helpers section; per-row Delete buttons render in a single
+        horizontal `st.columns(N)` row BELOW `apps_interviews_form`
+        (Streamlit 1.56 forbids `st.button` inside `st.form`), each
+        keyed `apps_interview_{id}_delete` and labelled
+        `🗑️ Delete Interview {seq}` so the per-row association
+        stays unambiguous despite the vertical separation. Single
+        dialog call site post-loop with a
+        `pending_id in current_ids` guard provides automatic stale-
+        target cleanup when the user navigates to a different
+        position. Confirm path: `database.delete_interview(id)` +
+        pop sentinels + `_applications_skip_table_reset=True`
+        (gotcha #11 — preserves selection across the rerun) +
+        `st.toast("Deleted interview {seq}.")` + `st.rerun()`.
+        Cancel path: pop sentinels + `_applications_skip_table_reset
+        =True` + `st.rerun()` (no DB write, no toast). Failure
+        path: `st.error` per GUIDELINES §8 with sentinels
+        SURVIVING so the dialog re-opens for retry — matches the
+        Opportunities-page failure-preserves-state precedent.
+        13 new tests across 2 new classes
+        (`TestApplicationsInterviewDeleteButton`,
+        `TestApplicationsInterviewDeleteDialog`); suite 663 → 676
+        under both pytest gates.
+  - [x] T3-rev-A Position / Institute column split per the post-T3
+        truth-file alignment. DESIGN §8.3 amended (commit `ba7cd47`)
+        with an explicit seven-column contract; wireframe updated
+        in the same commit. Page table render now produces
+        `Position` (bare `position_name`) + new `Institute` (bare
+        institute, EM_DASH on empty) columns instead of a single
+        `f"{institute}: {position_name}"` Position cell. Both go
+        through `_safe_str_or_em` (NaN→EM_DASH per gotcha #1).
+        Column widths: Position `large` (kept; bare `position_name`
+        can still be long), Institute `medium` (full institute names
+        like "Massachusetts Institute of Technology" don't fit
+        `small`). The `_format_label` helper stays on the page —
+        still used by the detail-card header. 4 net new test cases
+        (3 from `test_institute_column_format` parametrize + 1
+        `test_institute_column_is_medium`); suite 676 → 681 under
+        both pytest gates.
+  - [x] T3-rev-B Per-row interview block refactor — replaced the
+        single page-level `apps_interviews_form` with per-row
+        `apps_interview_{id}_form` (`border=False` so the parent
+        `st.container(border=True)` stays the only visual frame).
+        Each block carries `**Interview {seq}**` heading + 3-column
+        detail row (date / format / notes) + per-row
+        `st.form_submit_button("Save", key=f"apps_interview_{id}_save")`
+        + per-row Delete button outside the form (Streamlit 1.56
+        forbids `st.button` inside `st.form`). Blocks separated by
+        `st.divider()`. Save handler (`if saves_clicked:`) processes
+        the single (iid, seq) tuple from the click — Streamlit fires
+        at most one form submit per rerun. Toast wording: `Saved
+        interview {seq}.` (singular + sequence; side-effect closes
+        T3 review Finding #6 wording asymmetry). Error wording:
+        `Could not save interview {seq}: {e}`. Seeded-ids sentinel
+        still NOT popped on Save success — load-bearing for the
+        per-row architecture (popping would re-seed sibling rows and
+        clobber drafts). 2 net new test cases (replaced
+        `test_two_dirty_rows_call_update_interview_twice` with
+        `test_clicking_one_row_save_does_not_persist_sibling_row`,
+        added `test_save_one_row_preserves_sibling_row_draft` and
+        `test_save_toast_includes_sequence_number`); suite 681 → 683
+        under both pytest gates.
 - [ ] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
       grouped by `recommender_name`
 - [ ] **T5** Recommenders table + add form + inline edit (`asked_date`,
@@ -321,6 +420,75 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-01 — **Phase 5 T3-rev (T3-rev-A + T3-rev-B) shipped on
+  branch** `feature/phase-5-tier3-InterviewManagementUI` —
+  truth-file alignment for the Applications page. T3-rev-A: split
+  the combined Position cell (`f"{institute}: {position_name}"`)
+  into separate Position + Institute columns per the amended
+  DESIGN §8.3 seven-column contract; both go through
+  `_safe_str_or_em` (NaN→EM_DASH per gotcha #1); column widths
+  Position=large / Institute=medium. T3-rev-B: replaced the single
+  page-level `apps_interviews_form` with per-row
+  `apps_interview_{id}_form` (`border=False`) blocks — each
+  interview is now a self-contained block of {Interview number
+  heading + Detail row + per-row Save submit + per-row Delete} per
+  the user's directive. Streamlit fires at most one form submit
+  per click rerun, so the per-row Save handler (`if saves_clicked:`)
+  processes a single (iid, seq) tuple at a time — sibling rows'
+  in-flight drafts survive the rerun via the per-row pre-seed
+  sentinel `_apps_interviews_seeded_ids` (intersection-pruned
+  frozenset; NOT popped on Save success). Toast / error wording
+  switched to singular + sequence (`Saved interview {seq}.`,
+  `Could not save interview {seq}: {e}`) — closes T3 review
+  Finding #6 wording asymmetry by side-effect. 6 net new test
+  cases (4 from T3-rev-A column tests + 2 from T3-rev-B per-row
+  Save tests minus the retired
+  `test_two_dirty_rows_call_update_interview_twice`); suite 676 →
+  683 under both pytest gates.
+- 2026-05-01 — **Phase 5 T3-rev-A shipped on branch**
+  `feature/phase-5-tier3-InterviewManagementUI` — Position / Institute
+  column split per the post-T3 truth-file alignment. DESIGN §8.3
+  amended with an explicit seven-column contract for the Applications
+  table (Position bare, Institute bare, Applied, Recs, Confirmation,
+  Response, Result); wireframe already shows the same structure since
+  `2bd20ab`. Page now uses `_safe_str_or_em` on both `position_name`
+  and `institute` columns instead of a combined `f"{institute}:
+  {position_name}"` Position cell. Position keeps `width="large"`
+  (bare `position_name` can still be long); Institute is
+  `width="medium"`. The `_format_label` helper stays — still used by
+  the detail-card header. 4 net new test cases; suite 676 → 681
+  under both pytest gates.
+- 2026-05-01 — **Phase 5 T3 shipped on branch**
+  `feature/phase-5-tier3-InterviewManagementUI` (T3-A + T3-B both
+  green; pre-merge review + PR pending). T3-A: inline interview
+  list under the existing T2 detail card with `apps_interviews_form`
+  per-row edit form (date / format / notes widgets keyed
+  `apps_interview_{id}_{date|format|notes}` per DESIGN §8.3 D-B),
+  `_safe_str`-normalized dirty-diff Save calling
+  `database.update_interview` per dirty row only, Add button outside
+  the form calling
+  `database.add_interview(sid, {}, propagate_status=True)` with R2
+  promotion toast on `status_changed=True`; per-row pre-seed
+  sentinel `_apps_interviews_seeded_ids` (frozenset, intersection-
+  pruned per rerun) preserves sibling drafts across Add and stays
+  zombie-id-free across delete. T3-B: per-row Delete buttons
+  rendered in a single horizontal `st.columns(N)` row BELOW the
+  form (Streamlit 1.56 forbids `st.button` inside `st.form`), each
+  keyed `apps_interview_{id}_delete` and labelled
+  `🗑️ Delete Interview {seq}`; module-level
+  `@st.dialog`-decorated `_confirm_interview_delete_dialog` with the
+  gotcha #3 re-open trick implemented via a single post-loop
+  `pending_id in current_ids` guard (which doubles as automatic
+  stale-target cleanup when the user navigates to a different
+  position). Confirm path: `database.delete_interview(id)` +
+  paired sentinel cleanup + selection preserved (gotcha #11) +
+  `Deleted interview {seq}.` toast + rerun. Cancel path: silent
+  cleanup + selection preserved + rerun. Failure path: `st.error`
+  per GUIDELINES §8 with sentinels surviving so the dialog
+  re-opens for retry (mirrors the Opportunities-page
+  failure-preserves-state precedent). 38 new tests across 6 new
+  classes (4 from T3-A + 2 from T3-B); suite 638 → 676 under
+  both pytest gates.
 - 2026-04-30 — **PR #16 merged** (`b9a2c82`): Phase 5 T2 (T2-A + T2-B)
   shipped — editable Application detail card behind row selection +
   cascade-promotion toast surfacing. Suite 586 → 638 under both pytest
@@ -370,4 +538,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 5 T2 merged via PR #16 (`b9a2c82`); doc-cleanup branch `docs/guidelineupdate` in flight; Phase 5 T3 next functional work after that branch merges)_
+_Updated: 2026-05-01 (Phase 5 T3-rev-A + T3-rev-B both shipped on `feature/phase-5-tier3-InterviewManagementUI`; pre-merge review + PR pending)_

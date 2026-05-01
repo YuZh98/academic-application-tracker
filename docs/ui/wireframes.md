@@ -40,10 +40,10 @@ Page source: `app.py`. See
 ╠═════════════════════════════╩══════════════════════════════════╣
 ║  Upcoming (next 30 days)                                       ║
 ║                                                                ║
-║  Date     Days  Label              Kind       Status   Urgency ║
-║  Apr 24    9d   Stanford BioStats  deadline   Saved    🔴      ║
-║  May 3    18d   Stanford BioStats  Interview  Applied          ║
-║  May 15   30d   MIT CSAIL          deadline   Saved            ║
+║  Date     Days  Position   Institute  Kind       Status   Urgency ║
+║  Apr 24    9d   BioStats   Stanford   deadline   Saved    🔴      ║
+║  May 3    18d   BioStats   Stanford   Interview  Applied          ║
+║  May 15   30d   CSAIL      MIT        deadline   Saved            ║
 ║                                                                ║
 ╠════════════════════════════════════════════════════════════════╣
 ║  Recommender Alerts                                            ║
@@ -72,10 +72,10 @@ Page source: `pages/1_Opportunities.py`. See
 ║                                                                ║
 ║  Filter: Status [All ▼]  Priority [All ▼]  Field [________]   ║
 ║                                                                ║
-║  Position Name        Institute  Priority   Status    Due      ║
+║  Position   Institute  Priority   Status    Due      ║
 ║  ────────────────────────────────────────────────────────────  ║
-║  Stanford BioStats    Stanford   🟡 High   Applied   ——        ║
-║  MIT CSAIL Postdoc    MIT        🟡 High   Saved     May 15    ║
+║  BioStats   Stanford   🟡 High   Applied   ——        ║
+║  Postdoc    MIT        🟡 High   Saved     May 15    ║
 ║  ··· (click row to expand) ···                                 ║
 ║                                                                ║
 ║  ┌──── Stanford BioStats Postdoc  ·  Applied  ─────────────┐   ║
@@ -101,22 +101,28 @@ Page source: `pages/2_Applications.py`. See
 ║                                                                ║
 ║  Filter: Status [Active ▼]                                     ║
 ║                                                                ║
-║  Position           Applied    Recs  Confirmation   Response   Result   ║
+║  Position   Institute  Applied    Recs  Confirmation   Response   Result   ║
 ║  ───────────────────────────────────────────────────────────────────── ║
-║  Stanford BioStats  Apr 18     ✓     ✓ Apr 19       Interview  Pending ║
-║  MIT CSAIL          —          —     —              —          Pending ║
+║  BioStats  Stanford    Apr 18     ✓     ✓ Apr 19       Interview  Pending ║
+║  MIT       CSAIL      —          —      —                —        Pending ║
 ║                                                                ║
 ║  ┌──── Stanford BioStats Postdoc ──────────────────────────┐  ║
 ║  │  Applied: Apr 18       All recs submitted: ✓            │  ║
 ║  │  Confirmation: ✓  (received Apr 19)                     │  ║
 ║  │  Response type: Interview Invite ▼  Date: Apr 22        │  ║
-║  │  ──────  Interviews  ──────                             │  ║
-║  │  1.  📅 May 3    Video    (notes)         [ Edit ]      │  ║
-║  │  2.  📅 May 17   Onsite   (notes)         [ Edit ]      │  ║
-║  │  [ + Add another interview ]                            │  ║
-║  │  ──────                                                  │  ║
 ║  │  Result notify date: 📅 ——  Result: Pending ▼           │  ║
 ║  │  Notes: ___________________________________  [ Save ]   │  ║
+║  │  ──────  Interviews  ──────                             │  ║
+║  │  **Interview 1**                                        │  ║
+║  │  📅 May 3      Video ▼      notes______________         │  ║
+║  │  [ Save ]                                               │  ║
+║  │  [ 🗑️ Delete Interview 1 ]                              │  ║
+║  │  ─────────────────────────────────────────────────────  │  ║
+║  │  **Interview 2**                                        │  ║
+║  │  📅 May 17     Onsite ▼     notes______________         │  ║
+║  │  [ Save ]                                               │  ║
+║  │  [ 🗑️ Delete Interview 2 ]                              │  ║
+║  │  [ + Add another interview ]                            │  ║
 ║  └──────────────────────────────────────────────────────────┘  ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
