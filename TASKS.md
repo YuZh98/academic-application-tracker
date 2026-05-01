@@ -14,11 +14,15 @@ Branch (T1): merged via PR #15 (`aebbb8b`); pre-merge review at
 [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md);
 suite 553 → 586 green under both pytest gates.
 
-Branch (T2): `feature/phase-5-tier2-ApplicationDetailCard` —
-T2-A green, T2-B pending. Per the 2026-04-30 multi-agent plan critique,
-T2 is split into 2 sub-tasks (was 3) since the original "selection
-plumbing alone" sub-task would have shipped a placeholder UI surface
-deleted by the next commit.
+Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
+[`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md);
+suite 586 → 638 green under both pytest gates.
+
+Branch (T3): not yet started — next functional work after the
+`docs/guidelineupdate` doc-cleanup branch merges. T3 implements the
+inline interview list UI per DESIGN §8.3 D-B
+(`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
+delete, R2-toast surfacing on add).
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -178,7 +182,7 @@ deleted by the next commit.
 
 Per **Q1 Option B** from the 2026-04-27 v1 planning session, the
 existing T4/T5/T6 roadmap structure was preserved (no re-tiering).
-DESIGN.md §8.1 panel rows + empty-state matrix were the contract.
+DESIGN §8.1 panel rows + empty-state matrix were the contract.
 
 - [x] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1
       (T4-0/T4-0b column contract + T4-A `database.get_upcoming(days)`
@@ -317,66 +321,11 @@ _(none)_
 
 ## Recently done
 
-- 2026-04-30 — **Phase 5 T2-B green** on branch
-  `feature/phase-5-tier2-ApplicationDetailCard`: cascade-promotion
-  toast surfacing in the Applications-page Save handler. When
-  `database.upsert_application(propagate_status=True)` returns
-  `status_changed=True`, a SECOND `st.toast(f"Promoted to
-  {STATUS_LABELS[new_status]}.")` fires after the Saved toast.
-  Two toasts kept separate (semantically distinct: data persistence
-  vs. pipeline state change); order is Saved-then-Promoted
-  (chronological — Promoted is the consequence of Save).
-  No defensive `and result.get("new_status")` guard per the
-  Sonnet plan critique — trust the upsert contract; a violation
-  surfaces loudly via `KeyError` rather than silently skipping
-  the toast. All four R1/R3 paths from DESIGN §9.3 pinned
-  (R1-only on SAVED → APPLIED, R3-only on APPLIED → OFFER, R1+R3
-  chained from SAVED → OFFER with a DB-state probe confirming R3
-  ran AFTER R1, terminal-guard no-op on CLOSED where Save still
-  succeeds + application row still updates but no promotion
-  toast fires). Cohesion sweep: NaN-safe pre-seed parametrized
-  over all 4 date widgets (closes the cohesion gap on
-  response_date and result_notify_date); save-error preserves
-  form FIELD values across text_area + date_input + selectbox
-  (extends T2-A's sentinel-only check). The
-  filter-narrowing-keeps-form-values combination test was DROPPED
-  per Sonnet — pre-seed gates on (sid changed OR key missing);
-  filter narrowing alone changes neither, so the test would just
-  exercise Streamlit session_state. 9 new tests across 2 classes
-  (`TestApplicationsCascadePromotionToast`,
-  `TestApplicationsCohesionSweep`); suite 629 → 638 under both
-  pytest gates. Three commits: `test:` red,
-  `feat(applications):` green, `chore(tracker):` rollup. T2 (T2-A
-  + T2-B) now complete; pre-merge review + PR pending.
-- 2026-04-30 — **Phase 5 T2-A green** on branch
-  `feature/phase-5-tier2-ApplicationDetailCard`: editable
-  Application detail card behind row selection. `apps_table` made
-  selectable (`on_select="rerun"`, `selection_mode="single-row"`,
-  `column_config` widths source-grep-pinned per gotcha #15);
-  selection-resolution block resolves to
-  `applications_selected_position_id` (page-prefixed sentinels
-  `_applications_edit_form_sid`, `_applications_skip_table_reset`
-  per user direction — long-form `applications` avoids confusion
-  with `app.py`). **Asymmetry vs. Opportunities §8.2**: filter
-  narrowing that excludes the selected row keeps the card open
-  (the page resolves against the unfiltered `df`). Detail card
-  in `st.container(border=True)` (architected for T3's sibling
-  `apps_interviews_form`); header
-  `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`; inline
-  "All recs submitted: ✓ / —". `st.form("apps_detail_form")` with
-  8 widgets; pre-seed gates on form-id sentinel; Save handler
-  calls `database.upsert_application(propagate_status=True)`,
-  fires `st.toast`, sets the skip-flag + pops the sentinel + reruns;
-  failure path → `st.error`, sentinel survives. New helper
-  `_coerce_iso_to_date(v)` mirrors Opportunities F5. R1/R3
-  cascade-promotion toast lands in T2-B. 43 new tests across five
-  classes in `test_applications_page.py`; suite 586 → 629 under
-  both pytest gates. Three commits: `test:` red,
-  `feat(applications):` green, `chore(tracker):` rollup. Multi-agent
-  plan critique (Sonnet, 2026-04-30) reshaped the original
-  3-sub-task split into 2 sub-tasks (T2-A includes both selection
-  plumbing AND form/save) since the plumbing-only sub-task would
-  have shipped a placeholder UI surface deleted by the next commit.
+- 2026-04-30 — **PR #16 merged** (`b9a2c82`): Phase 5 T2 (T2-A + T2-B)
+  shipped — editable Application detail card behind row selection +
+  cascade-promotion toast surfacing. Suite 586 → 638 under both pytest
+  gates. Detailed forensic record in commit messages + the
+  [`phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md) review.
 - 2026-04-30 — **Phase 5 T1 Applications page shell complete** on
   branch `feature/phase-5-tier1-ApplicationsPageShell`. Three
   sub-tasks shipped via TDD three-commit cadence per sub-task
@@ -408,57 +357,17 @@ _(none)_
   closing Phase 4 (Dashboard). Tag annotation lists the cohesion
   smoke audit + bidirectional funnel disclosure toggle (T6
   amendment) as the headline T6 deliverables.
-- 2026-04-30 — **Phase 4 T6 funnel disclosure-toggle polish complete**
-  on branch `feature/phase-4-tier6-Cohesion`: replaced the pre-T6
-  unidirectional `[expand]` button with a bidirectional disclosure
-  toggle (DESIGN §8.1 T6 amendment); `st.button(type="tertiary")`
-  placed in the funnel subheader row via `st.columns([3, 1])`
-  (mirror of T4 Upcoming idiom); state-keyed labels in
-  `config.FUNNEL_TOGGLE_LABELS` following the project's
-  `<symbol> <verb-phrase>` CTA convention. Solves two user-reported
-  issues — no collapse path + button too heavy for a chart control —
-  in one widget rework. Three-commit TDD round
-  (`test:` red → `feat:` green → `chore:` rollup); 535 → 553 tests
-  passing under both pytest gates. Live AppTest probe confirms the
-  round-trip (False → True → False) with zero exceptions.
-- 2026-04-30 — **Phase 4 T6 cohesion-smoke audit complete** on branch
-  `feature/phase-4-tier6-Cohesion`: `reviews/phase-4-finish-cohesion-smoke.md`
-  pins six cohesion dimensions across the dashboard's five panels with
-  verbatim AppTest renders (populated + empty DB) as evidence; 535 tests
-  green under both pytest gates. Zero 🔴 / 🟠 + two 🟡 polish deferred.
-  Browser captures at 1280 / 1440 / 1680 land in
-  `docs/ui/screenshots/v0.5.0/` once the user runs them manually
-  (harness's macOS sandbox blocks headless screenshot via the preview
-  tool). T6 second + third checkboxes (full review doc + PR + tag
-  `v0.5.0`) still pending.
-- 2026-04-29 — **Phase 4 T5-A green** on branch
-  `feature/phase-4-tier5-RecommenderAlerts`: Recommender Alerts panel
-  wired below the Upcoming row. Subheader stable in both branches;
-  empty `st.info("No pending recommender follow-ups.")`; populated
-  branch groups `get_pending_recommenders()` by `recommender_name`
-  and emits one `st.container(border=True)` per person carrying a
-  `**⚠ {Name}**` header + bullet list of `{institute}: {position_name}
-  (asked {N}d ago, due {Mon D})` lines. 15 new `TestT5RecommenderAlerts`
-  tests green; suite total 519 → 534 under both pytest gates.
-- 2026-04-27 — **v1 plan locked** on branch `docs/v1-planning-pins`:
-  GUIDELINES.md G1/G3/G4 (sentinels list, pre-commit grep, new §13
-  page-authoring procedure); DESIGN.md D-A/D-B (§8.3 confirmation
-  column + inline interview list UI), D-C (§8.4 mailto + LLM-prompts
-  pattern), D-D (§6.3 confirmation_email v1.0-rc drop). Q1–Q8
-  decisions locked.
-- 2026-04-25 — **PR #10 merged** (`d7968e5`): Sub-task 13 reverted —
-  edit panel restored to `st.tabs` after the radio-based tab selector
-  caused two user-reported widget-state-loss bugs. 478 tests green.
-- 2026-04-25 — **PR #9 merged** (`0cb6f77`): skeptical test-reliability
-  + completeness review; 9 hardening commits.
-- 2026-04-25 — **PR #8 merged** (`ace9acb`): v1.3 alignment Sub-tasks
-  1–14 + 6 review follow-ups. Full DESIGN-to-codebase alignment.
-- 2026-04-22 — **v0.4.0** Phase 4 T3 Materials Readiness merged to main (`5ac0f63`)
-- 2026-04-22 — **v0.3.0** Phase 4 T2 Application Funnel merged (`96a5c76`)
-- 2026-04-21 — **v0.2.0** Phase 4 T1 App shell + KPI cards merged (`f49ec5f`)
+
+_Per GUIDELINES §14.5, the section caps at the 10 most-recent items
+and trims anything older than the last shipped tag. **v0.5.0**
+(2026-04-30) is the current boundary; pre-v0.5.0 entries — Phase 4
+T5-A green, T6 cohesion-smoke + funnel-toggle polish, the 2026-04-27
+v1 plan-locking commit, PRs #8/#9/#10, and the v0.2.0/v0.3.0/v0.4.0
+tag entries — are archived in `CHANGELOG.md` under their respective
+version blocks._
 
 For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 5 T2 complete — T2-A + T2-B both shipped on branch `feature/phase-5-tier2-ApplicationDetailCard`; suite 586 → 638 under both pytest gates; pre-merge review + PR next)_
+_Updated: 2026-04-30 (Phase 5 T2 merged via PR #16 (`b9a2c82`); doc-cleanup branch `docs/guidelineupdate` in flight; Phase 5 T3 next functional work after that branch merges)_

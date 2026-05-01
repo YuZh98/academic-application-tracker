@@ -1,6 +1,8 @@
 # Phase 3 — Tier 5 Pre-Merge Review (T5-F)
 
 **Branch:** `feature/phase-3-tier5` → `main`
+**Scope:** Pre-merge shipping note for Phase 3 Tier 5 — T5-A through T5-E (4 Save paths + Overview Delete dialog with FK cascade).
+**Verdict:** Merge — all acceptance criteria pass.
 **Commits ahead of main:** 17
 **Tests:** 223 passing (was 147 at end of Tier 3, 192 at end of Tier 4); **0 deprecation warnings** (`pytest -W error::DeprecationWarning` is green).
 **Source scope:** `pages/1_Opportunities.py` is the only source file touched. `database.py`, `config.py`, `exports.py`, `app.py` are byte-identical to `main`. `tests/conftest.py` and the non-opportunities test modules are also untouched.
@@ -64,7 +66,7 @@ Listing non-changes explicitly because the absence is load-bearing:
 - **Quick Add / filter bar / positions table** — no behavioural change. The selection-resolution block was widened once (to preserve selection while a delete dialog is pending, review Fix #2), but the happy-path behaviour is unchanged — verified by all pre-existing `TestRowSelection` / `TestFilterBarBehaviour` cases remaining green.
 - **Non-opportunities test modules** — `test_database.py`, `test_config.py`, `test_exports.py`, `conftest.py` are byte-identical to main.
 
-This scope discipline is deliberate — GUIDELINES.md §2 ("one layer per PR when possible") — and lets the merge be low-risk despite the large line delta.
+This scope discipline is deliberate — GUIDELINES §2 ("one layer per PR when possible") — and lets the merge be low-risk despite the large line delta.
 
 ---
 

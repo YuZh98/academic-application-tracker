@@ -1,7 +1,9 @@
 # Git Workflow — Depth
 
+_Extended reference for branching, commit granularity, undo levels, and tagging. The 30-line summary lives in [GUIDELINES §11](../../GUIDELINES.md#11-git-workflow--summary); if the summary and this file disagree, the summary wins._
+
 This is the extended reference for the Git workflow on this project.
-`GUIDELINES.md §11` holds the 30-line summary — if the summary and this
+`GUIDELINES §11` holds the 30-line summary — if the summary and this
 file disagree, the summary wins.
 
 ---

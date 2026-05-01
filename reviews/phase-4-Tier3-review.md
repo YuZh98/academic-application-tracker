@@ -3,6 +3,7 @@
 **Branch:** `feature/phase-4-tier3-MaterialReadiness` (3 commits ahead of `main`)
 **Scope:** T3 — Materials Readiness panel inside the right half-width column of the T2-C `st.columns(2)` pair. Subheader + `st.info` empty-state + two `st.progress` bars (Ready / Missing) + `"→ Opportunities page"` CTA → `st.switch_page("pages/1_Opportunities.py")`.
 **Stats:** `app.py` 170 → 201 lines (+31/-1, the `-1` is the header-comment flip `T3 → ✅ done`); `tests/test_app_page.py` 807 → 1086 lines (+273 including a 2-line trailing whitespace delta), +8 tests under one new class `TestT3MaterialsReadiness`. **263 → 271 tests passing, zero deprecation warnings.**
+**Verdict:** Approve, merge.
 **Cadence:** `test(phase-4-t3)` red → `feat(phase-4-t3)` green → `chore(phase-4-t3)` tracker rollup. Perfect TDD isolation per commit (`test:` → only `tests/test_app_page.py`; `feat:` → only `app.py`; `chore:` → only tracker markdowns).
 **Reviewer attitude:** Skeptical. Verify every Streamlit API claim. Trust no "looks fine" statements; grep every assertion.
 

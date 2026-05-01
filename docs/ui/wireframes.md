@@ -7,7 +7,7 @@ rendered output.
 
 For the data sources, widget behaviour, and empty-state rules that
 back each layout, see
-[DESIGN.md §8 UI Design](../../DESIGN.md#8-ui-design--page-by-page).
+[DESIGN §8 UI Design](../../DESIGN.md#8-ui-design--page-by-page).
 Each section below cross-links its matching DESIGN sub-section.
 
 ---
@@ -15,7 +15,7 @@ Each section below cross-links its matching DESIGN sub-section.
 ## Dashboard
 
 Page source: `app.py`. See
-[DESIGN.md §8.1](../../DESIGN.md#81-apppy--dashboard-home).
+[DESIGN §8.1](../../DESIGN.md#81-apppy--dashboard-home).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -40,9 +40,10 @@ Page source: `app.py`. See
 ╠═════════════════════════════╩══════════════════════════════════╣
 ║  Upcoming (next 30 days)                                       ║
 ║                                                                ║
-║  Apr 24  Stanford BioStats   Saved      deadline    9d  🔴     ║
-║  May 3   Stanford BioStats   Applied    Interview  18d         ║
-║  May 15  MIT CSAIL           Saved      deadline   30d         ║
+║  Date     Days  Label              Kind       Status   Urgency ║
+║  Apr 24    9d   Stanford BioStats  deadline   Saved    🔴      ║
+║  May 3    18d   Stanford BioStats  Interview  Applied          ║
+║  May 15   30d   MIT CSAIL          deadline   Saved            ║
 ║                                                                ║
 ╠════════════════════════════════════════════════════════════════╣
 ║  Recommender Alerts                                            ║
@@ -57,7 +58,7 @@ Page source: `app.py`. See
 ## Opportunities
 
 Page source: `pages/1_Opportunities.py`. See
-[DESIGN.md §8.2](../../DESIGN.md#82-pages1_opportunitiespy--positions).
+[DESIGN §8.2](../../DESIGN.md#82-pages1_opportunitiespy--positions).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -92,7 +93,7 @@ Page source: `pages/1_Opportunities.py`. See
 ## Applications
 
 Page source: `pages/2_Applications.py`. See
-[DESIGN.md §8.3](../../DESIGN.md#83-pages2_applicationspy--progress).
+[DESIGN §8.3](../../DESIGN.md#83-pages2_applicationspy--progress).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -120,42 +121,12 @@ Page source: `pages/2_Applications.py`. See
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-**Filter selectbox (Phase 5 T1-B).** The `Status` filter offers, in
-display order: `Active` (default — excludes `STATUS_FILTER_ACTIVE_EXCLUDED
-= {STATUS_SAVED, STATUS_CLOSED}`), `All`, then each `STATUS_VALUES`
-entry rendered via `STATUS_LABELS`. Sentinel labels (`Active`, `All`)
-fall through `format_func=STATUS_LABELS.get(v, v)` because they aren't
-in `STATUS_LABELS`.
-
-**Confirmation column inline cell text (Phase 5 T1-C, DESIGN §8.3 D-A
-amendment).** Streamlit 1.56's `st.dataframe` does not expose a
-per-cell tooltip API; the column folds the original `Received {ISO date}`
-tooltip into inline cell content. Three states:
-
-| `confirmation_received` | `confirmation_date` | Cell text |
-|---|---|---|
-| `0` | — | `—` |
-| `1` | `2026-04-19` | `✓ Apr 19` |
-| `1` | NULL | `✓ (no date)` |
-
-Full resolution + four-option comparison in
-[`reviews/phase-5-tier1-review.md`](../../reviews/phase-5-tier1-review.md)
-Q3 + new gotcha #16 in
-[`docs/dev-notes/streamlit-state-gotchas.md`](../dev-notes/streamlit-state-gotchas.md).
-
-**Phase 5 status (2026-04-30).** T1 ships the **page shell** only —
-`set_page_config(layout="wide")`, title, status filter, and the
-read-only six-column table sorted `deadline_date ASC NULLS LAST,
-position_id ASC`. The detail card (T2) and inline interview list (T3)
-are pending; their wireframe appearance below remains the contract
-for those tiers.
-
 ---
 
 ## Recommenders
 
 Page source: `pages/3_Recommenders.py`. See
-[DESIGN.md §8.4](../../DESIGN.md#84-pages3_recommenderspy--recommenders).
+[DESIGN §8.4](../../DESIGN.md#84-pages3_recommenderspy--recommenders).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -185,7 +156,7 @@ Page source: `pages/3_Recommenders.py`. See
 ## Export
 
 Page source: `pages/4_Export.py`. See
-[DESIGN.md §8.5](../../DESIGN.md#85-pages4_exportpy--export).
+[DESIGN §8.5](../../DESIGN.md#85-pages4_exportpy--export).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗

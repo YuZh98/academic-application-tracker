@@ -1,4 +1,6 @@
 # Code Review: Phase 2
+**Branch:** _(direct-to-main; pre-branch-workflow)_
+**Scope:** Phase 2 — `database.py` + `exports.py` + `config.py` interaction review.
 **Commit reviewed:** Phase 2 — `database.py`, `exports.py`
 **Date:** 2026-04-16
 **Files reviewed:** `database.py`, `exports.py`, `config.py` (for interaction)
@@ -8,7 +10,7 @@
 
 ## Summary
 
-`database.py` is well-structured and faithful to DESIGN.md §7. The module contract is respected: no Streamlit imports, parameterized queries throughout, deferred export pattern correctly implemented. The schema generation and migration loop in `init_db()` are elegant. Four fixes were applied before Phase 3 begins. One design improvement (config-driven terminal statuses) strengthens the Open/Closed Principle already established in Phase 1. `exports.py` stub is minimal and correct.
+`database.py` is well-structured and faithful to DESIGN §7. The module contract is respected: no Streamlit imports, parameterized queries throughout, deferred export pattern correctly implemented. The schema generation and migration loop in `init_db()` are elegant. Four fixes were applied before Phase 3 begins. One design improvement (config-driven terminal statuses) strengthens the Open/Closed Principle already established in Phase 1. `exports.py` stub is minimal and correct.
 
 ---
 
@@ -111,7 +113,7 @@ The values can be `str`, `int`, or `None` — `Any` is honest about that without
 
 `get_upcoming_deadlines` contained three hardcoded string literals:
 ```python
-# BEFORE — violates GUIDELINES.md §6
+# BEFORE — violates GUIDELINES §6
 params=(today, cutoff, "[CLOSED]", "[REJECTED]", "[DECLINED]"),
 ```
 This directly violates the project rule: *"Never hardcode a status string in any file other than config.py."* If a new terminal status (e.g., `[WITHDRAWN]`) is added to `STATUS_VALUES` in the future, `get_upcoming_deadlines` would silently continue showing it — the rule is declared but not enforced by the architecture.

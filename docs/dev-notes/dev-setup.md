@@ -1,10 +1,12 @@
 # Dev Setup
 
+_Install + run commands for first-time clone or re-setup of the Postdoc Tracker._
+
 Local install and run commands for the Postdoc Tracker. For **why**
 each component was chosen, see
-[DESIGN.md §3 Technology Stack](../../DESIGN.md#3-technology-stack).
+[DESIGN §3 Technology Stack](../../DESIGN.md#3-technology-stack).
 For **version pins** and environment conventions, see
-[GUIDELINES.md §1 Environment](../../GUIDELINES.md#1-environment).
+[GUIDELINES §1 Environment](../../GUIDELINES.md#1-environment).
 
 ---
 

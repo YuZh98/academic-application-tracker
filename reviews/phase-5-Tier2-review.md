@@ -1,6 +1,7 @@
 # Phase 5 — Tier 2 Code Review
 
 **Branch:** `feature/phase-5-tier2-ApplicationDetailCard` (6 commits ahead of `main`; T1 merged via PR #15 → `aebbb8b`)
+**Verdict:** Approve, merge after the inline test-logic fix lands.
 **Scope:** T2 — Application detail card on `pages/2_Applications.py`. Two sub-tasks:
   1. **T2-A** (3 commits) — Selection plumbing + bordered detail-card container + `apps_detail_form` (8 widgets) + Save handler that calls `database.upsert_application(propagate_status=True)`. Mirrors Opportunities §8.2 with a deliberate asymmetry at the empty-filter site (selection survives a filter narrowing because the card resolves against the unfiltered `df`).
   2. **T2-B** (3 commits) — Cascade-promotion toast surfacing. Save handler reads `result["status_changed"]` and fires a second `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")` after the Saved toast whenever R1 / R3 actually fired. Cohesion sweep covers the remaining date-widget NaN-pre-seed and the cross-widget-type save-error preserve-values gap.
