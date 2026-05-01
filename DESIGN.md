@@ -1,5 +1,5 @@
 # System Design: Postdoc Application Tracker
-**Version:** 1.3 | **Updated:** 2026-04-23 | **Status:** v1 target design (authoritative)
+**Version:** 1.4 | **Last updated:** 2026-04-30 | **Status:** v1 target design (authoritative)
 
 This document is the authoritative design specification. It describes
 **the target design for v1** (what the system will be at v1.0.0 release)
