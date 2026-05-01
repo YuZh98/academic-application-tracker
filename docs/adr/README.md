@@ -38,8 +38,10 @@ write an ADR.
 **Don't** write an ADR for:
 - Implementation details that could go either way (variable naming, file layout
   within a module).
-- Decisions already captured in `DESIGN.md` §10 (D1–D10) — those are the original
-  v1.0 decisions and remain there for historical continuity.
+- Decisions already captured in `DESIGN §10` D1–D10 — those are the original
+  v1.0 decisions, frozen for historical continuity. (`DESIGN §10` D11–D25
+  are post-v1.1 additions to the same section that pre-date the ADR ledger;
+  see "Status of post-v1.1 architectural decisions" below.)
 - Phase-local decisions (P3-D1, P4-D1, etc.) — those live in phase review docs
   under `reviews/`.
 
@@ -124,7 +126,8 @@ Cons: <list>
 
 | System | Scope | Lives in |
 |--------|-------|----------|
-| **`DESIGN.md` §10 (D1–D10)** | Original v1.0 architectural decisions (frozen) | `DESIGN.md` |
+| **`DESIGN §10` D1–D10** | Original v1.0 architectural decisions (frozen v1.0 batch) | `DESIGN.md` |
+| **`DESIGN §10` D11–D25** | Post-v1.1 decisions made before the ADR ledger was active (candidate ADR backfills) | `DESIGN.md` (see ADR backfill note below) |
 | **Phase decisions (P3-D1, P4-D1, ...)** | Phase-local implementation choices | `reviews/phase-*.md`, `CLAUDE.md` (internal) |
 | **ADR-NNNN (this folder)** | All architectural decisions **from v1.1 forward** | `docs/adr/` |
 
@@ -136,5 +139,21 @@ architectural; phase review wins for anything implementation-local.
 ## Current ADRs
 
 _(empty — this folder was created at v1.1 refactor per the "empty + forward-only"
-policy; existing D1–D10 decisions were not backfilled. New ADRs land here as
-decisions are made.)_
+policy; existing D1–D10 decisions (and the post-v1.1 D11–D25 additions to
+`DESIGN §10`) were not backfilled. New ADRs land here as decisions are made.)_
+
+## Status of post-v1.1 architectural decisions (note 2026-04-30)
+
+Several post-v1.1 decisions whose scope qualifies them as ADRs (cross-cutting
+architectural choices, hard to reverse, with viable alternatives) currently
+live elsewhere — `DESIGN §10` (D11–D25), `CHANGELOG.md` `[Unreleased]`, and
+review docs. Some examples (not exhaustive):
+
+- The `st.tabs` mandate post-Sub-task-13 reversal (`DESIGN §8.2`)
+- The R1/R2/R3 cascade-in-database design (`DESIGN §9.3`, was C13 deferred from v1.1)
+- The `DESIGN §8.3` D-A amendment (Confirmation column inline-text vs per-cell tooltip; recorded in `reviews/phase-5-tier1-review.md` and dev-note gotcha #16)
+
+The project owner will backfill these as ADRs in a future cleanup tier
+(post-v1.0). The forward-only policy still applies: new cross-cutting
+architectural decisions from this point on should land in `docs/adr/`
+(using the template above) rather than only in `DESIGN §10` or review docs.

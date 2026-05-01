@@ -20,6 +20,7 @@ manual steps to run against a pre-existing database.
 ### Changed
 - GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, TASKS.md scope rules, wireframe-drift severity, reviews folder index, content-routing table). (branch `docs/guidelineupdate`)
 - GUIDELINES.md §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (branch `docs/guidelineupdate`)
+- `docs/adr/README.md`: clarify post-v1.1 decision deferral policy; update D1–D10 references to acknowledge the D11–D25 additions in `DESIGN §10` as candidate ADR backfills. (branch `docs/guidelineupdate`)
 
 ### Added — Cascade-promotion toast surfacing (Phase 5 T2-B, branch `feature/phase-5-tier2-ApplicationDetailCard`)
 
