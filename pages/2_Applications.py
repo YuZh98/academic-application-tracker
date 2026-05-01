@@ -883,23 +883,29 @@ if "applications_selected_position_id" in st.session_state:
         # The function auto-assigns the next sequence and runs the R2
         # cascade (STATUS_APPLIED → STATUS_INTERVIEW on the first
         # interview, DESIGN §9.3); the page surfaces the promotion
-        # via a separate toast when status_changed=True. R2 ordering
-        # mirrors T2-B's R1/R3 surfacing: Promoted toast fires BEFORE
-        # the Added toast so the chronological readout is correct
-        # (the cascade fired during the add itself).
+        # via a separate toast when status_changed=True.
+        #
+        # Order is Added-then-Promoted (chronological — Promoted is
+        # the consequence of the Add). Matches T2-B Save handler's
+        # Saved-then-Promoted convention so the user sees the same
+        # action-first / cascade-second pattern across both surfaces
+        # (the application detail-card Save and the interview-list
+        # Add). Pinned by
+        # `test_added_toast_fires_before_promoted_toast` in
+        # `TestApplicationsInterviewAdd`.
         if add_clicked:
             try:
                 _add_result = database.add_interview(
                     sid, {}, propagate_status=True,
                 )
                 st.session_state["_applications_skip_table_reset"] = True
+                st.toast("Added interview.")
                 if _add_result["status_changed"]:
                     _promo_label = config.STATUS_LABELS.get(
                         _add_result["new_status"],
                         _add_result["new_status"],
                     )
                     st.toast(f"Promoted to {_promo_label}.")
-                st.toast("Added interview.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Could not add interview: {e}")

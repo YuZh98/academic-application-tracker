@@ -2212,6 +2212,55 @@ class TestApplicationsInterviewAdd:
         # And the position actually moved.
         assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
 
+    def test_added_toast_fires_before_promoted_toast(self, db):
+        """T3 review Finding #1 regression guard: when both toasts
+        fire on Add (STATUS_APPLIED + Add → STATUS_INTERVIEW), the
+        order MUST be `"Added interview."` then `"Promoted to ..."`
+        — matching T2-B Save handler's Saved-then-Promoted convention.
+        Without this index-relationship pin, a regression that flips
+        the order back (Promoted-first, Added-second) would slip
+        through every existing existence-only `any(...in...)` toast
+        check. `at.toast` is in chronological emission order
+        (Streamlit appends in source order), so the correct order
+        materializes as `added_idx < promoted_idx`."""
+        pid = database.add_position(make_position({"position_name": "OrderPos"}))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        _keep_selection(at, 0)
+        at.button(key=ADD_INTERVIEW_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Add raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        added_idx = next(
+            (i for i, v in enumerate(toast_values) if "Added interview" in v),
+            None,
+        )
+        promoted_idx = next(
+            (i for i, v in enumerate(toast_values) if "Promoted to" in v),
+            None,
+        )
+        assert added_idx is not None, (
+            f"Add must fire 'Added interview.' toast; got "
+            f"toasts={toast_values!r}."
+        )
+        assert promoted_idx is not None, (
+            f"Add on STATUS_APPLIED must fire 'Promoted to ...' toast "
+            f"(R2 cascade); got toasts={toast_values!r}."
+        )
+        assert added_idx < promoted_idx, (
+            f"Added must fire BEFORE Promoted (action-first / "
+            f"cascade-second — matches T2-B Save handler's "
+            f"Saved-then-Promoted convention so the user sees one "
+            f"consistent ordering pattern across the two cascade-"
+            f"surfacing handlers on the page). Got: added_idx="
+            f"{added_idx}, promoted_idx={promoted_idx}, toasts="
+            f"{toast_values!r}."
+        )
+
     def test_add_on_status_saved_no_promo_toast(self, db):
         """Control: STATUS_SAVED + Add → R2 status guard
         ('AND status = STATUS_APPLIED') prevents promotion. The
