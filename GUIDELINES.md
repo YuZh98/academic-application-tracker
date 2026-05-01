@@ -496,20 +496,45 @@ The schema is locked at §10; this table sets the depth default.
 
 ### 14.4 CHANGELOG discipline
 
-This project follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
+A changelog is a navigable record of notable changes. Detail belongs in
+commit messages and review docs; the changelog is an index into them.
 
-- `[Unreleased]` collects entries before they ship. On release it
-  rotates to the version header with a date.
-- Each entry is a **short bullet** under one of the six standard
-  categories: `Added` · `Changed` · `Deprecated` · `Removed` · `Fixed` ·
-  `Security`. One sentence is the target.
-- **Rationale and the deeper "why" live in the commit message and the
-  review doc — not the changelog.** Multi-paragraph essays under
-  `[Unreleased]` are an anti-pattern; new entries resist them.
-- Cite the commit hash when it aids navigation, e.g. `(aebbb8b)`.
-- **Migration notes** (project-local extension; not part of KaC 1.1.0):
-  each version section needing them ends with a single `**Migration:**`
-  block — once per release, not once per entry.
+#### Structure
+- File `CHANGELOG.md` at repo root. `[Unreleased]` at the top
+  accumulates new entries. On each release tag, rotate `[Unreleased]`
+  to `## [vX.Y.Z] - YYYY-MM-DD` (ISO 8601) in the same commit.
+- Versions ordered latest-first; every version header is clickable
+  via bottom-of-file link references (e.g.
+  `[v0.5.0]: https://github.com/.../releases/tag/v0.5.0` and
+  `[Unreleased]: https://github.com/.../compare/v0.5.0...HEAD`).
+- Within a version, subsections may appear once each, in this order:
+  `### Added` · `### Changed` · `### Fixed` · `### Removed` ·
+  `### Deprecated` · `### Security`. Headings are plain — `### Changed`,
+  never `### Changed — <topic>`.
+
+#### What counts as an entry
+- An entry records a notable change — one a future reader needs to
+  know about. Changes with no observable effect (pure refactors,
+  tests-only commits, formatting, typo fixes) are not notable.
+- One change → one entry, regardless of how many commits implemented it.
+
+#### Entry shape
+- One line per entry, two if a qualifier is genuinely needed; three
+  lines means the detail belongs in the commit message.
+- Imperative mood: "Add X", "Fix Y", "Remove Z".
+- End each entry with a navigation target — commit hash, PR number, or
+  review-doc path.
+- Breaking changes prefix `**Breaking:**`.
+
+#### Migrations
+If a version requires a schema or vocabulary change, add one
+`**Migration:**` block at the end of that version section listing
+the SQL or manual steps. One block per version.
+
+#### Avoid
+- Process narrative — review notes, internal decisions, branch references.
+- Forensic detail — rationale, alternatives considered, file:line refs,
+  test counts. Those live in the commit message body or the review doc.
 
 ### 14.5 TASKS.md scope rules
 
