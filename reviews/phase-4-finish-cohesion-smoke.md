@@ -2,6 +2,7 @@
 
 **Branch:** `feature/phase-4-tier6-Cohesion` (off `main` at `c5a7c76` after PR #13 merged)
 **Scope:** TASKS.md T6 first checkbox — *"Cross-panel cohesion smoke (manual browser at 1280 / 1440 / 1680 widths; screenshots to `docs/ui/screenshots/v0.5.0/`)"*. The five Phase-4 panels (KPI grid → Funnel + Readiness → Upcoming → Recommender Alerts) were each verified in isolation across T1–T5; T6 is the first time they get verified *together* across responsive widths and against each other for visual rhythm.
+**Verdict:** Approve cohesion claim; capture screenshots and merge T6 once the 3 PNGs land in `docs/ui/screenshots/v0.5.0/`.
 **Method:**
 1. Boot smoke via `streamlit run app.py` (Bash, port 8502) — confirms the dashboard returns HTTP 200 with no startup exception, on both an empty DB and a fully-seeded DB.
 2. AppTest probes (populated + empty-DB) — render every panel headlessly and dump every visible string in document order, so the cohesion claims below cite verbatim copy from the actual render rather than the spec.

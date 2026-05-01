@@ -1,4 +1,7 @@
 # Phase 3 Tier 2 & Tier 3 Code Review
+**Branch:** _(direct-to-main; pre-branch-workflow)_
+**Scope:** Phase 3 Tiers 2 + 3 — Filter bar + positions table on `pages/1_Opportunities.py`.
+**Verdict:** Request Changes (5 findings, all fixed in this review).
 **Files reviewed:** `pages/1_Opportunities.py` (Tier 2 filter bar + Tier 3 positions table), `tests/test_opportunities_page.py` (filter bar + table test classes)
 **Date:** 2026-04-18
 **Reviewer:** Claude (skeptical + didactic)

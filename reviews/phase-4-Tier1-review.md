@@ -3,6 +3,7 @@
 **Branch:** `feature/phase-4-tier1` (12 commits ahead of `main`)
 **Scope:** T1-A (test scaffold) + T1-B (app shell + KPI grid skeleton) + T1-C (refresh button + KPI count wiring) + T1-D (Next-Interview KPI wiring) + T1-E (empty-DB hero + CTA)
 **Stats:** `app.py` 13 → 124 lines; `tests/test_app_page.py` new file, +407 lines, 23 tests across 4 classes; **246 total tests passing, 0 deprecation warnings**.
+**Verdict:** T1 mergeable in isolation; locked plan packages T1–T5 into one PR at T6.
 **Reviewer attitude:** Skeptical. Trust nothing. Question every implicit assumption. Verify every Streamlit / pandas API claim.
 
 ---
