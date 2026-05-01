@@ -43,6 +43,12 @@ manual steps to run against a pre-existing database.
 ### Fixed
 - `docs/ui/wireframes.md` Dashboard panel column order: the Upcoming-table example rows showed `Date · Label · Status · Kind · Days left · Urgency` but DESIGN §8.1 + the actual `app.py` render use `Date · Days left · Label · Kind · Status · Urgency`. Reordered the 3 example rows to match the spec; added a column-header row for clarity. Closes the column-order drift originally flagged in `reviews/phase-4-finish-cohesion-smoke.md` (re-classified as 🟠 under §14.6).
 
+### Removed
+- `docs/ui/wireframes.md` Applications section: drop the three prose blocks beneath the ASCII (Filter selectbox details, Confirmation column 3-state table, Phase 5 status note). Per §14.8 routing, widget contracts belong in DESIGN §8.x and implementation status belongs in TASKS / CHANGELOG — not in a wireframes file. Filter-selectbox option-order + `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule MOVED to DESIGN §8.3 (one expanded bullet on the existing Default filter row); Confirmation 3-state table was already redundant with DESIGN §8.3 lines 832-836; Phase 5 status note dropped (TASKS.md is the durable record).
+
+### Changed
+- `DESIGN.md §8.3` Status filter selectbox bullet: expand to capture the option list (`[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`), default value, and the `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule moved from `docs/ui/wireframes.md`. Per §14.8: page-by-page UI contracts live in DESIGN §8.x.
+
 ## [v0.5.0] — 2026-04-30 — Phase 4 close (T4–T6) + v1.3 alignment + funnel toggle polish
 
 _v0.5.0 closes Phase 4 (Dashboard) — five panels complete (KPI grid, Application Funnel with bidirectional disclosure toggle, Materials Readiness, Upcoming timeline, Recommender Alerts). It also includes the v1.3 DESIGN-to-codebase alignment (Sub-tasks 1–14 + 6 follow-ups), the Sub-task 13 reversal (edit-panel restored to `st.tabs`), and the v1 planning pins from the 2026-04-27 session. Detailed entries below preserve the original forensic record from when each item shipped — they pre-date the §14.4 short-bullet discipline introduced on `docs/guidelineupdate`._
