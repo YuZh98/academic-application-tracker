@@ -40,9 +40,10 @@ Page source: `app.py`. See
 ╠═════════════════════════════╩══════════════════════════════════╣
 ║  Upcoming (next 30 days)                                       ║
 ║                                                                ║
-║  Apr 24  Stanford BioStats   Saved      deadline    9d  🔴     ║
-║  May 3   Stanford BioStats   Applied    Interview  18d         ║
-║  May 15  MIT CSAIL           Saved      deadline   30d         ║
+║  Date     Days  Label              Kind       Status   Urgency ║
+║  Apr 24    9d   Stanford BioStats  deadline   Saved    🔴      ║
+║  May 3    18d   Stanford BioStats  Interview  Applied          ║
+║  May 15   30d   MIT CSAIL          deadline   Saved            ║
 ║                                                                ║
 ╠════════════════════════════════════════════════════════════════╣
 ║  Recommender Alerts                                            ║
