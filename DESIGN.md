@@ -1,16 +1,6 @@
 # System Design: Postdoc Application Tracker
 **Version:** 1.4 | **Last updated:** 2026-04-30 | **Status:** v1 target design (authoritative)
 
-This document is the authoritative design specification. It describes
-**the target design for v1** (what the system will be at v1.0.0 release)
-and flags **forward-looking ideas for v2+** where they affect
-architectural decisions today (see §12). Implementation status (what's
-in code right now vs. what the spec says) lives in `CHANGELOG.md` and
-`TASKS.md` — not here.
-
-DESIGN.md is updated only on architectural change. Small corrections
-land as patch-style edits; structural changes bump the `Version:` line.
-
 ---
 
 ## Table of Contents
@@ -119,9 +109,6 @@ Exact pinned versions live in `requirements.txt`; the `Required ≥`
 column is the minimum known-working version and is the floor for any
 dependency upgrade policy.
 
-See [`docs/dev-notes/dev-setup.md`](docs/dev-notes/dev-setup.md) for
-the exact `venv` create / `pip install` / `streamlit run` commands.
-
 ### 3.1 Runtime assumptions
 
 | Assumption | Value | Notes |
@@ -177,18 +164,7 @@ Postdoc/
 └── .gitignore
 ```
 
-### Gitignore status
-
-| Path | Tracked? | Reason |
-|------|----------|--------|
-| `postdoc.db` | ❌ | Binary; personal data |
-| `.venv/` | ❌ | Local environment; platform-specific |
-| `.env`, `.env.*` | ❌ | Secrets (reserved for v2 AI ingestion) |
-| `__pycache__/`, `*.pyc` | ❌ | Auto-generated |
-| `exports/*.md` | ✅ | **Committed** — human-readable backup of the DB |
-| `CLAUDE.md` | ❌ | Internal session memory |
-| `PHASE_*_GUIDELINES.md` | ❌ | Internal phase playbooks |
-| All other source, tests, docs | ✅ | |
+`exports/*.md` is committed (human-readable DB backup). `postdoc.db`, `.venv/`, `.env*`, `__pycache__/` are gitignored. See `.gitignore` for the full list.
 
 ---
 
@@ -199,15 +175,6 @@ and field definitions. Every other module reads from it; no other file
 hardcodes a status string, priority value, or requirement-doc label.
 
 ### 5.1 Symbol index
-
-The constants listed below are the v1 API of `config.py`. Actual
-values, inline rationale, and defensive assertions live in
-[`config.py`](config.py); this section is a DESIGN-level index of
-**what each symbol is for and where it is consumed**. Literal values
-are shown here only when they are short and architecturally stable
-(e.g. the fixed set of pipeline statuses referenced by DDL and
-auto-promotion rules). Longer enumerations are described by category
-— open `config.py` for the exhaustive list.
 
 #### Tracker identity
 
@@ -479,12 +446,6 @@ was rejected — this section intentionally does not restate them.
 
 ## 7. Module Contracts
 
-This section describes **what each module does and how to reach it**. Full
-function signatures (parameters, return types, detailed docstrings) live
-in the source as docstrings — they are the single source of implementation
-truth. DESIGN.md specifies the **roles, calling conventions, and
-load-bearing invariants** that cross module boundaries.
-
 ### `database.py`
 
 **Role.** All SQLite I/O. No Streamlit imports; no display logic.
@@ -532,7 +493,7 @@ return the new row id (inserts) or `None` (updates, deletes).
 5. **Sort orders are part of the contract.** `get_all_positions` returns
    rows ordered by `deadline_date ASC NULLS LAST`; `get_upcoming_*`
    queries return chronological order; `get_all_recommenders` orders
-   by `recommender_name`. Tests and pages rely on these orderings.
+   by `recommender_name`.
 
 ### `exports.py`
 
@@ -874,9 +835,6 @@ state) so the user returns where they were.
 
 ## 10. Key Architectural Decisions
 
-The v1 design rests on these choices. Alternatives considered briefly
-in each row.
-
 | ID | Decision | Rationale | Alternative rejected |
 |----|----------|-----------|----------------------|
 | D1 | All field/vocab definitions in `config.py` | Open/Closed Principle — extend by editing one file | Hardcoded in page files — fails on generalization |
@@ -911,9 +869,7 @@ in each row.
 
 See [`docs/dev-notes/extending.md`](docs/dev-notes/extending.md) for
 step-by-step recipes (add a requirement document, add or rename a
-pipeline status, switch the tracker profile, etc.). For the concise
-summary of what editing each `config.py` constant affects, see
-[§5.3 Extension recipes](#53-extension-recipes) above.
+pipeline status, switch the tracker profile, etc.).
 
 ---
 
@@ -975,16 +931,11 @@ fields and pre-fills the quick-add form. Requires:
 - API key handling via `.env` — the `.env*` gitignore rule reserved from v1 covers the secrets; the runtime will need `python-dotenv` added to `requirements.txt` when this lands
 - Careful prompt discipline (structured output schema matching `QUICK_ADD_FIELDS`)
 
-v1's quick-add should accept a `prefill: dict` parameter shape (a
-two-line change today) so the v2 AI module wires in without
-restructuring the page.
-
 ### 12.5 Cloud backup of `postdoc.db`
 
 Periodic upload of `postdoc.db` + `exports/` (+ `attachments/` once 12.3
 lands) to a cloud blob store (S3, iCloud Drive, Dropbox). Scheduled via
-`APScheduler` or cron. v1 users get a free workaround today by placing
-the project folder inside an iCloud/Dropbox-synced directory.
+`APScheduler` or cron.
 
 ### 12.6 Interactive funnel
 
