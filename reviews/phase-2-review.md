@@ -1,4 +1,6 @@
 # Code Review: Phase 2
+**Branch:** _(direct-to-main; pre-branch-workflow)_
+**Scope:** Phase 2 — `database.py` + `exports.py` + `config.py` interaction review.
 **Commit reviewed:** Phase 2 — `database.py`, `exports.py`
 **Date:** 2026-04-16
 **Files reviewed:** `database.py`, `exports.py`, `config.py` (for interaction)

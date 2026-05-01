@@ -1,5 +1,9 @@
 # Final Review — Opportunities-Page Bug Fix Round (2026-04-25)
 
+**Branch:** `review/test-reliability-2026-04-25` (4 commits in this round)
+**Scope:** User-reported bug-fix round on `pages/1_Opportunities.py` — Bug 1 (position name disappearing on tab switch) + Bug 2 (Requirements / Materials default-value drift). Resolved by reverting the Sub-task 13 architecture change (`st.radio + conditional rendering` → `st.tabs(...)`).
+**Verdict:** Approve with two doc-drift nits (fixed in this review).
+
 ## Executive Summary
 
 Two user-reported bugs on `pages/1_Opportunities.py` (position-name

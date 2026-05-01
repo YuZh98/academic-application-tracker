@@ -1,4 +1,6 @@
 # Code Review: Phase 1
+**Branch:** _(direct-to-main; pre-branch-workflow)_
+**Scope:** Phase 1 — environment + `config.py` + `requirements.txt` initial review.
 **Commit reviewed:** `219741e` — `chore: set up venv and config.py`
 **Date:** 2026-04-16
 **Files reviewed:** `config.py`, `requirements.txt`

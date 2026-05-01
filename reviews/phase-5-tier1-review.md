@@ -1,8 +1,10 @@
 # Phase 5 Tier 1 — Applications page shell — Pre-merge review
 
 **Branch:** `feature/phase-5-tier1-ApplicationsPageShell`
+**Scope:** Phase 5 T1 — Applications page shell (`pages/2_Applications.py`); 3 sub-tasks (T1-A reader `database.get_applications_table()`; T1-B page + status-filter selectbox; T1-C read-only six-column table).
+**Verdict:** Approve. (Two 🟡 polish items + two 🟢 future items are deferred — see Findings.)
 **Date:** 2026-04-30
-**Spec authority:** DESIGN.md v1.3 §8.3 + `docs/ui/wireframes.md#applications`
+**Spec authority:** `DESIGN §8.3` + `docs/ui/wireframes.md#applications`
 **Test gates:** `pytest tests/ -q` and `pytest -W error::DeprecationWarning tests/ -q` — both green at **586 passed** (553 baseline + 33 new).
 
 ---

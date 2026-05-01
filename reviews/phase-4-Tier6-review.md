@@ -1,6 +1,7 @@
 # Phase 4 — Tier 6 Code Review
 
 **Branch:** `feature/phase-4-tier6-Cohesion` (5 commits ahead of `main`; T4 + T5 already merged via PR #12 / PR #13 → `c5a7c76`)
+**Verdict:** Approve, merge after the inline footnote lands and the user supplies the 1280 / 1440 / 1680 PNGs.
 **Scope:** T6 — the dashboard's pre-merge close-out, with three checkboxes per `TASKS.md`. Two are addressed on this branch:
   1. **Cross-panel cohesion smoke** (✅) — `reviews/phase-4-finish-cohesion-smoke.md` audits the five panels (KPI grid → Funnel + Readiness → Upcoming → Recommender Alerts) for shared visual grammar across populated and empty-DB renders. PNG captures at 1280 / 1440 / 1680 are user-pending (preview-tool sandbox limitation documented inline).
   2. **Funnel disclosure-toggle polish** (✅) — `[expand]` (one-way) → bidirectional `+ Show all stages` ↔ `− Show fewer stages`, `type="tertiary"`, docked in the funnel subheader row via `st.columns([3, 1])` (mirror of the T4 Upcoming-panel idiom). DESIGN §8.1 amendment locks the new contract; new config invariant #11 pins the dict shape.

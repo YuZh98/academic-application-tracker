@@ -1,9 +1,10 @@
 # DESIGN.md Review — 2026-04-23
 
+**Branch:** `feature/docs-refactor-pre-t4`
+**Scope:** Read-only review of `DESIGN.md` v1.3 (2026-04-23, 1,291 lines).
+**Verdict:** Approve with nits. Address 🔴 (F2/F4/F7/F8) before Phase 5; the rest can land in a single v1.4 clarity pass.
 **Reviewer:** Senior UX/Engineering review pass
 **Subject:** `DESIGN.md` v1.3 (2026-04-23), 1,291 lines
-**Branch:** `feature/docs-refactor-pre-t4`
-**Scope:** Read-only review; no code or markdown edits.
 **Goal of review:** Improve DESIGN.md on **UX-experience, clarity, stability, extensibility, unambiguity, conciseness, structuredness**, while keeping v1 realizable and avoiding over-engineering.
 
 ---

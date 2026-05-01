@@ -3,6 +3,7 @@
 **Branch:** `feature/phase-3-tier5` (14 commits ahead of `main`)
 **Scope:** T5-A (Overview Save) + T5-B (Requirements Save) + T5-C (Materials Save) + T5-D (Notes Save) + T5-E (Overview Delete with `@st.dialog`)
 **Stats:** `pages/1_Opportunities.py` +~300 lines; `tests/test_opportunities_page.py` +~1000 lines; 220 tests passing (was 147 at end of Tier 3); 0 deprecation warnings.
+**Verdict:** Request changes → approved after Fix #1 and Fix #2 (both landed in this review).
 **Reviewer attitude:** Skeptical. Trust nothing. Propose failure modes. Question the obvious.
 
 ---

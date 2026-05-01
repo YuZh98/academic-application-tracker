@@ -3,6 +3,7 @@
 **Branch:** `feature/phase-4-Tier2-ApplicationFunnel` (11 commits ahead of `main`)
 **Scope:** T2-A (Plotly horizontal bar from `count_by_status()` + `STATUS_COLORS`) → T2-A y-axis reversal fix → T2-B (empty-state branch, Option C + wording γ) → T2-C (left half of `st.columns(2)` per U2)
 **Stats:** `app.py` 124 → 170 lines (+46); `tests/test_app_page.py` 412 → 807 lines (+395), +17 tests across 3 new classes (`TestT2AFunnelBar` +7, `TestT2BFunnelEmptyState` +5, `TestT2CFunnelLayout` +5). **263 total tests passing, 0 deprecation warnings.**
+**Verdict:** Acceptance gate met; pre-merge findings #1 and #2 applied in a single review commit.
 **Reviewer attitude:** Skeptical. Trust nothing. Question every implicit assumption. Verify every Streamlit / Plotly API claim.
 
 ---

@@ -1,6 +1,8 @@
 # Phase 3 — Tier 5 Pre-Merge Review (T5-F)
 
 **Branch:** `feature/phase-3-tier5` → `main`
+**Scope:** Pre-merge shipping note for Phase 3 Tier 5 — T5-A through T5-E (4 Save paths + Overview Delete dialog with FK cascade).
+**Verdict:** Merge — all acceptance criteria pass.
 **Commits ahead of main:** 17
 **Tests:** 223 passing (was 147 at end of Tier 3, 192 at end of Tier 4); **0 deprecation warnings** (`pytest -W error::DeprecationWarning` is green).
 **Source scope:** `pages/1_Opportunities.py` is the only source file touched. `database.py`, `config.py`, `exports.py`, `app.py` are byte-identical to `main`. `tests/conftest.py` and the non-opportunities test modules are also untouched.

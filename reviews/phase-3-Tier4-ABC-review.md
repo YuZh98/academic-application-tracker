@@ -1,8 +1,10 @@
 # Phase 3 Tier 4 (T4-A / T4-B / T4-C) Code Review
+**Branch:** `feature/phase-3-tier4`
+**Scope:** T4-A (single-row selection), T4-B (subheader + tab shell), T4-C (7 pre-filled Overview widgets in `st.form("edit_overview")`, `_edit_form_sid` pre-seed).
+**Verdict:** Approve with fixes F1–F6 applied; ready to merge.
 **Files reviewed:** `pages/1_Opportunities.py` (row selection, edit-panel shell, Overview tab)
 **Date:** 2026-04-19
 **Reviewer:** Claude (skeptical + didactic)
-**Scope:** T4-A (single-row selection), T4-B (subheader + tab shell), T4-C (7 pre-filled Overview widgets in `st.form("edit_overview")`, `_edit_form_sid` pre-seed).
 
 ---
 

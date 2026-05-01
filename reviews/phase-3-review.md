@@ -1,4 +1,7 @@
 # Phase 3 Tier 1 Code Review
+**Branch:** _(direct-to-main; pre-branch-workflow)_
+**Scope:** Phase 3 Tier 1 — Quick-Add form + empty state on `pages/1_Opportunities.py`.
+**Verdict:** Request Changes (5 findings, all fixed in this review).
 **Files reviewed:** `pages/1_Opportunities.py`, `tests/test_opportunities_page.py`
 **Date:** 2026-04-17
 **Reviewer:** Claude (skeptical + didactic)
