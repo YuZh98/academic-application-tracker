@@ -18,20 +18,20 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Changed
-- GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, TASKS.md scope rules, wireframe-drift severity, reviews folder index, content-routing table). (branch `docs/guidelineupdate`)
-- GUIDELINES §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (branch `docs/guidelineupdate`)
-- `docs/adr/README.md`: clarify post-v1.1 decision deferral policy; update D1–D10 references to acknowledge the D11–D25 additions in `DESIGN §10` as candidate ADR backfills. (branch `docs/guidelineupdate`)
-- `reviews/*.md` (all 20 files): harmonize front-matter to the new §14.1 schema — add missing `**Branch:**` / `**Scope:**` / `**Verdict:**` fields; preserve all existing fields. Pre-branch-workflow reviews (Phase 1–3 Tier 1–3) get `Branch: _(direct-to-main; pre-branch-workflow)_`. (branch `docs/guidelineupdate`)
+- GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, TASKS.md scope rules, wireframe-drift severity, reviews folder index, content-routing table). (`b148dd5`)
+- GUIDELINES §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (`b148dd5`)
+- `docs/adr/README.md`: clarify post-v1.1 decision deferral policy; update D1–D10 references to acknowledge the D11–D25 additions in `DESIGN §10` as candidate ADR backfills. (`196fc0b`)
+- `reviews/*.md` (all 20 files): harmonize front-matter to the new §14.1 schema — add missing `**Branch:**` / `**Scope:**` / `**Verdict:**` fields; preserve all existing fields. Pre-branch-workflow reviews (Phase 1–3 Tier 1–3) get `Branch: _(direct-to-main; pre-branch-workflow)_`. (`e0da6e0`)
 
 ### Fixed
-- `docs/dev-notes/streamlit-state-gotchas.md` gotcha #13: replace stale `interview1_date` / `interview2_date` example with the post-v1.3-Sub-task-8 `scheduled_date` form (interviews sub-table). (branch `docs/guidelineupdate`)
-- `docs/dev-notes/streamlit-state-gotchas.md` gotcha #14: drop the obsolete 🔄 Refresh-button reference (button was deleted in Sub-task 12 per DESIGN D13); rewrite workaround to point at the surviving Save / Delete-handler use sites. (branch `docs/guidelineupdate`)
+- `docs/dev-notes/streamlit-state-gotchas.md` gotcha #13: replace stale `interview1_date` / `interview2_date` example with the post-v1.3-Sub-task-8 `scheduled_date` form (interviews sub-table). (`5487418`)
+- `docs/dev-notes/streamlit-state-gotchas.md` gotcha #14: drop the obsolete 🔄 Refresh-button reference (button was deleted in Sub-task 12 per DESIGN D13); rewrite workaround to point at the surviving Save / Delete-handler use sites. (`5487418`)
 
 ### Changed
-- `TASKS.md` `Recently done`: trim per the new §14.5 cap rule — drop pre-v0.5.0 entries (Phase 4 T5-A, T6 cohesion-smoke, T6 funnel-toggle polish, v1 plan-locking commit, PRs #8/#9/#10, v0.2.0/v0.3.0/v0.4.0 tag entries); items survive in CHANGELOG version blocks. (branch `docs/guidelineupdate`)
+- `TASKS.md` `Recently done`: trim per the new §14.5 cap rule — drop pre-v0.5.0 entries (Phase 4 T5-A, T6 cohesion-smoke, T6 funnel-toggle polish, v1 plan-locking commit, PRs #8/#9/#10, v0.2.0/v0.3.0/v0.4.0 tag entries); items survive in CHANGELOG version blocks. (`30ad6fd`)
 
 ### Added
-- `reviews/README.md`: new index file per `GUIDELINES §14.7` — reverse-chronological table of all 20 review docs with columns `(date, scope, branch, verdict, link)`; brief preamble cross-linking the §14.1 / §14.7 conventions; "How to add a new entry" footer. (branch `docs/guidelineupdate`)
+- `reviews/README.md`: new index file per `GUIDELINES §14.7` — reverse-chronological table of all 20 review docs with columns `(date, scope, branch, verdict, link)`; brief preamble cross-linking the §14.1 / §14.7 conventions; "How to add a new entry" footer. (`12c60e4`)
 - Phase 5 T1: Applications page shell on `pages/2_Applications.py` — `set_page_config`, title, status-filter selectbox, read-only six-column table per DESIGN §8.3 (with the §8.3 D-A inline-text amendment for the Confirmation column). Merged via PR #15 (`aebbb8b`); detailed essay in commit body + [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md).
 - Phase 5 T2-A: Applications-page editable detail card behind row selection — `apps_detail_form` (8 widgets), Save handler calling `database.upsert_application(propagate_status=True)`; asymmetry vs Opportunities §8.2 at `df_filtered.empty` (filter narrowing keeps the card open). Merged via PR #16 (`b9a2c82`); detailed essay in commit body + [`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md).
 - Phase 5 T2-B: cascade-promotion toast surfacing — second `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")` after the Saved toast when `upsert_application` returns `status_changed=True`. Merged via PR #16 (`b9a2c82`).
