@@ -48,6 +48,7 @@ manual steps to run against a pre-existing database.
 
 ### Added
 - `docs/dev-notes/streamlit-state-gotchas.md`: index/TOC at the top. 16 numbered one-line summaries of the gotchas; references like "see gotcha #16" can now navigate by number rather than by full-text search.
+- `docs/dev-notes/{dev-setup, extending, git-workflow-depth, streamlit-state-gotchas}.md`: one-sentence italicized "what this is" header under each title — folder-scan readability per the post-PR-#17 audit. The existing intro prose is preserved beneath; the new line is purpose-only.
 
 ### Changed
 - `DESIGN §8.3` Status filter selectbox bullet: expand to capture the option list (`[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`), default value, and the `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule moved from `docs/ui/wireframes.md`. Per §14.8: page-by-page UI contracts live in DESIGN §8.x.

@@ -1,5 +1,7 @@
 # Streamlit State Gotchas — Reference
 
+_Reproducible Streamlit quirks hit by this codebase (Symptom → Cause → Workaround), pinned by tests where possible. [GUIDELINES §7](../../GUIDELINES.md#7-streamlit-patterns) links here from the Streamlit-patterns section._
+
 Things that are **not** obvious from the Streamlit docs but that this
 codebase has hit in Phase 3/4. Each entry has the symptom, the cause, and
 the workaround. `GUIDELINES §7` links here from the Streamlit-patterns
