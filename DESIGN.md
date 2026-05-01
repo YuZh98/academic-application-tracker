@@ -54,9 +54,6 @@ A local, single-user web application that:
 - No email or calendar integration
 - No multi-user support
 
-Forward-looking ideas for v2+ that influence v1 architecture are collected
-in §12.
-
 ---
 
 ## 2. Architecture Overview
@@ -104,11 +101,6 @@ in §12.
 | `database.py` | `config`, `sqlite3`, `pandas` | `streamlit`, `exports` (top-level — deferred import only) |
 | `exports.py` | `database`, `config` | `streamlit` |
 | `config.py` | stdlib only | anything from this project |
-
-`exports.write_all()` is called as the last step of every `database.py`
-write function. Page files never call `exports` directly. The
-`database → exports → database` cycle is broken by importing `exports`
-lazily inside each database write function.
 
 ---
 
@@ -656,30 +648,11 @@ Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dash
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
 | KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
-| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector (see "Window selector" below). Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). The leading `+` (U+002B) and `−` (U+2212) match the project's `<symbol> <verb-phrase>` CTA convention used by `+ Add your first position` and `→ Opportunities page`. | — |
+| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector. Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). The leading `+` (U+002B) and `−` (U+2212) match the project's `<symbol> <verb-phrase>` CTA convention used by `+ Add your first position` and `→ Opportunities page`. | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
-| Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming(days=selected_window)` (T4-A); `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). Window controlled by an inline `st.selectbox` (key: `upcoming_window`) over `UPCOMING_WINDOW_OPTIONS`, default = `DEADLINE_ALERT_DAYS`; subheader text is dynamic: `f"Upcoming (next {selected_window} days)"`. | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty. Rows surfaced by a wider selected window (e.g. 60 / 90) but past `DEADLINE_ALERT_DAYS` show NO urgency glyph — the band is fixed in config, not tied to the user-selected window. |
+| Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming(days=selected_window)`; `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). Window controlled by an inline `st.selectbox` (key: `upcoming_window`) over `UPCOMING_WINDOW_OPTIONS`, default = `DEADLINE_ALERT_DAYS`; subheader text is dynamic: `f"Upcoming (next {selected_window} days)"`. | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty. Rows surfaced by a wider selected window (e.g. 60 / 90) but past `DEADLINE_ALERT_DAYS` show NO urgency glyph — the band is fixed in config, not tied to the user-selected window. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
 
-**Funnel visibility rules.** The funnel renders buckets in the order
-listed in `FUNNEL_BUCKETS`. A bucket is visible when **not** in
-`FUNNEL_DEFAULT_HIDDEN`, or when `st.session_state["_funnel_expanded"]`
-is `True` (which reveals every `FUNNEL_DEFAULT_HIDDEN` bucket at
-once). The disclosure toggle is **bidirectional**: clicking from the
-collapsed state expands; clicking from the expanded state collapses.
-The collapsed state is the *default-focused* view (active pipeline
-only, per D24); the expanded state is the *full-pipeline* view
-including terminal stages. Round-tripping between the two within a
-single session is supported and tested — a user verifying their
-archived count can return to the focused view without a fresh
-session.
-
-The toggle's *label* describes the action a click *will* perform, not
-the current state — `"+ Show all stages"` means *"clicking this will
-show all"* (you're currently collapsed); `"− Show fewer stages"`
-means *"clicking this will show fewer"* (you're currently expanded).
-Both labels are config-locked in `FUNNEL_TOGGLE_LABELS` (DESIGN §5.1)
-and follow the project's `<symbol> <verb-phrase>` CTA convention.
 
 **Upcoming-panel column contract.** Six columns in left-to-right display
 order:
@@ -700,22 +673,8 @@ them to the Title-Case headers above and maps `status` through
 `STATUS_LABELS` at render time. Empty result →
 `st.info(f"No deadlines or interviews in the next {selected_window} days.")`.
 The subheader `f"Upcoming (next {selected_window} days)"` renders in
-BOTH branches for page-height stability (T2/T3 precedent).
+BOTH branches for page-height stability.
 
-**Window selector.** The panel renders a small `st.selectbox`
-(key: `upcoming_window`, label hidden via `label_visibility="collapsed"`)
-inline with the subheader, offering options from
-`config.UPCOMING_WINDOW_OPTIONS` (`[30, 60, 90]` by default). The selected
-value drives `database.get_upcoming(days=selected_window)`, the dynamic
-subheader, and the empty-state copy. Default selection =
-`DEADLINE_ALERT_DAYS`, pinned by §5.2 invariant #10
-(`DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS`). Streamlit persists
-the selection in `st.session_state["upcoming_window"]` for the session.
-Layout: place the selectbox in a narrow right-side column, subheader on
-the left — same `st.columns([3, 1])` weight pair on every render so the
-T2/T3 page-height-stability guarantee extends to this panel too. The
-Urgency band is **independent of** the selected window: a row 50 days
-away in a 60-day window shows no urgency glyph, by design.
 
 **Empty-DB hero.** When
 
@@ -913,17 +872,6 @@ first move the status out of the terminal bucket, and then the next
 promote. This prevents a stray edit, data import, or misread response
 from clobbering a terminal decision.
 
-If R1 and R3 fire from the same `upsert_application` call, the combined
-effect depends on the pre-state. The per-state behaviour is:
-
-| Pre-state | R1 fires? | R3 fires? | Post-state |
-|-----------|-----------|-----------|------------|
-| `STATUS_SAVED` | Yes (→ `STATUS_APPLIED`) | Yes (→ `STATUS_OFFER`) | `STATUS_OFFER` |
-| `STATUS_APPLIED` | No | Yes (→ `STATUS_OFFER`) | `STATUS_OFFER` |
-| `STATUS_INTERVIEW` | No | Yes (→ `STATUS_OFFER`) | `STATUS_OFFER` |
-| `STATUS_OFFER` | No | Yes (no-op, already there) | `STATUS_OFFER` |
-| any member of `TERMINAL_STATUSES` | No | No (terminal guard) | unchanged |
-
 All cascades execute inside the same transaction as the primary write,
 so a failure rolls the whole call back.
 
@@ -935,12 +883,6 @@ Callers opt out with `propagate_status=False` for edits that should
 not move the pipeline (e.g. correcting a typo in application notes).
 The Applications page always calls with the default; Recommenders and
 the quick-add path never touch these functions.
-
-**Rationale for locating the cascade in `database.py`:**
-- Atomicity — a failed propagation rolls back the primary write too
-- Testable without an AppTest harness (pure database + config)
-- Keeps pages display-only per GUIDELINES §2
-- Uniform firing whether the caller is a page, a CLI, an exporter, or a future background job
 
 ### 9.4 Deleting a position
 
@@ -960,21 +902,6 @@ User clicks Delete on Overview tab
 
 Cancel preserves the current edit context (selected row and its tab
 state) so the user returns where they were.
-
-### 9.5 Export pipeline
-
-```
-Any database.py writer ends with:
-  → exports.write_all()
-      → write_opportunities()  → exports/OPPORTUNITIES.md
-      → write_progress()       → exports/PROGRESS.md
-      → write_recommenders()   → exports/RECOMMENDERS.md
-```
-
-A failure in any `write_*` is caught at the `write_all` boundary,
-logged, and swallowed — the DB write has already succeeded, so the
-user should see "Saved", not a traceback. The Export page surfaces the
-file mtimes so a user notices if backups stop regenerating.
 
 ---
 
@@ -1024,10 +951,6 @@ summary of what editing each `config.py` constant affects, see
 ---
 
 ## 12. v2 Design Notes
-
-These are architectural ideas for post-v1 releases. They inform v1
-decisions (e.g. keeping `TRACKER_PROFILE` + `VALID_PROFILES` as hooks)
-but are not implemented in v1.
 
 ### 12.1 General job tracker — profile expansion
 
