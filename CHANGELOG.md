@@ -30,6 +30,9 @@ manual steps to run against a pre-existing database.
 ### Changed
 - `TASKS.md` `Recently done`: trim per the new §14.5 cap rule — drop pre-v0.5.0 entries (Phase 4 T5-A, T6 cohesion-smoke, T6 funnel-toggle polish, v1 plan-locking commit, PRs #8/#9/#10, v0.2.0/v0.3.0/v0.4.0 tag entries); items survive in CHANGELOG version blocks. (branch `docs/guidelineupdate`)
 
+### Added
+- `reviews/README.md`: new index file per `GUIDELINES §14.7` — reverse-chronological table of all 20 review docs with columns `(date, scope, branch, verdict, link)`; brief preamble cross-linking the §14.1 / §14.7 conventions; "How to add a new entry" footer. (branch `docs/guidelineupdate`)
+
 ### Added — Cascade-promotion toast surfacing (Phase 5 T2-B, branch `feature/phase-5-tier2-ApplicationDetailCard`)
 
 Phase 5 Tier 2-B — the Applications-page Save handler now reads
