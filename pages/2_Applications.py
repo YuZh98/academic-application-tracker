@@ -320,6 +320,12 @@ if "applications_selected_position_id" in st.session_state:
         # than widening the T1-A reader (its 10-col contract is pinned
         # by tests + DESIGN §8.3 + the merged review doc).
         app_row = database.get_application(sid)
+        # T3-A: read interviews for this position alongside the
+        # application row. database.get_interviews orders by sequence
+        # ASC (database.py contract); the page does not re-sort. Empty
+        # frame is the natural state for a freshly-selected position
+        # with no interviews yet.
+        interviews_df = database.get_interviews(sid)
 
         with st.container(border=True):
             # DESIGN §8.0 + §8.3 status-label convention: render
@@ -450,6 +456,134 @@ if "applications_selected_position_id" in st.session_state:
                     "Save", key="apps_detail_submit"
                 )
 
+            # ── Interviews list (T3-A) ───────────────────────────────
+            #
+            # DESIGN §8.3 D-B: an inline interview list under the app
+            # detail card. Per-row widgets (date_input, selectbox,
+            # text_input) live inside `apps_interviews_form`; the Add
+            # button lives OUTSIDE the form (Streamlit 1.56 forbids
+            # st.button inside st.form). add_interview auto-assigns
+            # the next sequence and writes NULL date/format/notes
+            # (the schema DEFAULTs).
+            #
+            # Visual placement vs wireframe: docs/ui/wireframes.md
+            # shows interviews interleaved between Response and Result
+            # widgets. Streamlit forms cannot be opened/closed mid-
+            # rendering, so the interviews block is rendered AFTER
+            # the detail form ends (still inside the same bordered
+            # container per "under app detail card"). Wireframes are
+            # intent-only for layout (wireframes.md line 3).
+            st.markdown("**Interviews**")
+
+            # ── Pre-seed sentinel: per-row, frozenset of seeded ids ──
+            #
+            # Per-row pre-seeding (one sentinel entry per id) preserves
+            # in-flight drafts on sibling rows when the user clicks
+            # Add: only the new id (current_ids - seeded_ids = {new})
+            # gets pre-seeded; existing rows keep their session_state
+            # values across the rerun.
+            #
+            # The intersection step (saved_sentinel & current_ids)
+            # prunes deleted ids on every rerun so the sentinel never
+            # accumulates zombie entries (Sonnet plan-critique signal
+            # — without the intersection an ever-growing frozenset
+            # would carry deleted ids forever).
+            #
+            # int() cast normalizes pandas int64 ids to native int so
+            # frozenset comparisons in tests don't drift on dtype.
+            current_ids = (
+                frozenset(int(i) for i in interviews_df["id"])
+                if not interviews_df.empty
+                else frozenset()
+            )
+            saved_sentinel = st.session_state.get(
+                "_apps_interviews_seeded_ids", frozenset(),
+            )
+            seeded_ids = saved_sentinel & current_ids
+            for _, _iv_row in interviews_df.iterrows():
+                _iid = int(_iv_row["id"])
+                if _iid in seeded_ids:
+                    continue
+                # Pre-seed every widget key for this fresh id. The
+                # _safe_str / _coerce_iso_to_date helpers cover NaN-
+                # from-NULL (gotcha #1); the format guard rejects any
+                # legacy / out-of-vocab value so the selectbox only
+                # ever sees a member of [None, *INTERVIEW_FORMATS].
+                _fmt_str = _safe_str(_iv_row["format"])
+                _fmt = _fmt_str if _fmt_str in config.INTERVIEW_FORMATS else None
+                st.session_state[f"apps_interview_{_iid}_date"] = (
+                    _coerce_iso_to_date(_iv_row["scheduled_date"])
+                )
+                st.session_state[f"apps_interview_{_iid}_format"] = _fmt
+                st.session_state[f"apps_interview_{_iid}_notes"] = (
+                    _safe_str(_iv_row["notes"])
+                )
+            st.session_state["_apps_interviews_seeded_ids"] = (
+                seeded_ids | current_ids
+            )
+
+            # ── Per-row edit form ─────────────────────────────────────
+            #
+            # Form id `apps_interviews_form` ends in `_form` so it
+            # cannot collide with any widget key inside (gotcha #4).
+            # Save batches every per-row widget change into one Save
+            # click; the handler below computes a per-row dirty diff.
+            #
+            # The form is suppressed entirely when the interviews list
+            # is empty — a Save button with no rows above would be
+            # meaningless. The Add button below still renders so the
+            # user can create the first interview.
+            if not interviews_df.empty:
+                with st.form("apps_interviews_form"):
+                    for _, _iv_row in interviews_df.iterrows():
+                        _iid = int(_iv_row["id"])
+                        _seq = int(_iv_row["sequence"])
+                        st.markdown(f"**Interview {_seq}**")
+                        _cols = st.columns([2, 2, 4])
+                        with _cols[0]:
+                            st.date_input(
+                                "Date",
+                                value=None,
+                                key=f"apps_interview_{_iid}_date",
+                            )
+                        with _cols[1]:
+                            # Mirror of T2-A's response_type selectbox:
+                            # leading None makes "no format chosen" a
+                            # legal pre-seed value; format_func renders
+                            # None as the em-dash glyph.
+                            st.selectbox(
+                                "Format",
+                                options=[None, *config.INTERVIEW_FORMATS],
+                                format_func=lambda v: EM_DASH if v is None else v,
+                                key=f"apps_interview_{_iid}_format",
+                            )
+                        with _cols[2]:
+                            st.text_input(
+                                "Notes",
+                                key=f"apps_interview_{_iid}_notes",
+                            )
+                    interviews_submitted = st.form_submit_button(
+                        "Save", key="apps_interviews_save",
+                    )
+            else:
+                interviews_submitted = False
+
+            # ── Add button (outside the form per Streamlit 1.56) ─────
+            #
+            # st.form forbids st.button inside (only st.form_submit_
+            # button is allowed). The Add button lives outside the
+            # form and triggers add_interview(sid, {}) which auto-
+            # assigns the next sequence.
+            #
+            # Add does NOT discard in-flight drafts to OTHER interview
+            # rows: the per-row pre-seed sentinel only fires for the
+            # newly-Added id (current_ids - seeded_ids = {new_id}), so
+            # existing widget session_state values survive the rerun
+            # untouched.
+            add_clicked = st.button(
+                "Add another interview", key="apps_add_interview",
+            )
+
         if detail_submitted:
             # Build the upsert payload. Date inputs return either
             # `datetime.date` or None; isoformat() handles only the
@@ -515,3 +649,95 @@ if "applications_selected_position_id" in st.session_state:
                 # the handler exists to hide). Sentinel survives so
                 # the user's dirty form input is preserved for retry.
                 st.error(f"Could not save: {e}")
+
+        # ── T3-A: interviews Save handler ────────────────────────────
+        #
+        # Per-row dirty diff using _safe_str-normalized comparison so
+        # NaN-from-NULL on the DB side doesn't false-positive against
+        # an empty widget value (Sonnet plan-critique signal — without
+        # normalization, "" != float('nan') would dirty-write empty
+        # strings over NULL on every Save). Calls update_interview
+        # ONCE PER DIRTY ROW; clean rows skip.
+        #
+        # The Saved toast fires unconditionally (the user clicked Save
+        # and expects feedback even when nothing changed); update_
+        # interview is only called for actually-dirty rows.
+        #
+        # The seeded-ids sentinel is intentionally NOT popped here:
+        # update_interview is a direct write with no normalization, so
+        # the widget already reflects DB state after Save. Popping
+        # would force every row to re-seed on the post-Save rerun and
+        # clobber unsaved drafts on sibling rows — different from the
+        # T2-A detail-form pop pattern, where upsert_application can
+        # potentially normalize values.
+        if interviews_submitted:
+            try:
+                for _, _iv_row in interviews_df.iterrows():
+                    _iid = int(_iv_row["id"])
+                    _w_date = st.session_state.get(
+                        f"apps_interview_{_iid}_date",
+                    )
+                    _w_format = st.session_state.get(
+                        f"apps_interview_{_iid}_format",
+                    )
+                    _w_notes_str = _safe_str(
+                        st.session_state.get(
+                            f"apps_interview_{_iid}_notes", "",
+                        )
+                    )
+                    _w_date_iso = _w_date.isoformat() if _w_date else None
+                    _w_notes = _w_notes_str if _w_notes_str else None
+
+                    _db_date_str = _safe_str(_iv_row["scheduled_date"])
+                    _db_date_iso = _db_date_str if _db_date_str else None
+                    _db_fmt_str = _safe_str(_iv_row["format"])
+                    _db_format = (
+                        _db_fmt_str
+                        if _db_fmt_str in config.INTERVIEW_FORMATS
+                        else None
+                    )
+                    _db_notes_str = _safe_str(_iv_row["notes"])
+                    _db_notes = _db_notes_str if _db_notes_str else None
+
+                    _dirty: dict[str, Any] = {}
+                    if _w_date_iso != _db_date_iso:
+                        _dirty["scheduled_date"] = _w_date_iso
+                    if _w_format != _db_format:
+                        _dirty["format"] = _w_format
+                    if _w_notes != _db_notes:
+                        _dirty["notes"] = _w_notes
+                    if _dirty:
+                        database.update_interview(_iid, _dirty)
+
+                st.session_state["_applications_skip_table_reset"] = True
+                st.toast("Saved interviews.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not save interviews: {e}")
+
+        # ── T3-A: interviews Add handler ─────────────────────────────
+        #
+        # Inserts a blank interview row via add_interview(sid, {}).
+        # The function auto-assigns the next sequence and runs the R2
+        # cascade (STATUS_APPLIED → STATUS_INTERVIEW on the first
+        # interview, DESIGN §9.3); the page surfaces the promotion
+        # via a separate toast when status_changed=True. R2 ordering
+        # mirrors T2-B's R1/R3 surfacing: Promoted toast fires BEFORE
+        # the Added toast so the chronological readout is correct
+        # (the cascade fired during the add itself).
+        if add_clicked:
+            try:
+                _add_result = database.add_interview(
+                    sid, {}, propagate_status=True,
+                )
+                st.session_state["_applications_skip_table_reset"] = True
+                if _add_result["status_changed"]:
+                    _promo_label = config.STATUS_LABELS.get(
+                        _add_result["new_status"],
+                        _add_result["new_status"],
+                    )
+                    st.toast(f"Promoted to {_promo_label}.")
+                st.toast("Added interview.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not add interview: {e}")
