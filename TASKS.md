@@ -18,11 +18,11 @@ Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
 [`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md);
 suite 586 → 638 green under both pytest gates.
 
-Branch (T3): T3-A + T3-B both shipped on
-`feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 676
-green under both pytest gates. Pre-merge review + PR pending
-(separate steps; not part of T3-B's three TDD commits per the
-user's pause-for-review boundary, mirroring the T2 pattern).
+Branch (T3): T3-A + T3-B + T3 review (9 findings, 2 inline fixes) +
+T3-rev (drift fixes against truth files) all on
+`feature/phase-5-tier3-InterviewManagementUI`. T3-rev-A (Position /
+Institute column split) shipped; suite 638 → 681 green under both
+pytest gates. T3-rev-B (per-row interview block refactor) pending.
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -227,6 +227,29 @@ user's pause-for-review boundary, mirroring the T2 pattern).
         (`TestApplicationsInterviewDeleteButton`,
         `TestApplicationsInterviewDeleteDialog`); suite 663 → 676
         under both pytest gates.
+  - [x] T3-rev-A Position / Institute column split per the post-T3
+        truth-file alignment. DESIGN §8.3 amended (commit `ba7cd47`)
+        with an explicit seven-column contract; wireframe updated
+        in the same commit. Page table render now produces
+        `Position` (bare `position_name`) + new `Institute` (bare
+        institute, EM_DASH on empty) columns instead of a single
+        `f"{institute}: {position_name}"` Position cell. Both go
+        through `_safe_str_or_em` (NaN→EM_DASH per gotcha #1).
+        Column widths: Position `large` (kept; bare `position_name`
+        can still be long), Institute `medium` (full institute names
+        like "Massachusetts Institute of Technology" don't fit
+        `small`). The `_format_label` helper stays on the page —
+        still used by the detail-card header. 4 net new test cases
+        (3 from `test_institute_column_format` parametrize + 1
+        `test_institute_column_is_medium`); suite 676 → 681 under
+        both pytest gates.
+  - [ ] T3-rev-B Per-row interview block refactor — replace the
+        single page-level `apps_interviews_form` with per-row
+        `apps_interview_{id}_form` (`border=False`) blocks; each
+        block carries `**Interview {seq}**` heading +
+        date/format/notes detail row + per-row Save submit button +
+        per-row Delete button (outside the form per Streamlit
+        constraint). `st.divider()` between blocks.
 - [ ] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
       grouped by `recommender_name`
 - [ ] **T5** Recommenders table + add form + inline edit (`asked_date`,
@@ -380,6 +403,19 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-01 — **Phase 5 T3-rev-A shipped on branch**
+  `feature/phase-5-tier3-InterviewManagementUI` — Position / Institute
+  column split per the post-T3 truth-file alignment. DESIGN §8.3
+  amended with an explicit seven-column contract for the Applications
+  table (Position bare, Institute bare, Applied, Recs, Confirmation,
+  Response, Result); wireframe already shows the same structure since
+  `2bd20ab`. Page now uses `_safe_str_or_em` on both `position_name`
+  and `institute` columns instead of a combined `f"{institute}:
+  {position_name}"` Position cell. Position keeps `width="large"`
+  (bare `position_name` can still be long); Institute is
+  `width="medium"`. The `_format_label` helper stays — still used by
+  the detail-card header. 4 net new test cases; suite 676 → 681
+  under both pytest gates.
 - 2026-05-01 — **Phase 5 T3 shipped on branch**
   `feature/phase-5-tier3-InterviewManagementUI` (T3-A + T3-B both
   green; pre-merge review + PR pending). T3-A: inline interview
@@ -460,4 +496,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-01 (Phase 5 T3 — T3-A + T3-B both shipped on `feature/phase-5-tier3-InterviewManagementUI`; pre-merge review + PR pending)_
+_Updated: 2026-05-01 (Phase 5 T3-rev-A shipped — Position/Institute column split; T3-rev-B per-row interview block refactor pending; pre-merge review + PR pending after T3-rev-B closes)_
