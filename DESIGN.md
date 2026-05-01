@@ -128,7 +128,7 @@ the exact `venv` create / `pip install` / `streamlit run` commands.
 |------------|-------|-------|
 | Expected scale | 10²–10³ positions, 1–10 interviews each, 1–20 recommenders total | SQLite handles this comfortably; no performance tuning needed |
 | File encoding | UTF-8 everywhere | `postdoc.db` is binary; all markdown exports and `config.py` are UTF-8 |
-| Timezone | Local machine time | SQLite `date('now')` uses UTC by default; the app explicitly uses `datetime.date.today()` (local). For a single-user local app the user's timezone is implicit and consistent. |
+| Timezone | Local machine time | Single-user local app; no cross-timezone concerns. |
 | Concurrency | One writer at a time (the Streamlit process) | SQLite's default serialization is sufficient; no multi-threading / multi-process writers |
 | Persistence | `postdoc.db` on local disk | Loss-protection via the committed markdown exports; cloud backup is a v2 concern (§12.5) |
 
@@ -225,8 +225,8 @@ auto-promotion rules). Longer enumerations are described by category
 | `TERMINAL_STATUSES` | `list[str]` | Subset of `STATUS_VALUES` (`[CLOSED]` / `[REJECTED]` / `[DECLINED]`). Excluded from "active" queries (upcoming deadlines, materials readiness); also guards R3 auto-promotion against regression (§9.3). |
 | `STATUS_COLORS` | `dict[str, str]` | Per-status color for single-status surfaces (Opportunities-table badge, tooltips). Values drawn from the intersection of the `st.badge` color vocabulary and Plotly CSS color names. **Not** used for funnel bars — see `FUNNEL_BUCKETS`. Drift caught by §5.2 invariant #2. |
 | `STATUS_LABELS` | `dict[str, str]` | Storage-to-UI label. Storage keeps bracketed values as enum sentinels; UI strips the brackets via this dict. Every status surface rendered to a user MUST go through this map — never print a raw key. Drift caught by §5.2 invariant #3. |
-| `STATUS_FILTER_ACTIVE` | `str` | UI sentinel (`"Active"`) used as the default selection on the Applications page filter selectbox (§8.3, Phase 5 T1-B). Encodes "every actionable status" — the page resolves it to `set(STATUS_VALUES) - STATUS_FILTER_ACTIVE_EXCLUDED` at render time. The literal lives in config (not the page) so future surfaces — e.g. a "Tracked: Active" KPI variant on the dashboard — can reuse the same sentinel without hardcoding. Defensive guard in §5.2 invariant #12 ensures the sentinel does not collide with any real `STATUS_VALUES` entry. |
-| `STATUS_FILTER_ACTIVE_EXCLUDED` | `frozenset[str]` | Statuses removed by the `STATUS_FILTER_ACTIVE` sentinel — `{STATUS_SAVED, STATUS_CLOSED}` (pre-application + withdrawn). Frozen so a page cannot mutate it via `.add()`/`.remove()` and silently broaden the page's default filter at runtime. Membership is part of the spec (§8.3); broadening the exclusion (e.g. to also exclude `[REJECTED]`/`[DECLINED]`) is a deliberate spec amendment. Drift caught by §5.2 invariant #12. |
+| `STATUS_FILTER_ACTIVE` | `str` | UI sentinel (`"Active"`) used as the default selection on the Applications page filter selectbox (§8.3). Encodes "every actionable status" — the page resolves it to `set(STATUS_VALUES) - STATUS_FILTER_ACTIVE_EXCLUDED` at render time. Defensive guard in §5.2 invariant #12 ensures the sentinel does not collide with any real `STATUS_VALUES` entry. |
+| `STATUS_FILTER_ACTIVE_EXCLUDED` | `frozenset[str]` | Statuses removed by the `STATUS_FILTER_ACTIVE` sentinel — `{STATUS_SAVED, STATUS_CLOSED}` (pre-application + withdrawn). Frozen so a page cannot silently broaden the filter at runtime. Membership is part of the spec (§8.3); broadening the exclusion (e.g. to also exclude `[REJECTED]`/`[DECLINED]`) is a deliberate spec amendment. Drift caught by §5.2 invariant #12. |
 
 #### Dashboard funnel (presentation layer)
 
@@ -234,7 +234,7 @@ auto-promotion rules). Longer enumerations are described by category
 |----------|------|------|
 | `FUNNEL_BUCKETS` | `list[tuple[str, tuple[str, ...], str]]` | Presentation-layer grouping of raw statuses into funnel bars. Each entry: `(UI label, raw-status tuple, bucket color)`. Order = top-down display order (y-axis reversed). "Archived" aggregates `[REJECTED]` + `[DECLINED]` (D17); `[CLOSED]` stays its own bucket. Multiset coverage of `STATUS_VALUES` guarded by §5.2 invariant #5. |
 | `FUNNEL_DEFAULT_HIDDEN` | `set[str]` | Bucket labels hidden by default on the dashboard funnel. The single disclosure toggle (§8.1) reveals/hides them as a group; state held in `st.session_state["_funnel_expanded"]` for the current session only (D24, §8.1). Validated by §5.2 invariant #6. |
-| `FUNNEL_TOGGLE_LABELS` | `dict[bool, str]` | State-keyed labels for the funnel disclosure toggle (§8.1). Indexed by the bool value of `st.session_state["_funnel_expanded"]`: `False` → `"+ Show all stages"` (collapsed; click invites expand); `True` → `"− Show fewer stages"` (expanded; click invites collapse). Symbols are U+002B `+` and U+2212 `−` — they encode the click's effect direction. Vocabulary follows the project's `<symbol> <verb-phrase>` CTA convention. Validated by §5.2 invariant #11. |
+| `FUNNEL_TOGGLE_LABELS` | `dict[bool, str]` | State-keyed labels for the funnel disclosure toggle (§8.1). Indexed by the bool value of `st.session_state["_funnel_expanded"]`: `False` → `"+ Show all stages"` (collapsed; click invites expand); `True` → `"− Show fewer stages"` (expanded; click invites collapse). Vocabulary follows the project's `<symbol> <verb-phrase>` CTA convention. Validated by §5.2 invariant #11. |
 
 #### Vocabularies (user-facing selectbox options)
 
@@ -285,7 +285,7 @@ before any page renders:
 2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a per-status color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has a UI label
 4. `set(TERMINAL_STATUSES) <= set(STATUS_VALUES)` — terminals are a subset
-5. Let `F = [raw for (_, raws, _) in FUNNEL_BUCKETS for raw in raws]`. Require `sorted(F) == sorted(STATUS_VALUES)` (multiset equality). This asserts two facts at once: every raw status appears in some bucket, **and** no status appears in more than one bucket.
+5. Let `F = [raw for (_, raws, _) in FUNNEL_BUCKETS for raw in raws]`. Require `sorted(F) == sorted(STATUS_VALUES)` (multiset equality).
 6. `FUNNEL_DEFAULT_HIDDEN <= {label for label, _, _ in FUNNEL_BUCKETS}` — the hidden-by-default set references real bucket labels
 7. `set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES)` — every req value has a label
 8. `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` — urgency thresholds order correctly
@@ -303,7 +303,7 @@ before any page renders:
 | Add a new pipeline status | (1) Append to `STATUS_VALUES` and add the matching `STATUS_<name>` alias; (2) add one entry each to `STATUS_COLORS` and `STATUS_LABELS`; (3) decide which `FUNNEL_BUCKETS` entry it belongs in — extend an existing bucket's tuple or add a new 3-tuple `(label, (raw,...), color)` in the right display position; (4) if terminal, append to `TERMINAL_STATUSES`. No DDL change. |
 | Rename a pipeline status | Edit `STATUS_VALUES[i]`, the matching alias, and the keys in `STATUS_COLORS` / `STATUS_LABELS` / `FUNNEL_BUCKETS` / `TERMINAL_STATUSES`. Write a one-shot migration in `CHANGELOG.md` under the release: `UPDATE positions SET status = '<new>' WHERE status = '<old>'`. The schema `DEFAULT` clause is config-driven; no DDL edit needed if renaming `STATUS_VALUES[0]`. |
 | Hide or un-hide a funnel bucket by default | Edit `FUNNEL_DEFAULT_HIDDEN`. Values must be existing bucket labels. |
-| Rephrase the funnel disclosure toggle | Edit both keys of `FUNNEL_TOGGLE_LABELS`. Stay within the `<symbol> <verb-phrase>` CTA convention (matches `+ Add your first position` and `→ Opportunities page`). The `+` / `−` pairing is recommended — the symbol encodes the click's effect direction — but invariant #11 only enforces dict shape, not symbol choice. Tests in `TestT6FunnelToggle` (`test_label_symbols_match_cta_convention`) pin the current `+` / `−` pair; relax that test if you adopt a different symbol pair. |
+| Rephrase the funnel disclosure toggle | Edit both keys of `FUNNEL_TOGGLE_LABELS`. Stay within the `<symbol> <verb-phrase>` CTA convention (matches `+ Add your first position` and `→ Opportunities page`). The `+` / `−` pairing is recommended — the symbol encodes the click's effect direction — but invariant #11 only enforces dict shape, not symbol choice. |
 | Change a dashboard threshold | Edit `DEADLINE_*` or `RECOMMENDER_ALERT_DAYS`. Import-time invariants catch inverted thresholds. |
 | Switch the tracker profile | See §12.1. |
 
@@ -367,9 +367,6 @@ CREATE TABLE IF NOT EXISTS positions (
 );
 
 -- Trigger: keep updated_at fresh on every row mutation.
--- Relies on SQLite's default recursive_triggers = OFF — the inner
--- UPDATE fires the trigger again in principle, but is suppressed by
--- the default setting, preventing an infinite loop.
 CREATE TRIGGER IF NOT EXISTS positions_updated_at
     AFTER UPDATE ON positions FOR EACH ROW
 BEGIN
@@ -439,13 +436,6 @@ TABLE` statements via f-strings that read `config.STATUS_VALUES[0]` and
 `config.RESULT_DEFAULT`. Column names for the `req_*` / `done_*` pairs
 come from `config.REQUIREMENT_DOCS`. No user-supplied value ever reaches
 the DDL; `config.py` is the only string source.
-
-The DDL above shows DEFAULT clauses with `<ALIAS_NAME>` placeholders
-(e.g. `'<STATUS_SAVED>'`, `'<RESULT_DEFAULT>'`); at `init_db()`
-construction time, the f-strings substitute in the current config
-value. The placeholders let DESIGN stay immune to a rename of the
-underlying constant: rename `STATUS_VALUES[0]` from `"[SAVED]"` to
-something else and only `config.py` changes.
 
 ### 6.3 Data migrations
 
@@ -582,19 +572,7 @@ These conventions apply to every page.
 
 #### Page configuration
 
-Every page's first executable Streamlit call is:
-
-```python
-st.set_page_config(
-    page_title="Postdoc Tracker",
-    page_icon="📋",
-    layout="wide",
-)
-```
-
-`layout="wide"` is essential: the app is data-heavy (tables, KPI grids,
-funnel chart, timeline). `set_page_config` runs at the top of `app.py`
-and every `pages/*.py` — it is re-executed on every page switch.
+Every page calls `st.set_page_config(page_title="Postdoc Tracker", page_icon="📋", layout="wide")` as its first executable statement. `layout="wide"` is essential: the app is data-heavy. `set_page_config` runs at the top of `app.py` and every `pages/*.py` — it is re-executed on every page switch.
 
 #### Widget-key prefix conventions
 
@@ -609,10 +587,7 @@ reruns:
 | Internal sentinels | `_` prefix | `_edit_form_sid`, etc. |
 | Form ids | suffix `_form` | `edit_notes_form` (contains `edit_notes`) |
 
-**Form ids MUST NOT collide with any widget key inside the form.**
-Streamlit registers form ids with `writes_allowed=False`; a collision
-raises `StreamlitValueAssignmentNotAllowedError` at render. Suffixing
-form ids with `_form` is the project convention.
+**Form ids MUST NOT collide with any widget key inside the form.** Suffixing form ids with `_form` is the project convention.
 
 #### Status label convention
 
@@ -648,7 +623,7 @@ Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dash
 | KPI: Interview | `count_by_status().get(STATUS_INTERVIEW, 0)` | — | — |
 | KPI: Next Interview | `get_upcoming_interviews()` scanned for earliest FUTURE `scheduled_date`; rendered `'{Mon D} · {institute}'`; "—" when none | — | — |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, one bar per **visible** bucket in list order; a visible bucket with zero count renders as a zero-width bar (category preserved for axis stability); y-axis reversed so earliest pipeline stage sits on top; bar color comes from `FUNNEL_BUCKETS[i][2]` | Bucket labels = `FUNNEL_BUCKETS[i][0]` (UI, no brackets) | — |
-| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector. Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). The leading `+` (U+002B) and `−` (U+2212) match the project's `<symbol> <verb-phrase>` CTA convention used by `+ Add your first position` and `→ Opportunities page`. | — |
+| Funnel disclosure toggle | Single `st.button(..., type="tertiary")` placed in the funnel **subheader row** via `st.columns([3, 1])` (subheader left, toggle right) — same layout idiom as the Upcoming panel's window selector. Renders whenever `FUNNEL_DEFAULT_HIDDEN` is non-empty AND the funnel is not in the empty-DB branch (a). Clicking flips the session flag `st.session_state["_funnel_expanded"]`; the chart re-renders with the hidden buckets revealed (False→True) or hidden (True→False). The toggle is **bidirectional** — a user who expanded to verify their archived count can return to the focused view without ending the session. | Labels (config-locked, state-keyed): `config.FUNNEL_TOGGLE_LABELS[False] = "+ Show all stages"` (collapsed) · `config.FUNNEL_TOGGLE_LABELS[True] = "− Show fewer stages"` (expanded). Labels follow the `<symbol> <verb-phrase>` CTA convention. | — |
 | Materials Readiness | `compute_materials_readiness()` → two stacked `st.progress` bars labelled `"Ready to submit: N"` / `"Still missing: M"`; values = count / `max(ready + pending, 1)`; CTA button `"→ Opportunities page"` via `st.switch_page` | — | Empty state when `ready + pending == 0` |
 | Upcoming | Merge of `get_upcoming_deadlines()` + `get_upcoming_interviews()` via `database.get_upcoming(days=selected_window)`; `st.dataframe(width="stretch", hide_index=True)`. Six columns in display order: **Date**, **Days left**, **Label**, **Kind**, **Status**, **Urgency** — see "Upcoming-panel column contract" below for cell formats. Sort: by date ascending (stable). Window controlled by an inline `st.selectbox` (key: `upcoming_window`) over `UPCOMING_WINDOW_OPTIONS`, default = `DEADLINE_ALERT_DAYS`; subheader text is dynamic: `f"Upcoming (next {selected_window} days)"`. | — | 🔴 when days-away ≤ `DEADLINE_URGENT_DAYS`; 🟡 when ≤ `DEADLINE_ALERT_DAYS`; otherwise empty. Rows surfaced by a wider selected window (e.g. 60 / 90) but past `DEADLINE_ALERT_DAYS` show NO urgency glyph — the band is fixed in config, not tied to the user-selected window. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` grouped by `recommender_name` — one card per person with all their owed positions listed | — | All shown rows are warnings |
@@ -676,15 +651,7 @@ The subheader `f"Upcoming (next {selected_window} days)"` renders in
 BOTH branches for page-height stability.
 
 
-**Empty-DB hero.** When
-
-```python
-count_by_status().get(STATUS_SAVED, 0)
-+ count_by_status().get(STATUS_APPLIED, 0)
-+ count_by_status().get(STATUS_INTERVIEW, 0) == 0
-```
-
-a bordered hero container above the KPI grid shows a welcome subheader,
+**Empty-DB hero.** When the DB has no Saved, Applied, or Interview-stage positions, a bordered hero container above the KPI grid shows a welcome subheader,
 an explanatory paragraph, and a primary CTA button that
 `st.switch_page("pages/1_Opportunities.py")`. The KPI grid renders
 beneath the hero regardless. A DB holding only terminal-status rows
