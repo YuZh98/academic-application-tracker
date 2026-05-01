@@ -1,5 +1,7 @@
 # Extending the Tracker — Step-by-Step Recipes
 
+_Procedural "how-to" walkthroughs for common config-only extensions; companion to [DESIGN §5.3](../../DESIGN.md#53-extension-recipes)'s architectural "what-changes-where" index._
+
 Each recipe below is a concrete walkthrough for a common extension.
 For the **concise summary** of what editing each `config.py` constant
 affects (architectural "what → where"), see
