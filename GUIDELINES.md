@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.1 (2026-04-23) | **Applies from:** v0.5 onward
+**Version:** v1.2 | **Last updated:** 2026-04-30 | **Status:** authoritative
 
 ---
 
