@@ -19,11 +19,10 @@ Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
 suite 586 → 638 green under both pytest gates.
 
 Branch (T3): T3-A + T3-B + T3 review (9 findings, 2 inline fixes) +
-T3-rev (T3-rev-A column split + T3-rev-B per-row block refactor) all
-on `feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 683
-green under both pytest gates. Pre-merge review + PR pending
-(separate steps; not part of T3-rev-B's three TDD commits per the
-user's pause-for-review boundary, mirroring the T2 pattern).
+T3-rev (T3-rev-A column split + T3-rev-B per-row block refactor) +
+pre-merge review addendum (Findings #10–#13, 2 inline fixes) all on
+`feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 683
+green under both pytest gates. Pre-merge review done; PR pending.
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -96,8 +95,8 @@ user's pause-for-review boundary, mirroring the T2 pattern).
         Applications does NOT pop selection on filter narrowing —
         the detail card resolves against the unfiltered `df` so an
         in-progress edit survives a filter change. Detail card
-        wrapped in `st.container(border=True)` (architected for
-        T3's sibling `apps_interviews_form`); header reads
+        wrapped in `st.container(border=True)` (architected to hold
+        T3's per-row interview blocks); header reads
         `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`;
         inline "All recs submitted: ✓ / —" via
         `is_all_recs_submitted` (vacuous-true for zero recs, D23).
@@ -166,13 +165,14 @@ user's pause-for-review boundary, mirroring the T2 pattern).
         `TestApplicationsCohesionSweep`); suite 629 → 638 under
         both pytest gates.
 - [x] **T3** Inline interview list UI (per DESIGN §8.3 D-B) —
-      `apps_interview_{id}_*` keying, single Save form
-      `apps_interviews_form`, `@st.dialog`-gated delete, R2-toast
-      surfacing on add when `add_interview` returns
-      `status_changed=True`. T3-A + T3-B both shipped on branch
+      per-row `apps_interview_{id}_form` blocks (T3-rev-B; retired
+      the T3-A single-form `apps_interviews_form`), `@st.dialog`-
+      gated delete, R2-toast surfacing on add when `add_interview`
+      returns `status_changed=True`. T3-A + T3-B + T3-rev-A +
+      T3-rev-B all shipped on branch
       `feature/phase-5-tier3-InterviewManagementUI`. Pre-merge
-      review + PR pending (separate steps; not part of T3-B's
-      three TDD commits per the user's pause-for-review boundary).
+      review done (9+4 findings, 4 inline fixes across 2 passes);
+      PR pending.
   - [x] T3-A Interview list + per-row edit form + Save + Add +
         R2 toast — `apps_interviews_form` with date/format/notes
         per row inside the existing T2 `st.container(border=True)`,

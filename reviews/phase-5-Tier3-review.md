@@ -488,3 +488,150 @@ Forward-looking, not blocking T3:
 ---
 
 _Review by skeptical-reviewer session, 2026-05-01._
+
+---
+
+## Pre-merge review addendum — T3-rev-A / T3-rev-B
+
+**Date:** 2026-05-01 (second-pass, Sonnet)
+**Suite:** 683/683 green under both `pytest -q` and `pytest -W error::DeprecationWarning -q`.
+**Scope:** Review of the T3-rev-A (Position/Institute column split) and T3-rev-B (per-row interview blocks) commits that landed after the first-pass review above.
+
+### What changed since the first-pass review
+
+| Commit | Change |
+|--------|--------|
+| `ba7cd47` | DESIGN §8.3 + wireframes amended for T3-rev: Position/Institute split + per-row block architecture (Finding #2 drift **resolved**) |
+| `ec3228e` | Tests for T3-rev-A Position/Institute split added |
+| `1d73ebc` | Page: Position/Institute split in 7-column table |
+| `015371b` | Tests rewritten for T3-rev-B per-row blocks |
+| `f116dbf` | Page: single `apps_interviews_form` replaced by per-row `apps_interview_{id}_form` blocks |
+| `1cbbd9f` | Tracker rollup |
+
+Net test change: 676 → 683 (+7). Six new tests land across `TestApplicationsPageTable`, `TestApplicationsTableColumnConfig`, and `TestApplicationsInterviewSave`; one old test (`test_two_dirty_rows_call_update_interview_twice`) was retired and replaced by `test_clicking_one_row_save_does_not_persist_sibling_row`.
+
+### First-pass findings status
+
+| # | Severity | Finding | Status |
+|---|----------|---------|--------|
+| 1 | 🟠 | Toast order inconsistency (Added vs Promoted) | **Resolved** — first-pass inline fix, now also reflected in DESIGN §8.3 line 615 |
+| 2 | 🟠 | DESIGN §8.3 D-B drift (format selectbox, Delete label) | **Resolved** — DESIGN amended in commit `ba7cd47` |
+| 3 | 🟡 | Test gap on toast ordering | **Resolved** — `test_added_toast_fires_before_promoted_toast` |
+| 4 | 🟡 | Test gap on sibling-row draft survival | **Resolved** — `test_save_one_row_preserves_sibling_row_draft` |
+| 5 | 🟡 | Test gap on partial Save failure path | Deferred — still not landed |
+| 6 | 🟡 | Add/Delete toast wording asymmetry (no seq on Add) | **Resolved by side-effect** — T3-rev-B Save toast now reads `"Saved interview {seq}."` (singular + seq); all three lifecycle toasts now carry a sequence |
+| 7 | 🟢 | Defensive `seq is None` guard in dialog | Deferred |
+| 8 | 🟢 | Source-grep test for `type="primary"` on Confirm Delete | Deferred |
+| 9 | ℹ️  | `[APPLIED]` literal in `pages/1_Opportunities.py:395` comment | Carry-over (seventh tier) |
+
+### New findings — pre-merge pass
+
+| # | File · Line | Issue | Severity | Status |
+|---|-------------|-------|----------|--------|
+| 10 | `pages/2_Applications.py` line 422 (pre-fix) | **Stale comment**: "T3 adds a sibling `apps_interviews_form` inside the same container above the detail form" — `apps_interviews_form` was retired in T3-rev-B; all interview widgets now live in per-row `apps_interview_{id}_form` blocks. A future maintainer reading this comment would believe the single-form architecture is still in place. | 🟡 stale doc | **Fixed inline** — rewritten to name T3-rev-B's per-row blocks and note the T3-A retirement. |
+| 11 | `pages/2_Applications.py` lines 578-586 (pre-fix) | **Stale comment**: "Per-row widgets (date_input, selectbox, text_input) live inside `apps_interviews_form`" — same retired-form reference. The adjacent code immediately below uses the correct `apps_interview_{_iid}_form` key, so the disconnect is jarring: comment says one form, code uses N forms. | 🟡 stale doc | **Fixed inline** — rewritten to describe the T3-rev-B per-row block architecture (each row = `apps_interview_{id}_form`, holding heading + detail + Save submit + per-row Delete below). |
+| 12 | `tests/test_applications_page.py` `TestApplicationsInterviewSave` | **Test gap**: The T3-rev-B per-row Save handler sets `_applications_skip_table_reset = True` (page line 894) before `st.rerun()` to preserve selection across the post-Save dataframe-event-reset (gotcha #11). T2-A's analogous handler has two pinning tests: `test_save_preserves_selection` and `test_save_handler_sets_skip_table_reset_flag`. T3-rev-B's handler has neither — a regression that drops the flag would lose the card selection after every interview Save. | 🟡 polish | Documented; defer. |
+| 13 | `pages/1_Opportunities.py:395` | `[APPLIED]` literal in comment (carry-over from Finding #9). | ℹ️ carry-over | Carry-over (seventh→eighth tier). |
+
+### Fixes applied in this addendum
+
+**Two stale-comment fixes (Findings #10 and #11):**
+
+- **Line 422**: "T3 adds a sibling `apps_interviews_form`…" → "T3 adds per-row `apps_interview_{id}_form` blocks (T3-rev-B; the T3-A single-form `apps_interviews_form` was retired)…"
+- **Lines 578-586**: "widgets live inside `apps_interviews_form`; the Add button lives OUTSIDE" → "T3-rev-B: each interview is a self-contained per-row block — `apps_interview_{id}_form` (border=False) holding heading + detail row + per-row Save submit, plus a per-row Delete button OUTSIDE the form…"
+
+Both fixes are purely in comments; no logic changed. Suite still 683/683 green after.
+
+**NOT fixed:**
+
+- **Finding #12** (per-row Save selection-preservation test): Deferred to a polish pass alongside Finding #5.
+- **Finding #13** (§6 carry-over): Same deferred path as Finding #9.
+
+### Junior-engineer Q&A (addendum)
+
+#### Q-A1 — Why does T3-rev-B's Save handler (line 894) need `_applications_skip_table_reset = True`, and why is the test gap (Finding #12) worth calling out?
+
+**A.** Every time Streamlit reruns the page with new data (e.g., after a DB write + `st.rerun()`), the `st.dataframe` widget resets its selection event. The `selected_rows = list(event.selection.rows)` expression reads from the fresh event, which is now empty — so the else branch pops `applications_selected_position_id`, closing the detail card.
+
+The one-shot flag `_applications_skip_table_reset` is the bypass: when set, the `elif st.session_state.pop("_applications_skip_table_reset", False):` branch consumes the flag (one-shot) and falls through without popping the selection key. Result: card stays open.
+
+T2-A's two pinning tests verify this for the application-level Save handler:
+
+```python
+# test_save_handler_sets_skip_table_reset_flag — verifies the flag is set
+# test_save_preserves_selection — verifies the card survives the rerun
+```
+
+T3-rev-B's per-row Save handler uses the SAME flag (line 894) but has no analogous test. The regression failure mode:
+
+```
+User clicks Save on interview row 1 → 
+   st.rerun() fires WITHOUT skip flag →
+   dataframe event = empty →
+   else branch pops applications_selected_position_id →
+   detail card closes →
+   "Saved interview 1." toast fires but the card is gone
+```
+
+This would be a jarring UX: the user edits an interview, clicks Save, sees the toast — and the card they were editing disappears. Hard to reproduce in automated review (the absence of the skip flag looks like a logic change, not a missing line), easy to miss. Pinning with a test mirrors the T2-A pattern.
+
+The test sketch (deferred to a polish pass):
+
+```python
+def test_per_row_save_preserves_position_selection(self, db):
+    pid = database.add_position(make_position())
+    database.update_position(pid, {"status": config.STATUS_APPLIED})
+    iid = database.add_interview(pid, {"notes": "old"})["id"]
+
+    at = _run_page()
+    _select_row(at, 0)
+
+    at.session_state[_w_interview_notes(iid)] = "new"
+    _keep_selection(at, 0)
+    at.button(key=_w_interview_save(iid)).click()
+    at.run()
+
+    assert SELECTED_PID_KEY in at.session_state, (
+        "Per-row interview Save must preserve applications_selected_position_id "
+        "across the post-Save rerun via _applications_skip_table_reset (gotcha #11)."
+    )
+    assert at.session_state[SELECTED_PID_KEY] == pid
+```
+
+#### Q-A2 — What's the net benefit of T3-rev-B's per-row architecture vs the retired single-form?
+
+**A.** Three concrete improvements over the T3-A single-form:
+
+1. **Sibling-row draft isolation**: T3-A's single form batched ALL dirty rows on Save. The per-row architecture means clicking row 1's Save ONLY commits row 1; row 2's in-flight draft survives untouched. Under T3-A, the only way to discard row 2's accidental edit was to click Cancel / close the page.
+
+2. **Toast granularity**: T3-A said `"Saved interviews."` (ambiguous count). T3-rev-B says `"Saved interview {seq}."` (tells the user exactly which row was committed). This also resolved Finding #6's Add/Delete wording asymmetry as a side-effect — now all three lifecycle events (Add / Save / Delete) carry sequence information.
+
+3. **Delete placement**: T3-A's Delete buttons were in a horizontal `st.columns(N)` row at the bottom (to stay outside the single form). T3-rev-B's Delete button is immediately below the form for its row — the per-row block reads top-to-bottom: heading → date/format/notes → Save → Delete. More natural spatial association.
+
+The cost: each interview renders its own `<form>` in the HTML output, adding minor DOM overhead. At the v1 scale (10²–10³ positions, 1–10 interviews each, DESIGN §3.1), this is negligible.
+
+#### Q-A3 — The DESIGN amendment in `ba7cd47` now accurately describes T3-rev-B. Does that close Finding #2 completely?
+
+**A.** Yes, for this review's scope. The amended DESIGN §8.3 D-B now correctly documents:
+
+- Format selectbox: `[None, *config.INTERVIEW_FORMATS]` with `format_func` rendering `None` as EM_DASH.
+- Delete button label: `🗑️ Delete Interview {seq}` (not just `🗑️`).
+- Toast ordering: action-first / cascade-second (Added-then-Promoted convention).
+
+All three deviations that the first-pass review flagged as undocumented drift are now in DESIGN. A new contributor reading §8.3 D-B would see the correct spec before writing any code.
+
+### Verdict
+
+**Approve — merge.**
+
+- Suite: 683/683 green under both pytest gates.
+- All 🟠 first-pass findings resolved (toast order, DESIGN drift).
+- All 🟡 first-pass findings either resolved (draft survival, ordering test, wording asymmetry) or documented for a polish pass (partial-save failure, selection-preservation test).
+- Two new 🟡 stale-comment findings fixed inline; one new 🟡 test gap documented for a polish pass; one ℹ️ carry-over unchanged.
+- T3-rev-A and T3-rev-B are coherent with DESIGN §8.3, GUIDELINES patterns, and each other.
+
+**Merge sequence:** push branch → open PR → squash-merge → continue to Phase 5 T4 (Recommenders page) on a fresh branch. Polish-pass findings (#5, #12) and carry-over (#13) go into the Phase 5 finish review.
+
+---
+
+_Pre-merge addendum by skeptical-reviewer session, 2026-05-01._
