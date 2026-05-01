@@ -37,7 +37,8 @@ manual steps to run against a pre-existing database.
 - Phase 5 T2-B: cascade-promotion toast surfacing — second `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")` after the Saved toast when `upsert_application` returns `status_changed=True`. Merged via PR #16 (`b9a2c82`).
 
 ### Changed
-- `CHANGELOG.md`: split `[Unreleased]` into a `[v0.5.0]` (2026-04-30) version section at the boundary commit `c93dec0` per Keep a Changelog 1.1.0 (§14.4 application). Phase 5 T1 / T2-A / T2-B essays in `[Unreleased]` collapsed to short bullets pointing at commit hashes + review docs. Pre-v0.5.0 essays preserved verbatim under `[v0.5.0]` as the forensic record from before §14.4 landed. (branch `docs/guidelineupdate`)
+- `CHANGELOG.md`: split `[Unreleased]` into a `[v0.5.0]` (2026-04-30) version section at the boundary commit `c93dec0` per Keep a Changelog 1.1.0 (§14.4 application). Phase 5 T1 / T2-A / T2-B essays in `[Unreleased]` collapsed to short bullets pointing at commit hashes + review docs. Pre-v0.5.0 essays preserved verbatim under `[v0.5.0]` as the forensic record from before §14.4 landed. (`db383e3`)
+- All `.md` files (DESIGN, GUIDELINES, TASKS, roadmap, CHANGELOG, docs/adr/README, docs/dev-notes/*, docs/ui/wireframes, reviews/*): sweep `.md`-suffixed §-section refs to the §14.2 canonical form (`DESIGN §X.Y`, `GUIDELINES §N`). Markdown link URLs in `wireframes.md` are preserved (navigation-bearing per §14.2); only the link text is updated. ~46 instances across 17 files. (`24de8f8`)
 
 ## [v0.5.0] — 2026-04-30 — Phase 4 close (T4–T6) + v1.3 alignment + funnel toggle polish
 
