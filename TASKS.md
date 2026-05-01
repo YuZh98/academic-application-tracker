@@ -408,54 +408,14 @@ _(none)_
   closing Phase 4 (Dashboard). Tag annotation lists the cohesion
   smoke audit + bidirectional funnel disclosure toggle (T6
   amendment) as the headline T6 deliverables.
-- 2026-04-30 — **Phase 4 T6 funnel disclosure-toggle polish complete**
-  on branch `feature/phase-4-tier6-Cohesion`: replaced the pre-T6
-  unidirectional `[expand]` button with a bidirectional disclosure
-  toggle (DESIGN §8.1 T6 amendment); `st.button(type="tertiary")`
-  placed in the funnel subheader row via `st.columns([3, 1])`
-  (mirror of T4 Upcoming idiom); state-keyed labels in
-  `config.FUNNEL_TOGGLE_LABELS` following the project's
-  `<symbol> <verb-phrase>` CTA convention. Solves two user-reported
-  issues — no collapse path + button too heavy for a chart control —
-  in one widget rework. Three-commit TDD round
-  (`test:` red → `feat:` green → `chore:` rollup); 535 → 553 tests
-  passing under both pytest gates. Live AppTest probe confirms the
-  round-trip (False → True → False) with zero exceptions.
-- 2026-04-30 — **Phase 4 T6 cohesion-smoke audit complete** on branch
-  `feature/phase-4-tier6-Cohesion`: `reviews/phase-4-finish-cohesion-smoke.md`
-  pins six cohesion dimensions across the dashboard's five panels with
-  verbatim AppTest renders (populated + empty DB) as evidence; 535 tests
-  green under both pytest gates. Zero 🔴 / 🟠 + two 🟡 polish deferred.
-  Browser captures at 1280 / 1440 / 1680 land in
-  `docs/ui/screenshots/v0.5.0/` once the user runs them manually
-  (harness's macOS sandbox blocks headless screenshot via the preview
-  tool). T6 second + third checkboxes (full review doc + PR + tag
-  `v0.5.0`) still pending.
-- 2026-04-29 — **Phase 4 T5-A green** on branch
-  `feature/phase-4-tier5-RecommenderAlerts`: Recommender Alerts panel
-  wired below the Upcoming row. Subheader stable in both branches;
-  empty `st.info("No pending recommender follow-ups.")`; populated
-  branch groups `get_pending_recommenders()` by `recommender_name`
-  and emits one `st.container(border=True)` per person carrying a
-  `**⚠ {Name}**` header + bullet list of `{institute}: {position_name}
-  (asked {N}d ago, due {Mon D})` lines. 15 new `TestT5RecommenderAlerts`
-  tests green; suite total 519 → 534 under both pytest gates.
-- 2026-04-27 — **v1 plan locked** on branch `docs/v1-planning-pins`:
-  GUIDELINES.md G1/G3/G4 (sentinels list, pre-commit grep, new §13
-  page-authoring procedure); DESIGN.md D-A/D-B (§8.3 confirmation
-  column + inline interview list UI), D-C (§8.4 mailto + LLM-prompts
-  pattern), D-D (§6.3 confirmation_email v1.0-rc drop). Q1–Q8
-  decisions locked.
-- 2026-04-25 — **PR #10 merged** (`d7968e5`): Sub-task 13 reverted —
-  edit panel restored to `st.tabs` after the radio-based tab selector
-  caused two user-reported widget-state-loss bugs. 478 tests green.
-- 2026-04-25 — **PR #9 merged** (`0cb6f77`): skeptical test-reliability
-  + completeness review; 9 hardening commits.
-- 2026-04-25 — **PR #8 merged** (`ace9acb`): v1.3 alignment Sub-tasks
-  1–14 + 6 review follow-ups. Full DESIGN-to-codebase alignment.
-- 2026-04-22 — **v0.4.0** Phase 4 T3 Materials Readiness merged to main (`5ac0f63`)
-- 2026-04-22 — **v0.3.0** Phase 4 T2 Application Funnel merged (`96a5c76`)
-- 2026-04-21 — **v0.2.0** Phase 4 T1 App shell + KPI cards merged (`f49ec5f`)
+
+_Per GUIDELINES §14.5, the section caps at the 10 most-recent items
+and trims anything older than the last shipped tag. **v0.5.0**
+(2026-04-30) is the current boundary; pre-v0.5.0 entries — Phase 4
+T5-A green, T6 cohesion-smoke + funnel-toggle polish, the 2026-04-27
+v1 plan-locking commit, PRs #8/#9/#10, and the v0.2.0/v0.3.0/v0.4.0
+tag entries — are archived in `CHANGELOG.md` under their respective
+version blocks._
 
 For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
