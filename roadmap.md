@@ -19,16 +19,16 @@ without rewriting existing code.
 funnel disclosure toggle, 2026-04-30). Phase 4 closes with this tag;
 the dashboard's five panels are complete (KPI grid, application funnel
 with bidirectional disclosure toggle, Materials Readiness, Upcoming
-timeline, Recommender Alerts). Since v0.5.0, three more PRs have
-merged: PR #15 (Phase 5 T1, `aebbb8b`), PR #16 (Phase 5 T2, `b9a2c82`),
-PR #17 (v1 doc-pins, `40b67e3`). `main` is currently at `b9a2c82`.
+timeline, Recommender Alerts). Since v0.5.0, two more PRs have
+merged: PR #15 (Phase 5 T1, `aebbb8b`) and PR #16 (Phase 5 T2,
+`b9a2c82`). `main` is currently at `b9a2c82`.
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
 **In flight:** `docs/guidelineupdate` — documentation conventions
-cleanup branch. The post-PR-#17 audit identified 8 follow-up cleanups
-(A/B/C/E/F/G/H/D); they're shipping in three Sonnet-evaluated batches.
-Pure docs change; no code/schema/test impact. PR pending after batch 3
-closes.
+cleanup branch carrying both the v1 doc-pins (cleanups #6/#8/#1/#4/#5/#3)
+and the post-audit follow-ups (A/B/C/E/F/G/H/D, shipped in three
+Sonnet-evaluated batches). All 16 cleanups land in PR #17 (open,
+unmerged). Pure docs change; no code/schema/test impact.
 
 **Next up after the doc-cleanup branch merges:** Phase 5 T3 — Inline
 interview list UI on `pages/2_Applications.py` per DESIGN §8.3 D-B
