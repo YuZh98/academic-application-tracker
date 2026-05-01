@@ -53,13 +53,15 @@ SELECTED_PID_KEY      = "applications_selected_position_id"
 EDIT_FORM_SID_KEY     = "_applications_edit_form_sid"
 SKIP_TABLE_RESET_KEY  = "_applications_skip_table_reset"
 
-# T3-A: Interview list widgets and sentinels (DESIGN §8.3 D-B). Per-row
-# widget keys scope to the interview's primary key for stability across
-# reruns: apps_interview_{id}_{date|format|notes}. Pre-seed sentinel
-# tracks which interview ids have been seeded so a freshly-Added row
-# gets pre-seeded without disturbing sibling rows mid-edit.
-INTERVIEWS_FORM_ID         = "apps_interviews_form"
-INTERVIEWS_SAVE_KEY        = "apps_interviews_save"
+# T3-A / T3-rev-B: Interview list widgets and sentinels (DESIGN §8.3
+# D-B). Per-row widget keys scope to the interview's primary key for
+# stability across reruns: apps_interview_{id}_{date|format|notes|save|
+# delete}. T3-rev-B replaced the page-level `apps_interviews_form` +
+# `apps_interviews_save` (single-form architecture) with per-row
+# `apps_interview_{id}_form` + `apps_interview_{id}_save` (each row
+# is a self-contained block). Pre-seed sentinel tracks which interview
+# ids have been seeded so a freshly-Added row gets pre-seeded without
+# disturbing sibling rows mid-edit.
 ADD_INTERVIEW_KEY          = "apps_add_interview"
 INTERVIEWS_SEEDED_IDS_KEY  = "_apps_interviews_seeded_ids"
 
@@ -81,6 +83,12 @@ def _w_interview_format(iid: int) -> str:
 
 def _w_interview_notes(iid: int) -> str:
     return f"apps_interview_{iid}_notes"
+
+
+def _w_interview_save(iid: int) -> str:
+    """T3-rev-B: per-row Save submit button key. Replaces the
+    single-form `apps_interviews_save` key."""
+    return f"apps_interview_{iid}_save"
 
 
 # T3-B: per-row Delete button + @st.dialog confirm. Click sets the
@@ -1723,9 +1731,10 @@ class TestApplicationsInterviewListRender:
         )
 
     def test_empty_list_renders_no_form_only_add_button(self, db):
-        """Position with zero interviews → no per-row widgets, no Save
-        submit button, no form. Only the section header + the Add
-        button render. Sentinel ends as the empty frozenset."""
+        """Position with zero interviews → no per-row widgets, no
+        per-row Save submit buttons, no per-row forms. Only the
+        section header + the Add button render. Sentinel ends as
+        the empty frozenset."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
@@ -1740,14 +1749,25 @@ class TestApplicationsInterviewListRender:
         )
         # Add button renders.
         at.button(key=ADD_INTERVIEW_KEY)  # raises KeyError if absent.
-        # Save submit button does NOT render (no form when empty).
-        with pytest.raises(KeyError):
-            at.button(key=INTERVIEWS_SAVE_KEY)
+        # No per-row Save submit button keys exist when no interviews
+        # are present (per-row architecture means N rows → N save
+        # buttons; 0 rows → 0 save buttons).
+        for btn in at.button:
+            key = getattr(btn, "key", None) or ""
+            assert not (
+                key.startswith("apps_interview_") and key.endswith("_save")
+            ), (
+                f"No per-row Save button should render for an empty "
+                f"interviews list; found unexpected key={key!r}."
+            )
 
     def test_three_interviews_render_three_rows(self, db):
-        """Three DB interviews → three sets of per-row widgets, one per
-        sequence. `get_interviews` orders by sequence ASC; the page
-        does not re-sort."""
+        """Three DB interviews → three self-contained blocks, one per
+        sequence. Each block carries the per-row date / format / notes
+        widgets PLUS a per-row Save submit button (T3-rev-B). The
+        per-row Delete button is pinned in
+        `TestApplicationsInterviewDeleteButton`. `get_interviews`
+        orders by sequence ASC; the page does not re-sort."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         # add_interview auto-assigns sequence 1, 2, 3 in insertion order.
@@ -1758,16 +1778,19 @@ class TestApplicationsInterviewListRender:
         at = _run_page()
         _select_row(at, 0)
 
-        # Each interview id has its date / format / notes widget triple.
+        # Each interview id has its date / format / notes widget triple
+        # AND its own per-row Save submit button (T3-rev-B).
         for iid in (i1, i2, i3):
             try:
                 at.date_input(key=_w_interview_date(iid))
                 at.selectbox(key=_w_interview_format(iid))
                 at.text_input(key=_w_interview_notes(iid))
+                at.button(key=_w_interview_save(iid))
             except KeyError as e:
                 pytest.fail(
-                    f"All three per-row widgets must render for "
-                    f"interview id={iid}; missing widget: {e}"
+                    f"All four per-row block widgets (date / format / "
+                    f"notes / save) must render for interview id={iid}; "
+                    f"missing: {e}"
                 )
 
     def test_widgets_pre_seed_from_db(self, db):
@@ -1865,22 +1888,26 @@ class TestApplicationsInterviewListRender:
 # ── Interview Save handler (T3-A) ─────────────────────────────────────────────
 
 class TestApplicationsInterviewSave:
-    """T3-A: `apps_interviews_form` Save handler computes a per-row
-    dirty diff using `_safe_str`-normalized comparison so NaN-from-NULL
-    doesn't false-positive against an empty widget value, and calls
-    `database.update_interview(id, dirty_fields)` ONCE PER DIRTY ROW.
-    Clean rows skip; failure path uses `st.error` per GUIDELINES §8."""
+    """T3-A / T3-rev-B: per-row Save handler. Each interview row owns
+    its own form `apps_interview_{id}_form` with a per-row Save submit
+    button (`apps_interview_{id}_save`). Clicking row N's Save fires
+    a per-row dirty-diff and commits ONLY row N's dirty fields via
+    `database.update_interview` — the page no longer batches across
+    rows (single page-level form was retired in T3-rev-B). Sibling
+    rows' in-flight drafts survive untouched. Clean clicks skip; the
+    failure path uses `st.error` per GUIDELINES §8 with a per-row
+    sequence-bearing message."""
 
-    def test_clean_form_makes_no_db_writes(self, db, monkeypatch):
-        """Save with no widget changes → 0 `update_interview` calls.
-        Pinned by counting calls via a monkeypatch wrapper."""
+    def test_clean_row_save_makes_no_db_writes(self, db, monkeypatch):
+        """Click a row's Save with no widget changes → 0
+        `update_interview` calls (the per-row dirty-diff is empty)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        database.add_interview(pid, {
+        iid = database.add_interview(pid, {
             "scheduled_date": "2026-05-03",
             "format":         "Video",
             "notes":          "PI to call in",
-        })
+        })["id"]
 
         at = _run_page()
         _select_row(at, 0)
@@ -1893,12 +1920,12 @@ class TestApplicationsInterviewSave:
         monkeypatch.setattr(database, "update_interview", _spy)
 
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
         assert calls == [], (
-            f"Clean form Save must make zero update_interview calls; "
+            f"Clean row Save must make zero update_interview calls; "
             f"got {calls!r}."
         )
 
@@ -1928,7 +1955,7 @@ class TestApplicationsInterviewSave:
 
         at.session_state[_w_interview_date(iid)] = datetime.date(2026, 5, 10)
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
@@ -1965,7 +1992,7 @@ class TestApplicationsInterviewSave:
         # test_save_persists_response_type in T2-A's save tests.
         at.selectbox(key=_w_interview_format(iid)).select("Onsite")
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
@@ -1999,7 +2026,7 @@ class TestApplicationsInterviewSave:
 
         at.session_state[_w_interview_notes(iid)] = "new"
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
@@ -2031,7 +2058,7 @@ class TestApplicationsInterviewSave:
 
         at.session_state[_w_interview_notes(iid)] = ""
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
@@ -2057,7 +2084,7 @@ class TestApplicationsInterviewSave:
 
         at.selectbox(key=_w_interview_format(iid)).select(None)
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
@@ -2068,12 +2095,16 @@ class TestApplicationsInterviewSave:
             f"got format={target['format']!r}."
         )
 
-    def test_two_dirty_rows_call_update_interview_twice(
+    def test_clicking_one_row_save_does_not_persist_sibling_row(
         self, db, monkeypatch,
     ):
-        """Two rows, both dirty → 2 update_interview calls, one per
-        dirty row (DESIGN §8.3 D-B: 'one update_interview call per
-        dirty row')."""
+        """T3-rev-B: per-row Save commits ONLY the row whose Save was
+        clicked. Two rows, both dirty, click row 1's Save → only row 1
+        is persisted. Row 2's draft stays in session_state but is NOT
+        written to DB. (Replaces the retired
+        `test_two_dirty_rows_call_update_interview_twice` from the
+        single-form architecture: under per-row Save, two-row commits
+        require two clicks.)"""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         i1 = database.add_interview(pid, {"notes": "a"})["id"]
@@ -2092,24 +2123,27 @@ class TestApplicationsInterviewSave:
         at.session_state[_w_interview_notes(i1)] = "a-edited"
         at.session_state[_w_interview_notes(i2)] = "b-edited"
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(i1)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
-        # Order is by sequence ASC (matches `get_interviews` ordering).
-        assert calls == [i1, i2], (
-            f"Two-dirty-rows Save must call update_interview twice in "
-            f"sequence order; got calls={calls!r}."
+        # Only row 1 hits update_interview; row 2's draft is held in
+        # session_state, not persisted.
+        assert calls == [i1], (
+            f"Per-row Save must commit ONLY the clicked row; expected "
+            f"one call for id={i1}, got calls={calls!r}."
         )
 
-    def test_clean_row_skipped_when_other_dirty(self, db, monkeypatch):
-        """Two rows; only one dirty → 1 call (not 2). Pins the per-row
-        dirty-diff invariant — a clean row must NOT generate a spurious
-        write just because a sibling row is dirty."""
+    def test_clean_row_save_skipped_when_other_dirty(self, db, monkeypatch):
+        """Click row N's Save with no edits to row N — even when a
+        sibling row M is dirty in session_state, NO update fires.
+        Pins the per-row dirty-diff invariant: a clean row's Save
+        click must not cascade through siblings (the architecture
+        is per-row, not page-level)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        i_dirty = database.add_interview(pid, {"notes": "old"})["id"]
-        i_clean = database.add_interview(pid, {"notes": "stays"})["id"]
+        i_target_clean = database.add_interview(pid, {"notes": "old"})["id"]
+        i_other_dirty = database.add_interview(pid, {"notes": "stays"})["id"]
 
         at = _run_page()
         _select_row(at, 0)
@@ -2121,25 +2155,102 @@ class TestApplicationsInterviewSave:
             return original(interview_id, fields)
         monkeypatch.setattr(database, "update_interview", _spy)
 
-        at.session_state[_w_interview_notes(i_dirty)] = "new"
+        # Make the OTHER row dirty in session_state, then click the
+        # clean row's Save. The clean row's diff is empty → no call.
+        at.session_state[_w_interview_notes(i_other_dirty)] = "draft-edit"
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(i_target_clean)).click()
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
-        assert calls == [i_dirty], (
-            f"Save must call update_interview only for the dirty row "
-            f"(id={i_dirty}); the clean row (id={i_clean}) must skip. "
-            f"Got calls={calls!r}."
+        assert calls == [], (
+            f"Clean-row Save must skip even when a sibling is dirty; "
+            f"got calls={calls!r}."
+        )
+
+    def test_save_one_row_preserves_sibling_row_draft(self, db):
+        """T3 review Finding #4 follow-through: clicking row 1's Save
+        with row 2 also dirty → row 1 persists, row 2's session_state
+        draft survives untouched (the rerun re-renders but the per-row
+        pre-seed sentinel guards against re-seeding sibling rows).
+        Pinned by checking the actual session_state value AFTER the
+        post-Save rerun."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        i1 = database.add_interview(pid, {"notes": "row1-old"})["id"]
+        i2 = database.add_interview(pid, {"notes": "row2-old"})["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Edit row 1 (will save) AND row 2 (in-flight draft).
+        at.session_state[_w_interview_notes(i1)] = "row1-new"
+        at.session_state[_w_interview_notes(i2)] = "row2-draft"
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_save(i1)).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        # Row 1 persisted to DB.
+        rows = database.get_interviews(pid)
+        target_1 = rows[rows["id"] == i1].iloc[0]
+        assert target_1["notes"] == "row1-new", (
+            f"Row 1 must persist its dirty value; got "
+            f"notes={target_1['notes']!r}."
+        )
+        # Row 2's draft survives in session_state (NOT saved to DB,
+        # NOT clobbered by re-seed).
+        assert at.session_state[_w_interview_notes(i2)] == "row2-draft", (
+            f"Sibling row's in-flight draft must survive Save of "
+            f"another row (T3 review Finding #4 — the per-row pre-seed "
+            f"sentinel is the load-bearing mechanism). Got "
+            f"{at.session_state[_w_interview_notes(i2)]!r}."
+        )
+        # And the DB still has row 2's old value (the draft is unsaved).
+        target_2 = rows[rows["id"] == i2].iloc[0]
+        assert target_2["notes"] == "row2-old", (
+            f"Row 2's DB cell must NOT be touched by row 1's Save; "
+            f"got notes={target_2['notes']!r}."
+        )
+
+    def test_save_toast_includes_sequence_number(self, db):
+        """T3-rev-B: Save toast wording is `Saved interview {seq}.`
+        (was `Saved interviews.` under the single-form architecture;
+        the singular + sequence form is symmetric with the existing
+        `Deleted interview {seq}.` toast and addresses the T3 review's
+        Finding #6 wording asymmetry by side-effect)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {"notes": "old"})["id"]
+        # add_interview auto-assigns sequence 1.
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        at.session_state[_w_interview_notes(iid)] = "new"
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_save(iid)).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        assert any(
+            "Saved interview" in v and "1" in v for v in toast_values
+        ), (
+            f"Save toast must read 'Saved interview {{seq}}.' with the "
+            f"row's sequence number; got toasts={toast_values!r}."
         )
 
     def test_save_failure_uses_st_error_no_reraise(self, db, monkeypatch):
         """`update_interview` raises → page surfaces `st.error`, does
         NOT re-raise. Per GUIDELINES §8 — re-raise would render the
-        very traceback the handler exists to hide."""
+        very traceback the handler exists to hide. Error message
+        embeds the row's sequence number per T3-rev-B's per-row
+        wording (`Could not save interview {seq}: ...`)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         iid = database.add_interview(pid, {"notes": "old"})["id"]
+        # add_interview auto-assigns sequence 1.
 
         at = _run_page()
         _select_row(at, 0)
@@ -2150,7 +2261,7 @@ class TestApplicationsInterviewSave:
 
         at.session_state[_w_interview_notes(iid)] = "trigger"
         _keep_selection(at, 0)
-        at.button(key=INTERVIEWS_SAVE_KEY).click()
+        at.button(key=_w_interview_save(iid)).click()
         at.run()
 
         assert not at.exception, (
@@ -2158,12 +2269,15 @@ class TestApplicationsInterviewSave:
             f"re-raise); got exception={at.exception!r}."
         )
         error_values = [el.value for el in at.error]
-        assert (
-            any("interview update on fire" in v for v in error_values)
-            or any("Could not save" in v for v in error_values)
+        # Per-row error message includes "Could not save interview {seq}:"
+        # plus the underlying RuntimeError message.
+        assert any(
+            "Could not save interview" in v and "interview update on fire" in v
+            for v in error_values
         ), (
-            f"Save failure must surface via st.error containing the "
-            f"underlying message; got errors={error_values!r}."
+            f"Save failure must surface via st.error with the per-row "
+            f"sequence-bearing message AND the underlying error text; "
+            f"got errors={error_values!r}."
         )
 
 
