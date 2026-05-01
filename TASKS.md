@@ -326,35 +326,6 @@ _(none)_
   cascade-promotion toast surfacing. Suite 586 → 638 under both pytest
   gates. Detailed forensic record in commit messages + the
   [`phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md) review.
-- 2026-04-30 — **Phase 5 T2-A green** on branch
-  `feature/phase-5-tier2-ApplicationDetailCard`: editable
-  Application detail card behind row selection. `apps_table` made
-  selectable (`on_select="rerun"`, `selection_mode="single-row"`,
-  `column_config` widths source-grep-pinned per gotcha #15);
-  selection-resolution block resolves to
-  `applications_selected_position_id` (page-prefixed sentinels
-  `_applications_edit_form_sid`, `_applications_skip_table_reset`
-  per user direction — long-form `applications` avoids confusion
-  with `app.py`). **Asymmetry vs. Opportunities §8.2**: filter
-  narrowing that excludes the selected row keeps the card open
-  (the page resolves against the unfiltered `df`). Detail card
-  in `st.container(border=True)` (architected for T3's sibling
-  `apps_interviews_form`); header
-  `f"{institute}: {position_name} · {STATUS_LABELS[raw]}"`; inline
-  "All recs submitted: ✓ / —". `st.form("apps_detail_form")` with
-  8 widgets; pre-seed gates on form-id sentinel; Save handler
-  calls `database.upsert_application(propagate_status=True)`,
-  fires `st.toast`, sets the skip-flag + pops the sentinel + reruns;
-  failure path → `st.error`, sentinel survives. New helper
-  `_coerce_iso_to_date(v)` mirrors Opportunities F5. R1/R3
-  cascade-promotion toast lands in T2-B. 43 new tests across five
-  classes in `test_applications_page.py`; suite 586 → 629 under
-  both pytest gates. Three commits: `test:` red,
-  `feat(applications):` green, `chore(tracker):` rollup. Multi-agent
-  plan critique (Sonnet, 2026-04-30) reshaped the original
-  3-sub-task split into 2 sub-tasks (T2-A includes both selection
-  plumbing AND form/save) since the plumbing-only sub-task would
-  have shipped a placeholder UI surface deleted by the next commit.
 - 2026-04-30 — **Phase 5 T1 Applications page shell complete** on
   branch `feature/phase-5-tier1-ApplicationsPageShell`. Three
   sub-tasks shipped via TDD three-commit cadence per sub-task
