@@ -24,16 +24,13 @@ merged: PR #15 (Phase 5 T1, `aebbb8b`) and PR #16 (Phase 5 T2,
 `b9a2c82`). `main` is currently at `b9a2c82`.
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** `docs/guidelineupdate` — documentation conventions
-cleanup branch carrying both the v1 doc-pins (cleanups #6/#8/#1/#4/#5/#3)
-and the post-audit follow-ups (A/B/C/E/F/G/H/D, shipped in three
-Sonnet-evaluated batches). All 16 cleanups land in PR #17 (open,
-unmerged). Pure docs change; no code/schema/test impact.
+**In flight:** `feature/phase-5-tier3-InterviewManagementUI` — Phase 5 T3
+fully implemented (T3-A + T3-B + T3-rev-A + T3-rev-B) and pre-merge
+review done (2 passes, 13 total findings, 4 inline fixes). PR pending;
+suite 683/683 green under both pytest gates.
 
-**Next up after the doc-cleanup branch merges:** Phase 5 T3 — Inline
-interview list UI on `pages/2_Applications.py` per DESIGN §8.3 D-B
-(`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
-delete, R2-toast surfacing on add).
+**Next up after T3 merges:** Phase 5 T4 — Recommenders alert panel on
+`pages/3_Recommenders.py`, grouped by `recommender_name` per DESIGN §8.4.
 
 ---
 
@@ -86,7 +83,7 @@ Per **Q5 Option A**, build Applications page first.
 |------|-------|--------|
 | T1 | Applications page shell (`pages/2_Applications.py`): `set_page_config`, title, default filter (`STATUS_FILTER_ACTIVE` excluding `STATUS_SAVED + STATUS_CLOSED`), read-only six-column table sorted by deadline | ✅ merged via PR #15 (`aebbb8b`). New `database.get_applications_table()` reader; new config sentinel + invariant #12; DESIGN §8.3 D-A amended (per-cell tooltip → inline cell text). 33 new tests; suite 553 → 586 under both gates. |
 | T2 | Application detail card (Applied / Confirmation / Response / Result / Notes — editable via `st.form`) per DESIGN §8.3 D-A | ✅ merged via PR #16 (`b9a2c82`). Editable detail card behind row selection (T2-A) + cascade-promotion toast surfacing on R1/R3 (T2-B). 52 new tests; suite 586 → 638. |
-| T3 | Inline interview list UI (`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated delete, R2-toast on add) per DESIGN §8.3 D-B | ⏳ pending |
+| T3 | Inline interview list UI — per-row `apps_interview_{id}_form` blocks, `@st.dialog`-gated delete, R2-toast on add per DESIGN §8.3 D-B | 🔄 pre-merge review done; PR pending |
 | T4 | Recommender alert panel (`pages/3_Recommenders.py`) — grouped by recommender_name | ⏳ pending |
 | T5 | Recommenders table + add form + inline edit | ⏳ pending |
 | T6 | Reminder helpers per DESIGN §8.4 D-C — locked-body mailto + `LLM prompts (N tones)` expander | ⏳ pending |
