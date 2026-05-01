@@ -366,7 +366,7 @@ they are not defects.
 
 ---
 
-## 11. Git Workflow — Summary
+## 11. Git Workflow
 
 **Branches:** `main` is stable; all work on `feature/<name>`; merge via PR.
 
@@ -396,9 +396,7 @@ publishable release; `v1.x.y` post-v1.
 - [ ] `git diff --staged` shows only intended changes
 - [ ] `postdoc.db` is not staged
 
-**For depth** — branching details, commit-granularity examples, undo levels,
-tagging mechanics, "when you're stuck" — see
-[`docs/dev-notes/git-workflow-depth.md`](docs/dev-notes/git-workflow-depth.md).
+For branching, commit-granularity, undo levels, and tagging mechanics in depth, see [`docs/dev-notes/git-workflow-depth.md`](docs/dev-notes/git-workflow-depth.md).
 
 ---
 
@@ -455,9 +453,7 @@ DESIGN §8.x for each page's panel/widget contract.
 
 ## 14. Documentation Conventions
 
-The project's narrative lives in markdown. This section sets the rules
-that keep markdown files coherent across phases. For review-doc structure
-see §10; for git-side rules (commit-prefix, tagging) see §11.
+For review-doc structure see §10; for git-side rules see §11.
 
 ### 14.1 File-header schema
 
@@ -471,8 +467,7 @@ title. Required fields by doc class:
 | Review (`reviews/*`) | **Branch:** · **Scope:** · **Stats:** (optional) · **Verdict:** |
 | ADR (`docs/adr/ADR-*.md`) | **Status:** · **Date:** · **Deciders:** (per `docs/adr/README.md` template) |
 
-Tracker docs (`TASKS.md`, `roadmap.md`, `CHANGELOG.md`) keep their
-existing section conventions — they are not authoring-class.
+Tracker docs (`TASKS.md`, `roadmap.md`, `CHANGELOG.md`) are not authoring-class; their conventions live in §14.4 and §14.5.
 
 ### 14.2 Cross-reference canonical form
 
@@ -484,7 +479,7 @@ load-bearing. Mixed shapes in the same prose are a 🟠 drift finding.
 
 | Class | Length budget | When to expand |
 |---|---|---|
-| Spec (`DESIGN`) | Whatever the spec needs | Architectural change |
+| Spec (`DESIGN`) | (no cap) | Architectural change |
 | Guideline (this file) | Scannable; bullets > prose | New convention |
 | Dev-note | One topic per file; 50–400 lines | Reproduced + pinned by test |
 | ADR | 1–3 pages with template | Hard-to-reverse architectural decision |
@@ -492,7 +487,7 @@ load-bearing. Mixed shapes in the same prose are a 🟠 drift finding.
 | Review (standard) | + 5–8 Q&A | Default for tier work |
 | Review (deep: > 8 findings, bug repro, architecture) | + verbatim source dumps OK | Bug-fix rounds, DESIGN reviews |
 
-The schema is locked at §10; this table sets the depth default.
+Review structure itself is locked at §10.
 
 ### 14.4 CHANGELOG discipline
 
@@ -540,8 +535,8 @@ the SQL or manual steps. One block per version.
 
 `TASKS.md` is a sprint tracker, not a project history. The
 `Recently done` section caps at the **10 most recent items**; items
-older than the last shipped version tag are trimmed (they live in
-`CHANGELOG.md` under their version block — that's the durable record).
+older than the last shipped version tag are trimmed and live in
+`CHANGELOG.md` under their version block.
 
 `Current sprint` uses `- [ ]` / `- [x]` checkboxes — top-level boxes
 are tiers; sub-task boxes nest. When all sub-tasks under a tier check,
@@ -553,24 +548,21 @@ the tier rolls up to `Recently done` on the next `chore:` commit.
 layout (column widths, exact emoji choice, ASCII alignment).
 
 It is NOT intent-only for **column order**, **panel ordering**, or
-**panel presence**. A wireframe whose Date column appears before the
-Days-Left column when `DESIGN §8.1` specifies the opposite is a 🟠
-finding (drift), not 🟡 (polish). Treat structural divergences from
-`DESIGN` as bugs.
+**panel presence**. Structural divergence from `DESIGN` is a 🟠
+finding (drift), not 🟡 (polish).
 
 ### 14.7 Reviews folder index
 
 `reviews/` carries a `README.md` index — one row per review, columns
-`(date, scope, branch, verdict, link)`. Append on each new review;
-file timestamps order naturally, so the index is reverse-chronological
-or chronological by author preference.
+`(date, scope, branch, verdict, link)`. Reverse-chronological;
+prepend on each new review.
 
 Naming: `phase-<N>-tier<M>-review.md` (lowercase `tier`); date-stamped
 one-offs use `<topic>-YYYY-MM-DD-review.md`.
 
 ### 14.8 What lives where
 
-Decision-class content has competing homes. Resolve in this order:
+Pick the home for decision-class content in this order:
 
 | Content | Home | Why |
 |---|---|---|
@@ -583,7 +575,5 @@ Decision-class content has competing homes. Resolve in this order:
 | Sprint state | `TASKS.md` | Hand-maintained per §14.5 |
 | Phase planning | `roadmap.md` | Phases + ship criteria + post-v1 backlog |
 
-When the same decision could land in two of these, pick the one higher
-on the table. Content that belongs in the index (`DESIGN §5.3`) but
-lands only in the recipe file (`extending.md`), or vice versa, is a
-🟠 drift finding.
+Content placed in a lower-priority home when a higher one applies is
+a 🟠 drift finding.
