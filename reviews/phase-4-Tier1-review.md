@@ -3,6 +3,7 @@
 **Branch:** `feature/phase-4-tier1` (12 commits ahead of `main`)
 **Scope:** T1-A (test scaffold) + T1-B (app shell + KPI grid skeleton) + T1-C (refresh button + KPI count wiring) + T1-D (Next-Interview KPI wiring) + T1-E (empty-DB hero + CTA)
 **Stats:** `app.py` 13 → 124 lines; `tests/test_app_page.py` new file, +407 lines, 23 tests across 4 classes; **246 total tests passing, 0 deprecation warnings**.
+**Verdict:** T1 mergeable in isolation; locked plan packages T1–T5 into one PR at T6.
 **Reviewer attitude:** Skeptical. Trust nothing. Question every implicit assumption. Verify every Streamlit / pandas API claim.
 
 ---
@@ -292,7 +293,7 @@ It could, with three downsides:
 
 ### Q16. The KPI labels (`"Tracked"`, `"Applied"`, `"Interview"`, `"Next Interview"`) are duplicated between `app.py` and `tests/test_app_page.py`. Isn't that a violation of DRY?
 
-Intentional. The labels are the **UI contract** locked in `DESIGN.md §app.py` and `PHASE_4_GUIDELINES.md`. The test exists to **regression-detect drift** in either direction:
+Intentional. The labels are the **UI contract** locked in `DESIGN §app.py` and `PHASE_4_GUIDELINES.md`. The test exists to **regression-detect drift** in either direction:
 
 - If `app.py` renames `"Tracked"` → `"Active"`, the test fails.
 - If `app.py` reorders the columns, the test fails (it asserts the full list `== KPI_LABELS`, not just set membership).

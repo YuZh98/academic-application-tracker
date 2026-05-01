@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.1 (2026-04-23) | **Applies from:** v0.5 onward
+**Version:** v1.2 | **Last updated:** 2026-04-30 | **Status:** authoritative
 
 ---
 
@@ -20,7 +20,7 @@ source .venv/bin/activate
 
 **Pinned minimum versions** (exact pins in `requirements.txt` after first install):
 
-| Package | Required ≥ | Tested with (v0.4.0) |
+| Package | Required ≥ | Tested with (latest tag) |
 |---------|-----------|----------------------|
 | streamlit | 1.50 | 1.56.0 |
 | plotly | 5.22 | 6.7.0 |
@@ -90,7 +90,7 @@ importing `exports` lazily inside each write function (not at module top).
 ### Page files
 - Filename format: `N_Title.py` where `N` is the sort-order integer (`1_Opportunities.py`)
 - Page title set with `st.title()` as the first visible element
-- From v1.1, `st.set_page_config(page_title=..., layout=...)` sits at the top
+- `st.set_page_config(page_title=..., layout=...)` sits at the top
 
 ---
 
@@ -231,7 +231,7 @@ Failures use `st.error()` with a friendly message.
 Delete confirmations use a modal dialog (see Opportunities-page
 `_confirm_delete_dialog`). AppTest has a quirk here — the outer script must
 re-open the dialog on every rerun while the pending flag is set.
-See `docs/dev-notes/streamlit-state-gotchas.md §3`.
+See dev-notes gotcha #3.
 
 ### Cross-page navigation via `st.switch_page`
 ```python
@@ -242,11 +242,11 @@ if st.button("→ Opportunities"):
 ### Pre-seeding edit forms — use the `_edit_form_sid` sentinel
 Re-seeding widget session_state only works when gated by a selection-id
 sentinel — otherwise Streamlit's widget-value trap keeps the old values.
-See `docs/dev-notes/streamlit-state-gotchas.md §2`.
+See dev-notes gotcha #2.
 
 ### Coerce NaN cells with `_safe_str` before feeding into widgets
 Pandas returns `float('nan')` for NULL TEXT cells, which crashes widget
-protobuf serialisation. See `docs/dev-notes/streamlit-state-gotchas.md §1`.
+protobuf serialisation. See dev-notes gotcha #1.
 
 ---
 
@@ -282,8 +282,6 @@ except Exception as e:
 **Layout**
 
 - Test files live at `tests/test_<module>.py` or `tests/test_<page>.py`.
-  Current files: `test_config.py`, `test_database.py`, `test_exports.py`,
-  `test_opportunities_page.py`, `test_app_page.py`.
 - One test class per logical unit: `Test<TierOrFeature>` (e.g.,
   `TestT3MaterialsReadiness`, `TestQuickAddFormBehaviour`).
 
@@ -307,8 +305,8 @@ except Exception as e:
 - Seed data via `database.add_position()` / `upsert_application()` —
   **never raw SQL** in tests.
 - Shared DB isolation via the `db` fixture in `conftest.py`.
-- `pytest.ini` has `pythonpath = .` so `pytest` runs without `PYTHONPATH=.`
-  prefix (fix scheduled for v1.1 ship-prep).
+- `pytest.ini` has `pythonpath = .` so `pytest` runs without a `PYTHONPATH=.`
+  prefix.
 
 **Element lookup**
 
@@ -342,9 +340,11 @@ Every tier ends with a pre-merge review doc at
 
 1. **Executive summary** — 2–3 sentences; verdict upfront.
 2. **Findings table** — numbered rows, each with file/line, description,
-   severity, status (fixed inline / deferred / kept-by-design).
-3. **Junior-engineer Q&A** — 5–10 questions a reviewer new to the code
-   might ask, answered in the didactic style. This is the teaching layer.
+   severity (icons below), and status (see Status column values below).
+3. **Junior-engineer Q&A** — 5–8 questions for standard reviews; none
+   required for trivial reviews; no hard ceiling for deep reviews
+   (per §14.3 doc tiering). Answered in the didactic style — this is
+   the teaching layer.
 4. **Verdict** — Approve / Approve with nits / Request changes.
 
 **Severity scale**
@@ -355,13 +355,18 @@ Every tier ends with a pre-merge review doc at
 | 🟠 | Drift (doc↔code or code↔code inconsistency) | Fix before merge |
 | 🟡 | Polish (readability, naming, comment gap) | Fix if cheap; defer if costly |
 | 🟢 | Future (post-v1 or v2 concern) | Log in backlog |
+| ℹ️ | Observation (no defect; reader awareness) | None — informational only |
 
-**Kept-by-design observations** belong in the Q&A section, not Findings —
+**Status column values**: `Fixed inline` · `Deferred` · `Backlog` ·
+`Kept by design` · `Carry-over`. Use `Carry-over` for pre-existing items
+the current change does not regress (e.g. an inherited inconsistency
+that previous reviews logged but didn't fix). `Kept by design`
+observations belong in the Q&A section, not in the Findings table —
 they are not defects.
 
 ---
 
-## 11. Git Workflow — Summary
+## 11. Git Workflow
 
 **Branches:** `main` is stable; all work on `feature/<name>`; merge via PR.
 
@@ -377,12 +382,11 @@ they are not defects.
 
 **TDD cadence:** `test:` (red) → `feat:` (green) → `chore:` (tracker rollup).
 
-**Version tags (from v1.1):** `v0.x.0` for each phase shipped; `v1.0.0` at
-first publishable release; `v1.x.y` post-v1. Retroactive tags have been
-applied: `v0.1.0` (Phase 3) · `v0.2.0`–`v0.4.0` (Phase 4 T1–T3).
+**Version tags:** `v0.x.0` for each phase shipped; `v1.0.0` at first
+publishable release; `v1.x.y` post-v1.
 
 **What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/`
-· `CLAUDE.md` · `PHASE_*_GUIDELINES.md` (gitignored from v1.1).
+· `CLAUDE.md` · `PHASE_*_GUIDELINES.md`.
 
 **Pre-commit checklist:**
 - [ ] `pytest tests/ -q` passes
@@ -392,9 +396,7 @@ applied: `v0.1.0` (Phase 3) · `v0.2.0`–`v0.4.0` (Phase 4 T1–T3).
 - [ ] `git diff --staged` shows only intended changes
 - [ ] `postdoc.db` is not staged
 
-**For depth** — branching details, commit-granularity examples, undo levels,
-tagging mechanics, "when you're stuck" — see
-[`docs/dev-notes/git-workflow-depth.md`](docs/dev-notes/git-workflow-depth.md).
+For branching, commit-granularity, undo levels, and tagging mechanics in depth, see [`docs/dev-notes/git-workflow-depth.md`](docs/dev-notes/git-workflow-depth.md).
 
 ---
 
@@ -411,7 +413,7 @@ tagging mechanics, "when you're stuck" — see
 | Modifying `exports/` files by hand | They are generated; edits will be overwritten |
 | `use_container_width=True` | Deprecated → use `width="stretch"` |
 | `r[col] or ""` for DB text pre-seed | NaN is truthy — use `_safe_str(v)` |
-| Tagging new milestones as `v1-phase-N` | Superseded by `v0.x.y` scheme in v1.1 |
+| Tagging new milestones as `v1-phase-N` | Use `v0.x.y` scheme instead (see §11) |
 
 ---
 
@@ -422,8 +424,7 @@ mechanical sequence — see DESIGN §8.0 for cross-page conventions and
 DESIGN §8.x for each page's panel/widget contract.
 
 1. **Filename**: `pages/N_Title.py` where `N` is the next sort-order
-   integer (current map: `1_Opportunities`, `2_Applications`,
-   `3_Recommenders`, `4_Export`).
+   integer.
 2. **First Streamlit call**: `st.set_page_config(page_title="Postdoc Tracker", page_icon="📋", layout="wide")`
    — DESIGN §8.0 + D14. Must precede every other `st.*` call; Streamlit
    raises otherwise.
@@ -447,3 +448,132 @@ DESIGN §8.x for each page's panel/widget contract.
    keys inside (§3 + dev-notes gotcha #4).
 7. **Test file**: `tests/test_<page_name>.py`, one class per logical
    unit (`TestApplicationsTable`, etc., per §9).
+
+---
+
+## 14. Documentation Conventions
+
+For review-doc structure see §10; for git-side rules see §11.
+
+### 14.1 File-header schema
+
+Every authoring-class doc opens with metadata immediately under the
+title. Required fields by doc class:
+
+| Doc class | Required header fields |
+|---|---|
+| Spec / guideline (`DESIGN`, `GUIDELINES`) | **Version:** · **Last updated:** · **Status:** (the doc's own status taxonomy) |
+| Dev-note (`docs/dev-notes/*`) | Title only; cross-refs in body |
+| Review (`reviews/*`) | **Branch:** · **Scope:** · **Stats:** (optional) · **Verdict:** |
+| ADR (`docs/adr/ADR-*.md`) | **Status:** · **Date:** · **Deciders:** (per `docs/adr/README.md` template) |
+
+Tracker docs (`TASKS.md`, `roadmap.md`, `CHANGELOG.md`) are not authoring-class; their conventions live in §14.4 and §14.5.
+
+### 14.2 Cross-reference canonical form
+
+Lock one form: `DESIGN §8.1`, `GUIDELINES §11`, `dev-notes gotcha #16`.
+No `.md` suffix, no `#anchor`, no markdown link unless navigation is
+load-bearing. Mixed shapes in the same prose are a 🟠 drift finding.
+
+### 14.3 Doc tiering — when to add depth
+
+| Class | Length budget | When to expand |
+|---|---|---|
+| Spec (`DESIGN`) | (no cap) | Architectural change |
+| Guideline (this file) | Scannable; bullets > prose | New convention |
+| Dev-note | One topic per file; 50–400 lines | Reproduced + pinned by test |
+| ADR | 1–3 pages with template | Hard-to-reverse architectural decision |
+| Review (trivial: ≤ 3 findings, no surprises) | Exec summary → findings → verdict; no Q&A | Routine merges |
+| Review (standard) | + 5–8 Q&A | Default for tier work |
+| Review (deep: > 8 findings, bug repro, architecture) | + verbatim source dumps OK | Bug-fix rounds, DESIGN reviews |
+
+Review structure itself is locked at §10.
+
+### 14.4 CHANGELOG discipline
+
+A changelog is a navigable record of notable changes. Detail belongs in
+commit messages and review docs; the changelog is an index into them.
+
+#### Structure
+- File `CHANGELOG.md` at repo root. `[Unreleased]` at the top
+  accumulates new entries. On each release tag, rotate `[Unreleased]`
+  to `## [vX.Y.Z] - YYYY-MM-DD` (ISO 8601) in the same commit.
+- Versions ordered latest-first; every version header is clickable
+  via bottom-of-file link references (e.g.
+  `[v0.5.0]: https://github.com/.../releases/tag/v0.5.0` and
+  `[Unreleased]: https://github.com/.../compare/v0.5.0...HEAD`).
+- Within a version, subsections may appear once each, in this order:
+  `### Added` · `### Changed` · `### Fixed` · `### Removed` ·
+  `### Deprecated` · `### Security`. Headings are plain — `### Changed`,
+  never `### Changed — <topic>`.
+
+#### What counts as an entry
+- An entry records a notable change — one a future reader needs to
+  know about. Changes with no observable effect (pure refactors,
+  tests-only commits, formatting, typo fixes) are not notable.
+- One change → one entry, regardless of how many commits implemented it.
+
+#### Entry shape
+- One line per entry, two if a qualifier is genuinely needed; three
+  lines means the detail belongs in the commit message.
+- Imperative mood: "Add X", "Fix Y", "Remove Z".
+- End each entry with a navigation target — commit hash, PR number, or
+  review-doc path.
+- Breaking changes prefix `**Breaking:**`.
+
+#### Migrations
+If a version requires a schema or vocabulary change, add one
+`**Migration:**` block at the end of that version section listing
+the SQL or manual steps. One block per version.
+
+#### Avoid
+- Process narrative — review notes, internal decisions, branch references.
+- Forensic detail — rationale, alternatives considered, file:line refs,
+  test counts. Those live in the commit message body or the review doc.
+
+### 14.5 TASKS.md scope rules
+
+`TASKS.md` is a sprint tracker, not a project history. The
+`Recently done` section caps at the **10 most recent items**; items
+older than the last shipped version tag are trimmed and live in
+`CHANGELOG.md` under their version block.
+
+`Current sprint` uses `- [ ]` / `- [x]` checkboxes — top-level boxes
+are tiers; sub-task boxes nest. When all sub-tasks under a tier check,
+the tier rolls up to `Recently done` on the next `chore:` commit.
+
+### 14.6 Wireframe scope
+
+`docs/ui/wireframes.md` is "intent-only — not pixel-exact" for visual
+layout (column widths, exact emoji choice, ASCII alignment).
+
+It is NOT intent-only for **column order**, **panel ordering**, or
+**panel presence**. Structural divergence from `DESIGN` is a 🟠
+finding (drift), not 🟡 (polish).
+
+### 14.7 Reviews folder index
+
+`reviews/` carries a `README.md` index — one row per review, columns
+`(date, scope, branch, verdict, link)`. Reverse-chronological;
+prepend on each new review.
+
+Naming: `phase-<N>-tier<M>-review.md` (lowercase `tier`); date-stamped
+one-offs use `<topic>-YYYY-MM-DD-review.md`.
+
+### 14.8 What lives where
+
+Pick the home for decision-class content in this order:
+
+| Content | Home | Why |
+|---|---|---|
+| Cross-cutting architectural decisions | `docs/adr/` | Forward-only ADR ledger per `docs/adr/README.md` |
+| Tier-local implementation choices | `reviews/phase-*.md` Q&A | Bound to the change that introduced them |
+| Streamlit / library quirks | `docs/dev-notes/streamlit-state-gotchas.md` | Per-quirk Symptom / Cause / Workaround |
+| Config-extension procedural recipes | `docs/dev-notes/extending.md` | "How": step-by-step walkthrough |
+| Config-extension architectural index | `DESIGN §5.3` | "What changes where": one row per goal |
+| User-facing release narrative | `CHANGELOG.md` | Keep-a-Changelog formatted |
+| Sprint state | `TASKS.md` | Hand-maintained per §14.5 |
+| Phase planning | `roadmap.md` | Phases + ship criteria + post-v1 backlog |
+
+Content placed in a lower-priority home when a higher one applies is
+a 🟠 drift finding.

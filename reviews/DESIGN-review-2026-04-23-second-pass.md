@@ -1,11 +1,12 @@
 # DESIGN.md Review — 2026-04-23 (Second Pass)
 
+**Branch:** `feature/docs-refactor-pre-t4`
+**Scope:** Read-only review of `DESIGN.md` v1.3 (1,026 lines post-extraction) plus its new satellites (`docs/ui/wireframes.md`, `docs/dev-notes/extending.md`, `docs/dev-notes/dev-setup.md`).
+**Verdict:** Approve current state for Phase 5; address new 🔴/🟠 findings in a single `docs(design): v1.4 second-pass cleanup` commit; treat remaining prior 🟡 items as opportunistic cleanup.
 **Reviewer:** Senior UX + Engineering review, follow-up pass
 **Subject:** `DESIGN.md` v1.3 (currently 1,026 lines after recent extraction work)
-**Branch:** `feature/docs-refactor-pre-t4`
 **HEAD at review:** `b7d66df` — Phase 2 wireframe extraction
 **Prior review:** [`DESIGN-review-2026-04-23.md`](DESIGN-review-2026-04-23.md) — 17 findings (F1–F17)
-**Scope:** Read-only. Reviews DESIGN.md plus its new satellites (`docs/ui/wireframes.md`, `docs/dev-notes/extending.md`, `docs/dev-notes/dev-setup.md`).
 **Review criteria:** UX-experience · clarity · stability · extensibility · unambiguity · conciseness · structuredness. No over-engineering; keep v1 realizable.
 
 ---
@@ -214,7 +215,7 @@ The extraction moves created three new files that DESIGN.md now depends on. Quic
 
 **Verdict:** Clean complement to §5.3. The step-by-step recipes are the right genre for a dev-notes file.
 
-**Minor:** the "Switch the tracker profile" section is one sentence ("See DESIGN.md §12.1") — consider either (a) removing it from this file and linking from §5.3 directly to §12.1, or (b) expanding to actual steps. Currently it's the same G4 pattern: a stub earning a section header.
+**Minor:** the "Switch the tracker profile" section is one sentence ("See DESIGN §12.1") — consider either (a) removing it from this file and linking from §5.3 directly to §12.1, or (b) expanding to actual steps. Currently it's the same G4 pattern: a stub earning a section header.
 
 ### `docs/dev-notes/dev-setup.md` (48 lines)
 

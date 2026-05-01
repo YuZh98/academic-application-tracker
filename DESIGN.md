@@ -1,5 +1,5 @@
 # System Design: Postdoc Application Tracker
-**Version:** 1.3 | **Updated:** 2026-04-23 | **Status:** v1 target design (authoritative)
+**Version:** 1.4 | **Last updated:** 2026-04-30 | **Status:** v1 target design (authoritative)
 
 This document is the authoritative design specification. It describes
 **the target design for v1** (what the system will be at v1.0.0 release)
@@ -825,7 +825,7 @@ the full interview sequence.
 Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#applications).
 
 **Behaviour:**
-- **Default filter** excludes positions with status `STATUS_SAVED` or `STATUS_CLOSED` — they are pre-application or withdrawn and have no application data worth showing. The exclusion set is encoded in `config.STATUS_FILTER_ACTIVE_EXCLUDED` (§5.1) and exposed as a single selectbox sentinel `config.STATUS_FILTER_ACTIVE` (`"Active"`); the user can flip to the explicit `"All"` sentinel or a specific status to widen the view.
+- **Status filter selectbox** (`apps_filter_status`): options in display order = `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`; default = `STATUS_FILTER_ACTIVE` (`"Active"`); rendered via `format_func=STATUS_LABELS.get(v, v)` so known status values render through `STATUS_LABELS` while the sentinel labels (`Active`, `All`) fall through to the identity case (they aren't in the dict). `Active` excludes `config.STATUS_FILTER_ACTIVE_EXCLUDED = {STATUS_SAVED, STATUS_CLOSED}` (§5.1) — pre-application and withdrawn statuses with no application data worth showing. `All` applies no exclusion; a specific status narrows the view.
 - **"All recs submitted"** column is a live computation via `database.is_all_recs_submitted(position_id)`; no stored summary.
 - **"Confirmation"** column inlines `confirmation_received` + `confirmation_date` into the cell text:
 

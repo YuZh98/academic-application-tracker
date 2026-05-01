@@ -1,9 +1,11 @@
 # Extending the Tracker — Step-by-Step Recipes
 
+_Procedural "how-to" walkthroughs for common config-only extensions; companion to [DESIGN §5.3](../../DESIGN.md#53-extension-recipes)'s architectural "what-changes-where" index._
+
 Each recipe below is a concrete walkthrough for a common extension.
 For the **concise summary** of what editing each `config.py` constant
 affects (architectural "what → where"), see
-[DESIGN.md §5.3 Extension recipes](../../DESIGN.md#53-extension-recipes).
+[DESIGN §5.3 Extension recipes](../../DESIGN.md#53-extension-recipes).
 This file is the **step-by-step companion** — how to actually do it.
 
 The tracker is designed so most extensions touch only `config.py`;
@@ -64,7 +66,7 @@ sign the extension is architectural, not a routine config change.
 
 ## Switch the tracker profile
 
-See [DESIGN.md §12.1](../../DESIGN.md#121-general-job-tracker--profile-expansion). v1 supports `"postdoc"` only; the hook to add another is in place but not wired.
+See [DESIGN §12.1](../../DESIGN.md#121-general-job-tracker--profile-expansion). v1 supports `"postdoc"` only; the hook to add another is in place but not wired.
 
 ---
 

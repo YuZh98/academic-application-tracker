@@ -1,7 +1,8 @@
 # Phase 3 Tier 4 — Full Code Review
 
+**Branch:** `feature/phase-3-tier4` (baseline `9b84a38`)
 **Scope:** `pages/1_Opportunities.py` — covers T4-A (row selection) through T4-F (Notes tab). The Quick-Add (T1), filter bar (T2), and positions table (T3) sections are reviewed inline where Tier 4 depends on them.
-
+**Verdict:** Approve with fixes F1–F3 applied and F7 pinned by a test; F4–F6 accepted with rationale.
 **Attitude:** skeptical and didactic — every question a junior engineer might ask is fair game, and "it's been that way since Tier 1" is not a defence.
 
 **Baseline:** 190 tests green on `feature/phase-3-tier4` at commit `9b84a38`.

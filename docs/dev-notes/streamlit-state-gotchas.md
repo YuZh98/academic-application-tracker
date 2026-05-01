@@ -1,11 +1,37 @@
 # Streamlit State Gotchas — Reference
 
+_Reproducible Streamlit quirks hit by this codebase (Symptom → Cause → Workaround), pinned by tests where possible. [GUIDELINES §7](../../GUIDELINES.md#7-streamlit-patterns) links here from the Streamlit-patterns section._
+
 Things that are **not** obvious from the Streamlit docs but that this
 codebase has hit in Phase 3/4. Each entry has the symptom, the cause, and
-the workaround. `GUIDELINES.md §7` links here from the Streamlit-patterns
+the workaround. `GUIDELINES §7` links here from the Streamlit-patterns
 section.
 
 All notes verified against **Streamlit 1.56.0** (2026-04-23).
+
+---
+
+## Index
+
+Source comments and review docs cite gotchas by number — use this
+index to jump to the right entry.
+
+1. **NaN in `session_state`** crashes widget serialisation (use `_safe_str`)
+2. **Widget-value trap on selection change** — the `_edit_form_sid` sentinel
+3. **`@st.dialog`** does not auto-re-render across AppTest reruns
+4. **Form id collision** — must not match any widget key inside the form
+5. **`st.metric`** has no `key=` parameter (identify by label / position)
+6. **`AppTest.session_state`** does not support `.get()`
+7. **`KeyError` on conditional widgets** in AppTest — use try/except helpers
+8. **`numpy.bool_`** is not `True` identity-wise (use `bool(...)` or `==`)
+9. **`Button.type`** in AppTest reports widget-class name, not the `type=` param
+10. **`use_container_width=True`** deprecated — use `width="stretch"`
+11. **`st.dataframe` selection** doesn't persist across data-change reruns
+12. **`get_all_positions()` ordering** shifts row indices on insert
+13. **`pd.isna`** catches both `None` and `float('nan')` — truthy check misses NaN
+14. **`if st.button(...): st.rerun()`** double-reruns (drop explicit rerun for plain buttons)
+15. **`AppTest selectbox.options`** is protobuf string form, not original Python type
+16. **`st.dataframe`** has no per-cell tooltip API in Streamlit 1.56
 
 ---
 
@@ -118,7 +144,7 @@ A grep rule at merge time catches collisions.
 **Cause:** `st.metric` is a display-only primitive. Only stateful widgets
 accept `key=`. `at.metric[i].key` is also always `None` for the same reason.
 
-**Workaround:** identify metrics in tests by **label** (DESIGN.md §8 locks
+**Workaround:** identify metrics in tests by **label** (DESIGN §8 locks
 the four strings "Tracked" / "Applied" / "Interview" / "Next Interview")
 or by **positional order** within `st.columns(4)`. Both double as
 regression checks against the UI contract.
@@ -275,8 +301,11 @@ NaN-from-NULL columns. `pd.isna` is the load-bearing guard anywhere a
 DataFrame cell feeds into session_state or string formatting.
 
 ```python
-for col in ("interview1_date", "interview2_date"):
-    v = row[col]
+# Example from app.py::_next_interview_display (post v1.3 Sub-task 8,
+# which normalized the flat interview1_date / interview2_date columns
+# into the interviews sub-table — single scheduled_date per row).
+for _, row in upcoming.iterrows():
+    v = row["scheduled_date"]
     if pd.isna(v) or v == "" or v < today_iso:
         continue
     # safe to use v as a string / date
@@ -292,10 +321,18 @@ visible bug but a slight performance cost.
 **Cause:** `st.button` already triggers a rerun on click; the explicit
 `st.rerun()` fires a second one.
 
-**Workaround:** leave it if the double-rerun is negligible. The 🔄 Refresh
-button in `app.py` keeps the explicit `st.rerun()` as a self-documenting
-intent marker — future contributors reading the code see "this is here to
-refresh" immediately.
+**Workaround:** drop the explicit `st.rerun()` after a plain `st.button`
+click — Streamlit's automatic rerun is sufficient. The pattern survives
+in the codebase only inside Save / Delete handlers wrapped in `st.form`
+or `@st.dialog`, where the explicit rerun IS required: form-submission
+and dialog Confirm events do not trigger a script rerun automatically,
+so the handler must call `st.rerun()` explicitly to refresh the UI
+after a write. Example sites: every Save handler in
+`pages/1_Opportunities.py`'s `st.form` blocks, the
+`_confirm_delete_dialog` handler.
+
+(Pre-v1.3 the canonical example was the dashboard's 🔄 Refresh button
+on `app.py`; that button was removed in Sub-task 12 per DESIGN D13.)
 
 ---
 
