@@ -293,7 +293,7 @@ It could, with three downsides:
 
 ### Q16. The KPI labels (`"Tracked"`, `"Applied"`, `"Interview"`, `"Next Interview"`) are duplicated between `app.py` and `tests/test_app_page.py`. Isn't that a violation of DRY?
 
-Intentional. The labels are the **UI contract** locked in `DESIGN.md §app.py` and `PHASE_4_GUIDELINES.md`. The test exists to **regression-detect drift** in either direction:
+Intentional. The labels are the **UI contract** locked in `DESIGN §app.py` and `PHASE_4_GUIDELINES.md`. The test exists to **regression-detect drift** in either direction:
 
 - If `app.py` renames `"Tracked"` → `"Active"`, the test fails.
 - If `app.py` reorders the columns, the test fails (it asserts the full list `== KPI_LABELS`, not just set membership).

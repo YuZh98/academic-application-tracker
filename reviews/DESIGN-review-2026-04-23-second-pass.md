@@ -215,7 +215,7 @@ The extraction moves created three new files that DESIGN.md now depends on. Quic
 
 **Verdict:** Clean complement to §5.3. The step-by-step recipes are the right genre for a dev-notes file.
 
-**Minor:** the "Switch the tracker profile" section is one sentence ("See DESIGN.md §12.1") — consider either (a) removing it from this file and linking from §5.3 directly to §12.1, or (b) expanding to actual steps. Currently it's the same G4 pattern: a stub earning a section header.
+**Minor:** the "Switch the tracker profile" section is one sentence ("See DESIGN §12.1") — consider either (a) removing it from this file and linking from §5.3 directly to §12.1, or (b) expanding to actual steps. Currently it's the same G4 pattern: a stub earning a section header.
 
 ### `docs/dev-notes/dev-setup.md` (48 lines)
 

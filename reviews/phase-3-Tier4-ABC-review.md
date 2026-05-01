@@ -239,7 +239,7 @@ Before opening the PR, a junior engineer asked seven questions about the branch'
 
 ### Q1. Why 11 commits for one feature? Shouldn't we squash before merge?
 
-**No — keep `--no-ff` with history preserved.** The commits are not noise; they are a teaching artefact. Each tier has a paired `test:` → `feat:` → `chore:` triplet that makes the TDD cycle readable from `git log`: "here are the failing tests, here is the implementation that made them pass, here is the tracking bump." The final `review(...)` commit groups all post-review fixes with their three regression tests. If a later bisect is needed (e.g., "when did the Quick-Add behaviour change?"), tier-level granularity is the right unit. The project's `GUIDELINES.md §9` explicitly rejects both extremes (one giant commit, or wip-every-line) — this branch is the "just right" middle. Merge with `--no-ff` so the tier boundary is preserved on `main`.
+**No — keep `--no-ff` with history preserved.** The commits are not noise; they are a teaching artefact. Each tier has a paired `test:` → `feat:` → `chore:` triplet that makes the TDD cycle readable from `git log`: "here are the failing tests, here is the implementation that made them pass, here is the tracking bump." The final `review(...)` commit groups all post-review fixes with their three regression tests. If a later bisect is needed (e.g., "when did the Quick-Add behaviour change?"), tier-level granularity is the right unit. The project's `GUIDELINES §9` explicitly rejects both extremes (one giant commit, or wip-every-line) — this branch is the "just right" middle. Merge with `--no-ff` so the tier boundary is preserved on `main`.
 
 ### Q2. `pages/1_Opportunities.py` is now 243 lines and mixes five concerns (title, quick-add, filter, table, edit panel). Time to split it?
 
@@ -263,11 +263,11 @@ It's a defensive coercion, not data repair. The DB column is legitimately nullab
 
 ### Q7. `config.EDIT_PANEL_TABS` is a list, but the page indexes into `tabs[0]..tabs[3]` by position. What happens if someone adds a 5th tab via config?
 
-Streamlit would render 5 tabs, but only the first 4 would have bodies — the 5th would appear empty. This is a known coupling: **config controls labels; page controls bodies.** The two have to stay in sync. Two reasonable futures: (a) accept the coupling and document it (current choice — cheap, obvious at read time), (b) move to a dict-of-callables in `config` so the page can dispatch by label. Option (b) violates the "config.py is constants only, no functions" rule from `GUIDELINES.md §2`. For a 4-tab UI this won't change often, so (a) is fine. If a 5th tab ever appears, the reviewer should force a compile-time error by asserting `len(config.EDIT_PANEL_TABS) == 4` at the top of the page — a better guard than silent empty tabs.
+Streamlit would render 5 tabs, but only the first 4 would have bodies — the 5th would appear empty. This is a known coupling: **config controls labels; page controls bodies.** The two have to stay in sync. Two reasonable futures: (a) accept the coupling and document it (current choice — cheap, obvious at read time), (b) move to a dict-of-callables in `config` so the page can dispatch by label. Option (b) violates the "config.py is constants only, no functions" rule from `GUIDELINES §2`. For a 4-tab UI this won't change often, so (a) is fine. If a 5th tab ever appears, the reviewer should force a compile-time error by asserting `len(config.EDIT_PANEL_TABS) == 4` at the top of the page — a better guard than silent empty tabs.
 
 ### Q8. Merge strategy — `--no-ff`, `--squash`, or rebase?
 
-**`--no-ff`.** Rationale per `GUIDELINES.md §9`:
+**`--no-ff`.** Rationale per `GUIDELINES §9`:
 - `--squash` would collapse the TDD triplets and hide the review→fix narrative — exactly what we want to preserve for a learning project.
 - Rebase-onto-main would linearise history and drop the tier-boundary signal (the merge commit is the marker that "this is one shipped feature").
 - `--no-ff` creates one merge commit that summarises "Phase 3 Tier 4 A/B/C complete", with all 11 commits reachable through it.

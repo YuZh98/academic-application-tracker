@@ -2,7 +2,7 @@
 
 Things that are **not** obvious from the Streamlit docs but that this
 codebase has hit in Phase 3/4. Each entry has the symptom, the cause, and
-the workaround. `GUIDELINES.md §7` links here from the Streamlit-patterns
+the workaround. `GUIDELINES §7` links here from the Streamlit-patterns
 section.
 
 All notes verified against **Streamlit 1.56.0** (2026-04-23).
@@ -118,7 +118,7 @@ A grep rule at merge time catches collisions.
 **Cause:** `st.metric` is a display-only primitive. Only stateful widgets
 accept `key=`. `at.metric[i].key` is also always `None` for the same reason.
 
-**Workaround:** identify metrics in tests by **label** (DESIGN.md §8 locks
+**Workaround:** identify metrics in tests by **label** (DESIGN §8 locks
 the four strings "Tracked" / "Applied" / "Interview" / "Next Interview")
 or by **positional order** within `st.columns(4)`. Both double as
 regression checks against the UI contract.

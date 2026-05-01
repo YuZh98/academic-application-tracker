@@ -66,7 +66,7 @@ Listing non-changes explicitly because the absence is load-bearing:
 - **Quick Add / filter bar / positions table** — no behavioural change. The selection-resolution block was widened once (to preserve selection while a delete dialog is pending, review Fix #2), but the happy-path behaviour is unchanged — verified by all pre-existing `TestRowSelection` / `TestFilterBarBehaviour` cases remaining green.
 - **Non-opportunities test modules** — `test_database.py`, `test_config.py`, `test_exports.py`, `conftest.py` are byte-identical to main.
 
-This scope discipline is deliberate — GUIDELINES.md §2 ("one layer per PR when possible") — and lets the merge be low-risk despite the large line delta.
+This scope discipline is deliberate — GUIDELINES §2 ("one layer per PR when possible") — and lets the merge be low-risk despite the large line delta.
 
 ---
 
