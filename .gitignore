@@ -37,3 +37,4 @@ postdoc.db
 # See DESIGN.md §4 File Structure and CHANGELOG.md's v1.1 doc refactor entry.
 CLAUDE.md
 PHASE_*_GUIDELINES.md
+*.original.md
