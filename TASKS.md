@@ -18,11 +18,11 @@ Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
 [`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md);
 suite 586 → 638 green under both pytest gates.
 
-Branch (T3): not yet started — next functional work after the
-`docs/guidelineupdate` doc-cleanup branch merges. T3 implements the
-inline interview list UI per DESIGN §8.3 D-B
-(`apps_interview_{id}_*` keying, single Save form, `@st.dialog`-gated
-delete, R2-toast surfacing on add).
+Branch (T3): in flight on `feature/phase-5-tier3-InterviewManagementUI`;
+T3-A shipped (interview list + per-row edit form + Save + Add +
+R2 toast) with suite 638 → 663 green under both pytest gates.
+T3-B (per-row Delete via `@st.dialog`) pending; pre-merge review +
+PR follow at the end of T3.
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -168,6 +168,41 @@ delete, R2-toast surfacing on add).
       `apps_interview_{id}_*` keying, single Save form
       `apps_interviews_form`, `@st.dialog`-gated delete, R2-toast
       surfacing on add when `add_interview` returns `status_changed=True`
+  - [x] T3-A Interview list + per-row edit form + Save + Add +
+        R2 toast — `apps_interviews_form` with date/format/notes
+        per row inside the existing T2 `st.container(border=True)`,
+        `_safe_str`-normalized dirty-diff Save calling
+        `database.update_interview` per dirty row only (clean rows
+        skip), Add button outside the form (Streamlit 1.56 forbids
+        `st.button` inside `st.form`) calling
+        `database.add_interview(sid, {}, propagate_status=True)`
+        with R2 promotion toast on `status_changed=True`. Format
+        selectbox mirrors T2-A's `response_type` pattern:
+        `[None, *INTERVIEW_FORMATS]` with `format_func` rendering
+        `None` as the em-dash glyph — without the leading `None`,
+        a freshly-Added row (`format=NULL`) would default to
+        `INTERVIEW_FORMATS[0]` and silently dirty-write a value
+        the user never chose (Sonnet plan-critique signal).
+        Per-row pre-seed sentinel `_apps_interviews_seeded_ids`
+        (frozenset of seeded ids; pruned via
+        `saved_sentinel & current_ids` on every rerun) preserves
+        sibling-row drafts across Add and prevents zombie ids
+        after delete (Sonnet plan-critique signal). Save handler
+        does NOT pop the sentinel after success (different from
+        T2-A's pop pattern): `update_interview` is a direct write
+        with no normalization, so the widget already reflects DB
+        state — popping would re-seed sibling rows and clobber
+        unsaved drafts. 25 new tests across 4 new classes
+        (`TestApplicationsInterviewListRender`,
+        `TestApplicationsInterviewSave`,
+        `TestApplicationsInterviewAdd`,
+        `TestApplicationsInterviewSentinelLifecycle`); suite
+        638 → 663 under both pytest gates.
+  - [ ] T3-B Per-row Delete via `@st.dialog` confirm before
+        `database.delete_interview(id)`; gotcha #3 re-open trick
+        (outer script re-invokes the dialog while the pending
+        flag is set so AppTest's script-run model can reach
+        Confirm/Cancel handlers).
 - [ ] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
       grouped by `recommender_name`
 - [ ] **T5** Recommenders table + add form + inline edit (`asked_date`,
@@ -321,6 +356,26 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-01 — **Phase 5 T3-A shipped** on branch
+  `feature/phase-5-tier3-InterviewManagementUI` — inline interview
+  list under the existing T2 detail card. Per-row edit form
+  `apps_interviews_form` (date / format / notes widgets keyed
+  `apps_interview_{id}_{date|format|notes}` per DESIGN §8.3 D-B)
+  with `_safe_str`-normalized dirty-diff Save calling
+  `database.update_interview` once per dirty row only; Add button
+  outside the form calling
+  `database.add_interview(sid, {}, propagate_status=True)` with R2
+  promotion toast on `status_changed=True`. Format selectbox mirrors
+  T2-A's `response_type` pattern: `[None, *INTERVIEW_FORMATS]` with
+  em-dash `format_func` for the leading `None`. Per-row pre-seed
+  sentinel `_apps_interviews_seeded_ids` (frozenset; pruned via
+  intersection on every rerun) preserves sibling-row drafts across
+  Add and zombie-id-free across delete. 25 new tests across 4 new
+  classes (`TestApplicationsInterviewListRender`,
+  `TestApplicationsInterviewSave`,
+  `TestApplicationsInterviewAdd`,
+  `TestApplicationsInterviewSentinelLifecycle`); suite 638 → 663
+  under both pytest gates.
 - 2026-04-30 — **PR #16 merged** (`b9a2c82`): Phase 5 T2 (T2-A + T2-B)
   shipped — editable Application detail card behind row selection +
   cascade-promotion toast surfacing. Suite 586 → 638 under both pytest
@@ -370,4 +425,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-04-30 (Phase 5 T2 merged via PR #16 (`b9a2c82`); doc-cleanup branch `docs/guidelineupdate` in flight; Phase 5 T3 next functional work after that branch merges)_
+_Updated: 2026-05-01 (Phase 5 T3-A shipped on `feature/phase-5-tier3-InterviewManagementUI`; T3-B per-row Delete pending)_
