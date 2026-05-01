@@ -266,10 +266,12 @@ from tests.conftest import make_position
 
 
 class TestApplicationsPageTable:
-    """T1-C: read-only Applications table per DESIGN §8.3 + wireframe.
+    """T1-C / T3-rev-A: read-only Applications table per DESIGN §8.3 +
+    wireframe.
 
-    Columns (display order, six total):
-      Position / Applied / Recs / Confirmation / Response / Result
+    Columns (display order, seven total — T3-rev-A split Position from
+    Institute so each is filterable / sortable on its own):
+      Position / Institute / Applied / Recs / Confirmation / Response / Result
 
     Filter behaviour:
       - Default = config.STATUS_FILTER_ACTIVE → hides
@@ -291,15 +293,18 @@ class TestApplicationsPageTable:
     EM_DASH = "—"
 
     DISPLAY_COLUMNS = [
-        "Position", "Applied", "Recs", "Confirmation", "Response", "Result",
+        "Position", "Institute", "Applied", "Recs",
+        "Confirmation", "Response", "Result",
     ]
 
     EMPTY_COPY = "No applications match the current filter."
 
-    def test_table_renders_with_six_display_columns(self, db):
-        """The page must surface the six wireframe columns in this exact
-        order — column rename in T2's detail card or T3's interview list
-        should not silently shift the table's projection."""
+    def test_table_renders_with_seven_display_columns(self, db):
+        """The page must surface the seven wireframe columns in this
+        exact order — Position / Institute split was added in T3-rev-A
+        per DESIGN §8.3 column contract; a column rename in T2's detail
+        card or T3's interview list should not silently shift the
+        table's projection."""
         pid = database.add_position(make_position({"position_name": "P"}))
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         at = _run_page()
@@ -393,18 +398,14 @@ class TestApplicationsPageTable:
             f"Specific-status filter must hide non-matching rows; got {names!r}"
         )
 
-    @pytest.mark.parametrize("institute,expected_label", [
-        ("Stanford", "Stanford: Title One"),
-        ("",         "Title One"),
-        (None,       "Title One"),
-    ])
-    def test_position_column_format(self, db, institute, expected_label):
-        """DESIGN §8.3 + T4 precedent: Position cell is
-        f'{institute}: {position_name}' when institute is non-empty;
-        bare position_name when institute is missing or _safe_str-coerced
-        empty. Pinned across the three NULL/empty/populated cases so a
-        future _safe_str regression on the institute column shows up
-        here rather than as a silent display drift."""
+    @pytest.mark.parametrize("institute", ["Stanford", "", None])
+    def test_position_column_renders_bare_position_name(self, db, institute):
+        """T3-rev-A: DESIGN §8.3 column contract — Position cell renders
+        the bare `position_name`, regardless of institute. The institute
+        is no longer prefixed onto Position; it lives in its own
+        Institute column (see `test_institute_column_*` below). Pinned
+        across the three NULL/empty/populated institute cases so a
+        regression that re-introduces the prefix surfaces here."""
         pid = database.add_position(make_position({
             "position_name": "Title One",
             "institute":     institute,
@@ -413,9 +414,33 @@ class TestApplicationsPageTable:
 
         at = _run_page()
         labels = list(at.dataframe[0].value["Position"])
-        assert labels == [expected_label], (
-            f"Position label mismatch for institute={institute!r}: "
-            f"expected [{expected_label!r}]; got {labels!r}"
+        assert labels == ["Title One"], (
+            f"Position cell must be the bare position_name regardless "
+            f"of institute={institute!r}; got {labels!r}."
+        )
+
+    @pytest.mark.parametrize("institute,expected_cell", [
+        ("Stanford", "Stanford"),
+        ("",         "—"),
+        (None,       "—"),
+    ])
+    def test_institute_column_format(self, db, institute, expected_cell):
+        """T3-rev-A: DESIGN §8.3 column contract — Institute column
+        carries the bare institute string, EM_DASH when empty / NULL.
+        Same _safe_str / _safe_str_or_em coercion path the existing
+        Response and Result columns use; pinning the three cases here
+        catches a regression that pre-seeds NaN into the cell."""
+        pid = database.add_position(make_position({
+            "position_name": "Title One",
+            "institute":     institute,
+        }))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        cells = list(at.dataframe[0].value["Institute"])
+        assert cells == [expected_cell], (
+            f"Institute cell mismatch for institute={institute!r}: "
+            f"expected [{expected_cell!r}]; got {cells!r}."
         )
 
     @pytest.mark.parametrize("received,date,expected_cell", [
@@ -479,10 +504,13 @@ class TestApplicationsPageTable:
 
         at = _run_page()
         names = list(at.dataframe[0].value["Position"])
+        # T3-rev-A: Position is the bare position_name now (Institute
+        # is its own column); the names below are NOT prefixed with
+        # the institute.
         assert names == [
-            "Stanford: Soon Applicant",
-            "Stanford: Late Applicant",
-            "Stanford: No Deadline",
+            "Soon Applicant",
+            "Late Applicant",
+            "No Deadline",
         ], (
             f"Sort must be deadline ASC NULLS LAST; got {names!r}"
         )
@@ -508,15 +536,17 @@ class TestApplicationsPageTable:
 # ── Column widths (T2-A, source-grep) ─────────────────────────────────────────
 
 class TestApplicationsTableColumnConfig:
-    """T2-A: when the table becomes selectable (T2-A makes
-    `on_select='rerun', selection_mode='single-row'` live on
-    apps_table), equal-width columns across six cells look cramped.
-    Add `column_config` with explicit widths — Position wide, the rest
-    narrower. AppTest does not surface column_config on the dataframe
-    element (gotcha #15 — the protobuf serializes the data, not the
-    construction parameters), so the contract is pinned at the source
-    level. Drift here either means the column_config block was deleted
-    or the column-name keys were renamed."""
+    """T2-A / T3-rev-A: when the table becomes selectable
+    (`on_select='rerun', selection_mode='single-row'`), equal-width
+    columns across seven cells look cramped. The page binds explicit
+    widths via `column_config` — Position large (full position_name
+    can be long), Institute medium (T3-rev-A new column),
+    Confirmation medium, others small. AppTest does not surface
+    column_config on the dataframe element (gotcha #15 — the protobuf
+    serializes the data, not the construction parameters), so the
+    contract is pinned at the source level. Drift here either means
+    the column_config block was deleted or the column-name keys were
+    renamed."""
 
     def test_column_config_block_present(self):
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
@@ -528,16 +558,31 @@ class TestApplicationsTableColumnConfig:
         )
 
     def test_position_column_is_wide(self):
-        """Position carries 'institute: position_name' for many rows
-        (T1-C `_format_label`); allocating it the wide slot keeps long
-        labels readable."""
+        """T3-rev-A: Position now carries the bare position_name (the
+        institute moved to its own column). Position keeps the wide
+        slot because position_name itself can be long
+        (e.g., 'Senior Postdoctoral Researcher in Computational
+        Biostatistics'); a regression that drops the wide allocation
+        would crush the most read-heavy cell."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
-        # Match either positional or keyword `label=` form so a future
-        # refactor that re-orders TextColumn arguments doesn't trip.
         assert (
             ('"Position"' in src and 'width="large"' in src)
         ), (
             "Position column must be configured with width='large' "
+            "via st.column_config.TextColumn(...)."
+        )
+
+    def test_institute_column_is_medium(self):
+        """T3-rev-A: Institute is a new column carrying the bare
+        institute string. Medium width balances readability (institute
+        names like 'Massachusetts Institute of Technology' don't fit
+        in 'small' but rarely need 'large') against the seven-column
+        layout's overall width budget."""
+        src = pathlib.Path(PAGE).read_text(encoding="utf-8")
+        assert (
+            ('"Institute"' in src and 'width="medium"' in src)
+        ), (
+            "Institute column must be configured with width='medium' "
             "via st.column_config.TextColumn(...)."
         )
 
