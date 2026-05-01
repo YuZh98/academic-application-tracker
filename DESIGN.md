@@ -594,7 +594,7 @@ Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#a
 
 **Behaviour:**
 - **Status filter selectbox** (`apps_filter_status`): options in display order = `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`; default = `STATUS_FILTER_ACTIVE` (`"Active"`); rendered via `format_func=STATUS_LABELS.get(v, v)` so known status values render through `STATUS_LABELS` while sentinel labels (`Active`, `All`) fall through to identity case (not in dict). `Active` excludes `config.STATUS_FILTER_ACTIVE_EXCLUDED = {STATUS_SAVED, STATUS_CLOSED}` (§5.1) — pre-application + withdrawn statuses w/ no app data worth showing. `All` applies no exclusion; specific status narrows view.
-- **"All recs submitted"** col = live computation via `database.is_all_recs_submitted(position_id)`; no stored summary.
+- **Read-only table column contract.** Renders **seven cols** in display order: **Position** (bare `position_name`, EM_DASH on empty), **Institute** (bare `institute`, EM_DASH on empty), **Applied** (`applied_date` formatted `MMM D` or EM_DASH), **Recs** (`✓` / `—` via `database.is_all_recs_submitted(position_id)` — live, no stored summary), **Confirmation** (D-A inline cell text — see below), **Response** (`response_type` or EM_DASH), **Result** (`result` or EM_DASH). Sort inherited from `database.get_applications_table()` (`deadline_date ASC NULLS LAST, position_id ASC`); page no re-sort.
 - **"Confirmation"** col inlines `confirmation_received` + `confirmation_date` into cell text:
 
     | State | Cell text |
@@ -604,12 +604,15 @@ Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#a
     | `confirmation_received == 1`, `confirmation_date` NULL | `✓ (no date)` |
 
     Raw int never shown.
-- **Interviews** edited as **inline list** under app detail card:
-  - Each row in list = one `interviews` record, ordered by `sequence`. Per-row widgets: `scheduled_date` (`st.date_input`), `format` (`st.selectbox` over `config.INTERVIEW_FORMATS`), `notes` (`st.text_input`), and Delete `🗑️` button. Widget keys scope to interview's primary key for stability across reruns: `apps_interview_{id}_{date|format|notes|delete}`.
-  - Below list, `Add another interview` button (`apps_add_interview`) appends new row; `database.add_interview` computes next `sequence` itself.
-  - Save commits all dirty rows in one click via `apps_interviews_form` form (one `database.update_interview` call per dirty row).
-  - Delete on any row routes through `@st.dialog` confirm before `database.delete_interview(id)`. `interviews` FK CASCADE rooted at `applications.position_id` per §6.2.
-  - On add, if `add_interview` returns `status_changed=True` (R2 fired, see §9.3), page surfaces `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")`.
+- **Interviews** edited as **per-row blocks** under app detail card. Each interview = self-contained block w/ four elements:
+  1. `**Interview {seq}**` heading (`st.markdown`).
+  2. **Detail row** — three widgets in `st.columns([2, 2, 4])`: `scheduled_date` (`st.date_input`), `format` (`st.selectbox` over `[None, *config.INTERVIEW_FORMATS]` w/ `format_func` rendering `None` as EM_DASH so freshly-Added rows where `format` is NULL pre-seed correctly), `notes` (`st.text_input`).
+  3. **Per-row Save submit button** (`st.form_submit_button`, key `apps_interview_{id}_save`) — sits inside the block's per-row form `apps_interview_{id}_form` (`border=False` so the parent `st.container(border=True)` stays the only visual frame). Save commits ONLY this row's dirty fields via `database.update_interview` (page no batches across rows). Toast: `st.toast(f"Saved interview {seq}.")`. Failure: `st.error(f"Could not save interview {seq}: {e}")`, no re-raise (GUIDELINES §8).
+  4. **Per-row Delete button** (`st.button`, key `apps_interview_{id}_delete`, label `🗑️ Delete Interview {seq}`) — sits OUTSIDE the form (Streamlit 1.56 forbids `st.button` inside `st.form`), immediately below the Save line. Routes through `@st.dialog` confirm before `database.delete_interview(id)`. `interviews` FK CASCADE rooted at `applications.position_id` per §6.2.
+
+  Per-row widget keys (full list): `apps_interview_{id}_{date|format|notes|save|delete}`. Per-row form id: `apps_interview_{id}_form`. Blocks separated by `st.divider()` between rows.
+
+  Below the last block, `Add another interview` button (`apps_add_interview`) appends a new row; `database.add_interview` computes next `sequence` itself. On add, if `add_interview` returns `status_changed=True` (R2 fired, see §9.3), page surfaces `st.toast(f"Promoted to {STATUS_LABELS[new_status]}.")` AFTER the `"Added interview."` toast (action-first / cascade-second — matches the T2-B Save handler's Saved-then-Promoted convention).
 - **Pipeline promotions** fire inside `database.upsert_application(propagate_status=True)` and `database.add_interview(propagate_status=True)` — see §9.3. Page does NOT detect transitions; just calls writer and reads returned promotion indicator to surface `st.toast`.
 - **Status selectbox** (read-only here; this page edits applications, not pipeline) shows `STATUS_LABELS[raw]`.
 

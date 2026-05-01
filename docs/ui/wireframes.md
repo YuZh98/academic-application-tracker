@@ -110,13 +110,19 @@ Page source: `pages/2_Applications.py`. See
 ║  │  Applied: Apr 18       All recs submitted: ✓            │  ║
 ║  │  Confirmation: ✓  (received Apr 19)                     │  ║
 ║  │  Response type: Interview Invite ▼  Date: Apr 22        │  ║
-║  │  ──────  Interviews  ──────                             │  ║
-║  │  1.  📅 May 3    Video    (notes)         [ Edit ]      │  ║
-║  │  2.  📅 May 17   Onsite   (notes)         [ Edit ]      │  ║
-║  │  [ + Add another interview ]                            │  ║
-║  │  ──────                                                  │  ║
 ║  │  Result notify date: 📅 ——  Result: Pending ▼           │  ║
 ║  │  Notes: ___________________________________  [ Save ]   │  ║
+║  │  ──────  Interviews  ──────                             │  ║
+║  │  **Interview 1**                                        │  ║
+║  │  📅 May 3      Video ▼      notes______________         │  ║
+║  │  [ Save ]                                               │  ║
+║  │  [ 🗑️ Delete Interview 1 ]                              │  ║
+║  │  ─────────────────────────────────────────────────────  │  ║
+║  │  **Interview 2**                                        │  ║
+║  │  📅 May 17     Onsite ▼     notes______________         │  ║
+║  │  [ Save ]                                               │  ║
+║  │  [ 🗑️ Delete Interview 2 ]                              │  ║
+║  │  [ + Add another interview ]                            │  ║
 ║  └──────────────────────────────────────────────────────────┘  ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
