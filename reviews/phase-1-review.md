@@ -10,7 +10,7 @@
 
 ## Summary
 
-`config.py` is clean, well-structured, and faithful to DESIGN.md §5. Comments are thorough — especially the live-verified `st.badge` color note and the REQUIREMENT_DOCS extension procedure. No critical issues. Five findings were resolved before Phase 2 begins. `requirements.txt` received a provenance header. Two informational notes require no action.
+`config.py` is clean, well-structured, and faithful to DESIGN §5. Comments are thorough — especially the live-verified `st.badge` color note and the REQUIREMENT_DOCS extension procedure. No critical issues. Five findings were resolved before Phase 2 begins. `requirements.txt` received a provenance header. Two informational notes require no action.
 
 ---
 
@@ -64,7 +64,7 @@ PEP 526 module-level variable annotations were absent. Added on all 13 named con
 
 ### F6 — `TRACKER_PROFILE` has no consuming code yet *(Informational — No action)*
 
-`TRACKER_PROFILE = "postdoc"` is defined as forward-looking design (DESIGN.md §11). It will be consumed by `database.init_db()` in Phase 2 and by page files in Phase 3 to filter profile-specific fields. Added a code comment noting the expected consumption points and a warning to remove it if still unused after Phase 3.
+`TRACKER_PROFILE = "postdoc"` is defined as forward-looking design (DESIGN §11). It will be consumed by `database.init_db()` in Phase 2 and by page files in Phase 3 to filter profile-specific fields. Added a code comment noting the expected consumption points and a warning to remove it if still unused after Phase 3.
 
 ---
 

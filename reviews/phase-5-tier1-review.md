@@ -24,7 +24,7 @@ Phase 5 T1 lands the **Applications page shell**: a new `pages/2_Applications.py
 | # | Severity | Location | Description | Status |
 |---|----------|----------|-------------|--------|
 | 1 | 🟡 polish | `pages/2_Applications.py:51` | `_FILTER_ALL = "All"` is a page-local magic literal. Parity with `pages/1_Opportunities.py`'s "All" usage; the user's Q3 directive moved only "Active" to config. | Deferred — promoting "All" to config is a project-wide refactor (touches Opportunities filter too). |
-| 2 | 🟡 drift | DESIGN.md §8.3 D-A | The original D-A wording specified a per-cell tooltip; that API doesn't exist in Streamlit 1.56's `st.dataframe`. Resolution = inline cell text. | Fixed inline — DESIGN.md amended in the T1-C GREEN commit (`8a07db1`); this review doc is the canonical resolution record. |
+| 2 | 🟡 drift | DESIGN §8.3 D-A | The original D-A wording specified a per-cell tooltip; that API doesn't exist in Streamlit 1.56's `st.dataframe`. Resolution = inline cell text. | Fixed inline — DESIGN.md amended in the T1-C GREEN commit (`8a07db1`); this review doc is the canonical resolution record. |
 | 3 | 🟢 future | CHANGELOG.md `[Unreleased]` | Post-v0.4.0 work (v1.3 alignment + Phase 4 T4 + T5 + T6 + this T1) has accumulated under `[Unreleased]`. The `v0.5.0` tag now exists but no `[v0.5.0]` release section sits between `[Unreleased]` and `[v0.4.0]`. | Logged — separate housekeeping commit. Not blocking T1 merge. |
 | 4 | 🟢 future | `pages/2_Applications.py` Confirmation column | If a future Streamlit release adds per-cell tooltips for `st.dataframe`, the inline-text workaround can be reverted to honor the original DESIGN §8.3 D-A wording. | Logged in DESIGN amendment block + this review's Q&A. |
 

@@ -178,7 +178,7 @@ deleted by the next commit.
 
 Per **Q1 Option B** from the 2026-04-27 v1 planning session, the
 existing T4/T5/T6 roadmap structure was preserved (no re-tiering).
-DESIGN.md §8.1 panel rows + empty-state matrix were the contract.
+DESIGN §8.1 panel rows + empty-state matrix were the contract.
 
 - [x] **T4** Upcoming timeline panel on `app.py` — DESIGN §8.1
       (T4-0/T4-0b column contract + T4-A `database.get_upcoming(days)`

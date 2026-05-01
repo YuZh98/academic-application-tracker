@@ -146,7 +146,7 @@ ordering, not a commitment.
 |------|--------|-------|
 | AI-populate quick-add from listing URL | Friend #4 | New **Phase 8**; new dep (anthropic / openai SDK); `prefill: dict` hook in quick-add keeps v1 forward-compatible |
 | Cloud backup of `postdoc.db` (periodic upload to S3 / iCloud / Dropbox) | Friend #6 | Simplest today: drop the project folder into an iCloud/Dropbox-synced location |
-| File attachments on Materials panel (PDF/MD/TeX) | DESIGN.md §11 | Full sketch already in DESIGN; new `attachments` table + FK cascade + `shutil.rmtree` on delete |
+| File attachments on Materials panel (PDF/MD/TeX) | DESIGN §11 | Full sketch already in DESIGN; new `attachments` table + FK cascade + `shutil.rmtree` on delete |
 | Recommender edit inline within Opportunities edit panel | UX | Rather than only on separate Recommenders page |
 | Urgency colored badge / emoji prefix | Phase 7 | Column_config conditional formatting |
 | Offer details sub-table (start date, salary notes, decision deadline) | ADR-001 legacy | New `offers` table linked from `applications` |

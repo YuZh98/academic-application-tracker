@@ -18,10 +18,10 @@ The quick-add form and empty state are structurally sound: the import contract i
 
 | # | File | Line | Issue | Severity |
 |---|------|------|-------|----------|
-| F1 | `pages/1_Opportunities.py` | 43–45 | No `try/except` around `database.add_position()` — violates GUIDELINES.md §8 | 🔴 Critical |
+| F1 | `pages/1_Opportunities.py` | 43–45 | No `try/except` around `database.add_position()` — violates GUIDELINES §8 | 🔴 Critical |
 | F2 | `tests/test_opportunities_page.py` | 20 | `SUBMIT_KEY` hardcodes internal Streamlit key format `"FormSubmitter:{form}-{label}"` — breaks silently on version update | 🟡 Moderate |
 | F3 | `pages/1_Opportunities.py` | 19–26, 31 | Text inputs not `.strip()`ped; whitespace-only `position_name` (e.g., `"   "`) is truthy so bypasses `if not position_name` guard and inserts a blank row | 🟡 Moderate |
-| F4 | `pages/1_Opportunities.py` | 30 | `if submitted:` block lives inside the `with st.expander()` context — GUIDELINES.md §7 shows this pattern outside any container; error/success messages render inside the expander and are hidden when it collapses | 🟢 Minor |
+| F4 | `pages/1_Opportunities.py` | 30 | `if submitted:` block lives inside the `with st.expander()` context — GUIDELINES §7 shows this pattern outside any container; error/success messages render inside the expander and are hidden when it collapses | 🟢 Minor |
 | F5 | `pages/1_Opportunities.py` | 34 | `fields: dict` annotation; Phase 2 review already established `dict[str, Any]` as the project standard | 🟢 Minor |
 
 ---
@@ -37,7 +37,7 @@ st.success(f'Added "{position_name}" to your list.')
 st.rerun()
 ```
 
-**Problem:** If `database.add_position()` raises — e.g., `sqlite3.OperationalError: database is locked`, `disk full`, or a future `UNIQUE` constraint — the exception propagates unhandled. Streamlit renders a full Python traceback in the browser. GUIDELINES.md §8 explicitly shows the pattern to follow:
+**Problem:** If `database.add_position()` raises — e.g., `sqlite3.OperationalError: database is locked`, `disk full`, or a future `UNIQUE` constraint — the exception propagates unhandled. Streamlit renders a full Python traceback in the browser. GUIDELINES §8 explicitly shows the pattern to follow:
 
 ```python
 try:
@@ -104,7 +104,7 @@ with st.expander("Quick Add", expanded=False):
         st.error(...)      # renders inside the expander
 ```
 
-**Problem:** GUIDELINES.md §7 shows `if submitted:` and its side-effect calls (`st.error`, `st.success`) **outside** any containing context manager. When `if submitted:` lives inside the expander, `st.error()` is rendered in the expander's DOM container. If the user collapses the expander — possible after submitting — the error vanishes. More importantly, the guidelines exist to keep page code predictable: feedback should render in the main content area, not nested inside a UI control.
+**Problem:** GUIDELINES §7 shows `if submitted:` and its side-effect calls (`st.error`, `st.success`) **outside** any containing context manager. When `if submitted:` lives inside the expander, `st.error()` is rendered in the expander's DOM container. If the user collapses the expander — possible after submitting — the error vanishes. More importantly, the guidelines exist to keep page code predictable: feedback should render in the main content area, not nested inside a UI control.
 
 **Fix:** Dedent `if submitted:` to the module level (outside the `with st.expander()` block). Error and success messages then render below the expander, always visible.
 
@@ -137,9 +137,9 @@ fields: dict = {
 
 ## What Looks Good
 
-- **Import contract honoured:** `pages/1_Opportunities.py` imports only `streamlit`, `database`, `config` — exactly as required by GUIDELINES.md §2. No `exports` import, no raw SQL.
+- **Import contract honoured:** `pages/1_Opportunities.py` imports only `streamlit`, `database`, `config` — exactly as required by GUIDELINES §2. No `exports` import, no raw SQL.
 - **Controlled vocabularies used correctly:** `config.PRIORITY_VALUES` drives the selectbox; status defaults to `STATUS_VALUES[0]` via `database.add_position()` defaults, not a hardcoded string.
-- **`st.date_input(value=None)` + `.isoformat()`:** Exactly the pattern prescribed by GUIDELINES.md §7. Consistent handling of optional dates.
+- **`st.date_input(value=None)` + `.isoformat()`:** Exactly the pattern prescribed by GUIDELINES §7. Consistent handling of optional dates.
 - **`st.form()` used for the write:** Prevents partial saves from widget interactions — guideline §7 followed.
 - **Test design:** Using real SQLite (no mocks) for integration tests. Catches DB-layer regressions that mock-based tests would miss. Separate per-field structure tests give precise failure messages.
 - **`_run_page()` helper:** Centralises the page-launch + exception-guard pattern. All 16 test methods benefit without repetition.
@@ -164,7 +164,7 @@ After the first submission, `st.rerun()` triggers a re-execution of the page scr
 
 **Q3. Why does the form expander have `expanded=False` (collapsed by default)? Won't new users miss it?**
 
-DESIGN.md §8 specifies this explicitly: the Quick Add expander starts collapsed so the table is the first thing a returning user sees. The primary daily workflow is reviewing existing positions, not adding new ones. For a brand-new user with an empty DB, the empty-state message ("No positions yet — use Quick Add above") acts as the signpost. The "above" is deliberate — it points up to the collapsed expander.
+DESIGN §8 specifies this explicitly: the Quick Add expander starts collapsed so the table is the first thing a returning user sees. The primary daily workflow is reviewing existing positions, not adding new ones. For a brand-new user with an empty DB, the empty-state message ("No positions yet — use Quick Add above") acts as the signpost. The "above" is deliberate — it points up to the collapsed expander.
 
 **Q4. `database.add_position(fields)` receives a `dict` of column names and values. How does it know those column names are safe to put in an SQL `INSERT` statement?**
 
@@ -174,7 +174,7 @@ cols = ", ".join(fields.keys())
 placeholders = ", ".join("?" * len(fields))
 conn.execute(f"INSERT INTO positions ({cols}) VALUES ({placeholders})", vals)
 ```
-The column names come from the dict keys — which in the quick-add form are the same strings as `config.QUICK_ADD_FIELDS` (`"position_name"`, `"institute"`, etc.), all of which are known good column names. The VALUES are parameterised (`?`), so there is no injection risk for the data. The column name substitution via f-string is safe here because the names come from `config.py` constants, never from user input. GUIDELINES.md §5 documents this distinction ("f-strings only for column names from config constants").
+The column names come from the dict keys — which in the quick-add form are the same strings as `config.QUICK_ADD_FIELDS` (`"position_name"`, `"institute"`, etc.), all of which are known good column names. The VALUES are parameterised (`?`), so there is no injection risk for the data. The column name substitution via f-string is safe here because the names come from `config.py` constants, never from user input. GUIDELINES §5 documents this distinction ("f-strings only for column names from config constants").
 
 **Q5. The `test_form_has_X` tests just call `at.text_input(key="qa_X")` and don't assert anything. If the call succeeds, the test passes; if the key doesn't exist, `KeyError` fails the test. Is that intentional?**
 
@@ -184,7 +184,7 @@ Yes, intentionally. `AppTest.__call__(key=...)` raises `KeyError` when the widge
 
 ## Lessons
 
-1. **GUIDELINES.md §8 is mandatory, not advisory.** Every database write in a page file needs a `try/except`. "It's a personal tool" is not an excuse — unhandled exceptions produce confusing user experiences and hide bugs during development.
+1. **GUIDELINES §8 is mandatory, not advisory.** Every database write in a page file needs a `try/except`. "It's a personal tool" is not an excuse — unhandled exceptions produce confusing user experiences and hide bugs during development.
 
 2. **Test keys should be explicit, not inferred.** When you rely on an auto-generated key, you create a hidden dependency on a library implementation detail. Add `key=` to every interactive widget you intend to test.
 

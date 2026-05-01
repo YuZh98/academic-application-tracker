@@ -5,7 +5,7 @@ All notable changes to the Postdoc Tracker are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (with the pre-1.0 convention that each minor bump marks one completed phase
-or tier — see `GUIDELINES.md §11` for the version scheme).
+or tier — see `GUIDELINES §11` for the version scheme).
 
 Versions use the format `v<major>.<minor>.<patch>`. The `[Unreleased]` section
 at the top collects changes on feature branches before they ship.
@@ -19,7 +19,7 @@ manual steps to run against a pre-existing database.
 
 ### Changed
 - GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, TASKS.md scope rules, wireframe-drift severity, reviews folder index, content-routing table). (branch `docs/guidelineupdate`)
-- GUIDELINES.md §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (branch `docs/guidelineupdate`)
+- GUIDELINES §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (branch `docs/guidelineupdate`)
 - `docs/adr/README.md`: clarify post-v1.1 decision deferral policy; update D1–D10 references to acknowledge the D11–D25 additions in `DESIGN §10` as candidate ADR backfills. (branch `docs/guidelineupdate`)
 - `reviews/*.md` (all 20 files): harmonize front-matter to the new §14.1 schema — add missing `**Branch:**` / `**Scope:**` / `**Verdict:**` fields; preserve all existing fields. Pre-branch-workflow reviews (Phase 1–3 Tier 1–3) get `Branch: _(direct-to-main; pre-branch-workflow)_`. (branch `docs/guidelineupdate`)
 
@@ -443,7 +443,7 @@ tests for `days_left` / `urgency` coherence and Date-as-`datetime.date`
 type. Suite total 478 → 497 passing under both `pytest -q` and
 `pytest -W error::DeprecationWarning -q`.
 
-### Changed — DESIGN.md §8.1 Upcoming-panel column contract locked (T4-0 + T4-0b, branch `feature/phase-4-tier4-UpcomingDeadline`)
+### Changed — DESIGN §8.1 Upcoming-panel column contract locked (T4-0 + T4-0b, branch `feature/phase-4-tier4-UpcomingDeadline`)
 
 Documentation-only spec lock-down ahead of the T4-A implementation, so
 T4-A's tests bind to one unambiguous contract. Resolves the §8.1
@@ -492,7 +492,7 @@ ordering, and Status placement).
 
 No code in this commit pair (T4-0 + T4-0b) — pure documentation.
 
-### Changed — DESIGN.md §6.3 confirmation_email v1.0-rc drop committed (branch `docs/v1-planning-pins`)
+### Changed — DESIGN §6.3 confirmation_email v1.0-rc drop committed (branch `docs/v1-planning-pins`)
 
 Documentation-only update closing the deferred-decision flagged in
 DESIGN §6.3 step (c) since the Sub-task 10 migration. No code, no
@@ -509,7 +509,7 @@ the v1.0-rc release.
   in one transaction, plus the `PRAGMA table_info` idempotence check.
   Closes Q4 Option A from the 2026-04-27 planning session.
 
-### Changed — DESIGN.md §8.4 Recommender mailto + LLM-prompts pattern (branch `docs/v1-planning-pins`)
+### Changed — DESIGN §8.4 Recommender mailto + LLM-prompts pattern (branch `docs/v1-planning-pins`)
 
 Documentation-only update locking the Recommenders-page reminder UX
 before Phase 5 starts. No code, no schema, no test impact.
@@ -526,7 +526,7 @@ before Phase 5 starts. No code, no schema, no test impact.
   simple case and an LLM-assisted path for richer drafts without
   introducing an outbound email integration.
 
-### Changed — DESIGN.md §8.3 Applications page UI contracts (branch `docs/v1-planning-pins`)
+### Changed — DESIGN §8.3 Applications page UI contracts (branch `docs/v1-planning-pins`)
 
 Documentation-only update locking two previously-underspecified UI
 contracts on the Applications page before Phase 5 starts. No code,
@@ -703,7 +703,7 @@ columns).
 ### Changed — v1.3 alignment Sub-task 3 (branch `feature/align-v1.3`)
 
 Sub-task 3 swaps the `WORK_AUTH_OPTIONS` and `FULL_TIME_OPTIONS`
-vocabularies to the v1.3 spec (DESIGN.md §5.1 + D22). Both columns
+vocabularies to the v1.3 spec (DESIGN §5.1 + D22). Both columns
 stay plain TEXT with no DDL constraint, so no automatic schema
 migration runs; any dev-DB rows carrying legacy strings remain as
 orphan TEXT until manually translated (see Migration below).

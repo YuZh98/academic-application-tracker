@@ -43,7 +43,7 @@ doc. The review targets **doc quality**, not code parity.
 
 ## 1. Findings table
 
-Severity follows [GUIDELINES.md §10](../GUIDELINES.md) with a doc-review adaptation:
+Severity follows [GUIDELINES §10](../GUIDELINES.md) with a doc-review adaptation:
 
 | Icon | Meaning | Scope |
 |------|---------|-------|
@@ -269,7 +269,7 @@ intent into state transitions.
    hasn't fired.
 
 That said, friend critique pushed to remove it (roadmap.md P1
-backlog). `DESIGN.md §10 D13` — the *target* — already says "No 🔄
+backlog). `DESIGN §10 D13` — the *target* — already says "No 🔄
 Refresh button on the dashboard top bar." The current code still has
 one. Expect the deferred code refactor to delete it.
 
@@ -310,10 +310,10 @@ WHERE status = '<old>'` is fine. An unplanned switch is not.
 a scope next to them. The unscoped claim invites a failure mode you
 didn't think about.
 
-### Q7. "§10 has D1–D25, but the ADR README says 'decisions in DESIGN.md §10 (D1–D10) — those are the original v1.0 decisions.' Is D11–D25 also frozen, or not?"
+### Q7. "§10 has D1–D25, but the ADR README says 'decisions in DESIGN §10 (D1–D10) — those are the original v1.0 decisions.' Is D11–D25 also frozen, or not?"
 
 **Answer.** This is a contradiction between
-[`docs/adr/README.md`](../docs/adr/README.md) and DESIGN.md §10. The
+[`docs/adr/README.md`](../docs/adr/README.md) and DESIGN §10. The
 ADR README was drafted when §10 had ten rows; the refactor added D11–D25
 (or those ranges were always there and the README writer miscounted).
 Either way, the ADR README needs a one-line fix: change "D1–D10" to

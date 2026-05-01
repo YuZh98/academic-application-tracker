@@ -7,7 +7,7 @@ rendered output.
 
 For the data sources, widget behaviour, and empty-state rules that
 back each layout, see
-[DESIGN.md §8 UI Design](../../DESIGN.md#8-ui-design--page-by-page).
+[DESIGN §8 UI Design](../../DESIGN.md#8-ui-design--page-by-page).
 Each section below cross-links its matching DESIGN sub-section.
 
 ---
@@ -15,7 +15,7 @@ Each section below cross-links its matching DESIGN sub-section.
 ## Dashboard
 
 Page source: `app.py`. See
-[DESIGN.md §8.1](../../DESIGN.md#81-apppy--dashboard-home).
+[DESIGN §8.1](../../DESIGN.md#81-apppy--dashboard-home).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -57,7 +57,7 @@ Page source: `app.py`. See
 ## Opportunities
 
 Page source: `pages/1_Opportunities.py`. See
-[DESIGN.md §8.2](../../DESIGN.md#82-pages1_opportunitiespy--positions).
+[DESIGN §8.2](../../DESIGN.md#82-pages1_opportunitiespy--positions).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -92,7 +92,7 @@ Page source: `pages/1_Opportunities.py`. See
 ## Applications
 
 Page source: `pages/2_Applications.py`. See
-[DESIGN.md §8.3](../../DESIGN.md#83-pages2_applicationspy--progress).
+[DESIGN §8.3](../../DESIGN.md#83-pages2_applicationspy--progress).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -155,7 +155,7 @@ for those tiers.
 ## Recommenders
 
 Page source: `pages/3_Recommenders.py`. See
-[DESIGN.md §8.4](../../DESIGN.md#84-pages3_recommenderspy--recommenders).
+[DESIGN §8.4](../../DESIGN.md#84-pages3_recommenderspy--recommenders).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
@@ -185,7 +185,7 @@ Page source: `pages/3_Recommenders.py`. See
 ## Export
 
 Page source: `pages/4_Export.py`. See
-[DESIGN.md §8.5](../../DESIGN.md#85-pages4_exportpy--export).
+[DESIGN §8.5](../../DESIGN.md#85-pages4_exportpy--export).
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
