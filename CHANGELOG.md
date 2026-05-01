@@ -27,6 +27,9 @@ manual steps to run against a pre-existing database.
 - `docs/dev-notes/streamlit-state-gotchas.md` gotcha #13: replace stale `interview1_date` / `interview2_date` example with the post-v1.3-Sub-task-8 `scheduled_date` form (interviews sub-table). (branch `docs/guidelineupdate`)
 - `docs/dev-notes/streamlit-state-gotchas.md` gotcha #14: drop the obsolete 🔄 Refresh-button reference (button was deleted in Sub-task 12 per DESIGN D13); rewrite workaround to point at the surviving Save / Delete-handler use sites. (branch `docs/guidelineupdate`)
 
+### Changed
+- `TASKS.md` `Recently done`: trim per the new §14.5 cap rule — drop pre-v0.5.0 entries (Phase 4 T5-A, T6 cohesion-smoke, T6 funnel-toggle polish, v1 plan-locking commit, PRs #8/#9/#10, v0.2.0/v0.3.0/v0.4.0 tag entries); items survive in CHANGELOG version blocks. (branch `docs/guidelineupdate`)
+
 ### Added — Cascade-promotion toast surfacing (Phase 5 T2-B, branch `feature/phase-5-tier2-ApplicationDetailCard`)
 
 Phase 5 Tier 2-B — the Applications-page Save handler now reads
