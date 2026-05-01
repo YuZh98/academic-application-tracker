@@ -154,6 +154,105 @@ def _coerce_iso_to_date(v: Any) -> datetime.date | None:
         return None
 
 
+@st.dialog("Delete this interview?")
+def _confirm_interview_delete_dialog() -> None:
+    """T3-B: modal confirm dialog for irreversible interview deletion
+    (DESIGN §8.3 D-B). Mirrors the Opportunities-page
+    `_confirm_delete_dialog` pattern.
+
+    The target interview is read from session_state keys
+    `_apps_interview_delete_target_id` (the row's primary key) and
+    `_apps_interview_delete_target_seq` (the sequence number, used in
+    the warning copy so the user knows which row is about to go).
+    Passing via session_state — rather than function arguments — is
+    load-bearing for the gotcha #3 re-open trick: the outer script
+    re-invokes this dialog on every rerun while the pending sentinels
+    are set, so AppTest's script-run model can reach the
+    Confirm/Cancel handlers (Streamlit's own dialog auto-re-render
+    magic does not carry through AppTest).
+
+    Outcomes:
+
+    • Confirm → `database.delete_interview(id)` (a leaf delete; no FK
+      cascade — the `interviews` table is on the child side of the
+      one FK in DESIGN §6.2). On success: pop both pending sentinels,
+      set `_applications_skip_table_reset=True` so the dataframe-event-
+      reset rerun preserves the position selection (gotcha #11),
+      `st.toast(f"Deleted interview {seq}.")`, `st.rerun()` → dialog
+      closes naturally on the next render (no pending sentinels).
+    • Cancel → pop both pending sentinels, set
+      `_applications_skip_table_reset=True` (preserves selection
+      across the rerun), `st.rerun()`. No DB write.
+    • Failure (delete raises) → `st.error(...)` per GUIDELINES §8;
+      sentinels SURVIVE so the dialog re-opens on the next rerun
+      and the user can retry. Mirrors the Opportunities-page
+      failure-preserves-state precedent — there is no DB rollback to
+      undo, the user just gets to try again.
+    """
+    iid: int | None = st.session_state.get(
+        "_apps_interview_delete_target_id"
+    )
+    seq: int | None = st.session_state.get(
+        "_apps_interview_delete_target_seq"
+    )
+    if iid is None:
+        # Defensive: the post-loop guard already filters by
+        # `pending_id in current_ids`, so this branch should be
+        # unreachable in practice. Surfacing a friendly error keeps
+        # behaviour graceful if a future refactor drops the guard.
+        st.error("Delete target was lost — please re-open the dialog.")
+        return
+
+    st.warning(
+        f"Interview {seq} will be permanently deleted. "
+        f"This **cannot be undone**."
+    )
+    col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button(
+            "Confirm Delete",
+            type="primary",
+            key="apps_interview_delete_confirm",
+            width="stretch",
+        ):
+            try:
+                database.delete_interview(iid)
+                st.session_state["_applications_skip_table_reset"] = True
+                st.session_state.pop(
+                    "_apps_interview_delete_target_id", None,
+                )
+                st.session_state.pop(
+                    "_apps_interview_delete_target_seq", None,
+                )
+                st.toast(f"Deleted interview {seq}.")
+                st.rerun()
+            except Exception as e:
+                # GUIDELINES §8: friendly error, no re-raise. Sentinels
+                # survive so the dialog re-opens on the next rerun for
+                # retry — Opportunities-page failure-preserves-state
+                # precedent.
+                st.error(f"Could not delete interview: {e}")
+    with col_cancel:
+        if st.button(
+            "Cancel",
+            key="apps_interview_delete_cancel",
+            width="stretch",
+        ):
+            st.session_state.pop(
+                "_apps_interview_delete_target_id", None,
+            )
+            st.session_state.pop(
+                "_apps_interview_delete_target_seq", None,
+            )
+            # _applications_skip_table_reset preserves the position
+            # selection across the cancel-driven rerun (gotcha #11):
+            # the dataframe widget would otherwise reset its event
+            # and the selection-resolution else-branch would pop
+            # `applications_selected_position_id`.
+            st.session_state["_applications_skip_table_reset"] = True
+            st.rerun()
+
+
 # ── Filter bar ────────────────────────────────────────────────────────────────
 #
 # Default selection = config.STATUS_FILTER_ACTIVE — a sentinel that
@@ -567,6 +666,69 @@ if "applications_selected_position_id" in st.session_state:
                     )
             else:
                 interviews_submitted = False
+
+            # ── Per-row Delete buttons (T3-B; outside the form) ──────
+            #
+            # st.form forbids st.button inside (only st.form_submit_
+            # button is allowed), so the per-row Delete affordances
+            # render in a single horizontal `st.columns(N)` row BELOW
+            # the form rather than inline with each row's widgets.
+            # Each button is labelled `🗑️ Delete Interview {seq}` so
+            # the per-row association stays unambiguous despite the
+            # vertical separation from the form widgets — wireframe
+            # deviation documented in the T3 review (wireframes.md
+            # is intent-only for layout per its line 3).
+            #
+            # Click handler sets the two pending-target sentinels
+            # (`_apps_interview_delete_target_id` + `..._seq`); the
+            # dialog itself opens via the post-loop guard below so
+            # there is exactly one call site for the dialog,
+            # regardless of which button was clicked.
+            if not interviews_df.empty:
+                _delete_cols = st.columns(len(interviews_df))
+                for _col, (_, _iv_row) in zip(
+                    _delete_cols, interviews_df.iterrows(),
+                ):
+                    _iid = int(_iv_row["id"])
+                    _seq = int(_iv_row["sequence"])
+                    with _col:
+                        if st.button(
+                            f"🗑️ Delete Interview {_seq}",
+                            key=f"apps_interview_{_iid}_delete",
+                        ):
+                            st.session_state[
+                                "_apps_interview_delete_target_id"
+                            ] = _iid
+                            st.session_state[
+                                "_apps_interview_delete_target_seq"
+                            ] = _seq
+
+            # ── Dialog re-open guard (T3-B; gotcha #3) ───────────────
+            #
+            # Single dialog call site. Fires whenever the pending-id
+            # sentinel is set AND the id is in the current position's
+            # interviews. The `pending_id in current_ids` check
+            # provides automatic stale-target cleanup: navigating to
+            # a different position (sid changes → current_ids changes)
+            # silently pops the sentinels because the pending id no
+            # longer matches anything in view. Same guard catches the
+            # post-confirm rerun (the deleted id is no longer in
+            # current_ids — but the Confirm handler also pops the
+            # sentinels itself so this is belt-and-suspenders).
+            _pending_delete_id = st.session_state.get(
+                "_apps_interview_delete_target_id"
+            )
+            if _pending_delete_id is not None:
+                if _pending_delete_id in current_ids:
+                    _confirm_interview_delete_dialog()
+                else:
+                    # Stale target — silent cleanup, no error / toast.
+                    st.session_state.pop(
+                        "_apps_interview_delete_target_id", None,
+                    )
+                    st.session_state.pop(
+                        "_apps_interview_delete_target_seq", None,
+                    )
 
             # ── Add button (outside the form per Streamlit 1.56) ─────
             #
