@@ -328,12 +328,18 @@ else:
     # df_filtered too, so iloc[selected_row] in the resolution block
     # below maps to the same row as event.selection.rows[0].
     df_filtered = df_filtered.reset_index(drop=True)
+    # T3-rev-A: split the previously-combined Position cell into TWO
+    # cells per DESIGN §8.3 column contract — Position carries the bare
+    # position_name, Institute carries the bare institute. Both go
+    # through `_safe_str_or_em` so a NULL/NaN cell renders as EM_DASH
+    # rather than crashing the widget protobuf (gotcha #1). The
+    # `_format_label` helper that combined them is still used by the
+    # detail-card header below; only the table render switched to bare
+    # cells.
     display_df = pd.DataFrame({
-        "Position": df_filtered.apply(
-            lambda r: _format_label(r["institute"], r["position_name"]),
-            axis=1,
-        ),
-        "Applied": df_filtered["applied_date"].apply(_format_date_or_em),
+        "Position":  df_filtered["position_name"].apply(_safe_str_or_em),
+        "Institute": df_filtered["institute"].apply(_safe_str_or_em),
+        "Applied":   df_filtered["applied_date"].apply(_format_date_or_em),
         "Recs": df_filtered["position_id"].apply(
             lambda pid: "✓" if database.is_all_recs_submitted(pid) else EM_DASH
         ),
@@ -344,11 +350,16 @@ else:
             axis=1,
         ),
         "Response": df_filtered["response_type"].apply(_safe_str_or_em),
-        "Result": df_filtered["result"].apply(_safe_str_or_em),
+        "Result":   df_filtered["result"].apply(_safe_str_or_em),
     }).reset_index(drop=True)
 
-    # T2-A: column_config locks per-column widths so the selectable
-    # table doesn't collapse to equal-width cells. AppTest can't see
+    # T2-A / T3-rev-A: column_config locks per-column widths so the
+    # selectable table doesn't collapse to equal-width cells. Position
+    # keeps `width="large"` (bare position_name can still be long, e.g.
+    # "Senior Postdoctoral Researcher in Computational Biostatistics").
+    # Institute is `width="medium"` — institute names like "MIT" or
+    # "Stanford" fit easily, but full names like "Massachusetts
+    # Institute of Technology" don't fit in `small`. AppTest can't see
     # column_config (gotcha #15 — the protobuf serializes the data,
     # not the construction kwargs), so the contract is pinned via
     # source-grep in TestApplicationsTableColumnConfig.
@@ -358,6 +369,7 @@ else:
         hide_index=True,
         column_config={
             "Position":     st.column_config.TextColumn("Position",     width="large"),
+            "Institute":    st.column_config.TextColumn("Institute",    width="medium"),
             "Applied":      st.column_config.TextColumn("Applied",      width="small"),
             "Recs":         st.column_config.TextColumn("Recs",         width="small"),
             "Confirmation": st.column_config.TextColumn("Confirmation", width="medium"),
