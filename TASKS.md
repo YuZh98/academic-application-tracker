@@ -19,10 +19,11 @@ Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
 suite 586 → 638 green under both pytest gates.
 
 Branch (T3): T3-A + T3-B + T3 review (9 findings, 2 inline fixes) +
-T3-rev (drift fixes against truth files) all on
-`feature/phase-5-tier3-InterviewManagementUI`. T3-rev-A (Position /
-Institute column split) shipped; suite 638 → 681 green under both
-pytest gates. T3-rev-B (per-row interview block refactor) pending.
+T3-rev (T3-rev-A column split + T3-rev-B per-row block refactor) all
+on `feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 683
+green under both pytest gates. Pre-merge review + PR pending
+(separate steps; not part of T3-rev-B's three TDD commits per the
+user's pause-for-review boundary, mirroring the T2 pattern).
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -243,13 +244,29 @@ pytest gates. T3-rev-B (per-row interview block refactor) pending.
         (3 from `test_institute_column_format` parametrize + 1
         `test_institute_column_is_medium`); suite 676 → 681 under
         both pytest gates.
-  - [ ] T3-rev-B Per-row interview block refactor — replace the
+  - [x] T3-rev-B Per-row interview block refactor — replaced the
         single page-level `apps_interviews_form` with per-row
-        `apps_interview_{id}_form` (`border=False`) blocks; each
-        block carries `**Interview {seq}**` heading +
-        date/format/notes detail row + per-row Save submit button +
-        per-row Delete button (outside the form per Streamlit
-        constraint). `st.divider()` between blocks.
+        `apps_interview_{id}_form` (`border=False` so the parent
+        `st.container(border=True)` stays the only visual frame).
+        Each block carries `**Interview {seq}**` heading + 3-column
+        detail row (date / format / notes) + per-row
+        `st.form_submit_button("Save", key=f"apps_interview_{id}_save")`
+        + per-row Delete button outside the form (Streamlit 1.56
+        forbids `st.button` inside `st.form`). Blocks separated by
+        `st.divider()`. Save handler (`if saves_clicked:`) processes
+        the single (iid, seq) tuple from the click — Streamlit fires
+        at most one form submit per rerun. Toast wording: `Saved
+        interview {seq}.` (singular + sequence; side-effect closes
+        T3 review Finding #6 wording asymmetry). Error wording:
+        `Could not save interview {seq}: {e}`. Seeded-ids sentinel
+        still NOT popped on Save success — load-bearing for the
+        per-row architecture (popping would re-seed sibling rows and
+        clobber drafts). 2 net new test cases (replaced
+        `test_two_dirty_rows_call_update_interview_twice` with
+        `test_clicking_one_row_save_does_not_persist_sibling_row`,
+        added `test_save_one_row_preserves_sibling_row_draft` and
+        `test_save_toast_includes_sequence_number`); suite 681 → 683
+        under both pytest gates.
 - [ ] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
       grouped by `recommender_name`
 - [ ] **T5** Recommenders table + add form + inline edit (`asked_date`,
@@ -403,6 +420,31 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-01 — **Phase 5 T3-rev (T3-rev-A + T3-rev-B) shipped on
+  branch** `feature/phase-5-tier3-InterviewManagementUI` —
+  truth-file alignment for the Applications page. T3-rev-A: split
+  the combined Position cell (`f"{institute}: {position_name}"`)
+  into separate Position + Institute columns per the amended
+  DESIGN §8.3 seven-column contract; both go through
+  `_safe_str_or_em` (NaN→EM_DASH per gotcha #1); column widths
+  Position=large / Institute=medium. T3-rev-B: replaced the single
+  page-level `apps_interviews_form` with per-row
+  `apps_interview_{id}_form` (`border=False`) blocks — each
+  interview is now a self-contained block of {Interview number
+  heading + Detail row + per-row Save submit + per-row Delete} per
+  the user's directive. Streamlit fires at most one form submit
+  per click rerun, so the per-row Save handler (`if saves_clicked:`)
+  processes a single (iid, seq) tuple at a time — sibling rows'
+  in-flight drafts survive the rerun via the per-row pre-seed
+  sentinel `_apps_interviews_seeded_ids` (intersection-pruned
+  frozenset; NOT popped on Save success). Toast / error wording
+  switched to singular + sequence (`Saved interview {seq}.`,
+  `Could not save interview {seq}: {e}`) — closes T3 review
+  Finding #6 wording asymmetry by side-effect. 6 net new test
+  cases (4 from T3-rev-A column tests + 2 from T3-rev-B per-row
+  Save tests minus the retired
+  `test_two_dirty_rows_call_update_interview_twice`); suite 676 →
+  683 under both pytest gates.
 - 2026-05-01 — **Phase 5 T3-rev-A shipped on branch**
   `feature/phase-5-tier3-InterviewManagementUI` — Position / Institute
   column split per the post-T3 truth-file alignment. DESIGN §8.3
@@ -496,4 +538,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-01 (Phase 5 T3-rev-A shipped — Position/Institute column split; T3-rev-B per-row interview block refactor pending; pre-merge review + PR pending after T3-rev-B closes)_
+_Updated: 2026-05-01 (Phase 5 T3-rev-A + T3-rev-B both shipped on `feature/phase-5-tier3-InterviewManagementUI`; pre-merge review + PR pending)_
