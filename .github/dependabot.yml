@@ -1,0 +1,41 @@
+version: 2
+
+# Weekly dependency PRs. Dependabot opens against `main`; the CI workflow
+# (.github/workflows/ci.yml) gates them through both pytest gates + ruff
+# lint + the status-literal grep before merge. Solo-repo workflow: skim
+# the PR, watch CI go green, merge or close.
+
+updates:
+  # Python runtime + dev deps. Dependabot auto-discovers both
+  # `requirements.txt` and `requirements-dev.txt` in this directory.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      # One PR per week for routine minor/patch bumps; majors stay separate
+      # so a Streamlit / pandas major lands as its own reviewable change.
+      python-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Pin the actions used in .github/workflows/*.yml.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "github-actions"
