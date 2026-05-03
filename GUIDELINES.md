@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.2 | **Last updated:** 2026-04-30 | **Status:** authoritative
+**Version:** v1.3 | **Last updated:** 2026-05-02 | **Status:** authoritative
 
 ---
 
@@ -183,8 +183,12 @@ if row["status"] == "[SAVED]": ...
 ```
 - When adding a new document type (e.g., "Portfolio"), add it to `REQUIREMENT_DOCS`
   in `config.py` only. The form, schema migration, and export pick it up.
-- **Grep rule (pre-merge check):**
-  `grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py` must return zero hits.
+- **Grep rule (pre-merge check; also enforced by CI + pre-commit):**
+  `rg --type py -n '\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]' app.py pages/ | rg -v '^[^:]+:[0-9]+:\s*#'` must return zero lines.
+  The `rg -v` filter excludes lines whose content begins with `#`, so
+  explanatory comments (e.g. [pages/1_Opportunities.py:395](pages/1_Opportunities.py)) don't trip the rule.
+  Wired into [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and the
+  `status-literal-grep` hook in [`.pre-commit-config.yaml`](.pre-commit-config.yaml).
 
 ---
 
@@ -388,13 +392,25 @@ publishable release; `v1.x.y` post-v1.
 **What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/`
 · `CLAUDE.md` · `PHASE_*_GUIDELINES.md`.
 
-**Pre-commit checklist:**
+**Pre-commit checklist** (CI re-runs the first three on every push and PR
+via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+- [ ] `ruff check .` clean
 - [ ] `pytest tests/ -q` passes
 - [ ] `pytest -W error::DeprecationWarning tests/ -q` passes
+- [ ] §6 status-literal grep clean (code-only):
+      `rg --type py -n '\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]' app.py pages/ | rg -v '^[^:]+:[0-9]+:\s*#'` returns 0 lines
 - [ ] No `print()` debug left in
-- [ ] §6 status-literal grep clean: `grep -nE "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/*.py` returns 0 hits
 - [ ] `git diff --staged` shows only intended changes
 - [ ] `postdoc.db` is not staged
+
+**Local automation:** install dev deps once per clone, then pre-commit
+runs `ruff --fix` and the status-literal grep on every `git commit`:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
 
 For branching, commit-granularity, undo levels, and tagging mechanics in depth, see [`docs/dev-notes/git-workflow-depth.md`](docs/dev-notes/git-workflow-depth.md).
 
