@@ -7,41 +7,45 @@
 import re
 import sqlite3
 import time
-import pytest
-import pandas as pd
 from datetime import date, timedelta
 
-import database
-import config
-from tests.conftest import make_position
+import pandas as pd
+import pytest
 
+import config
+import database
+from tests.conftest import make_position
 
 # ── Schema / init_db ──────────────────────────────────────────────────────────
 
-class TestInitDb:
 
+class TestInitDb:
     def test_creates_three_tables(self, db):
         with database._connect() as conn:
-            tables = {r["name"] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()}
+            tables = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
         assert {"positions", "applications", "recommenders"} <= tables
 
     def test_creates_indices(self, db):
         with database._connect() as conn:
-            indices = {r["name"] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='index'"
-            ).fetchall()}
-        assert "idx_positions_status"   in indices
+            indices = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            }
+        assert "idx_positions_status" in indices
         assert "idx_positions_deadline" in indices
 
     def test_positions_has_all_req_done_columns(self, db):
         with database._connect() as conn:
-            col_names = {r["name"] for r in conn.execute(
-                "PRAGMA table_info(positions)"
-            ).fetchall()}
+            col_names = {r["name"] for r in conn.execute("PRAGMA table_info(positions)").fetchall()}
         for req_col, done_col, _ in config.REQUIREMENT_DOCS:
-            assert req_col  in col_names, f"Missing column: {req_col}"
+            assert req_col in col_names, f"Missing column: {req_col}"
             assert done_col in col_names, f"Missing column: {done_col}"
 
     def test_idempotent(self, db):
@@ -49,9 +53,12 @@ class TestInitDb:
         database.init_db()
         database.init_db()
         with database._connect() as conn:
-            tables = {r["name"] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()}
+            tables = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
         assert "positions" in tables
 
     def test_migration_adds_new_column(self, db, monkeypatch):
@@ -64,10 +71,8 @@ class TestInitDb:
         database.init_db()
 
         with database._connect() as conn:
-            col_names = {r["name"] for r in conn.execute(
-                "PRAGMA table_info(positions)"
-            ).fetchall()}
-        assert "req_portfolio"  in col_names
+            col_names = {r["name"] for r in conn.execute("PRAGMA table_info(positions)").fetchall()}
+        assert "req_portfolio" in col_names
         assert "done_portfolio" in col_names
 
     def test_migration_preserves_existing_rows(self, db, monkeypatch):
@@ -82,7 +87,7 @@ class TestInitDb:
 
         pos = database.get_position(pos_id)
         assert pos["position_name"] == "BioStats Postdoc"
-        assert pos["req_portfolio"] == "No"   # default for new column
+        assert pos["req_portfolio"] == "No"  # default for new column
 
     def test_migration_rewrites_legacy_req_short_codes(self, db):
         """Sub-task 2 / D21: pre-v1.3 short-code req_* values ('Y'/'N') must
@@ -113,9 +118,7 @@ class TestInitDb:
         database.init_db()
 
         pos = database.get_position(pos_id)
-        assert pos["req_cv"] == "Yes", (
-            f"Legacy 'Y' must migrate to 'Yes'; got {pos['req_cv']!r}"
-        )
+        assert pos["req_cv"] == "Yes", f"Legacy 'Y' must migrate to 'Yes'; got {pos['req_cv']!r}"
         assert pos["req_cover_letter"] == "No", (
             f"Legacy 'N' must migrate to 'No'; got {pos['req_cover_letter']!r}"
         )
@@ -142,7 +145,7 @@ class TestInitDb:
         only materialises at runtime inside the test and inside init_db().
         See CHANGELOG [Unreleased] Migration: entry for the canonical SQL."""
         pos_id = database.add_position(make_position())
-        legacy_status = "[OPE" + "N]"   # pre-v1.3 pipeline-stage-0 literal
+        legacy_status = "[OPE" + "N]"  # pre-v1.3 pipeline-stage-0 literal
         with database._connect() as conn:
             conn.execute(
                 "UPDATE positions SET status = ? WHERE id = ?",
@@ -153,8 +156,7 @@ class TestInitDb:
 
         pos = database.get_position(pos_id)
         assert pos["status"] == "[SAVED]", (
-            "Pre-v1.3 stage-0 literal must migrate to '[SAVED]'; got "
-            f"{pos['status']!r}"
+            f"Pre-v1.3 stage-0 literal must migrate to '[SAVED]'; got {pos['status']!r}"
         )
 
         # Idempotence: second init_db() leaves '[SAVED]' untouched.
@@ -177,11 +179,11 @@ class TestInitDb:
         p1 = database.add_position(make_position({"position_name": "P1"}))
         p2 = database.add_position(make_position({"position_name": "P2"}))
         p3 = database.add_position(make_position({"position_name": "P3"}))
-        legacy_medium = "M" + "ed"   # pre-v1.3 short-code priority literal
+        legacy_medium = "M" + "ed"  # pre-v1.3 short-code priority literal
         with database._connect() as conn:
             conn.execute("UPDATE positions SET priority = ? WHERE id = ?", (legacy_medium, p1))
             conn.execute("UPDATE positions SET priority = 'Medium' WHERE id = ?", (p2,))
-            conn.execute("UPDATE positions SET priority = 'High' WHERE id = ?",   (p3,))
+            conn.execute("UPDATE positions SET priority = 'High' WHERE id = ?", (p3,))
 
         database.init_db()
 
@@ -214,7 +216,8 @@ class TestInitDb:
         sentinel_result = "SentinelPending"
 
         monkeypatch.setattr(
-            config, "STATUS_VALUES",
+            config,
+            "STATUS_VALUES",
             [sentinel_status] + config.STATUS_VALUES[1:],
         )
         monkeypatch.setattr(config, "RESULT_DEFAULT", sentinel_result)
@@ -223,15 +226,11 @@ class TestInitDb:
         database.init_db()
 
         with database._connect() as conn:
-            positions_cols    = conn.execute("PRAGMA table_info(positions)").fetchall()
+            positions_cols = conn.execute("PRAGMA table_info(positions)").fetchall()
             applications_cols = conn.execute("PRAGMA table_info(applications)").fetchall()
 
-        status_default = next(
-            r["dflt_value"] for r in positions_cols if r["name"] == "status"
-        )
-        result_default = next(
-            r["dflt_value"] for r in applications_cols if r["name"] == "result"
-        )
+        status_default = next(r["dflt_value"] for r in positions_cols if r["name"] == "status")
+        result_default = next(r["dflt_value"] for r in applications_cols if r["name"] == "result")
 
         assert status_default == f"'{config.STATUS_VALUES[0]}'", (
             "positions.status DEFAULT must interpolate config.STATUS_VALUES[0] "
@@ -278,7 +277,8 @@ class TestInitDb:
         that default, not on any code we write here."""
         with database._connect() as conn:
             triggers = {
-                r["name"] for r in conn.execute(
+                r["name"]
+                for r in conn.execute(
                     "SELECT name FROM sqlite_master WHERE type = 'trigger'"
                 ).fetchall()
             }
@@ -394,29 +394,23 @@ class TestInitDb:
                     deadline_date TEXT
                 )
             """)
-            conn.execute(
-                "INSERT INTO positions (position_name) VALUES ('LegacyRow')"
-            )
+            conn.execute("INSERT INTO positions (position_name) VALUES ('LegacyRow')")
 
         database.init_db()
 
         with database._connect() as conn:
-            cols = {r["name"] for r in conn.execute(
-                "PRAGMA table_info(positions)"
-            ).fetchall()}
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(positions)").fetchall()}
             legacy_row = conn.execute(
-                "SELECT updated_at FROM positions "
-                "WHERE position_name = 'LegacyRow'"
+                "SELECT updated_at FROM positions WHERE position_name = 'LegacyRow'"
             ).fetchone()
             triggers = {
-                r["name"] for r in conn.execute(
+                r["name"]
+                for r in conn.execute(
                     "SELECT name FROM sqlite_master WHERE type = 'trigger'"
                 ).fetchall()
             }
 
-        assert "updated_at" in cols, (
-            "Migration must add updated_at via ALTER TABLE ADD COLUMN."
-        )
+        assert "updated_at" in cols, "Migration must add updated_at via ALTER TABLE ADD COLUMN."
         assert legacy_row["updated_at"] is not None, (
             "Existing pre-v1.3 rows must be backfilled with datetime('now') — "
             f"got {legacy_row['updated_at']!r}"
@@ -439,8 +433,7 @@ class TestInitDb:
         database.init_db()
         with database._connect() as conn:
             ts_after_second_init = conn.execute(
-                "SELECT updated_at FROM positions "
-                "WHERE position_name = 'LegacyRow'"
+                "SELECT updated_at FROM positions WHERE position_name = 'LegacyRow'"
             ).fetchone()["updated_at"]
         assert ts_after_second_init == ts_after_first_init, (
             "Second init_db() on a migrated DB must be a no-op for updated_at. "
@@ -458,16 +451,13 @@ class TestInitDb:
         with database._connect() as conn:
             cols = conn.execute("PRAGMA table_info(positions)").fetchall()
 
-        work_auth_note = next(
-            (r for r in cols if r["name"] == "work_auth_note"), None
-        )
+        work_auth_note = next((r for r in cols if r["name"] == "work_auth_note"), None)
         assert work_auth_note is not None, (
             "positions.work_auth_note must be defined in the CREATE TABLE DDL. "
             f"Column list: {sorted(r['name'] for r in cols)!r}"
         )
         assert work_auth_note["type"] == "TEXT", (
-            "positions.work_auth_note type must be TEXT; "
-            f"got {work_auth_note['type']!r}"
+            f"positions.work_auth_note type must be TEXT; got {work_auth_note['type']!r}"
         )
         assert work_auth_note["dflt_value"] is None, (
             "positions.work_auth_note must not carry a DEFAULT — fresh rows "
@@ -509,19 +499,15 @@ class TestInitDb:
                 )
             """)
             conn.execute(
-                "INSERT INTO positions (position_name, work_auth) "
-                "VALUES ('LegacyRow', 'Yes')"
+                "INSERT INTO positions (position_name, work_auth) VALUES ('LegacyRow', 'Yes')"
             )
 
         database.init_db()
 
         with database._connect() as conn:
-            cols = {r["name"] for r in conn.execute(
-                "PRAGMA table_info(positions)"
-            ).fetchall()}
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(positions)").fetchall()}
             legacy_row = conn.execute(
-                "SELECT work_auth, work_auth_note "
-                "FROM positions WHERE position_name = 'LegacyRow'"
+                "SELECT work_auth, work_auth_note FROM positions WHERE position_name = 'LegacyRow'"
             ).fetchone()
 
         assert "work_auth_note" in cols, (
@@ -541,8 +527,7 @@ class TestInitDb:
         database.init_db()
         with database._connect() as conn:
             legacy_row_after = conn.execute(
-                "SELECT work_auth, work_auth_note "
-                "FROM positions WHERE position_name = 'LegacyRow'"
+                "SELECT work_auth, work_auth_note FROM positions WHERE position_name = 'LegacyRow'"
             ).fetchone()
         assert legacy_row_after["work_auth"] == "Yes"
         assert legacy_row_after["work_auth_note"] is None
@@ -558,9 +543,7 @@ class TestInitDb:
         with database._connect() as conn:
             cols = conn.execute("PRAGMA table_info(applications)").fetchall()
 
-        received = next(
-            (r for r in cols if r["name"] == "confirmation_received"), None
-        )
+        received = next((r for r in cols if r["name"] == "confirmation_received"), None)
         assert received is not None, (
             "applications.confirmation_received must be defined in the CREATE "
             f"TABLE DDL. Column list: {sorted(r['name'] for r in cols)!r}"
@@ -587,9 +570,7 @@ class TestInitDb:
         with database._connect() as conn:
             cols = conn.execute("PRAGMA table_info(applications)").fetchall()
 
-        date_col = next(
-            (r for r in cols if r["name"] == "confirmation_date"), None
-        )
+        date_col = next((r for r in cols if r["name"] == "confirmation_date"), None)
         assert date_col is not None, (
             "applications.confirmation_date must be defined in the CREATE "
             f"TABLE DDL. Column list: {sorted(r['name'] for r in cols)!r}"
@@ -618,9 +599,7 @@ class TestInitDb:
         with database._connect() as conn:
             cols = conn.execute("PRAGMA table_info(recommenders)").fetchall()
 
-        confirmed = next(
-            (r for r in cols if r["name"] == "confirmed"), None
-        )
+        confirmed = next((r for r in cols if r["name"] == "confirmed"), None)
         assert confirmed is not None, (
             "recommenders.confirmed must be defined in the CREATE TABLE DDL. "
             f"Column list: {sorted(r['name'] for r in cols)!r}"
@@ -647,16 +626,13 @@ class TestInitDb:
         with database._connect() as conn:
             cols = conn.execute("PRAGMA table_info(recommenders)").fetchall()
 
-        reminder_sent = next(
-            (r for r in cols if r["name"] == "reminder_sent"), None
-        )
+        reminder_sent = next((r for r in cols if r["name"] == "reminder_sent"), None)
         assert reminder_sent is not None, (
             "recommenders.reminder_sent must be defined in the CREATE TABLE "
             f"DDL. Column list: {sorted(r['name'] for r in cols)!r}"
         )
         assert reminder_sent["type"] == "INTEGER", (
-            "recommenders.reminder_sent type must be INTEGER (D20); "
-            f"got {reminder_sent['type']!r}"
+            f"recommenders.reminder_sent type must be INTEGER (D20); got {reminder_sent['type']!r}"
         )
         assert reminder_sent["dflt_value"] == "0", (
             "recommenders.reminder_sent DEFAULT must be 0 — fresh rows "
@@ -672,9 +648,7 @@ class TestInitDb:
         with database._connect() as conn:
             cols = conn.execute("PRAGMA table_info(recommenders)").fetchall()
 
-        reminder_date = next(
-            (r for r in cols if r["name"] == "reminder_sent_date"), None
-        )
+        reminder_date = next((r for r in cols if r["name"] == "reminder_sent_date"), None)
         assert reminder_date is not None, (
             "recommenders.reminder_sent_date must be defined in the CREATE "
             f"TABLE DDL. Column list: {sorted(r['name'] for r in cols)!r}"
@@ -700,9 +674,7 @@ class TestInitDb:
         on the surviving post-rename table with the correct target
         table + column + delete action."""
         with database._connect() as conn:
-            fks = conn.execute(
-                "PRAGMA foreign_key_list(recommenders)"
-            ).fetchall()
+            fks = conn.execute("PRAGMA foreign_key_list(recommenders)").fetchall()
 
         assert len(fks) == 1, (
             "recommenders must carry exactly one foreign key "
@@ -710,9 +682,9 @@ class TestInitDb:
             f"{[dict(r) for r in fks]!r}"
         )
         fk = fks[0]
-        assert fk["table"]    == "positions",   f"got {fk['table']!r}"
-        assert fk["from"]     == "position_id", f"got {fk['from']!r}"
-        assert fk["to"]       == "id",          f"got {fk['to']!r}"
+        assert fk["table"] == "positions", f"got {fk['table']!r}"
+        assert fk["from"] == "position_id", f"got {fk['from']!r}"
+        assert fk["to"] == "id", f"got {fk['to']!r}"
         assert fk["on_delete"] == "CASCADE", (
             "FK delete action must be CASCADE so delete_position cleans "
             f"up recommenders rows. Got {fk['on_delete']!r}"
@@ -721,8 +693,8 @@ class TestInitDb:
 
 # ── add_position / get_position ───────────────────────────────────────────────
 
-class TestAddPosition:
 
+class TestAddPosition:
     def test_returns_integer_id(self, db):
         pos_id = database.add_position(make_position())
         assert isinstance(pos_id, int)
@@ -765,7 +737,6 @@ class TestAddPosition:
 
 
 class TestGetPosition:
-
     def test_returns_dict(self, db):
         pos_id = database.add_position(make_position())
         result = database.get_position(pos_id)
@@ -786,10 +757,11 @@ class TestGetPosition:
 
 # ── get_all_positions ─────────────────────────────────────────────────────────
 
-class TestGetAllPositions:
 
+class TestGetAllPositions:
     def test_empty_db_returns_empty_dataframe(self, db):
         import pandas as pd
+
         df = database.get_all_positions()
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 0
@@ -801,27 +773,43 @@ class TestGetAllPositions:
         assert len(df) == 2
 
     def test_ordered_by_deadline_asc(self, db):
-        database.add_position(make_position({
-            "position_name": "Late",
-            "deadline_date": (date.today() + timedelta(days=30)).isoformat(),
-        }))
-        database.add_position(make_position({
-            "position_name": "Soon",
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Late",
+                    "deadline_date": (date.today() + timedelta(days=30)).isoformat(),
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Soon",
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         df = database.get_all_positions()
         assert df.iloc[0]["position_name"] == "Soon"
         assert df.iloc[1]["position_name"] == "Late"
 
     def test_null_deadline_last(self, db):
-        database.add_position(make_position({
-            "position_name": "No deadline",
-            "deadline_date": None,
-        }))
-        database.add_position(make_position({
-            "position_name": "Has deadline",
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "No deadline",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Has deadline",
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         df = database.get_all_positions()
         assert df.iloc[0]["position_name"] == "Has deadline"
         assert df.iloc[1]["position_name"] == "No deadline"
@@ -829,8 +817,8 @@ class TestGetAllPositions:
 
 # ── update_position ───────────────────────────────────────────────────────────
 
-class TestUpdatePosition:
 
+class TestUpdatePosition:
     def test_updates_specified_fields(self, db):
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {"status": "[APPLIED]", "req_cv": "Yes"})
@@ -842,8 +830,8 @@ class TestUpdatePosition:
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {"status": "[APPLIED]"})
         pos = database.get_position(pos_id)
-        assert pos["position_name"] == "BioStats Postdoc"   # unchanged
-        assert pos["institute"] == "Stanford"               # unchanged
+        assert pos["position_name"] == "BioStats Postdoc"  # unchanged
+        assert pos["institute"] == "Stanford"  # unchanged
 
     def test_can_set_done_column(self, db):
         pos_id = database.add_position(make_position())
@@ -861,21 +849,28 @@ class TestUpdatePosition:
         against a future refactor that accidentally adds coercion or
         truncation at the DB layer."""
         # INSERT path — add_position accepts both fields in its dict.
-        pos_id = database.add_position(make_position({
-            "work_auth":      "Yes",
-            "work_auth_note": "green card required",
-        }))
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "work_auth": "Yes",
+                    "work_auth_note": "green card required",
+                }
+            )
+        )
         pos = database.get_position(pos_id)
-        assert pos["work_auth"]      == "Yes"
+        assert pos["work_auth"] == "Yes"
         assert pos["work_auth_note"] == "green card required"
 
         # UPDATE path — both columns reachable via update_position.
-        database.update_position(pos_id, {
-            "work_auth":      "Unknown",
-            "work_auth_note": "J-1 OK with a waiver",
-        })
+        database.update_position(
+            pos_id,
+            {
+                "work_auth": "Unknown",
+                "work_auth_note": "J-1 OK with a waiver",
+            },
+        )
         pos = database.get_position(pos_id)
-        assert pos["work_auth"]      == "Unknown"
+        assert pos["work_auth"] == "Unknown"
         assert pos["work_auth_note"] == "J-1 OK with a waiver"
 
         # Empty string round-trips as empty string (not coerced to NULL).
@@ -887,8 +882,8 @@ class TestUpdatePosition:
 
 # ── delete_position + cascade ─────────────────────────────────────────────────
 
-class TestDeletePosition:
 
+class TestDeletePosition:
     def test_removes_position_row(self, db):
         pos_id = database.add_position(make_position())
         database.delete_position(pos_id)
@@ -909,20 +904,23 @@ class TestDeletePosition:
         assert len(recs) == 0
 
     def test_deleting_nonexistent_id_does_not_raise(self, db):
-        database.delete_position(999)   # should be silent
+        database.delete_position(999)  # should be silent
 
 
 # ── upsert_application ────────────────────────────────────────────────────────
 
-class TestUpsertApplication:
 
+class TestUpsertApplication:
     def test_inserts_if_no_conflict(self, db):
         pos_id = database.add_position(make_position())
         # The auto-created row has result='Pending'. Upsert with a real applied_date.
-        database.upsert_application(pos_id, {
-            "applied_date": "2026-04-10",
-            "response_type": "Interview Invite",
-        })
+        database.upsert_application(
+            pos_id,
+            {
+                "applied_date": "2026-04-10",
+                "response_type": "Interview Invite",
+            },
+        )
         app = database.get_application(pos_id)
         assert app["applied_date"] == "2026-04-10"
         assert app["response_type"] == "Interview Invite"
@@ -950,7 +948,7 @@ class TestUpsertApplication:
         database.upsert_application(pos_id, {"applied_date": "2026-04-10"})
         database.upsert_application(pos_id, {"result": "Rejected"})
         app = database.get_application(pos_id)
-        assert app["applied_date"] == "2026-04-10"   # still set
+        assert app["applied_date"] == "2026-04-10"  # still set
 
     def test_writes_confirmation_received_and_date_roundtrip(self, db):
         """Sub-task 10 / DESIGN §6.2 + D19: upsert_application accepts the
@@ -969,13 +967,16 @@ class TestUpsertApplication:
         assert app["confirmation_date"] is None
 
         # Flag + date: mirrors the common case of a dated receipt.
-        database.upsert_application(pos_id, {
-            "confirmation_received": 1,
-            "confirmation_date":     "2026-04-12",
-        })
+        database.upsert_application(
+            pos_id,
+            {
+                "confirmation_received": 1,
+                "confirmation_date": "2026-04-12",
+            },
+        )
         app = database.get_application(pos_id)
         assert app["confirmation_received"] == 1
-        assert app["confirmation_date"]     == "2026-04-12"
+        assert app["confirmation_date"] == "2026-04-12"
 
         # Legacy column stays NULL — no caller (incl. this one) writes to it.
         assert app["confirmation_email"] is None, (
@@ -1025,7 +1026,7 @@ class TestUpsertApplicationR1:
         assert database.get_position(pid)["status"] == config.STATUS_APPLIED
         assert result == {
             "status_changed": True,
-            "new_status":     config.STATUS_APPLIED,
+            "new_status": config.STATUS_APPLIED,
         }
 
     def test_r1_noop_when_applied_date_was_already_set(self, db):
@@ -1053,13 +1054,9 @@ class TestUpsertApplicationR1:
         re-promoted. Verified against STATUS_APPLIED + STATUS_INTERVIEW
         directly (STATUS_OFFER / terminals also satisfy the guard)."""
         for pre in (config.STATUS_APPLIED, config.STATUS_INTERVIEW):
-            pid = database.add_position(make_position(
-                {"position_name": f"Pre-{pre}"}
-            ))
+            pid = database.add_position(make_position({"position_name": f"Pre-{pre}"}))
             _force_position_status(pid, pre)
-            result = database.upsert_application(
-                pid, {"applied_date": "2026-04-10"}
-            )
+            result = database.upsert_application(pid, {"applied_date": "2026-04-10"})
             assert database.get_position(pid)["status"] == pre, (
                 f"R1 must not affect a position already at {pre!r}; "
                 f"got {database.get_position(pid)['status']!r}"
@@ -1070,11 +1067,12 @@ class TestUpsertApplicationR1:
     def test_r1_does_not_fire_when_propagate_status_false(self, db):
         pid = database.add_position(make_position())
         result = database.upsert_application(
-            pid, {"applied_date": "2026-04-10"}, propagate_status=False,
+            pid,
+            {"applied_date": "2026-04-10"},
+            propagate_status=False,
         )
         assert database.get_position(pid)["status"] == config.STATUS_SAVED, (
-            "propagate_status=False must suppress R1 even when its "
-            "conditions are met."
+            "propagate_status=False must suppress R1 even when its conditions are met."
         )
         assert result["status_changed"] is False
         assert result["new_status"] is None
@@ -1097,7 +1095,7 @@ class TestUpsertApplicationR3:
         assert database.get_position(pid)["status"] == config.STATUS_OFFER
         assert result == {
             "status_changed": True,
-            "new_status":     config.STATUS_OFFER,
+            "new_status": config.STATUS_OFFER,
         }
 
     def test_r3_promotes_applied_to_offer(self, db):
@@ -1155,7 +1153,9 @@ class TestUpsertApplicationR3:
     def test_r3_does_not_fire_when_propagate_status_false(self, db):
         pid = database.add_position(make_position())
         result = database.upsert_application(
-            pid, {"response_type": "Offer"}, propagate_status=False,
+            pid,
+            {"response_type": "Offer"},
+            propagate_status=False,
         )
         assert database.get_position(pid)["status"] == config.STATUS_SAVED
         assert result["status_changed"] is False
@@ -1183,10 +1183,13 @@ class TestUpsertApplicationR1R3Matrix:
 
     def _upsert_both(self, pid):
         """Shared body: one upsert carrying both R1 and R3 triggers."""
-        return database.upsert_application(pid, {
-            "applied_date":  "2026-04-10",
-            "response_type": "Offer",
-        })
+        return database.upsert_application(
+            pid,
+            {
+                "applied_date": "2026-04-10",
+                "response_type": "Offer",
+            },
+        )
 
     def test_matrix_saved_lands_on_offer(self, db):
         """STATUS_SAVED + R1 + R3 → R1 promotes SAVED→APPLIED, then
@@ -1250,6 +1253,7 @@ class TestUpsertApplicationIndicator:
         upsert_application to the same keyword-only cascade API as
         add_interview (Sub-task 8), with default True."""
         import inspect
+
         sig = inspect.signature(database.upsert_application)
         param = sig.parameters.get("propagate_status")
         assert param is not None
@@ -1296,6 +1300,7 @@ class TestUpsertApplicationAtomicity:
         # Sentinel that SQLite cannot bind.
         class NotBindable:
             pass
+
         monkeypatch.setattr(config, "STATUS_APPLIED", NotBindable())
 
         with pytest.raises(Exception):
@@ -1325,6 +1330,7 @@ class TestUpsertApplicationAtomicity:
 
         class NotBindable:
             pass
+
         monkeypatch.setattr(config, "STATUS_OFFER", NotBindable())
 
         with pytest.raises(Exception):
@@ -1344,8 +1350,8 @@ class TestUpsertApplicationAtomicity:
 
 # ── recommenders ─────────────────────────────────────────────────────────────
 
-class TestRecommenders:
 
+class TestRecommenders:
     def test_add_returns_id(self, db):
         pos_id = database.add_position(make_position())
         rec_id = database.add_recommender(pos_id, {"recommender_name": "Dr. Smith"})
@@ -1371,14 +1377,17 @@ class TestRecommenders:
 
     def test_update_recommender(self, db):
         pos_id = database.add_position(make_position())
-        rec_id = database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": "2026-04-01",
-        })
+        rec_id = database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": "2026-04-01",
+            },
+        )
         database.update_recommender(rec_id, {"submitted_date": "2026-04-14"})
         recs = database.get_recommenders(pos_id)
         assert recs.iloc[0]["submitted_date"] == "2026-04-14"
-        assert recs.iloc[0]["recommender_name"] == "Dr. Smith"   # unchanged
+        assert recs.iloc[0]["recommender_name"] == "Dr. Smith"  # unchanged
 
     def test_delete_recommender(self, db):
         pos_id = database.add_position(make_position())
@@ -1391,7 +1400,7 @@ class TestRecommenders:
         pos_id = database.add_position(make_position())
         rec_id = database.add_recommender(pos_id, {"recommender_name": "Dr. Smith"})
         database.delete_recommender(rec_id)
-        pos = database.get_position(pos_id)   # should not raise
+        pos = database.get_position(pos_id)  # should not raise
         assert pos["position_name"] == "BioStats Postdoc"
 
     def test_fresh_recommender_row_defaults(self, db):
@@ -1402,9 +1411,7 @@ class TestRecommenders:
         These three defaults collectively pin the CREATE TABLE contract
         for the DESIGN §6.2 recommenders DDL."""
         pos_id = database.add_position(make_position())
-        rec_id = database.add_recommender(
-            pos_id, {"recommender_name": "Dr. Smith"}
-        )
+        rec_id = database.add_recommender(pos_id, {"recommender_name": "Dr. Smith"})
         recs = database.get_recommenders(pos_id)
         row = recs.iloc[0]
         assert row["id"] == rec_id
@@ -1429,18 +1436,27 @@ class TestRecommenders:
         this test catches any accidental type narrowing)."""
         pid = database.add_position(make_position())
 
-        r1 = database.add_recommender(pid, {
-            "recommender_name": "Dr. Yes",
-            "confirmed":        1,
-        })
-        r0 = database.add_recommender(pid, {
-            "recommender_name": "Dr. No",
-            "confirmed":        0,
-        })
-        rN = database.add_recommender(pid, {
-            "recommender_name": "Dr. Pending",
-            # confirmed omitted → NULL
-        })
+        r1 = database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Yes",
+                "confirmed": 1,
+            },
+        )
+        r0 = database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. No",
+                "confirmed": 0,
+            },
+        )
+        rN = database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Pending",
+                # confirmed omitted → NULL
+            },
+        )
         recs = database.get_recommenders(pid).set_index("id")
         assert int(recs.loc[r1, "confirmed"]) == 1
         assert int(recs.loc[r0, "confirmed"]) == 0
@@ -1455,15 +1471,21 @@ class TestRecommenders:
         must come back byte-for-byte."""
         pid = database.add_position(make_position())
 
-        r_sent = database.add_recommender(pid, {
-            "recommender_name":   "Dr. Reminded",
-            "reminder_sent":      1,
-            "reminder_sent_date": "2026-04-14",
-        })
-        r_unsent = database.add_recommender(pid, {
-            "recommender_name": "Dr. Unreminded",
-            "reminder_sent":    0,
-        })
+        r_sent = database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Reminded",
+                "reminder_sent": 1,
+                "reminder_sent_date": "2026-04-14",
+            },
+        )
+        r_unsent = database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Unreminded",
+                "reminder_sent": 0,
+            },
+        )
         recs = database.get_recommenders(pid).set_index("id")
 
         assert int(recs.loc[r_sent, "reminder_sent"]) == 1
@@ -1483,7 +1505,6 @@ class TestRecommenders:
 
 
 class TestIsAllRecsSubmitted:
-
     def test_returns_true_for_zero_recommenders(self, db):
         """Vacuous truth: a position with no recommenders has no
         outstanding letters by definition. This matches the most
@@ -1495,26 +1516,38 @@ class TestIsAllRecsSubmitted:
 
     def test_returns_true_when_all_recommenders_submitted(self, db):
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Smith",
-            "submitted_date":   "2026-04-10",
-        })
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Jones",
-            "submitted_date":   "2026-04-12",
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Smith",
+                "submitted_date": "2026-04-10",
+            },
+        )
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Jones",
+                "submitted_date": "2026-04-12",
+            },
+        )
         assert database.is_all_recs_submitted(pid) is True
 
     def test_returns_false_when_any_recommender_unsubmitted(self, db):
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Smith",
-            "submitted_date":   "2026-04-10",
-        })
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Jones",
-            # submitted_date omitted → NULL
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Smith",
+                "submitted_date": "2026-04-10",
+            },
+        )
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Jones",
+                # submitted_date omitted → NULL
+            },
+        )
         assert database.is_all_recs_submitted(pid) is False
 
     def test_empty_string_submitted_date_counts_as_unsubmitted(self, db):
@@ -1523,10 +1556,13 @@ class TestIsAllRecsSubmitted:
         submitted treats empty string the same as NULL — both mean
         "no submission recorded"."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Smith",
-            "submitted_date":   "",
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Smith",
+                "submitted_date": "",
+            },
+        )
         assert database.is_all_recs_submitted(pid) is False
 
     def test_scoped_to_position_id(self, db):
@@ -1534,22 +1570,28 @@ class TestIsAllRecsSubmitted:
         bleed into this position's 'all submitted' calculation."""
         pid_a = database.add_position(make_position({"position_name": "A"}))
         pid_b = database.add_position(make_position({"position_name": "B"}))
-        database.add_recommender(pid_a, {
-            "recommender_name": "Dr. Smith",
-            "submitted_date":   "2026-04-10",
-        })
-        database.add_recommender(pid_b, {
-            "recommender_name": "Dr. Jones",
-            # unsubmitted on position B only
-        })
+        database.add_recommender(
+            pid_a,
+            {
+                "recommender_name": "Dr. Smith",
+                "submitted_date": "2026-04-10",
+            },
+        )
+        database.add_recommender(
+            pid_b,
+            {
+                "recommender_name": "Dr. Jones",
+                # unsubmitted on position B only
+            },
+        )
         assert database.is_all_recs_submitted(pid_a) is True
         assert database.is_all_recs_submitted(pid_b) is False
 
 
 # ── count_by_status ───────────────────────────────────────────────────────────
 
-class TestCountByStatus:
 
+class TestCountByStatus:
     def test_empty_db_returns_empty_dict(self, db):
         assert database.count_by_status() == {}
 
@@ -1560,46 +1602,62 @@ class TestCountByStatus:
         database.update_position(pos3, {"status": "[APPLIED]"})
 
         counts = database.count_by_status()
-        assert counts["[SAVED]"]   == 2
+        assert counts["[SAVED]"] == 2
         assert counts["[APPLIED]"] == 1
 
     def test_closed_status_counted_separately(self, db):
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {"status": "[CLOSED]"})
         counts = database.count_by_status()
-        assert "[SAVED]"  not in counts
+        assert "[SAVED]" not in counts
         assert counts.get("[CLOSED]") == 1
 
 
 # ── get_upcoming_deadlines ────────────────────────────────────────────────────
 
-class TestGetUpcomingDeadlines:
 
+class TestGetUpcomingDeadlines:
     def test_returns_positions_within_window(self, db):
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 1
 
     def test_excludes_positions_outside_window(self, db):
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=40)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=40)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 0
 
     def test_excludes_past_deadlines(self, db):
-        database.add_position(make_position({
-            "deadline_date": (date.today() - timedelta(days=1)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() - timedelta(days=1)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 0
 
     def test_includes_deadline_today(self, db):
-        database.add_position(make_position({
-            "deadline_date": date.today().isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": date.today().isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 1
 
@@ -1608,9 +1666,13 @@ class TestGetUpcomingDeadlines:
         The exact boundary day must be included; a regression to `<`
         would silently drop the last day of the window. Pin both sides
         of the comparison together with the next test."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=30)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=30)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 1, (
             "Deadline exactly at the upper boundary (today + days) must "
@@ -1621,29 +1683,38 @@ class TestGetUpcomingDeadlines:
         """The companion to the boundary test above: today+days+1 must
         be excluded. Pinning both rules together protects against an
         off-by-one in either direction."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=31)).isoformat(),
-        }))
-        df = database.get_upcoming_deadlines(30)
-        assert len(df) == 0, (
-            "Deadline one day past the window upper boundary must be "
-            "excluded."
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=31)).isoformat(),
+                }
+            )
         )
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 0, "Deadline one day past the window upper boundary must be excluded."
 
     def test_excludes_closed_status(self, db):
-        pos_id = database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         database.update_position(pos_id, {"status": "[CLOSED]"})
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 0
 
     def test_excludes_rejected_and_declined(self, db):
         for status in ("[REJECTED]", "[DECLINED]"):
-            pos_id = database.add_position(make_position({
-                "position_name": f"pos_{status}",
-                "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-            }))
+            pos_id = database.add_position(
+                make_position(
+                    {
+                        "position_name": f"pos_{status}",
+                        "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                    }
+                )
+            )
             database.update_position(pos_id, {"status": status})
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 0
@@ -1654,19 +1725,33 @@ class TestGetUpcomingDeadlines:
         assert len(df) == 0
 
     def test_ordered_by_deadline_asc(self, db):
-        database.add_position(make_position({
-            "position_name": "Later", "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
-        }))
-        database.add_position(make_position({
-            "position_name": "Sooner", "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Later",
+                    "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Sooner",
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         assert df.iloc[0]["position_name"] == "Sooner"
 
     def test_result_has_expected_columns(self, db):
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming_deadlines(30)
         for col in ("id", "position_name", "institute", "deadline_date", "status", "priority"):
             assert col in df.columns, f"Missing column: {col}"
@@ -1677,13 +1762,16 @@ class TestGetUpcomingDeadlines:
 # columns on applications are replaced by a normalized interviews sub-table
 # so a position can carry arbitrarily many interviews.
 
-class TestInterviewsSchema:
 
+class TestInterviewsSchema:
     def test_interviews_table_exists(self, db):
         with database._connect() as conn:
-            tables = {r["name"] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()}
+            tables = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
         assert "interviews" in tables, (
             "Sub-task 8: interviews table must be registered via CREATE TABLE "
             "IF NOT EXISTS in init_db()."
@@ -1694,9 +1782,9 @@ class TestInterviewsSchema:
         sequence, scheduled_date, format, notes. Other columns would signal
         DDL drift from the DESIGN spec."""
         with database._connect() as conn:
-            cols = {r["name"]: dict(r) for r in conn.execute(
-                "PRAGMA table_info(interviews)"
-            ).fetchall()}
+            cols = {
+                r["name"]: dict(r) for r in conn.execute("PRAGMA table_info(interviews)").fetchall()
+            }
 
         # SQLite quirk: INTEGER PRIMARY KEY AUTOINCREMENT reports
         # notnull=0 from PRAGMA table_info — the NOT NULL is enforced
@@ -1705,22 +1793,20 @@ class TestInterviewsSchema:
         # even though it's de-facto NOT NULL; the other NOT NULL
         # columns still report notnull=1 as expected.
         expected = {
-            "id":             ("INTEGER", 0),   # PK (notnull enforced by PK)
-            "application_id": ("INTEGER", 1),   # NOT NULL
-            "sequence":       ("INTEGER", 1),   # NOT NULL
-            "scheduled_date": ("TEXT",    0),   # nullable
-            "format":         ("TEXT",    0),   # nullable
-            "notes":          ("TEXT",    0),   # nullable
+            "id": ("INTEGER", 0),  # PK (notnull enforced by PK)
+            "application_id": ("INTEGER", 1),  # NOT NULL
+            "sequence": ("INTEGER", 1),  # NOT NULL
+            "scheduled_date": ("TEXT", 0),  # nullable
+            "format": ("TEXT", 0),  # nullable
+            "notes": ("TEXT", 0),  # nullable
         }
         for name, (type_, notnull) in expected.items():
             assert name in cols, f"interviews.{name} missing — got {list(cols)!r}"
             assert cols[name]["type"] == type_, (
-                f"interviews.{name} type expected {type_}, "
-                f"got {cols[name]['type']!r}"
+                f"interviews.{name} type expected {type_}, got {cols[name]['type']!r}"
             )
             assert cols[name]["notnull"] == notnull, (
-                f"interviews.{name} notnull expected {notnull}, "
-                f"got {cols[name]['notnull']!r}"
+                f"interviews.{name} notnull expected {notnull}, got {cols[name]['notnull']!r}"
             )
         # Make sure nothing unexpected snuck in.
         assert set(cols) == set(expected), (
@@ -1763,9 +1849,12 @@ class TestInterviewsSchema:
         application_id that keeps get_interviews(application_id) fast as
         the table grows."""
         with database._connect() as conn:
-            indices = {r["name"] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'index'"
-            ).fetchall()}
+            indices = {
+                r["name"]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'index'"
+                ).fetchall()
+            }
         assert "idx_interviews_application" in indices, (
             f"Expected idx_interviews_application in sqlite_master; got {indices!r}"
         )
@@ -1773,8 +1862,8 @@ class TestInterviewsSchema:
 
 # ── add_interview / get_interviews / update_interview / delete_interview ─────
 
-class TestAddInterview:
 
+class TestAddInterview:
     def test_returns_indicator_dict(self, db):
         """DESIGN §7 + §9.3: writers that can promote return an indicator
         dict with id + status_changed + new_status keys. A fresh
@@ -1783,9 +1872,12 @@ class TestAddInterview:
         reads False/None. The R2-fires path is covered by
         TestAddInterviewR2 in the Sub-task 9 coverage block."""
         pid = database.add_position(make_position())
-        result = database.add_interview(pid, {
-            "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
-        })
+        result = database.add_interview(
+            pid,
+            {
+                "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
+            },
+        )
         assert isinstance(result, dict)
         assert "id" in result and isinstance(result["id"], int)
         assert result["id"] >= 1
@@ -1809,9 +1901,7 @@ class TestAddInterview:
         database.add_interview(pid, {"scheduled_date": "2026-06-01"})
         df = database.get_interviews(pid)
         seqs = list(df["sequence"])
-        assert seqs == [1, 2], (
-            f"Second add_interview must auto-sequence to 2; got {seqs!r}"
-        )
+        assert seqs == [1, 2], f"Second add_interview must auto-sequence to 2; got {seqs!r}"
 
     def test_auto_sequence_picks_past_gap_after_delete(self, db):
         """Gaps in sequence (delete #1, add two more) are allowed —
@@ -1846,10 +1936,13 @@ class TestAddInterview:
         explicitly — e.g. restoring a deleted interview at its old slot.
         The UNIQUE constraint catches collisions."""
         pid = database.add_position(make_position())
-        database.add_interview(pid, {
-            "sequence": 3,
-            "scheduled_date": "2026-05-01",
-        })
+        database.add_interview(
+            pid,
+            {
+                "sequence": 3,
+                "scheduled_date": "2026-05-01",
+            },
+        )
         df = database.get_interviews(pid)
         assert list(df["sequence"]) == [3]
 
@@ -1868,6 +1961,7 @@ class TestAddInterview:
         the kwarg has no observable effect (cascade body deferred), but
         the signature is in place for Sub-task 9."""
         import inspect
+
         sig = inspect.signature(database.add_interview)
         param = sig.parameters.get("propagate_status")
         assert param is not None, (
@@ -1922,18 +2016,20 @@ class TestAddInterview:
         but column is plain TEXT so any string is allowed) and notes.
         Round-trip through add_interview → get_interviews."""
         pid = database.add_position(make_position())
-        database.add_interview(pid, {
-            "scheduled_date": "2026-05-01",
-            "format":         "Video",
-            "notes":          "PI chat then committee",
-        })
+        database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-01",
+                "format": "Video",
+                "notes": "PI chat then committee",
+            },
+        )
         row = database.get_interviews(pid).iloc[0]
         assert row["format"] == "Video"
-        assert row["notes"]  == "PI chat then committee"
+        assert row["notes"] == "PI chat then committee"
 
 
 class TestGetInterviews:
-
     def test_empty_when_no_interviews(self, db):
         pid = database.add_position(make_position())
         df = database.get_interviews(pid)
@@ -1963,29 +2059,32 @@ class TestGetInterviews:
 
 
 class TestUpdateInterview:
-
     def test_updates_specified_fields(self, db):
         pid = database.add_position(make_position())
         res = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
-        database.update_interview(res["id"], {
-            "scheduled_date": "2026-06-15",
-            "format":         "Onsite",
-        })
+        database.update_interview(
+            res["id"],
+            {
+                "scheduled_date": "2026-06-15",
+                "format": "Onsite",
+            },
+        )
         row = database.get_interviews(pid).iloc[0]
         assert row["scheduled_date"] == "2026-06-15"
-        assert row["format"]         == "Onsite"
+        assert row["format"] == "Onsite"
 
     def test_partial_update_preserves_other_fields(self, db):
         pid = database.add_position(make_position())
-        res = database.add_interview(pid, {
-            "scheduled_date": "2026-05-01",
-            "notes":          "keep me",
-        })
+        res = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-01",
+                "notes": "keep me",
+            },
+        )
         database.update_interview(res["id"], {"format": "Phone"})
         row = database.get_interviews(pid).iloc[0]
-        assert row["notes"] == "keep me", (
-            "Partial update must not clobber unmentioned columns."
-        )
+        assert row["notes"] == "keep me", "Partial update must not clobber unmentioned columns."
 
     def test_empty_fields_is_noop(self, db):
         """Mirror the update_position / update_recommender / upsert
@@ -1999,7 +2098,6 @@ class TestUpdateInterview:
 
 
 class TestDeleteInterview:
-
     def test_removes_single_row(self, db):
         pid = database.add_position(make_position())
         res = database.add_interview(pid, {"scheduled_date": "2026-05-01"})
@@ -2017,7 +2115,6 @@ class TestDeleteInterview:
 
 
 class TestInterviewsCascade:
-
     def test_delete_position_cascades_through_application_to_interviews(self, db):
         """FK chain: positions → applications (ON DELETE CASCADE via
         applications.position_id → positions.id) → interviews (ON DELETE
@@ -2119,11 +2216,12 @@ class TestAddInterviewR2:
         pid = database.add_position(make_position())
         database.upsert_application(pid, {"applied_date": "2026-04-10"})
         result = database.add_interview(
-            pid, {"scheduled_date": "2026-05-01"}, propagate_status=False,
+            pid,
+            {"scheduled_date": "2026-05-01"},
+            propagate_status=False,
         )
         assert database.get_position(pid)["status"] == config.STATUS_APPLIED, (
-            "propagate_status=False must suppress R2 even when its "
-            "conditions are met."
+            "propagate_status=False must suppress R2 even when its conditions are met."
         )
         assert result["status_changed"] is False
         # Primary INSERT still landed.
@@ -2152,7 +2250,6 @@ class TestAddInterviewR2:
 
 
 class TestAddInterviewAtomicity:
-
     def test_cascade_failure_rolls_back_insert(self, db, monkeypatch):
         """Mirror of TestUpsertApplicationAtomicity: force R2's UPDATE
         to fail by monkeypatching config.STATUS_INTERVIEW to a non-
@@ -2165,6 +2262,7 @@ class TestAddInterviewAtomicity:
 
         class NotBindable:
             pass
+
         monkeypatch.setattr(config, "STATUS_INTERVIEW", NotBindable())
 
         with pytest.raises(Exception):
@@ -2189,9 +2287,9 @@ class TestInterviewsMigration:
     sqlite_master BEFORE the CREATE TABLE IF NOT EXISTS and only runs
     the copy path when the interviews table did not already exist."""
 
-    def _seed_pre_v1_3_applications(self, tmp_path, monkeypatch,
-                                      interview1_date=None,
-                                      interview2_date=None):
+    def _seed_pre_v1_3_applications(
+        self, tmp_path, monkeypatch, interview1_date=None, interview2_date=None
+    ):
         """Build a minimal pre-v1.3 DB: positions (enough columns for
         init_db() to be happy) + applications with the two legacy date
         columns, one row with the requested values. Intentionally does
@@ -2230,9 +2328,7 @@ class TestInterviewsMigration:
                     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
                 )
             """)
-            conn.execute(
-                "INSERT INTO positions (position_name) VALUES ('LegacyPosition')"
-            )
+            conn.execute("INSERT INTO positions (position_name) VALUES ('LegacyPosition')")
             conn.execute(
                 "INSERT INTO applications "
                 "(position_id, interview1_date, interview2_date) VALUES (1, ?, ?)",
@@ -2240,37 +2336,32 @@ class TestInterviewsMigration:
             )
 
     def test_migration_copies_interview1_date_as_sequence_1(self, tmp_path, monkeypatch):
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, interview1_date="2026-05-01"
-        )
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch, interview1_date="2026-05-01")
         database.init_db()
         with database._connect() as conn:
             rows = conn.execute(
-                "SELECT application_id, sequence, scheduled_date "
-                "FROM interviews ORDER BY sequence"
+                "SELECT application_id, sequence, scheduled_date FROM interviews ORDER BY sequence"
             ).fetchall()
         assert len(rows) == 1
         assert rows[0]["application_id"] == 1
-        assert rows[0]["sequence"]       == 1
+        assert rows[0]["sequence"] == 1
         assert rows[0]["scheduled_date"] == "2026-05-01"
 
     def test_migration_copies_interview2_date_as_sequence_2(self, tmp_path, monkeypatch):
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, interview2_date="2026-06-15"
-        )
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch, interview2_date="2026-06-15")
         database.init_db()
         with database._connect() as conn:
             rows = conn.execute(
-                "SELECT application_id, sequence, scheduled_date "
-                "FROM interviews ORDER BY sequence"
+                "SELECT application_id, sequence, scheduled_date FROM interviews ORDER BY sequence"
             ).fetchall()
         assert len(rows) == 1
-        assert rows[0]["sequence"]       == 2
+        assert rows[0]["sequence"] == 2
         assert rows[0]["scheduled_date"] == "2026-06-15"
 
     def test_migration_copies_both_dates_in_order(self, tmp_path, monkeypatch):
         self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             interview1_date="2026-05-01",
             interview2_date="2026-06-15",
         )
@@ -2291,9 +2382,7 @@ class TestInterviewsMigration:
         self._seed_pre_v1_3_applications(tmp_path, monkeypatch)  # both NULL
         database.init_db()
         with database._connect() as conn:
-            n = conn.execute(
-                "SELECT COUNT(*) AS n FROM interviews"
-            ).fetchone()["n"]
+            n = conn.execute("SELECT COUNT(*) AS n FROM interviews").fetchone()["n"]
         assert n == 0
 
     def test_migration_nulls_legacy_columns_after_copy(self, tmp_path, monkeypatch):
@@ -2304,15 +2393,15 @@ class TestInterviewsMigration:
         guarantees idempotence (second migration run finds nothing
         to copy)."""
         self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             interview1_date="2026-05-01",
             interview2_date="2026-06-15",
         )
         database.init_db()
         with database._connect() as conn:
             app = conn.execute(
-                "SELECT interview1_date, interview2_date FROM applications "
-                "WHERE position_id = 1"
+                "SELECT interview1_date, interview2_date FROM applications WHERE position_id = 1"
             ).fetchone()
         assert app["interview1_date"] is None
         assert app["interview2_date"] is None
@@ -2323,7 +2412,8 @@ class TestInterviewsMigration:
         duplicate rows, no re-copy of any NULL-cleared legacy value,
         no IntegrityError from the UNIQUE constraint."""
         self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             interview1_date="2026-05-01",
             interview2_date="2026-06-15",
         )
@@ -2331,8 +2421,7 @@ class TestInterviewsMigration:
         database.init_db()  # second call must be a no-op
         with database._connect() as conn:
             rows = conn.execute(
-                "SELECT sequence FROM interviews WHERE application_id = 1 "
-                "ORDER BY sequence"
+                "SELECT sequence FROM interviews WHERE application_id = 1 ORDER BY sequence"
             ).fetchall()
         assert [r["sequence"] for r in rows] == [1, 2], (
             "Second init_db() must not duplicate migrated rows; "
@@ -2360,6 +2449,7 @@ class TestInterviewsMigration:
 # in the Sub-task 8 migration) and stays in place until the v1.0-rc
 # rebuild drops it.
 
+
 class TestConfirmationSplitMigration:
     """Sub-task 10 / DESIGN §6.3 split-a-dual-purpose-column pattern.
     Pre-v1.3 DBs have applications.confirmation_email as a single TEXT
@@ -2370,8 +2460,7 @@ class TestConfirmationSplitMigration:
     the migration body only fires when the new columns were absent
     pre-ALTER, so a re-run on an already-migrated DB is a no-op."""
 
-    def _seed_pre_v1_3_applications(self, tmp_path, monkeypatch,
-                                      confirmation_email_value=None):
+    def _seed_pre_v1_3_applications(self, tmp_path, monkeypatch, confirmation_email_value=None):
         """Build a minimal pre-v1.3 DB: positions + applications carrying
         the legacy `confirmation_email` TEXT column (but NO
         confirmation_received / confirmation_date). Inserts one row with
@@ -2412,12 +2501,9 @@ class TestConfirmationSplitMigration:
                     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
                 )
             """)
+            conn.execute("INSERT INTO positions (position_name) VALUES ('LegacyPosition')")
             conn.execute(
-                "INSERT INTO positions (position_name) VALUES ('LegacyPosition')"
-            )
-            conn.execute(
-                "INSERT INTO applications "
-                "(position_id, confirmation_email) VALUES (1, ?)",
+                "INSERT INTO applications (position_id, confirmation_email) VALUES (1, ?)",
                 (confirmation_email_value,),
             )
 
@@ -2426,9 +2512,7 @@ class TestConfirmationSplitMigration:
         confirmation_received = 1, leave confirmation_date NULL. No date
         was ever recorded for this shape — the old column's flag
         semantics gave "received, don't know when"."""
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, confirmation_email_value="Y"
-        )
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch, confirmation_email_value="Y")
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
@@ -2461,16 +2545,14 @@ class TestConfirmationSplitMigration:
                 "FROM applications WHERE position_id = 1"
             ).fetchone()
         assert row["confirmation_received"] == 1
-        assert row["confirmation_date"]     == "2026-01-15"
+        assert row["confirmation_date"] == "2026-01-15"
 
     def test_migration_skips_null_legacy_value(self, tmp_path, monkeypatch):
         """NULL in confirmation_email means "no data" — both new
         columns must stay at their defaults (received=0, date=NULL).
         This is the common case for v1.2 rows whose users never
         touched the confirmation field."""
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, confirmation_email_value=None
-        )
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch, confirmation_email_value=None)
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
@@ -2489,9 +2571,7 @@ class TestConfirmationSplitMigration:
         also leave the new columns at their defaults — it is neither
         'Y' nor a date-shaped string, and ambiguous-empty is the same
         semantics as NULL for this column."""
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, confirmation_email_value=""
-        )
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch, confirmation_email_value="")
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
@@ -2499,7 +2579,7 @@ class TestConfirmationSplitMigration:
                 "FROM applications WHERE position_id = 1"
             ).fetchone()
         assert row["confirmation_received"] == 0
-        assert row["confirmation_date"]     is None
+        assert row["confirmation_date"] is None
 
     def test_migration_skips_other_legacy_values(self, tmp_path, monkeypatch):
         """Any legacy value that is neither 'Y' nor a date-shaped
@@ -2507,9 +2587,7 @@ class TestConfirmationSplitMigration:
         typo, a short freetext note, or a pre-v1.0 'N' sentinel.
         The migration must leave the new columns at their defaults
         rather than guess."""
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, confirmation_email_value="N"
-        )
+        self._seed_pre_v1_3_applications(tmp_path, monkeypatch, confirmation_email_value="N")
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
@@ -2532,7 +2610,7 @@ class TestConfirmationSplitMigration:
         pos_id = database.add_position(make_position())
         app = database.get_application(pos_id)
         assert app["confirmation_received"] == 0
-        assert app["confirmation_date"]     is None
+        assert app["confirmation_date"] is None
 
     def test_migration_is_idempotent(self, tmp_path, monkeypatch):
         """Migrate-once gate: first init_db() adds the two columns and
@@ -2554,7 +2632,7 @@ class TestConfirmationSplitMigration:
                 "FROM applications WHERE position_id = 1"
             ).fetchone()
         assert row_first["confirmation_received"] == 1
-        assert row_first["confirmation_date"]     == "2026-01-15"
+        assert row_first["confirmation_date"] == "2026-01-15"
 
         database.init_db()  # second call must be a no-op for this branch
 
@@ -2564,10 +2642,12 @@ class TestConfirmationSplitMigration:
                 "FROM applications WHERE position_id = 1"
             ).fetchone()
         assert row_second["confirmation_received"] == row_first["confirmation_received"]
-        assert row_second["confirmation_date"]     == row_first["confirmation_date"]
+        assert row_second["confirmation_date"] == row_first["confirmation_date"]
 
     def test_migration_null_clears_legacy_confirmation_email_column(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """DESIGN §6.3 step (c): "leave the old column NULL until a
         follow-up release rebuilds the table to drop it." After the
@@ -2592,7 +2672,7 @@ class TestConfirmationSplitMigration:
         # Sanity-pin the new columns first — the NULL-clear must not
         # accidentally undo the translation done by the prior UPDATEs.
         assert row["confirmation_received"] == 1
-        assert row["confirmation_date"]     == "2026-01-15"
+        assert row["confirmation_date"] == "2026-01-15"
         # The DESIGN §6.3 step (c) NULL-clear:
         assert row["confirmation_email"] is None, (
             "Legacy confirmation_email must be NULL-cleared after the "
@@ -2631,6 +2711,7 @@ class TestConfirmationSplitMigration:
 # All other columns (id, position_id, recommender_name, relationship,
 # asked_date, submitted_date, notes) copy through unchanged.
 
+
 class TestRecommendersRebuildMigration:
     """Sub-task 11 / DESIGN §6.2 + §6.3 + D19 + D20: the recommenders
     table rebuild translates pre-v1.3 TEXT columns into the DESIGN-spec
@@ -2640,8 +2721,7 @@ class TestRecommendersRebuildMigration:
     relationship. Idempotence guard is on `confirmed`'s declared type
     so reruns are a strict no-op."""
 
-    def _seed_pre_v1_3_recommenders(self, tmp_path, monkeypatch,
-                                      rows=()):
+    def _seed_pre_v1_3_recommenders(self, tmp_path, monkeypatch, rows=()):
         """Build a minimal pre-v1.3 DB: positions (enough for init_db
         to be happy) + recommenders with the pre-v1.3 schema
         (`confirmed TEXT`, `reminder_sent TEXT`, no `reminder_sent_date`).
@@ -2710,13 +2790,10 @@ class TestRecommendersRebuildMigration:
 
             for r in rows:
                 cols = ["position_id"] + [k for k in r if k != "position_id"]
-                vals = [r.get("position_id", 1)] + [
-                    r[k] for k in cols if k != "position_id"
-                ]
+                vals = [r.get("position_id", 1)] + [r[k] for k in cols if k != "position_id"]
                 placeholders = ", ".join("?" * len(cols))
                 conn.execute(
-                    f"INSERT INTO recommenders ({', '.join(cols)}) "
-                    f"VALUES ({placeholders})",
+                    f"INSERT INTO recommenders ({', '.join(cols)}) VALUES ({placeholders})",
                     vals,
                 )
 
@@ -2724,14 +2801,17 @@ class TestRecommendersRebuildMigration:
 
     def test_migration_translates_confirmed_Y_to_1(self, tmp_path, monkeypatch):
         """Legacy 'Y' in confirmed must translate to INTEGER 1."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. Yes", "confirmed": "Y"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. Yes", "confirmed": "Y"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
-                "SELECT confirmed FROM recommenders "
-                "WHERE recommender_name = 'Dr. Yes'"
+                "SELECT confirmed FROM recommenders WHERE recommender_name = 'Dr. Yes'"
             ).fetchone()
         assert row["confirmed"] == 1, (
             f"Expected confirmed=1 after 'Y' translation, got {row['confirmed']!r}"
@@ -2739,14 +2819,17 @@ class TestRecommendersRebuildMigration:
 
     def test_migration_translates_confirmed_N_to_0(self, tmp_path, monkeypatch):
         """Legacy 'N' in confirmed must translate to INTEGER 0."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. No", "confirmed": "N"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. No", "confirmed": "N"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
-                "SELECT confirmed FROM recommenders "
-                "WHERE recommender_name = 'Dr. No'"
+                "SELECT confirmed FROM recommenders WHERE recommender_name = 'Dr. No'"
             ).fetchone()
         assert row["confirmed"] == 0, (
             f"Expected confirmed=0 after 'N' translation, got {row['confirmed']!r}"
@@ -2757,14 +2840,17 @@ class TestRecommendersRebuildMigration:
         the pending-response tri-state D20 preserves via INTEGER (no
         DEFAULT, NULL-able). The `ELSE NULL` branch in the CASE
         translation captures this."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. Pending", "confirmed": None},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. Pending", "confirmed": None},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
-                "SELECT confirmed FROM recommenders "
-                "WHERE recommender_name = 'Dr. Pending'"
+                "SELECT confirmed FROM recommenders WHERE recommender_name = 'Dr. Pending'"
             ).fetchone()
         assert row["confirmed"] is None
 
@@ -2775,21 +2861,23 @@ class TestRecommendersRebuildMigration:
         cautious path, reflecting "we don't know" as NULL (pending
         response). The user-spec SQL's `CASE confirmed WHEN 'Y' THEN 1
         WHEN 'N' THEN 0 ELSE NULL END` implements this exactly."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. Maybe",  "confirmed": "maybe"},
-            {"recommender_name": "Dr. Empty",  "confirmed": ""},
-            {"recommender_name": "Dr. Lower",  "confirmed": "y"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. Maybe", "confirmed": "maybe"},
+                {"recommender_name": "Dr. Empty", "confirmed": ""},
+                {"recommender_name": "Dr. Lower", "confirmed": "y"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             rows = conn.execute(
-                "SELECT recommender_name, confirmed FROM recommenders "
-                "ORDER BY id"
+                "SELECT recommender_name, confirmed FROM recommenders ORDER BY id"
             ).fetchall()
         for r in rows:
             assert r["confirmed"] is None, (
-                f"Expected confirmed=NULL for {r['recommender_name']!r}, "
-                f"got {r['confirmed']!r}"
+                f"Expected confirmed=NULL for {r['recommender_name']!r}, got {r['confirmed']!r}"
             )
 
     # ── reminder_sent (flag) translation ───────────────────────────
@@ -2797,32 +2885,42 @@ class TestRecommendersRebuildMigration:
     def test_migration_translates_reminder_sent_Y_to_flag_1(self, tmp_path, monkeypatch):
         """Legacy 'Y' in reminder_sent sets the new INTEGER flag to 1;
         reminder_sent_date stays NULL because 'Y' carried no date."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. Reminded", "reminder_sent": "Y"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. Reminded", "reminder_sent": "Y"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
                 "SELECT reminder_sent, reminder_sent_date FROM recommenders "
                 "WHERE recommender_name = 'Dr. Reminded'"
             ).fetchone()
-        assert row["reminder_sent"]      == 1
+        assert row["reminder_sent"] == 1
         assert row["reminder_sent_date"] is None
 
     def test_migration_translates_reminder_sent_null_and_other_to_flag_0(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """Legacy NULL, empty string, 'N', or any freetext that is not
         'Y' and not date-shaped must produce reminder_sent=0 and
         reminder_sent_date=NULL — the user-spec SQL's
         `CASE WHEN reminder_sent = 'Y' THEN 1 ELSE 0 END` defaults
         everything-not-Y to 0."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. Null",  "reminder_sent": None},
-            {"recommender_name": "Dr. Empty", "reminder_sent": ""},
-            {"recommender_name": "Dr. No",    "reminder_sent": "N"},
-            {"recommender_name": "Dr. Other", "reminder_sent": "sometime"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. Null", "reminder_sent": None},
+                {"recommender_name": "Dr. Empty", "reminder_sent": ""},
+                {"recommender_name": "Dr. No", "reminder_sent": "N"},
+                {"recommender_name": "Dr. Other", "reminder_sent": "sometime"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             rows = conn.execute(
@@ -2840,7 +2938,9 @@ class TestRecommendersRebuildMigration:
             )
 
     def test_migration_splits_date_shaped_reminder_sent_into_new_column(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """Pre-v1.3 reminder_sent sometimes stored a date string instead
         of 'Y' — ambiguous dual-purpose semantics exactly like Sub-task
@@ -2851,9 +2951,13 @@ class TestRecommendersRebuildMigration:
         Downstream the page UI will treat a non-NULL reminder_sent_date
         as evidence that a reminder was sent; if the user wants both
         flag and date set they re-save after the migration runs."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. Dated", "reminder_sent": "2026-04-14"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. Dated", "reminder_sent": "2026-04-14"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
@@ -2866,7 +2970,7 @@ class TestRecommendersRebuildMigration:
         #                             THEN reminder_sent ELSE NULL END
         # A date-shaped legacy value is not 'Y', so flag=0; the GLOB
         # matches so the date populates the new column.
-        assert row["reminder_sent"]      == 0
+        assert row["reminder_sent"] == 0
         assert row["reminder_sent_date"] == "2026-04-14"
 
     # ── other-column preservation + structural invariants ──────────
@@ -2877,15 +2981,21 @@ class TestRecommendersRebuildMigration:
         notes verbatim — only the three D19/D20 columns are CASE-
         translated. This test pins every copied column via a single
         seed row with non-NULL values across the board."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[{
-            "recommender_name": "Dr. FullRow",
-            "relationship":     "PhD Advisor",
-            "asked_date":       "2026-03-01",
-            "confirmed":        "Y",
-            "submitted_date":   "2026-04-15",
-            "reminder_sent":    "Y",
-            "notes":            "wrote in early",
-        }])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {
+                    "recommender_name": "Dr. FullRow",
+                    "relationship": "PhD Advisor",
+                    "asked_date": "2026-03-01",
+                    "confirmed": "Y",
+                    "submitted_date": "2026-04-15",
+                    "reminder_sent": "Y",
+                    "notes": "wrote in early",
+                }
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
@@ -2893,30 +3003,32 @@ class TestRecommendersRebuildMigration:
                 "       asked_date, submitted_date, notes "
                 "FROM recommenders WHERE recommender_name = 'Dr. FullRow'"
             ).fetchone()
-        assert row["id"]               == 1
-        assert row["position_id"]      == 1
+        assert row["id"] == 1
+        assert row["position_id"] == 1
         assert row["recommender_name"] == "Dr. FullRow"
-        assert row["relationship"]     == "PhD Advisor"
-        assert row["asked_date"]       == "2026-03-01"
-        assert row["submitted_date"]   == "2026-04-15"
-        assert row["notes"]            == "wrote in early"
+        assert row["relationship"] == "PhD Advisor"
+        assert row["asked_date"] == "2026-03-01"
+        assert row["submitted_date"] == "2026-04-15"
+        assert row["notes"] == "wrote in early"
 
     def test_migration_preserves_fk_cascade_on_delete_position(self, tmp_path, monkeypatch):
         """The rebuild must land the FK + ON DELETE CASCADE on the
         post-rename table (the new DDL re-declares it, but this test
         exercises the end-to-end behaviour). Deleting a position with
         a migrated recommender must cascade the recommender row away."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"position_id": 1, "recommender_name": "Dr. Cascade", "confirmed": "Y"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"position_id": 1, "recommender_name": "Dr. Cascade", "confirmed": "Y"},
+            ],
+        )
         database.init_db()
         # Confirm pre-delete state: recommender exists.
         assert len(database.get_recommenders(1)) == 1
         database.delete_position(1)
         with database._connect() as conn:
-            remaining = conn.execute(
-                "SELECT COUNT(*) AS c FROM recommenders"
-            ).fetchone()["c"]
+            remaining = conn.execute("SELECT COUNT(*) AS c FROM recommenders").fetchone()["c"]
         assert remaining == 0, (
             "FK CASCADE on delete_position must wipe the recommender row "
             f"after the rebuild. Got {remaining} remaining rows."
@@ -2930,16 +3042,23 @@ class TestRecommendersRebuildMigration:
         `sqlite_sequence` table, which SQLite updates on INSERT — so
         copying the rows with explicit id values is sufficient for the
         counter to stay coherent."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. First",  "confirmed": "Y"},
-            {"recommender_name": "Dr. Second", "confirmed": "N"},
-            {"recommender_name": "Dr. Third"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. First", "confirmed": "Y"},
+                {"recommender_name": "Dr. Second", "confirmed": "N"},
+                {"recommender_name": "Dr. Third"},
+            ],
+        )
         database.init_db()
         # Max id pre-add is 3; next must be 4.
-        new_id = database.add_recommender(1, {
-            "recommender_name": "Dr. Fourth",
-        })
+        new_id = database.add_recommender(
+            1,
+            {
+                "recommender_name": "Dr. Fourth",
+            },
+        )
         assert new_id == 4, (
             f"AUTOINCREMENT counter must advance past migrated ids. "
             f"Expected next id=4, got {new_id}"
@@ -2951,18 +3070,21 @@ class TestRecommendersRebuildMigration:
         table_info guard evaluates False and the CREATE-COPY-DROP-
         RENAME does not run. Previously-translated integer values
         must stay put."""
-        self._seed_pre_v1_3_recommenders(tmp_path, monkeypatch, rows=[
-            {"recommender_name": "Dr. First",  "confirmed": "Y",
-             "reminder_sent": "2026-04-14"},
-        ])
+        self._seed_pre_v1_3_recommenders(
+            tmp_path,
+            monkeypatch,
+            rows=[
+                {"recommender_name": "Dr. First", "confirmed": "Y", "reminder_sent": "2026-04-14"},
+            ],
+        )
         database.init_db()
         with database._connect() as conn:
             first = conn.execute(
                 "SELECT id, confirmed, reminder_sent, reminder_sent_date "
                 "FROM recommenders WHERE recommender_name = 'Dr. First'"
             ).fetchone()
-        assert first["confirmed"]          == 1
-        assert first["reminder_sent"]      == 0
+        assert first["confirmed"] == 1
+        assert first["reminder_sent"] == 0
         assert first["reminder_sent_date"] == "2026-04-14"
 
         database.init_db()  # second call must be a no-op
@@ -2972,9 +3094,9 @@ class TestRecommendersRebuildMigration:
                 "SELECT id, confirmed, reminder_sent, reminder_sent_date "
                 "FROM recommenders WHERE recommender_name = 'Dr. First'"
             ).fetchone()
-        assert second["id"]                 == first["id"]
-        assert second["confirmed"]          == first["confirmed"]
-        assert second["reminder_sent"]      == first["reminder_sent"]
+        assert second["id"] == first["id"]
+        assert second["confirmed"] == first["confirmed"]
+        assert second["reminder_sent"] == first["reminder_sent"]
         assert second["reminder_sent_date"] == first["reminder_sent_date"]
 
 
@@ -2986,8 +3108,8 @@ class TestRecommendersRebuildMigration:
 # with the legacy interview1_date/interview2_date columns (those stay NULL
 # after the Sub-task 8 migration).
 
-class TestGetUpcomingInterviews:
 
+class TestGetUpcomingInterviews:
     def test_empty_when_no_interviews_set(self, db):
         database.add_position(make_position())
         df = database.get_upcoming_interviews()
@@ -2995,9 +3117,12 @@ class TestGetUpcomingInterviews:
 
     def test_returns_single_future_interview(self, db):
         pos_id = database.add_position(make_position())
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
+            },
+        )
         df = database.get_upcoming_interviews()
         assert len(df) == 1
 
@@ -3006,12 +3131,18 @@ class TestGetUpcomingInterviews:
         on the same position → two rows in the result (not one
         aggregated row, not capped at 2)."""
         pos_id = database.add_position(make_position())
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
-        })
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=14)).isoformat(),
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=7)).isoformat(),
+            },
+        )
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=14)).isoformat(),
+            },
+        )
         df = database.get_upcoming_interviews()
         assert len(df) == 2, (
             "Row-per-interview shape is load-bearing for D18 — two "
@@ -3020,17 +3151,23 @@ class TestGetUpcomingInterviews:
 
     def test_excludes_past_interview(self, db):
         pos_id = database.add_position(make_position())
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() - timedelta(days=1)).isoformat(),
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() - timedelta(days=1)).isoformat(),
+            },
+        )
         df = database.get_upcoming_interviews()
         assert len(df) == 0
 
     def test_includes_interview_today(self, db):
         pos_id = database.add_position(make_position())
-        database.add_interview(pos_id, {
-            "scheduled_date": date.today().isoformat(),
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": date.today().isoformat(),
+            },
+        )
         df = database.get_upcoming_interviews()
         assert len(df) == 1
 
@@ -3040,7 +3177,7 @@ class TestGetUpcomingInterviews:
         position or insert order."""
         pid_a = database.add_position(make_position({"position_name": "A"}))
         pid_b = database.add_position(make_position({"position_name": "B"}))
-        later  = (date.today() + timedelta(days=20)).isoformat()
+        later = (date.today() + timedelta(days=20)).isoformat()
         sooner = (date.today() + timedelta(days=5)).isoformat()
         database.add_interview(pid_a, {"scheduled_date": later})
         database.add_interview(pid_b, {"scheduled_date": sooner})
@@ -3052,18 +3189,24 @@ class TestGetUpcomingInterviews:
         (name + institute) and the interview identity (scheduled_date,
         plus format and sequence for the Applications page)."""
         pos_id = database.add_position(make_position())
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
-            "format":         "Video",
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+                "format": "Video",
+            },
+        )
         df = database.get_upcoming_interviews()
         for col in (
-            "position_id", "position_name", "institute",
-            "scheduled_date", "format", "sequence",
+            "position_id",
+            "position_name",
+            "institute",
+            "scheduled_date",
+            "format",
+            "sequence",
         ):
             assert col in df.columns, (
-                f"get_upcoming_interviews missing expected column {col!r}; "
-                f"got {list(df.columns)!r}"
+                f"get_upcoming_interviews missing expected column {col!r}; got {list(df.columns)!r}"
             )
 
 
@@ -3072,6 +3215,7 @@ class TestGetUpcomingInterviews:
 # over get_upcoming_deadlines + get_upcoming_interviews; powers the dashboard's
 # Upcoming panel (DESIGN §8.1). Spec lock-down for the column contract is in
 # DESIGN §8.1's "Upcoming-panel column contract" sub-table.
+
 
 class TestGetUpcoming:
     """get_upcoming(days) returns six columns in storage form
@@ -3094,7 +3238,7 @@ class TestGetUpcoming:
 
     EXPECTED_COLUMNS = ["date", "days_left", "label", "kind", "status", "urgency"]
     URGENT = "🔴"
-    WARN   = "🟡"
+    WARN = "🟡"
     DEADLINE_KIND = "Deadline for application"
 
     def test_empty_db_returns_empty_dataframe_with_expected_columns(self, db):
@@ -3103,8 +3247,7 @@ class TestGetUpcoming:
         df = database.get_upcoming()
         assert len(df) == 0, f"Empty DB must return zero rows; got {len(df)}"
         assert list(df.columns) == self.EXPECTED_COLUMNS, (
-            f"Columns must be {self.EXPECTED_COLUMNS!r} in this order, "
-            f"got {list(df.columns)!r}"
+            f"Columns must be {self.EXPECTED_COLUMNS!r} in this order, got {list(df.columns)!r}"
         )
 
     def test_deadline_row_projects_to_unified_shape(self, db):
@@ -3112,17 +3255,21 @@ class TestGetUpcoming:
         Kind, the date-object Date column, the institute-prefixed Label,
         and the position's status."""
         deadline_iso = (date.today() + timedelta(days=10)).isoformat()
-        database.add_position(make_position({
-            "position_name": "P-deadline",
-            "institute":     "Stanford",
-            "deadline_date": deadline_iso,
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "P-deadline",
+                    "institute": "Stanford",
+                    "deadline_date": deadline_iso,
+                }
+            )
+        )
         df = database.get_upcoming()
         assert len(df) == 1
         row = df.iloc[0]
-        assert row["date"]   == date.fromisoformat(deadline_iso)
-        assert row["label"]  == "Stanford: P-deadline"
-        assert row["kind"]   == self.DEADLINE_KIND
+        assert row["date"] == date.fromisoformat(deadline_iso)
+        assert row["label"] == "Stanford: P-deadline"
+        assert row["kind"] == self.DEADLINE_KIND
         assert row["status"] == config.STATUS_SAVED
 
     def test_interview_row_projects_to_unified_shape(self, db):
@@ -3132,18 +3279,22 @@ class TestGetUpcoming:
         (R2 cascade does NOT fire from [SAVED] — position stays at
         default)."""
         interview_iso = (date.today() + timedelta(days=10)).isoformat()
-        pos_id = database.add_position(make_position({
-            "position_name": "P-int",
-            "institute":     "MIT",
-            "deadline_date": None,
-        }))
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "position_name": "P-int",
+                    "institute": "MIT",
+                    "deadline_date": None,
+                }
+            )
+        )
         database.add_interview(pos_id, {"scheduled_date": interview_iso})
         df = database.get_upcoming()
         assert len(df) == 1
         row = df.iloc[0]
-        assert row["date"]   == date.fromisoformat(interview_iso)
-        assert row["label"]  == "MIT: P-int"
-        assert row["kind"]   == "Interview 1"
+        assert row["date"] == date.fromisoformat(interview_iso)
+        assert row["label"] == "MIT: P-int"
+        assert row["kind"] == "Interview 1"
         assert row["status"] == config.STATUS_SAVED
 
     def test_date_column_holds_datetime_date_objects(self, db):
@@ -3153,9 +3304,13 @@ class TestGetUpcoming:
         every cell is a date instance. Per-element check is the
         load-bearing assertion (a regression to ISO-string Dates would
         not catch on a column.dtype check)."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming()
         cells = list(df["date"])
         assert all(isinstance(c, date) for c in cells), (
@@ -3165,26 +3320,38 @@ class TestGetUpcoming:
 
     def test_days_left_today_for_zero_days(self, db):
         """+0d → 'today' — the no-arithmetic case for the user."""
-        database.add_position(make_position({
-            "deadline_date": date.today().isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": date.today().isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming()
         assert df.iloc[0]["days_left"] == "today"
 
     def test_days_left_singular_for_one_day(self, db):
         """+1d → 'in 1 day' — pinned because singular/plural agreement
         is locked DESIGN copy."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=1)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=1)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming()
         assert df.iloc[0]["days_left"] == "in 1 day"
 
     def test_days_left_plural_for_multiple_days(self, db):
         """+10d → 'in 10 days' — and the same template for any N > 1."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming()
         assert df.iloc[0]["days_left"] == "in 10 days"
 
@@ -3193,15 +3360,18 @@ class TestGetUpcoming:
         drops the prefix and shows just the position name — the
         colon-prefix would look broken otherwise."""
         deadline_iso = (date.today() + timedelta(days=5)).isoformat()
-        database.add_position(make_position({
-            "position_name": "Standalone",
-            "institute":     None,
-            "deadline_date": deadline_iso,
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Standalone",
+                    "institute": None,
+                    "deadline_date": deadline_iso,
+                }
+            )
+        )
         df = database.get_upcoming()
         assert df.iloc[0]["label"] == "Standalone", (
-            f"Missing institute must produce bare position_name. "
-            f"Got: {df.iloc[0]['label']!r}"
+            f"Missing institute must produce bare position_name. Got: {df.iloc[0]['label']!r}"
         )
 
     def test_label_falls_back_when_institute_is_empty_string(self, db):
@@ -3209,11 +3379,15 @@ class TestGetUpcoming:
         separately because get_all_positions / pandas may surface
         '' rather than NaN/None depending on the round-trip."""
         deadline_iso = (date.today() + timedelta(days=5)).isoformat()
-        database.add_position(make_position({
-            "position_name": "Standalone",
-            "institute":     "",
-            "deadline_date": deadline_iso,
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Standalone",
+                    "institute": "",
+                    "deadline_date": deadline_iso,
+                }
+            )
+        )
         df = database.get_upcoming()
         assert df.iloc[0]["label"] == "Standalone"
 
@@ -3222,17 +3396,27 @@ class TestGetUpcoming:
         are 'Interview 1' and 'Interview 2' (1-indexed), pulling from
         interviews.sequence. Pinning both rows together protects against
         a regression that hardcodes the sequence number."""
-        pos_id = database.add_position(make_position({
-            "position_name": "Multi",
-            "institute":     "U",
-            "deadline_date": None,
-        }))
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
-        })
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=14)).isoformat(),
-        })
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "position_name": "Multi",
+                    "institute": "U",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+            },
+        )
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=14)).isoformat(),
+            },
+        )
         df = database.get_upcoming()
         assert len(df) == 2
         assert list(df["kind"]) == ["Interview 1", "Interview 2"], (
@@ -3244,30 +3428,45 @@ class TestGetUpcoming:
         """A's deadline at +20d, B's interview at +5d → B first (with
         its 'Interview 1' Kind), then A (with the deadline Kind).
         Sort key is the unified Date column."""
-        database.add_position(make_position({
-            "position_name": "A",
-            "institute":     "InstA",
-            "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
-        }))
-        b_id = database.add_position(make_position({
-            "position_name": "B",
-            "institute":     "InstB",
-            "deadline_date": None,
-        }))
-        database.add_interview(b_id, {
-            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
-        })
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "A",
+                    "institute": "InstA",
+                    "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
+                }
+            )
+        )
+        b_id = database.add_position(
+            make_position(
+                {
+                    "position_name": "B",
+                    "institute": "InstB",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_interview(
+            b_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+            },
+        )
         df = database.get_upcoming()
-        assert list(df["kind"])  == ["Interview 1", self.DEADLINE_KIND]
+        assert list(df["kind"]) == ["Interview 1", self.DEADLINE_KIND]
         assert list(df["label"]) == ["InstB: B", "InstA: A"]
 
     def test_urgency_red_within_urgent_threshold(self, db):
         """Days-away ≤ DEADLINE_URGENT_DAYS → URGENT, boundary inclusive."""
         for offset in (0, config.DEADLINE_URGENT_DAYS):
-            database.add_position(make_position({
-                "position_name": f"P-{offset}",
-                "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
-            }))
+            database.add_position(
+                make_position(
+                    {
+                        "position_name": f"P-{offset}",
+                        "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+                    }
+                )
+            )
         df = database.get_upcoming()
         assert all(u == self.URGENT for u in df["urgency"]), (
             f"Days-away ≤ DEADLINE_URGENT_DAYS={config.DEADLINE_URGENT_DAYS} "
@@ -3281,10 +3480,14 @@ class TestGetUpcoming:
             config.DEADLINE_URGENT_DAYS + 1,
             config.DEADLINE_ALERT_DAYS,
         ):
-            database.add_position(make_position({
-                "position_name": f"P-{offset}",
-                "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
-            }))
+            database.add_position(
+                make_position(
+                    {
+                        "position_name": f"P-{offset}",
+                        "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+                    }
+                )
+            )
         df = database.get_upcoming()
         assert all(u == self.WARN for u in df["urgency"]), (
             f"Days-away in ({config.DEADLINE_URGENT_DAYS}, "
@@ -3299,9 +3502,13 @@ class TestGetUpcoming:
         regression that hardcodes the comparison constant in the
         function body."""
         offset = config.DEADLINE_URGENT_DAYS
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+                }
+            )
+        )
         monkeypatch.setattr(config, "DEADLINE_URGENT_DAYS", offset - 1)
         df = database.get_upcoming()
         assert df.iloc[0]["urgency"] == self.WARN, (
@@ -3316,9 +3523,13 @@ class TestGetUpcoming:
         DEADLINE_URGENT_DAYS shows '🔴' AND the days_left phrasing for
         that exact offset — they cannot disagree."""
         offset = config.DEADLINE_URGENT_DAYS
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=offset)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming()
         row = df.iloc[0]
         assert row["urgency"] == self.URGENT
@@ -3340,11 +3551,14 @@ class TestGetUpcoming:
         §8.1's window contract applies it to interviews too. An
         interview one day past the default window is excluded."""
         pos_id = database.add_position(make_position({"deadline_date": None}))
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(
-                days=config.DEADLINE_ALERT_DAYS + 1
-            )).isoformat(),
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (
+                    date.today() + timedelta(days=config.DEADLINE_ALERT_DAYS + 1)
+                ).isoformat(),
+            },
+        )
         df = database.get_upcoming()
         assert len(df) == 0
 
@@ -3354,9 +3568,12 @@ class TestGetUpcoming:
         but the row is still surfaced — the user asked for the wider
         window explicitly. Days_left still renders correctly."""
         pos_id = database.add_position(make_position({"deadline_date": None}))
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=60)).isoformat(),
-        })
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=60)).isoformat(),
+            },
+        )
         df = database.get_upcoming(days=90)
         assert len(df) == 1
         assert df.iloc[0]["urgency"] == "", (
@@ -3372,9 +3589,13 @@ class TestGetUpcoming:
         """Terminal-status filtering passes through from
         get_upcoming_deadlines — a [REJECTED] position's deadline does
         NOT appear in the upcoming feed."""
-        pos_id = database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         database.update_position(pos_id, {"status": config.STATUS_REJECTED})
         df = database.get_upcoming()
         assert len(df) == 0
@@ -3383,9 +3604,13 @@ class TestGetUpcoming:
         """T4-A is the storage layer; STATUS_LABELS mapping is T4-B's
         responsibility. Pin that the raw bracketed sentinel makes it
         through the projection unchanged."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         df = database.get_upcoming()
         assert df.iloc[0]["status"] == config.STATUS_SAVED
         assert df.iloc[0]["status"].startswith("["), (
@@ -3395,8 +3620,8 @@ class TestGetUpcoming:
 
 # ── get_pending_recommenders ──────────────────────────────────────────────────
 
-class TestGetPendingRecommenders:
 
+class TestGetPendingRecommenders:
     def test_empty_when_no_recommenders(self, db):
         database.add_position(make_position())
         df = database.get_pending_recommenders(7)
@@ -3404,10 +3629,13 @@ class TestGetPendingRecommenders:
 
     def test_includes_recommender_asked_beyond_threshold(self, db):
         pos_id = database.add_position(make_position())
-        database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": (date.today() - timedelta(days=8)).isoformat(),
-        })
+        database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": (date.today() - timedelta(days=8)).isoformat(),
+            },
+        )
         df = database.get_pending_recommenders(7)
         assert len(df) == 1
         assert df.iloc[0]["recommender_name"] == "Dr. Smith"
@@ -3415,58 +3643,71 @@ class TestGetPendingRecommenders:
     def test_excludes_recommender_asked_within_threshold(self, db):
         """Asked 6 days ago with days=7 → should NOT be alerted."""
         pos_id = database.add_position(make_position())
-        database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": (date.today() - timedelta(days=6)).isoformat(),
-        })
+        database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": (date.today() - timedelta(days=6)).isoformat(),
+            },
+        )
         df = database.get_pending_recommenders(7)
         assert len(df) == 0
 
     def test_excludes_recommender_who_submitted(self, db):
         pos_id = database.add_position(make_position())
-        rec_id = database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Jones",
-            "asked_date": (date.today() - timedelta(days=10)).isoformat(),
-        })
-        database.update_recommender(rec_id, {
-            "submitted_date": date.today().isoformat(),
-        })
+        rec_id = database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Jones",
+                "asked_date": (date.today() - timedelta(days=10)).isoformat(),
+            },
+        )
+        database.update_recommender(
+            rec_id,
+            {
+                "submitted_date": date.today().isoformat(),
+            },
+        )
         df = database.get_pending_recommenders(7)
         assert len(df) == 0
 
-    def test_empty_string_submitted_date_currently_excluded(self, db):
-        """Pin the **current** behaviour and document a known asymmetry.
+    @pytest.mark.xfail(
+        strict=False,
+        reason=(
+            "Known asymmetry: get_pending_recommenders filters only on "
+            "submitted_date IS NULL, but is_all_recs_submitted also treats "
+            "submitted_date='' as unsubmitted. Fix by adding "
+            "OR submitted_date = '' to the get_pending_recommenders WHERE "
+            "clause, then remove this xfail marker."
+        ),
+    )
+    def test_empty_string_submitted_date_not_in_pending_alert(self, db):
+        """Desired behaviour: a recommender whose submitted_date was cleared
+        to '' (which the page legitimately writes per the Notes-tab
+        clear-field round-trip contract) should appear in the pending-alert
+        list, because '' means "no submission yet" — the same as NULL.
 
-        is_all_recs_submitted (database.py) treats both ``NULL`` and
-        ``""`` as "not submitted" (its WHERE is
-        ``submitted_date IS NULL OR submitted_date = ''``) — pinned by
-        TestIsAllRecsSubmitted::
-        test_empty_string_submitted_date_counts_as_unsubmitted.
-
-        get_pending_recommenders only filters on ``submitted_date IS NULL``.
-        A recommender whose date got cleared to ``""`` (which the page
-        legitimately writes per the Notes-tab clear-field round-trip
-        contract) is therefore "unsubmitted" by one helper but **silently
-        excluded** from the alert list by the other. This test pins the
-        current asymmetric behaviour so a future production change to
-        normalise the two helpers (e.g. adding ``OR submitted_date = ''``
-        to get_pending_recommenders) is a deliberate edit, not an
-        invisible drift — the test will then need to flip and assert
-        len(df) == 1, and an empty-string date will start surfacing as a
-        pending alert."""
+        Currently xfail: get_pending_recommenders filters only on
+        ``submitted_date IS NULL``, silently excluding '' rows, while
+        is_all_recs_submitted correctly treats both NULL and '' as
+        unsubmitted (``submitted_date IS NULL OR submitted_date = ''``).
+        The asymmetry is pinned here so the fix is a deliberate edit, not
+        an invisible drift. When the fix lands this test will pass and
+        pytest will report it as XPASS — remove the xfail decorator then."""
         pos_id = database.add_position(make_position())
-        database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Jones",
-            "asked_date":     (date.today() - timedelta(days=10)).isoformat(),
-            "submitted_date": "",
-        })
+        database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Jones",
+                "asked_date": (date.today() - timedelta(days=10)).isoformat(),
+                "submitted_date": "",
+            },
+        )
         df = database.get_pending_recommenders(7)
-        assert len(df) == 0, (
-            "Current behaviour: empty-string submitted_date is treated as "
-            "'submitted' by get_pending_recommenders (only IS NULL is "
-            "filtered). is_all_recs_submitted DISAGREES — both NULL and "
-            "'' count as unsubmitted there. If you reconcile the two, "
-            "flip this assertion to len(df) == 1 and update this docstring."
+        assert len(df) == 1, (
+            "A recommender with submitted_date='' must appear in the pending "
+            "alert list ('' means unsubmitted, same as NULL). "
+            "Fix: add OR submitted_date = '' to get_pending_recommenders."
         )
 
     def test_excludes_recommender_with_no_asked_date(self, db):
@@ -3477,10 +3718,13 @@ class TestGetPendingRecommenders:
 
     def test_result_has_join_columns(self, db):
         pos_id = database.add_position(make_position())
-        database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": (date.today() - timedelta(days=10)).isoformat(),
-        })
+        database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": (date.today() - timedelta(days=10)).isoformat(),
+            },
+        )
         df = database.get_pending_recommenders(7)
         for col in ("position_name", "institute", "deadline_date"):
             assert col in df.columns
@@ -3488,8 +3732,8 @@ class TestGetPendingRecommenders:
 
 # ── compute_materials_readiness ───────────────────────────────────────────────
 
-class TestComputeMaterialsReadiness:
 
+class TestComputeMaterialsReadiness:
     def test_empty_db_returns_zeros(self, db):
         result = database.compute_materials_readiness()
         assert result == {"ready": 0, "pending": 0}
@@ -3516,10 +3760,15 @@ class TestComputeMaterialsReadiness:
 
     def test_pending_when_one_of_many_required_docs_not_done(self, db):
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {
-            "req_cv": "Yes", "done_cv": 1,
-            "req_cover_letter": "Yes", "done_cover_letter": 0,   # not done
-        })
+        database.update_position(
+            pos_id,
+            {
+                "req_cv": "Yes",
+                "done_cv": 1,
+                "req_cover_letter": "Yes",
+                "done_cover_letter": 0,  # not done
+            },
+        )
         result = database.compute_materials_readiness()
         assert result["ready"] == 0
         assert result["pending"] == 1
@@ -3527,10 +3776,15 @@ class TestComputeMaterialsReadiness:
     def test_optional_docs_not_required_for_ready(self, db):
         """req_* = 'Optional' means the doc exists but is not required for readiness."""
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {
-            "req_cv": "Yes", "done_cv": 1,
-            "req_transcripts": "Optional", "done_transcripts": 0,  # Optional, not done
-        })
+        database.update_position(
+            pos_id,
+            {
+                "req_cv": "Yes",
+                "done_cv": 1,
+                "req_transcripts": "Optional",
+                "done_transcripts": 0,  # Optional, not done
+            },
+        )
         result = database.compute_materials_readiness()
         # 'Optional' != 'Yes', so done_transcripts=0 does not make it pending
         assert result["ready"] == 1
@@ -3538,10 +3792,14 @@ class TestComputeMaterialsReadiness:
 
     def test_excludes_closed_positions(self, db):
         pos_id = database.add_position(make_position())
-        database.update_position(pos_id, {
-            "status": "[CLOSED]",
-            "req_cv": "Yes", "done_cv": 0,
-        })
+        database.update_position(
+            pos_id,
+            {
+                "status": "[CLOSED]",
+                "req_cv": "Yes",
+                "done_cv": 0,
+            },
+        )
         result = database.compute_materials_readiness()
         assert result == {"ready": 0, "pending": 0}
 
@@ -3558,7 +3816,7 @@ class TestComputeMaterialsReadiness:
         database.add_position(make_position({"position_name": "P3"}))
 
         result = database.compute_materials_readiness()
-        assert result["ready"]   == 1
+        assert result["ready"] == 1
         assert result["pending"] == 1
 
     def test_active_statuses_drive_from_config_aliases(self, db, monkeypatch):
@@ -3580,8 +3838,8 @@ class TestComputeMaterialsReadiness:
         assert database.compute_materials_readiness() == {"ready": 0, "pending": 1}
 
         # Patch all three aliases to sentinel values the DB never holds.
-        monkeypatch.setattr(config, "STATUS_SAVED",     "[SENTINEL_SAVED]")
-        monkeypatch.setattr(config, "STATUS_APPLIED",   "[SENTINEL_APPLIED]")
+        monkeypatch.setattr(config, "STATUS_SAVED", "[SENTINEL_SAVED]")
+        monkeypatch.setattr(config, "STATUS_APPLIED", "[SENTINEL_APPLIED]")
         monkeypatch.setattr(config, "STATUS_INTERVIEW", "[SENTINEL_INTERVIEW]")
 
         # Post-patch: the real row's status ("[SAVED]") is no longer in
@@ -3638,15 +3896,15 @@ class TestComputeMaterialsReadiness:
 
 # ── Edge cases for empty fields dicts (F2 / F3 fixes) ────────────────────────
 
-class TestEmptyFieldsGuards:
 
+class TestEmptyFieldsGuards:
     def test_update_position_empty_fields_is_noop(self, db):
         """update_position({}) must return without error rather than emitting
         'UPDATE ... SET  WHERE id=?' which is invalid SQL (F2)."""
         pos_id = database.add_position(make_position())
         database.update_position(pos_id, {})
         pos = database.get_position(pos_id)
-        assert pos["position_name"] == "BioStats Postdoc"   # unchanged
+        assert pos["position_name"] == "BioStats Postdoc"  # unchanged
 
     def test_update_recommender_empty_fields_is_noop(self, db):
         """update_recommender({}) must return without error (F2)."""
@@ -3654,35 +3912,38 @@ class TestEmptyFieldsGuards:
         rec_id = database.add_recommender(pos_id, {"recommender_name": "Dr. Smith"})
         database.update_recommender(rec_id, {})
         recs = database.get_recommenders(pos_id)
-        assert recs.iloc[0]["recommender_name"] == "Dr. Smith"   # unchanged
+        assert recs.iloc[0]["recommender_name"] == "Dr. Smith"  # unchanged
 
     def test_upsert_application_empty_fields_is_noop(self, db):
         """upsert_application({}) must return without error (F3)."""
         pos_id = database.add_position(make_position())
         database.upsert_application(pos_id, {})
         app = database.get_application(pos_id)
-        assert app["result"] == "Pending"   # unchanged default
+        assert app["result"] == "Pending"  # unchanged default
 
 
 # ── TERMINAL_STATUSES used by get_upcoming_deadlines (F5 fix) ────────────────
 
-class TestTerminalStatusesConfig:
 
+class TestTerminalStatusesConfig:
     def test_all_terminal_statuses_excluded_from_deadlines(self, db):
         """Every status in config.TERMINAL_STATUSES must be filtered out by
         get_upcoming_deadlines — the query now reads from config, not hardcoded
         strings, so adding a new terminal status to config automatically takes
         effect here (F5)."""
         for status in config.TERMINAL_STATUSES:
-            pos_id = database.add_position(make_position({
-                "position_name": f"pos_{status}",
-                "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-            }))
+            pos_id = database.add_position(
+                make_position(
+                    {
+                        "position_name": f"pos_{status}",
+                        "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                    }
+                )
+            )
             database.update_position(pos_id, {"status": status})
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 0, (
-            f"Expected 0 rows; terminal statuses leaked into results: "
-            f"{df['status'].tolist()}"
+            f"Expected 0 rows; terminal statuses leaked into results: {df['status'].tolist()}"
         )
 
     # `test_terminal_statuses_are_subset_of_status_values` lives in
@@ -3692,8 +3953,8 @@ class TestTerminalStatusesConfig:
 
 # ── _connect rollback on exception ───────────────────────────────────────────
 
-class TestConnectContextManager:
 
+class TestConnectContextManager:
     def test_commits_on_clean_exit(self, db):
         with database._connect() as conn:
             conn.execute(
@@ -3739,6 +4000,7 @@ class TestConnectContextManager:
 # exports.write_all() to raise via monkeypatch, calls the writer, and asserts
 # the exception is swallowed AND a log entry was emitted.
 
+
 class TestExportsLogAndContinue:
     """DESIGN §7 database.py contract #1 — every writer must swallow an
     exports.write_all() failure, log it, and continue to report success
@@ -3749,6 +4011,7 @@ class TestExportsLogAndContinue:
         """Force exports.write_all() to raise on every call. Returns the
         raised exception's message so tests can pin it loosely."""
         import exports
+
         msg = "simulated exports.write_all failure"
 
         def _explode():
@@ -3757,20 +4020,27 @@ class TestExportsLogAndContinue:
         monkeypatch.setattr(exports, "write_all", _explode)
         return msg
 
-    @pytest.mark.parametrize("writer_name", [
-        "add_position",
-        "update_position",
-        "delete_position",
-        "upsert_application",
-        "add_interview",
-        "update_interview",
-        "delete_interview",
-        "add_recommender",
-        "update_recommender",
-        "delete_recommender",
-    ])
+    @pytest.mark.parametrize(
+        "writer_name",
+        [
+            "add_position",
+            "update_position",
+            "delete_position",
+            "upsert_application",
+            "add_interview",
+            "update_interview",
+            "delete_interview",
+            "add_recommender",
+            "update_recommender",
+            "delete_recommender",
+        ],
+    )
     def test_writer_swallows_exports_failure(
-        self, db, monkeypatch, caplog, writer_name,
+        self,
+        db,
+        monkeypatch,
+        caplog,
+        writer_name,
     ):
         """The writer must NOT re-raise an exports.write_all() failure.
         Parametrized so a single failure surfaces as a unique line in
@@ -3779,41 +4049,25 @@ class TestExportsLogAndContinue:
         # have something to act on. Each baseline write itself calls
         # exports.write_all() — that's intentional happy-path coverage.
         pid = database.add_position({"position_name": "Baseline"})
-        iid = database.add_interview(
-            pid, {"scheduled_date": "2026-12-01"}
-        )["id"]
-        rid = database.add_recommender(
-            pid, {"recommender_name": "Dr. Baseline"}
-        )
+        iid = database.add_interview(pid, {"scheduled_date": "2026-12-01"})["id"]
+        rid = database.add_recommender(pid, {"recommender_name": "Dr. Baseline"})
 
         # Arm boom AFTER baseline so every subsequent exports.write_all()
         # raises.
         self._arm_boom(monkeypatch)
 
         callers = {
-            "add_position":      lambda: database.add_position(
-                {"position_name": "Z"}
-            ),
-            "update_position":   lambda: database.update_position(
-                pid, {"position_name": "Y"}
-            ),
-            "delete_position":   lambda: database.delete_position(pid),
+            "add_position": lambda: database.add_position({"position_name": "Z"}),
+            "update_position": lambda: database.update_position(pid, {"position_name": "Y"}),
+            "delete_position": lambda: database.delete_position(pid),
             "upsert_application": lambda: database.upsert_application(
                 pid, {"applied_date": "2026-01-01"}
             ),
-            "add_interview":     lambda: database.add_interview(
-                pid, {"scheduled_date": "2026-12-15"}
-            ),
-            "update_interview":  lambda: database.update_interview(
-                iid, {"notes": "updated"}
-            ),
-            "delete_interview":  lambda: database.delete_interview(iid),
-            "add_recommender":   lambda: database.add_recommender(
-                pid, {"recommender_name": "Dr. Y"}
-            ),
-            "update_recommender": lambda: database.update_recommender(
-                rid, {"notes": "updated"}
-            ),
+            "add_interview": lambda: database.add_interview(pid, {"scheduled_date": "2026-12-15"}),
+            "update_interview": lambda: database.update_interview(iid, {"notes": "updated"}),
+            "delete_interview": lambda: database.delete_interview(iid),
+            "add_recommender": lambda: database.add_recommender(pid, {"recommender_name": "Dr. Y"}),
+            "update_recommender": lambda: database.update_recommender(rid, {"notes": "updated"}),
             "delete_recommender": lambda: database.delete_recommender(rid),
         }
 
@@ -3832,17 +4086,17 @@ class TestExportsLogAndContinue:
         # what matters is that SOMETHING shows up in the error channel
         # so operators can correlate a missing markdown file with a
         # specific writer call.
-        assert any(
-            "export" in (r.message or "").lower()
-            for r in caplog.records
-        ), (
+        assert any("export" in (r.message or "").lower() for r in caplog.records), (
             f"Expected at least one log entry mentioning 'export' "
             f"after {writer_name} caught its exports.write_all() "
             f"failure. Got: {[r.message for r in caplog.records]}"
         )
 
     def test_db_write_commits_even_when_exports_fails(
-        self, db, monkeypatch, caplog,
+        self,
+        db,
+        monkeypatch,
+        caplog,
     ):
         """Load-bearing semantic pin: when exports.write_all() raises,
         the DB write must STILL be committed and visible to subsequent
@@ -3851,13 +4105,10 @@ class TestExportsLogAndContinue:
         self._arm_boom(monkeypatch)
 
         with caplog.at_level("ERROR"):
-            pid = database.add_position(
-                {"position_name": "Persisted Despite Boom"}
-            )
+            pid = database.add_position({"position_name": "Persisted Despite Boom"})
 
         assert isinstance(pid, int) and pid > 0, (
-            f"add_position must return a real id even when exports "
-            f"fails. Got {pid!r}"
+            f"add_position must return a real id even when exports fails. Got {pid!r}"
         )
         # Read back via a DIFFERENT writer/reader to confirm the row
         # was actually committed (not just returned in-memory).
@@ -3868,6 +4119,7 @@ class TestExportsLogAndContinue:
 
 
 # ── get_applications_table ────────────────────────────────────────────────────
+
 
 class TestGetApplicationsTable:
     """get_applications_table() returns the joined positions × applications
@@ -3912,8 +4164,7 @@ class TestGetApplicationsTable:
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 0
         assert list(df.columns) == self.EXPECTED_COLUMNS, (
-            f"Columns must be {self.EXPECTED_COLUMNS!r} in this order, "
-            f"got {list(df.columns)!r}"
+            f"Columns must be {self.EXPECTED_COLUMNS!r} in this order, got {list(df.columns)!r}"
         )
 
     def test_one_row_per_position(self, db):
@@ -3928,18 +4179,22 @@ class TestGetApplicationsTable:
     def test_position_fields_surface(self, db):
         """The positions-side fields land in the joined view with
         their stored values."""
-        pid = database.add_position(make_position({
-            "position_name": "BioStats",
-            "institute":     "Stanford",
-            "deadline_date": "2026-05-15",
-        }))
+        pid = database.add_position(
+            make_position(
+                {
+                    "position_name": "BioStats",
+                    "institute": "Stanford",
+                    "deadline_date": "2026-05-15",
+                }
+            )
+        )
         df = database.get_applications_table()
         row = df.iloc[0]
-        assert row["position_id"]   == pid
+        assert row["position_id"] == pid
         assert row["position_name"] == "BioStats"
-        assert row["institute"]     == "Stanford"
+        assert row["institute"] == "Stanford"
         assert row["deadline_date"] == "2026-05-15"
-        assert row["status"]        == config.STATUS_SAVED
+        assert row["status"] == config.STATUS_SAVED
 
     def test_application_defaults_after_add_position(self, db):
         """A freshly-added position has its applications row
@@ -3951,11 +4206,11 @@ class TestGetApplicationsTable:
         database.add_position(make_position())
         df = database.get_applications_table()
         row = df.iloc[0]
-        assert row["applied_date"]          is None
+        assert row["applied_date"] is None
         assert row["confirmation_received"] == 0
-        assert row["confirmation_date"]     is None
-        assert row["response_type"]         is None
-        assert row["result"]                == config.RESULT_DEFAULT
+        assert row["confirmation_date"] is None
+        assert row["response_type"] is None
+        assert row["result"] == config.RESULT_DEFAULT
 
     def test_application_fields_surface_after_upsert(self, db):
         """upsert_application updates show up on the next read. Pin the
@@ -3965,35 +4220,51 @@ class TestGetApplicationsTable:
         R1/R3) rather than here — keeping the assertion focused on the
         join + column-projection contract."""
         pid = database.add_position(make_position())
-        database.upsert_application(pid, {
-            "applied_date":          "2026-04-18",
-            "confirmation_received": 1,
-            "confirmation_date":     "2026-04-19",
-            "response_type":         "Interview Invite",
-        }, propagate_status=False)
+        database.upsert_application(
+            pid,
+            {
+                "applied_date": "2026-04-18",
+                "confirmation_received": 1,
+                "confirmation_date": "2026-04-19",
+                "response_type": "Interview Invite",
+            },
+            propagate_status=False,
+        )
         df = database.get_applications_table()
         row = df.iloc[0]
-        assert row["applied_date"]          == "2026-04-18"
+        assert row["applied_date"] == "2026-04-18"
         assert row["confirmation_received"] == 1
-        assert row["confirmation_date"]     == "2026-04-19"
-        assert row["response_type"]         == "Interview Invite"
+        assert row["confirmation_date"] == "2026-04-19"
+        assert row["response_type"] == "Interview Invite"
 
     def test_ordered_by_deadline_asc_nulls_last(self, db):
         """Primary sort: deadline_date ASC NULLS LAST. NULL deadlines
         sort to the bottom. Mirrors the get_all_positions contract
         (§7 #5) so the two readers agree on row order."""
-        database.add_position(make_position({
-            "position_name": "Late",
-            "deadline_date": "2026-06-30",
-        }))
-        database.add_position(make_position({
-            "position_name": "No deadline",
-            "deadline_date": None,
-        }))
-        database.add_position(make_position({
-            "position_name": "Soon",
-            "deadline_date": "2026-04-15",
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Late",
+                    "deadline_date": "2026-06-30",
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "No deadline",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Soon",
+                    "deadline_date": "2026-04-15",
+                }
+            )
+        )
         df = database.get_applications_table()
         assert list(df["position_name"]) == ["Soon", "Late", "No deadline"]
 
@@ -4003,19 +4274,26 @@ class TestGetApplicationsTable:
         — without it, SQLite is free to return ties in either order,
         which would surface as a flickering selection across reruns
         on the Applications page (per streamlit-state-gotchas #12)."""
-        pid_a = database.add_position(make_position({
-            "position_name": "A",
-            "deadline_date": "2026-05-01",
-        }))
-        pid_b = database.add_position(make_position({
-            "position_name": "B",
-            "deadline_date": "2026-05-01",
-        }))
+        pid_a = database.add_position(
+            make_position(
+                {
+                    "position_name": "A",
+                    "deadline_date": "2026-05-01",
+                }
+            )
+        )
+        pid_b = database.add_position(
+            make_position(
+                {
+                    "position_name": "B",
+                    "deadline_date": "2026-05-01",
+                }
+            )
+        )
         df = database.get_applications_table()
         ids = list(df["position_id"])
         assert ids == sorted([pid_a, pid_b]), (
-            f"Equal-deadline rows must order by position_id ASC; "
-            f"got {ids!r}"
+            f"Equal-deadline rows must order by position_id ASC; got {ids!r}"
         )
 
     def test_includes_terminal_status_rows(self, db):
@@ -4026,13 +4304,11 @@ class TestGetApplicationsTable:
         (DESIGN §8.3); the reader stays general so a future 'All'
         filter selection can surface every row without a second query."""
         database.add_position(make_position({"position_name": "Open"}))
-        pid_closed = database.add_position(
-            make_position({"position_name": "Closed-out"})
-        )
+        pid_closed = database.add_position(make_position({"position_name": "Closed-out"}))
         database.update_position(pid_closed, {"status": config.STATUS_CLOSED})
 
         df = database.get_applications_table()
         assert len(df) == 2
         statuses = dict(zip(df["position_name"], df["status"]))
-        assert statuses["Open"]       == config.STATUS_SAVED
+        assert statuses["Open"] == config.STATUS_SAVED
         assert statuses["Closed-out"] == config.STATUS_CLOSED

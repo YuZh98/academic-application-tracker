@@ -5,28 +5,40 @@
 # Full content tests belong in Phase 6 once the generators are implemented.
 
 from pathlib import Path
+
+import pytest
+
 import exports
 
 
-def test_write_all_does_not_raise():
+@pytest.fixture
+def isolated_exports_dir(tmp_path, monkeypatch):
+    """Redirect EXPORTS_DIR to a temp path so smoke tests never touch the
+    real project exports/ directory. Each test gets its own clean subtree."""
+    d = tmp_path / "exports"
+    monkeypatch.setattr(exports, "EXPORTS_DIR", d)
+    return d
+
+
+def test_write_all_does_not_raise(isolated_exports_dir):
     exports.write_all()
 
 
-def test_write_all_creates_exports_directory():
+def test_write_all_creates_exports_directory(isolated_exports_dir):
     exports.write_all()
-    assert exports.EXPORTS_DIR.exists()
-    assert exports.EXPORTS_DIR.is_dir()
+    assert isolated_exports_dir.exists()
+    assert isolated_exports_dir.is_dir()
 
 
-def test_write_opportunities_does_not_raise():
+def test_write_opportunities_does_not_raise(isolated_exports_dir):
     exports.write_opportunities()
 
 
-def test_write_progress_does_not_raise():
+def test_write_progress_does_not_raise(isolated_exports_dir):
     exports.write_progress()
 
 
-def test_write_recommenders_does_not_raise():
+def test_write_recommenders_does_not_raise(isolated_exports_dir):
     exports.write_recommenders()
 
 
@@ -47,8 +59,10 @@ def test_exports_dir_path_is_correct():
 def test_write_all_swallows_individual_writer_failure(monkeypatch, caplog):
     """DESIGN §9.5: a failure in any write_* is caught at the write_all
     boundary and logged. write_all() itself must not re-raise."""
+
     def _boom():
         raise RuntimeError("simulated write_progress failure")
+
     monkeypatch.setattr(exports, "write_progress", _boom)
 
     with caplog.at_level("ERROR"):
@@ -56,10 +70,7 @@ def test_write_all_swallows_individual_writer_failure(monkeypatch, caplog):
 
     # Log captured — message should reference the failing writer so
     # operators can find which file failed.
-    assert any(
-        "write_progress" in (r.message or "")
-        for r in caplog.records
-    ), (
+    assert any("write_progress" in (r.message or "") for r in caplog.records), (
         "Expected a log entry naming write_progress after its failure. "
         f"Got: {[r.message for r in caplog.records]}"
     )
@@ -82,14 +93,13 @@ def test_write_all_continues_after_individual_failure(monkeypatch):
         calls.append("recommenders")
 
     monkeypatch.setattr(exports, "write_opportunities", _track_opportunities)
-    monkeypatch.setattr(exports, "write_progress",     _boom_progress)
+    monkeypatch.setattr(exports, "write_progress", _boom_progress)
     monkeypatch.setattr(exports, "write_recommenders", _track_recommenders)
 
     exports.write_all()  # must not re-raise
 
     assert calls == ["opportunities", "progress", "recommenders"], (
-        "write_recommenders must run even after write_progress raised. "
-        f"Got call order: {calls}"
+        f"write_recommenders must run even after write_progress raised. Got call order: {calls}"
     )
 
 
@@ -99,6 +109,7 @@ def test_write_all_swallows_mkdir_failure(monkeypatch, caplog):
     the DB write has already succeeded and the user must see "Saved",
     not a traceback. Replaces EXPORTS_DIR with a stand-in whose mkdir
     raises so the test does not depend on a real I/O failure shape."""
+
     class _BoomyPath:
         def mkdir(self, *args, **kwargs):
             raise OSError("simulated mkdir failure")
