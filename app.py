@@ -13,6 +13,7 @@
 #        row inline placement) — DESIGN §8.1 T6 amendment        ✅ done
 
 from datetime import date
+from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -64,12 +65,13 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
     best_iso: str | None = None
     best_institute: str | None = None
     for _, row in upcoming.iterrows():
-        v = row["scheduled_date"]
+        v: Any = row["scheduled_date"]
         if pd.isna(v) or v == "" or v < today_iso:
             continue
         if best_iso is None or v < best_iso:
-            best_iso = v
-            best_institute = row["institute"]
+            best_iso = str(v)
+            inst: Any = row["institute"]
+            best_institute = None if pd.isna(inst) else str(inst)
 
     if best_iso is None:
         return NEXT_INTERVIEW_EMPTY
@@ -79,6 +81,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
     if best_institute and not pd.isna(best_institute):
         label += f" · {best_institute}"
     return label
+
 
 # ── Top bar ───────────────────────────────────────────────────────────────────
 # Plain title only — no 🔄 Refresh button per DESIGN D13. Streamlit reruns
@@ -96,10 +99,7 @@ st.title("Postdoc Tracker")
 # DESIGN §6.2 + D18), rendered '{Mon D} · {institute}'; '—' when none
 # (locked decision U3). All status literals via config.STATUS_* aliases.
 _status_counts = database.count_by_status()
-tracked = (
-    _status_counts.get(config.STATUS_SAVED, 0)
-    + _status_counts.get(config.STATUS_APPLIED, 0)
-)
+tracked = _status_counts.get(config.STATUS_SAVED, 0) + _status_counts.get(config.STATUS_APPLIED, 0)
 applied = _status_counts.get(config.STATUS_APPLIED, 0)
 interview = _status_counts.get(config.STATUS_INTERVIEW, 0)
 next_interview = _next_interview_display(database.get_upcoming_interviews())
@@ -211,9 +211,7 @@ with _left_col:
         same rerun (a plain `if st.button(): set state; st.rerun()`
         would need an extra pass and risks briefly drawing the old
         chart). Bidirectional: True ↔ False on each click."""
-        st.session_state["_funnel_expanded"] = (
-            not st.session_state["_funnel_expanded"]
-        )
+        st.session_state["_funnel_expanded"] = not st.session_state["_funnel_expanded"]
 
     # Per-bucket aggregated counts. A sparse-dict lookup (count_by_status
     # omits zero-count statuses) is fine — missing raws contribute 0.
@@ -270,10 +268,7 @@ with _left_col:
         # direction "above" / "below") — DESIGN §8.1 T6 amendment — so
         # the copy stays correct regardless of where the toggle sits
         # relative to the info block.
-        st.info(
-            "All your positions are in hidden buckets. "
-            "Click 'Show all stages' to reveal them."
-        )
+        st.info("All your positions are in hidden buckets. Click 'Show all stages' to reveal them.")
     else:
         # Branch (c): render the chart.
         _visible_buckets = [
@@ -320,8 +315,7 @@ with _right_col:
     _pending = _readiness["pending"]
     if _ready + _pending == 0:
         st.info(
-            "Materials readiness will appear once you've added positions "
-            "with required documents."
+            "Materials readiness will appear once you've added positions with required documents."
         )
     else:
         _total = max(_ready + _pending, 1)
@@ -370,18 +364,18 @@ with _header_col:
 
 _upcoming = database.get_upcoming(days=selected_window)
 if _upcoming.empty:
-    st.info(
-        f"No deadlines or interviews in the next {selected_window} days."
-    )
+    st.info(f"No deadlines or interviews in the next {selected_window} days.")
 else:
-    _upcoming_display = _upcoming.rename(columns={
-        "date":      "Date",
-        "days_left": "Days left",
-        "label":     "Label",
-        "kind":      "Kind",
-        "status":    "Status",
-        "urgency":   "Urgency",
-    })
+    _upcoming_display = _upcoming.rename(
+        columns={
+            "date": "Date",
+            "days_left": "Days left",
+            "label": "Label",
+            "kind": "Kind",
+            "status": "Status",
+            "urgency": "Urgency",
+        }
+    )
     # Storage uses bracketed sentinels; UI strips them via STATUS_LABELS.
     # `.get(raw, raw)` keeps a stale value visible rather than producing NaN —
     # defensive belt-and-suspenders against an unrecognised status.
@@ -453,12 +447,13 @@ else:
         with st.container(border=True):
             _bullets = []
             for _, _row in _group.iterrows():
-                _label = _format_label(_row["institute"], _row["position_name"])
-                _asked_iso = _row["asked_date"]
+                _inst: Any = _row["institute"]
+                _pos_name: Any = _row["position_name"]
+                _label = _format_label(_inst, str(_pos_name))
+                _asked_iso: str = str(_row["asked_date"])
                 _days_ago = (_today - date.fromisoformat(_asked_iso)).days
-                _due = _format_due(_row["deadline_date"])
-                _bullets.append(
-                    f"- {_label} (asked {_days_ago}d ago, due {_due})"
-                )
+                _due_raw: Any = _row["deadline_date"]
+                _due = _format_due(_due_raw)
+                _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
             _body = f"**⚠ {_name}**\n" + "\n".join(_bullets)
             st.markdown(_body)
