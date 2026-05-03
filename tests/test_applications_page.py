@@ -18,6 +18,7 @@ import pytest
 import database
 import config
 from streamlit.testing.v1 import AppTest
+from tests.conftest import make_position
 
 
 PAGE = "pages/2_Applications.py"
@@ -267,10 +268,6 @@ class TestApplicationsFilterBar:
 
 
 # ── Table render (T1-C) ───────────────────────────────────────────────────────
-
-# Local copy of the conftest helper (imported lazily to keep the page-test
-# module self-contained; same shape as test_opportunities_page.py).
-from tests.conftest import make_position
 
 
 class TestApplicationsPageTable:
@@ -530,7 +527,7 @@ class TestApplicationsPageTable:
         looks like a broken state). Mirrors the
         Opportunities-page filter empty-state precedent
         (test_filter_by_status_no_match_shows_info)."""
-        pid = database.add_position(make_position({"position_name": "Saved Only"}))
+        database.add_position(make_position({"position_name": "Saved Only"}))
         # Single SAVED row; default Active filter excludes it.
 
         at = _run_page()
