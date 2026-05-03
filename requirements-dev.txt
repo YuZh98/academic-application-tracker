@@ -1,0 +1,7 @@
+# Developer-only dependencies. Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-dev.txt
+# Pinned to keep CI and local environments byte-identical.
+
+pytest==9.0.3
+ruff==0.15.12
+pre-commit==4.0.1

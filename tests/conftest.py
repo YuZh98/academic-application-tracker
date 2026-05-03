@@ -2,11 +2,9 @@
 # Shared pytest fixtures for the postdoc tracker test suite.
 
 import pytest
-from pathlib import Path
 from datetime import date, timedelta
 
 import database
-import config
 
 
 @pytest.fixture
