@@ -9,6 +9,8 @@
 # patches database.DB_PATH before each test, so AppTest picks up the temp DB.
 
 import datetime
+from typing import Any
+
 import pytest
 import database
 import config
@@ -639,7 +641,7 @@ class TestRowSelection:
 
     def test_selecting_row_sets_selected_position_id(self, db):
         """Injecting a single-row selection must populate selected_position_id with the row's DB id."""
-        pid_alpha = database.add_position({"position_name": "Alpha"})
+        database.add_position({"position_name": "Alpha"})
         pid_beta  = database.add_position({"position_name": "Beta"})
 
         at = AppTest.from_file(PAGE)
@@ -676,7 +678,7 @@ class TestRowSelection:
 
     def test_selection_respects_active_filter(self, db):
         """Row 0 of a filtered view must map to the filtered row's id, not an unfiltered row."""
-        pid_applied = database.add_position(
+        database.add_position(
             {"position_name": "Applied One", "status": "[APPLIED]"}
         )
         pid_open = database.add_position(
@@ -2976,15 +2978,6 @@ class TestPreSeedNaNCoercion:
         test catches the NaN case that the integration test above would
         also flag — but this one pinpoints the failure without
         requiring an AppTest run."""
-        # Load the page module directly so we can poke at its helpers
-        # without actually running the page script's top-level code.
-        # pages/1_Opportunities.py does call database.init_db() at
-        # import time, but that's a no-op when the schema is current
-        # and uses the `db` fixture's patched DB_PATH via conftest.
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "_opp_page_module", "pages/1_Opportunities.py"
-        )
         # We need _safe_str only — executing the whole page runs every
         # top-level st.* call against no AppTest context. Instead,
         # read the source and exec just the helper definition.

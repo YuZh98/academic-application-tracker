@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests + Lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Pytest
+        run: pytest tests/ -q
+
+      - name: Pytest (deprecation gate)
+        run: pytest tests/ -W error::DeprecationWarning -q
+
+      - name: Status-literal grep (code-only, GUIDELINES §6)
+        # Raw bracketed sentinels must not appear in app/page code per
+        # GUIDELINES §6. Comment-only references are excluded — see
+        # pages/1_Opportunities.py:395 for the canonical exception.
+        run: |
+          matches=$(rg --type py -n '\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]' \
+            app.py pages/ 2>/dev/null \
+            | rg -v '^[^:]+:[0-9]+:\s*#' || true)
+          if [ -n "$matches" ]; then
+            echo "::error::Status literal found in app/page code:"
+            echo "$matches"
+            exit 1
+          fi

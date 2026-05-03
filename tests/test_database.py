@@ -10,7 +10,6 @@ import time
 import pytest
 import pandas as pd
 from datetime import date, timedelta
-from pathlib import Path
 
 import database
 import config
