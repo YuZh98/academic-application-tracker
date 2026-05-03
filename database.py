@@ -7,12 +7,13 @@
 #   - exports.write_all() is called inside write functions via deferred import
 #     to avoid the circular dependency: database → exports → database.
 
+import logging
+import sqlite3
 from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Generator
-import logging
-import sqlite3
+
 import pandas as pd
 
 import config
@@ -23,6 +24,7 @@ DB_PATH: Path = Path(__file__).parent / "postdoc.db"
 
 
 # ── Connection ────────────────────────────────────────────────────────────────
+
 
 @contextmanager
 def _connect() -> Generator[sqlite3.Connection, None, None]:
@@ -42,6 +44,7 @@ def _connect() -> Generator[sqlite3.Connection, None, None]:
 
 
 # ── Init ──────────────────────────────────────────────────────────────────────
+
 
 def init_db() -> None:
     """Create tables and indices if they don't exist. Safe to call on every start.
@@ -141,10 +144,12 @@ def init_db() -> None:
         # a subsequent idempotent re-run. Computed here (before the
         # CREATE) so the same boolean gates the one-shot data copy
         # further below.
-        interviews_existed_pre_create = conn.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type = 'table' AND name = 'interviews'"
-        ).fetchone() is not None
+        interviews_existed_pre_create = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'interviews'"
+            ).fetchone()
+            is not None
+        )
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS interviews (
@@ -184,9 +189,7 @@ def init_db() -> None:
             )
         """)
 
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_positions_status      ON positions(status)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_status      ON positions(status)")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_positions_deadline    ON positions(deadline_date)"
         )
@@ -199,13 +202,9 @@ def init_db() -> None:
         existing_cols = {row["name"] for row in cur.fetchall()}
         for req_col, done_col, _ in config.REQUIREMENT_DOCS:
             if req_col not in existing_cols:
-                conn.execute(
-                    f"ALTER TABLE positions ADD COLUMN {req_col} TEXT DEFAULT 'No'"
-                )
+                conn.execute(f"ALTER TABLE positions ADD COLUMN {req_col} TEXT DEFAULT 'No'")
             if done_col not in existing_cols:
-                conn.execute(
-                    f"ALTER TABLE positions ADD COLUMN {done_col} INTEGER DEFAULT 0"
-                )
+                conn.execute(f"ALTER TABLE positions ADD COLUMN {done_col} INTEGER DEFAULT 0")
 
         # Migration (v1.3 Sub-task 6, DESIGN §6.2 + D25): pre-v1.3 DBs
         # whose positions table was created without updated_at pick up
@@ -220,8 +219,7 @@ def init_db() -> None:
         if "updated_at" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN updated_at TEXT")
             conn.execute(
-                "UPDATE positions SET updated_at = datetime('now') "
-                "WHERE updated_at IS NULL"
+                "UPDATE positions SET updated_at = datetime('now') WHERE updated_at IS NULL"
             )
 
         # Migration (v1.3 Sub-task 7, DESIGN §6.2 + §6.3 + D22):
@@ -298,22 +296,18 @@ def init_db() -> None:
         #       is dead weight but preserved so this migration need not
         #       touch upsert_application or any other writer.
         applications_cols = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(applications)").fetchall()
+            row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
         }
         confirmation_split_needed = (
             "confirmation_received" not in applications_cols
-            or "confirmation_date"     not in applications_cols
+            or "confirmation_date" not in applications_cols
         )
         if "confirmation_received" not in applications_cols:
             conn.execute(
-                "ALTER TABLE applications "
-                "ADD COLUMN confirmation_received INTEGER DEFAULT 0"
+                "ALTER TABLE applications ADD COLUMN confirmation_received INTEGER DEFAULT 0"
             )
         if "confirmation_date" not in applications_cols:
-            conn.execute(
-                "ALTER TABLE applications ADD COLUMN confirmation_date TEXT"
-            )
+            conn.execute("ALTER TABLE applications ADD COLUMN confirmation_date TEXT")
         if confirmation_split_needed:
             # Date-shaped legacy values: set both new columns. SQLite
             # GLOB uses shell-style character classes;
@@ -335,9 +329,7 @@ def init_db() -> None:
             )
             # Flag-only legacy values: set received=1, leave date NULL.
             conn.execute(
-                "UPDATE applications "
-                "SET confirmation_received = 1 "
-                "WHERE confirmation_email = 'Y'"
+                "UPDATE applications SET confirmation_received = 1 WHERE confirmation_email = 'Y'"
             )
             # NULL-clear the legacy column per DESIGN §6.3 step (c)
             # ("leave the old column NULL until a follow-up release
@@ -426,9 +418,7 @@ def init_db() -> None:
         # delete_position cascade chain survives the rebuild; the
         # `test_migration_preserves_fk_cascade_on_delete_position`
         # test exercises this end-to-end.
-        rec_cols_info = conn.execute(
-            "PRAGMA table_info(recommenders)"
-        ).fetchall()
+        rec_cols_info = conn.execute("PRAGMA table_info(recommenders)").fetchall()
         confirmed_type = next(
             (row["type"] for row in rec_cols_info if row["name"] == "confirmed"),
             None,
@@ -532,8 +522,8 @@ def init_db() -> None:
         # The legacy strings are assembled by concatenation so the
         # GUIDELINES §6 pre-merge grep for old-vocabulary use stays at
         # zero hits in the production source tree.
-        _legacy_saved  = "[OPE" + "N]"    # pre-v1.3 pipeline-stage-0 literal
-        _legacy_medium = "M" + "ed"        # pre-v1.3 priority short code
+        _legacy_saved = "[OPE" + "N]"  # pre-v1.3 pipeline-stage-0 literal
+        _legacy_medium = "M" + "ed"  # pre-v1.3 priority short code
         conn.execute(
             "UPDATE positions SET status = ? WHERE status = ?",
             (config.STATUS_VALUES[0], _legacy_saved),
@@ -545,6 +535,7 @@ def init_db() -> None:
 
 
 # ── Positions ─────────────────────────────────────────────────────────────────
+
 
 def add_position(fields: dict[str, Any]) -> int:
     """Insert a new position row and its blank applications row.
@@ -558,13 +549,14 @@ def add_position(fields: dict[str, Any]) -> int:
             f"INSERT INTO positions ({cols}) VALUES ({placeholders})",
             vals,
         )
-        new_id: int = cur.lastrowid
+        new_id: int = cur.lastrowid or 0
         conn.execute(
             "INSERT INTO applications (position_id) VALUES (?)",
             (new_id,),
         )
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -574,8 +566,7 @@ def add_position(fields: dict[str, Any]) -> int:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
     return new_id
 
@@ -614,6 +605,7 @@ def update_position(position_id: int, fields: dict[str, Any]) -> None:
         )
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -623,8 +615,7 @@ def update_position(position_id: int, fields: dict[str, Any]) -> None:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
 
@@ -635,6 +626,7 @@ def delete_position(position_id: int) -> None:
         conn.execute("DELETE FROM positions WHERE id = ?", (position_id,))
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -644,12 +636,12 @@ def delete_position(position_id: int) -> None:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
 
 # ── Applications ──────────────────────────────────────────────────────────────
+
 
 def get_application(position_id: int) -> dict:
     """Return the application row for a position as a dict.
@@ -746,8 +738,7 @@ def upsert_application(
             new_applied_date = fields.get("applied_date")
             if pre_applied_date is None and new_applied_date is not None:
                 conn.execute(
-                    "UPDATE positions SET status = ? "
-                    "WHERE id = ? AND status = ?",
+                    "UPDATE positions SET status = ? WHERE id = ? AND status = ?",
                     (config.STATUS_APPLIED, position_id, config.STATUS_SAVED),
                 )
 
@@ -778,6 +769,7 @@ def upsert_application(
         post_status = post_pos["status"] if post_pos else None
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -787,8 +779,7 @@ def upsert_application(
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
     if post_status != pre_status:
@@ -890,7 +881,7 @@ def add_interview(
             f"INSERT INTO interviews ({cols}) VALUES ({placeholders})",
             vals,
         )
-        new_id: int = cur.lastrowid
+        new_id: int = cur.lastrowid or 0
 
         if propagate_status:
             # R2: count-free per DESIGN §9.3. The status guard alone
@@ -899,8 +890,7 @@ def add_interview(
             # existing interviews still promotes correctly on the next
             # add_interview, which the count-based variant would miss.
             conn.execute(
-                "UPDATE positions SET status = ? "
-                "WHERE id = ? AND status = ?",
+                "UPDATE positions SET status = ? WHERE id = ? AND status = ?",
                 (config.STATUS_INTERVIEW, application_id, config.STATUS_APPLIED),
             )
 
@@ -913,6 +903,7 @@ def add_interview(
         post_status = post_pos["status"] if post_pos else None
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -922,20 +913,19 @@ def add_interview(
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
     if post_status != pre_status:
         return {
-            "id":             new_id,
+            "id": new_id,
             "status_changed": True,
-            "new_status":     post_status,
+            "new_status": post_status,
         }
     return {
-        "id":             new_id,
+        "id": new_id,
         "status_changed": False,
-        "new_status":     None,
+        "new_status": None,
     }
 
 
@@ -945,10 +935,9 @@ def get_interviews(application_id: int) -> pd.DataFrame:
     Empty frame for an application with no interviews (not an error)."""
     with _connect() as conn:
         df = pd.read_sql_query(
-            "SELECT * FROM interviews WHERE application_id = ? "
-            "ORDER BY sequence ASC",
+            "SELECT * FROM interviews WHERE application_id = ? ORDER BY sequence ASC",
             conn,
-            params=(application_id,),
+            params=[application_id],
         )
     return df
 
@@ -969,6 +958,7 @@ def update_interview(interview_id: int, fields: dict[str, Any]) -> None:
         )
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -978,8 +968,7 @@ def update_interview(interview_id: int, fields: dict[str, Any]) -> None:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
 
@@ -989,6 +978,7 @@ def delete_interview(interview_id: int) -> None:
         conn.execute("DELETE FROM interviews WHERE id = ?", (interview_id,))
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -998,12 +988,12 @@ def delete_interview(interview_id: int) -> None:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
 
 # ── Recommenders ──────────────────────────────────────────────────────────────
+
 
 def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
     """Insert a new recommender row. Returns new id. Calls exports.write_all()."""
@@ -1016,9 +1006,10 @@ def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
             f"INSERT INTO recommenders ({cols}) VALUES ({placeholders})",
             vals,
         )
-        new_id: int = cur.lastrowid
+        new_id: int = cur.lastrowid or 0
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -1028,8 +1019,7 @@ def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
     return new_id
 
@@ -1040,7 +1030,7 @@ def get_recommenders(position_id: int) -> pd.DataFrame:
         df = pd.read_sql_query(
             "SELECT * FROM recommenders WHERE position_id = ? ORDER BY id ASC",
             conn,
-            params=(position_id,),
+            params=[position_id],
         )
     return df
 
@@ -1072,6 +1062,7 @@ def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
         )
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -1081,8 +1072,7 @@ def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
 
@@ -1092,6 +1082,7 @@ def delete_recommender(rec_id: int) -> None:
         conn.execute("DELETE FROM recommenders WHERE id = ?", (rec_id,))
 
     import exports as _exports  # deferred: avoids circular import
+
     # DESIGN §7 database.py contract #1: log + swallow any
     # exports failure so the DB write that already succeeded
     # reports success to the caller. Markdown regeneration is
@@ -1101,20 +1092,18 @@ def delete_recommender(rec_id: int) -> None:
         _exports.write_all()
     except Exception:
         logger.exception(
-            "exports.write_all() failed; DB write succeeded — "
-            "markdown regeneration is best-effort"
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
         )
 
 
 # ── Dashboard queries ─────────────────────────────────────────────────────────
 
+
 def count_by_status() -> dict[str, int]:
     """Return {status_value: count} for all positions.
     Statuses with zero positions are not included in the result."""
     with _connect() as conn:
-        cur = conn.execute(
-            "SELECT status, COUNT(*) AS cnt FROM positions GROUP BY status"
-        )
+        cur = conn.execute("SELECT status, COUNT(*) AS cnt FROM positions GROUP BY status")
         rows = cur.fetchall()
     return {row["status"]: row["cnt"] for row in rows}
 
@@ -1122,10 +1111,10 @@ def count_by_status() -> dict[str, int]:
 def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
     """Return open positions with deadline_date within the next `days` days,
     ordered by deadline_date ASC. Excludes config.TERMINAL_STATUSES."""
-    today    = date.today().isoformat()
-    cutoff   = (date.today() + timedelta(days=days)).isoformat()
+    today = date.today().isoformat()
+    cutoff = (date.today() + timedelta(days=days)).isoformat()
     terminal = tuple(config.TERMINAL_STATUSES)
-    not_in   = ", ".join("?" * len(terminal))
+    not_in = ", ".join("?" * len(terminal))
 
     with _connect() as conn:
         df = pd.read_sql_query(
@@ -1137,7 +1126,7 @@ def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFra
                  AND status NOT IN ({not_in})
                ORDER BY deadline_date ASC""",
             conn,
-            params=(today, cutoff, *terminal),
+            params=[today, cutoff, *terminal],
         )
     return df
 
@@ -1171,7 +1160,7 @@ def get_upcoming_interviews() -> pd.DataFrame:
                  AND i.scheduled_date >= ?
                ORDER BY i.scheduled_date ASC, i.sequence ASC""",
             conn,
-            params=(today,),
+            params=[today],
         )
     return df
 
@@ -1192,7 +1181,12 @@ def get_upcoming_interviews() -> pd.DataFrame:
 # so the two columns cannot drift — coherence is guaranteed by construction.
 
 _UPCOMING_COLUMNS: list[str] = [
-    "date", "days_left", "label", "kind", "status", "urgency",
+    "date",
+    "days_left",
+    "label",
+    "kind",
+    "status",
+    "urgency",
 ]
 
 
@@ -1244,7 +1238,7 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
       - Sort is stable: within a tied date the per-helper ordering
         survives (deadlines before interviews — implicit, not pinned
         by tests)."""
-    today      = date.today()
+    today = date.today()
     cutoff_iso = (today + timedelta(days=days)).isoformat()
 
     # ── Deadlines half ────────────────────────────────────────────────────
@@ -1252,19 +1246,21 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
     if deadlines.empty:
         deadlines_proj = pd.DataFrame(columns=_UPCOMING_COLUMNS)
     else:
-        date_series      = pd.to_datetime(deadlines["deadline_date"]).dt.date
+        date_series = pd.to_datetime(deadlines["deadline_date"]).dt.date
         days_away_series = date_series.apply(lambda d: (d - today).days)
-        deadlines_proj = pd.DataFrame({
-            "date":      date_series,
-            "days_left": days_away_series.apply(_days_left_label),
-            "label":     deadlines.apply(
-                lambda r: _label_for(r["institute"], r["position_name"]),
-                axis=1,
-            ),
-            "kind":      "Deadline for application",
-            "status":    deadlines["status"],
-            "urgency":   days_away_series.apply(_urgency_glyph),
-        })
+        deadlines_proj = pd.DataFrame(
+            {
+                "date": date_series,
+                "days_left": days_away_series.apply(_days_left_label),
+                "label": deadlines.apply(
+                    lambda r: _label_for(r["institute"], r["position_name"]),
+                    axis=1,
+                ),
+                "kind": "Deadline for application",
+                "status": deadlines["status"],
+                "urgency": days_away_series.apply(_urgency_glyph),
+            }
+        )
 
     # ── Interviews half ───────────────────────────────────────────────────
     # Apply the days bound here (the helper itself doesn't bound) so the
@@ -1279,27 +1275,27 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
         # status is not part of get_upcoming_interviews' contract — enrich
         # via the positions table. Trim to id + status so the merge doesn't
         # pollute the projection with stray fields.
-        positions = get_all_positions()[["id", "status"]].rename(
+        positions = get_all_positions()[["id", "status"]].rename(  # type: ignore[call-overload]
             columns={"id": "position_id"}
         )
         merged = interviews.merge(positions, on="position_id", how="left")
-        date_series      = pd.to_datetime(merged["scheduled_date"]).dt.date
+        date_series = pd.to_datetime(merged["scheduled_date"]).dt.date
         days_away_series = date_series.apply(lambda d: (d - today).days)
-        interviews_proj = pd.DataFrame({
-            "date":      date_series,
-            "days_left": days_away_series.apply(_days_left_label),
-            "label":     merged.apply(
-                lambda r: _label_for(r["institute"], r["position_name"]),
-                axis=1,
-            ),
-            "kind":      merged["sequence"].apply(lambda n: f"Interview {n}"),
-            "status":    merged["status"],
-            "urgency":   days_away_series.apply(_urgency_glyph),
-        })
+        interviews_proj = pd.DataFrame(
+            {
+                "date": date_series,
+                "days_left": days_away_series.apply(_days_left_label),
+                "label": merged.apply(
+                    lambda r: _label_for(r["institute"], r["position_name"]),
+                    axis=1,
+                ),
+                "kind": merged["sequence"].apply(lambda n: f"Interview {n}"),
+                "status": merged["status"],
+                "urgency": days_away_series.apply(_urgency_glyph),
+            }
+        )
 
-    combined = pd.concat(
-        [deadlines_proj, interviews_proj], ignore_index=True
-    )
+    combined = pd.concat([deadlines_proj, interviews_proj], ignore_index=True)
     return combined.sort_values(by="date", kind="stable").reset_index(drop=True)
 
 
@@ -1321,7 +1317,7 @@ def get_pending_recommenders(days: int = config.RECOMMENDER_ALERT_DAYS) -> pd.Da
                  AND r.asked_date <= ?
                ORDER BY r.recommender_name ASC, p.deadline_date ASC NULLS LAST""",
             conn,
-            params=(cutoff,),
+            params=[cutoff],
         )
     return df
 
@@ -1348,12 +1344,9 @@ def compute_materials_readiness() -> dict[str, int]:
     if not config.REQUIREMENT_DOCS:
         return {"ready": 0, "pending": 0}
 
-    has_any_req = " OR ".join(
-        f"{req} = 'Yes'" for req, _, _ in config.REQUIREMENT_DOCS
-    )
+    has_any_req = " OR ".join(f"{req} = 'Yes'" for req, _, _ in config.REQUIREMENT_DOCS)
     all_done = " AND ".join(
-        f"({req} != 'Yes' OR {done} = 1)"
-        for req, done, _ in config.REQUIREMENT_DOCS
+        f"({req} != 'Yes' OR {done} = 1)" for req, done, _ in config.REQUIREMENT_DOCS
     )
     # Sub-task 9 / TASKS.md C1: the active-statuses set is sourced from
     # config aliases rather than hardcoded literals, so a future rename
@@ -1380,7 +1373,7 @@ def compute_materials_readiness() -> dict[str, int]:
         row = cur.fetchone()
 
     return {
-        "ready":   int(row["ready"]   or 0),
+        "ready": int(row["ready"] or 0),
         "pending": int(row["pending"] or 0),
     }
 
