@@ -1,0 +1,30 @@
+# Project tooling config. Build/packaging metadata is intentionally absent —
+# the project is a Streamlit app, not a published package; install via
+# requirements.txt + venv per GUIDELINES §1.
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+extend-exclude = [
+    "docs",       # contains screenshot seed snippets, not source
+    "exports",    # generated markdown output
+    "__pycache__",
+    ".venv",
+]
+
+[tool.ruff.lint]
+# Pyflakes (F), pycodestyle errors (E) and warnings (W). A deliberately
+# tight starter set — extend in a follow-up once the cadence is comfortable.
+# `I` (isort) is intentionally excluded for now: enabling it would reformat
+# 9 import blocks across the codebase, scope creep for this PR. Add it
+# alongside the format-the-world reformat in a follow-up.
+select = ["E", "F", "W"]
+# E501 (line-too-long) is not enforced yet; existing code reaches 224 chars
+# and a format-the-world reformat is a separate PR.
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+# Format is configured but NOT yet enforced via CI / pre-commit. When the
+# 14-file reformat lands as its own PR, add `ruff-format` to the hook list.
