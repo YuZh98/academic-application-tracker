@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.3 | **Last updated:** 2026-05-02 | **Status:** authoritative
+**Version:** v1.4 | **Last updated:** 2026-05-03 | **Status:** authoritative
 
 ---
 
@@ -514,6 +514,11 @@ commit messages and review docs; the changelog is an index into them.
 - File `CHANGELOG.md` at repo root. `[Unreleased]` at the top
   accumulates new entries. On each release tag, rotate `[Unreleased]`
   to `## [vX.Y.Z] - YYYY-MM-DD` (ISO 8601) in the same commit.
+  Use [`scripts/release.sh`](scripts/release.sh) to do the slice:
+  `scripts/release.sh vX.Y.Z "Topical title"` validates inputs,
+  refuses if `[Unreleased]` is empty or the version already exists,
+  and prints the follow-up `git commit` + `git tag` + `git push`
+  commands.
 - Versions ordered latest-first; every version header is clickable
   via bottom-of-file link references (e.g.
   `[v0.5.0]: https://github.com/.../releases/tag/v0.5.0` and
