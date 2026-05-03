@@ -1,0 +1,23 @@
+# Pre-commit hooks. Install once per clone:
+#   pip install pre-commit && pre-commit install
+# Then every `git commit` runs ruff lint + the status-literal grep on staged
+# files. To run against the whole tree: `pre-commit run --all-files`.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: status-literal-grep
+        name: Status literal grep (no raw [SAVED]/[APPLIED]/[INTERVIEW] in app code)
+        entry: bash -c 'matches=$(rg --type py -n "\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]" app.py pages/ 2>/dev/null | rg -v "^[^:]+:[0-9]+:\s*#"); if [ -n "$matches" ]; then echo "$matches"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        # Per GUIDELINES §6: storage holds bracketed sentinels; UI strips
+        # brackets. Raw literals in app/page code are a config-bypass bug.
+        # Comment-only references are excluded (`^…:#` filter) so docs and
+        # explanatory comments don't trip the rule.
