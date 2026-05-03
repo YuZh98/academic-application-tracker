@@ -22,7 +22,12 @@ Branch (T3): T3-A + T3-B + T3 review (9 findings, 2 inline fixes) +
 T3-rev (T3-rev-A column split + T3-rev-B per-row block refactor) +
 pre-merge review addendum (Findings #10–#13, 2 inline fixes) all on
 `feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 683
-green under both pytest gates. Pre-merge review done; PR pending.
+green under both pytest gates. Merged via PR #19 (`f4db64c`); pre-merge
+review at [`reviews/phase-5-Tier3-review.md`](reviews/phase-5-Tier3-review.md).
+
+Branch (T4): on `feature/phase-5-tier4-RecommendersAlertPanel`; pre-merge
+review at [`reviews/phase-5-tier4-review.md`](reviews/phase-5-tier4-review.md);
+suite 682 → 700 green under both pytest gates.
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -267,7 +272,7 @@ green under both pytest gates. Pre-merge review done; PR pending.
         added `test_save_one_row_preserves_sibling_row_draft` and
         `test_save_toast_includes_sequence_number`); suite 681 → 683
         under both pytest gates.
-- [ ] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
+- [x] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
       grouped by `recommender_name`
 - [ ] **T5** Recommenders table + add form + inline edit (`asked_date`,
       `confirmed`, `submitted_date`, `reminder_sent`+`reminder_sent_date`,
