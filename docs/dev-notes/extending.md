@@ -29,7 +29,7 @@ sign the extension is architectural, not a routine config change.
 
 ## Add a new vocabulary option
 
-1. Append to the relevant list (`WORK_AUTH_OPTIONS`, `SOURCE_OPTIONS`, `RESPONSE_TYPES`, `RESULT_VALUES`, `RELATIONSHIP_TYPES`, `INTERVIEW_FORMATS`, etc.).
+1. Append to the relevant list (`WORK_AUTH_OPTIONS`, `SOURCE_OPTIONS`, `RESPONSE_TYPES`, `RESULT_VALUES`, `RELATIONSHIP_VALUES`, `INTERVIEW_FORMATS`, etc.).
 2. Selectboxes pick the new value up on next render.
 3. No DB change — column is plain TEXT.
 

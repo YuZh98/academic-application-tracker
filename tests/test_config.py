@@ -120,7 +120,7 @@ def test_quick_add_fields_are_strings():
     ("SOURCE_OPTIONS",     config.SOURCE_OPTIONS),
     ("RESPONSE_TYPES",     config.RESPONSE_TYPES),
     ("RESULT_VALUES",      config.RESULT_VALUES),
-    ("RELATIONSHIP_TYPES", config.RELATIONSHIP_TYPES),
+    ("RELATIONSHIP_VALUES", config.RELATIONSHIP_VALUES),
 ])
 def test_vocabulary_lists_are_non_empty(name, lst):
     assert len(lst) > 0, f"{name} must not be empty"
