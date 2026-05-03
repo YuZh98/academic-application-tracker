@@ -236,7 +236,7 @@ class TestQuickAddFormBehaviour:
         at.run()
         assert at.toast, "Expected st.toast after a valid quick-add submission"
 
-    def test_new_position_has_open_status(self, db):
+    def test_new_position_has_saved_status(self, db):
         """Positions added via quick-add must default to STATUS_VALUES[0] ('[SAVED]')."""
         at = _run_page()
         at.text_input(key="qa_position_name").input("Yale Postdoc")
