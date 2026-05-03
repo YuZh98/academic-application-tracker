@@ -271,7 +271,7 @@ RESULT_VALUES: list[str] = [
     "Offer Accepted", "Offer Declined", "Rejected", "Withdrawn",
 ]
 
-RELATIONSHIP_TYPES: list[str] = [
+RELATIONSHIP_VALUES: list[str] = [
     "PhD Advisor", "Committee Member", "Collaborator",
     "Postdoc Supervisor", "Department Faculty", "Other",
 ]

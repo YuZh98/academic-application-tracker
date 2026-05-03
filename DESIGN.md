@@ -207,7 +207,7 @@ Postdoc/
 | `RESPONSE_TYPE_OFFER` | `str` | Named alias for R3 cascade trigger (`"Offer"`) — anti-typo guardrail mirroring `STATUS_*` alias pattern so `database.upsert_application` insulated from future rename of `RESPONSE_TYPES` entry. Drift caught by §5.2 invariant #9. |
 | `RESULT_DEFAULT` | `str` | `"Pending"` — matches `applications.result` schema `DEFAULT` clause; rename needs one-shot `UPDATE` migration (§6.3). |
 | `RESULT_VALUES` | `list[str]` | Final app outcome; starts with `RESULT_DEFAULT`, then accepted / declined / rejected / withdrawn. |
-| `RELATIONSHIP_TYPES` | `list[str]` | Recommender→applicant relationship (advisor / committee / collaborator / …). |
+| `RELATIONSHIP_VALUES` | `list[str]` | Recommender→applicant relationship (advisor / committee / collaborator / …). |
 | `INTERVIEW_FORMATS` | `list[str]` | Vocab for `interviews.format` col: `Phone` / `Video` / `Onsite` / `Other`. |
 
 #### Requirement documents
@@ -371,7 +371,7 @@ CREATE TABLE IF NOT EXISTS recommenders (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     position_id         INTEGER NOT NULL,
     recommender_name    TEXT,
-    relationship        TEXT,                   -- from config.RELATIONSHIP_TYPES
+    relationship        TEXT,                   -- from config.RELATIONSHIP_VALUES
     asked_date          TEXT,
     confirmed           INTEGER,                -- 0, 1, or NULL (pending response)
     submitted_date      TEXT,
