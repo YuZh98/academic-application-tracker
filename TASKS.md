@@ -455,6 +455,14 @@ Branch (T1): on `feature/phase-6-tier1-WriteOpportunities`; pre-merge
 review at [`reviews/phase-6-tier1-review.md`](reviews/phase-6-tier1-review.md);
 suite 777 → 786 green under both pytest gates. Merged via PR #32 (`e9a8a4a`).
 
+Branch (T2): on `feature/phase-6-tier2-WriteProgress`; pre-merge
+review at [`reviews/phase-6-tier2-review.md`](reviews/phase-6-tier2-review.md);
+suite 786 → 801 green under both pytest gates. Mandatory conftest
+fixture lift (`db_and_exports` → `tests/conftest.py::db`) closes T1's
+exposed pollution; T2 isolation gate (`git status --porcelain
+exports/` empty post-pytest) now part of the standing pre-PR
+checklist. Merged via PR #33 (`911115a`).
+
 - [x] **T1** `write_opportunities()` generator — fills the existing
       `exports.py` stub with the first markdown export per DESIGN §7.
       Reads `database.get_all_positions()`, sorts `deadline_date ASC
@@ -498,8 +506,57 @@ suite 777 → 786 green under both pytest gates. Merged via PR #32 (`e9a8a4a`).
       monkeypatch the test would pollute the project's real
       `exports/` directory). 9 new tests in `TestWriteOpportunities`;
       suite 777 → 786 under both pytest gates.
-- [ ] **T2** `write_progress()` generator (depends on Phase 5 T3 —
-      reads `interviews` data)
+- [x] **T2** `write_progress()` generator (depends on Phase 5 T3 —
+      reads `interviews` data) — fills the `exports.py` stub for the
+      second markdown generator. Reads
+      `database.get_applications_table()` (positions × applications
+      LEFT JOIN, 10-column projection) and per-row
+      `database.get_interviews(position_id)` for the interviews
+      side; writes a single markdown table to `exports/PROGRESS.md`
+      (UPPERCASE per DESIGN §7 line 463 + the T1 `OPPORTUNITIES.md`
+      precedent). 8-column contract pinned by
+      `TestWriteProgress.EXPECTED_HEADER`: Position · Institute ·
+      Status · Applied · Confirmation · Response · Result ·
+      Interviews. **No `Deadline` column** — the two exports answer
+      different questions; OPPORTUNITIES.md owns the upstream window,
+      PROGRESS.md owns the application progression. Cell shapes
+      mirror T1 conventions (em-dash for missing TEXT via
+      `_safe_str_or_em`, ISO TEXT pass-through for dates, raw
+      bracketed status sentinel `[APPLIED]` etc., `_md_escape_cell`
+      on every cell). Two new tri-state helpers for the
+      joined-frame complexity: `_format_confirmation(received,
+      iso_date)` mirrors the Applications page DESIGN §8.3 D-A
+      T1-C inline-text shape (`—` / `✓ {ISO}` / `✓ (no date)`)
+      using ISO instead of "Mon D" for round-trip cleanliness; pages
+      and exports cannot share helpers (DESIGN §2 layer rules —
+      pages import streamlit, exports cannot).
+      `_format_interviews_summary(scheduled_dates: list[Any])`
+      renders the only T2 design call: `"{N} (last: {YYYY-MM-DD})"`
+      with `last` = max scheduled_date across the position's
+      interviews. Edge cases pinned: 0 interviews → `—`; ≥1
+      interviews + all-NULL `scheduled_date` → `{N} (no dates)`.
+      Considered + rejected: count-only (loses chronology),
+      comma-joined date list (unbounded length), next-interview
+      cell (relies on "today" semantics that drift over time and
+      break idempotency). Sort: `deadline_date ASC NULLS LAST,
+      position_id ASC` inherited from
+      `database.get_applications_table()` SQL ORDER BY; re-applied
+      via `pandas.sort_values(... kind="stable")` to defend against
+      upstream changes. Per-row N+1 interviews lookup is documented
+      as kept-by-design (low position counts, single-user app;
+      richer joined query would be premature optimization).
+      Idempotent (DESIGN §7 contract #2). **Mandatory ride-along —
+      conftest fixture lift**: `tests/conftest.py::db` now
+      monkeypatches both `database.DB_PATH` AND `exports.EXPORTS_DIR`
+      in one fixture; `tests/test_exports.py::db_and_exports`
+      collapses to a thin wrapper returning the path; 5 migration
+      sites in `test_database.py` get paired EXPORTS_DIR
+      monkeypatches (2 actual polluters + 3 defensive symmetry); 2
+      `write_all` behaviour tests in `test_exports.py` gain the
+      `isolated_exports_dir` fixture parameter. T2 isolation gate
+      (`git status --porcelain exports/` empty post-pytest) is now
+      part of the standing pre-PR checklist. 15 new tests in
+      `TestWriteProgress`; suite 786 → 801 under both pytest gates.
 - [ ] **T3** `write_recommenders()` generator
 - [ ] **T4** Export page — manual regenerate button + file mtimes
 - [ ] **T5** Export page — `st.download_button` per file
@@ -552,6 +609,19 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #33 merged** (`911115a`): Phase 6 T2 shipped —
+  `exports.write_progress()` filled with an 8-column markdown table
+  writer to `exports/PROGRESS.md` (positions × applications ×
+  interviews; no Deadline column — different question from T1).
+  Tri-state helpers `_format_confirmation` (`—` / `✓ {ISO}` / `✓ (no
+  date)`) and `_format_interviews_summary` (`—` / `{N} (last: {ISO})`
+  / `{N} (no dates)`); `last` = max(scheduled_date), round-trippable
+  + idempotent + deterministic. Mandatory conftest fixture lift
+  (`tests/conftest.py::db` monkeypatches both `DB_PATH` AND
+  `EXPORTS_DIR`) closes T1's exposed test-isolation pollution; T2
+  isolation gate added to standing pre-PR checklist. 15 new tests in
+  `TestWriteProgress`; suite 786 → 801 under both pytest gates.
+  Pre-merge review at [`reviews/phase-6-tier2-review.md`](reviews/phase-6-tier2-review.md).
 - 2026-05-04 — **PR #32 merged** (`e9a8a4a`): Phase 6 T1 shipped —
   `exports.write_opportunities()` filled with an 8-column markdown
   table writer to `exports/OPPORTUNITIES.md`. Sort: `deadline_date
@@ -711,4 +781,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 6 T1 merged via PR #32; main HEAD `e9a8a4a`; suite 786 / 1 xfailed; Phase 6 T2 — `write_progress()` exports generator next)_
+_Updated: 2026-05-04 (Phase 6 T2 merged via PR #33; main HEAD `911115a`; suite 801 / 1 xfailed; Phase 6 T3 — `write_recommenders()` exports generator next)_

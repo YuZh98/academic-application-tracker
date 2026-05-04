@@ -28,7 +28,7 @@ pandas · Plotly · pytest · ruff
 ```
 config.py              Constants only — statuses, thresholds, vocabularies
 database.py            All SQL reads/writes; calls exports.write_all() after every write
-exports.py             Markdown generators (T1 `write_opportunities` shipped; T2 / T3 pending)
+exports.py             Markdown generators (T1 `write_opportunities` + T2 `write_progress` shipped; T3 `write_recommenders` pending)
 app.py                 Dashboard home page (Phase 4, complete)
 pages/
   1_Opportunities.py   Position CRUD (Phase 3, complete)
@@ -83,7 +83,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
-**`main` HEAD:** Phase 6 T1 merged (PR #32); test suite at 786 passed + 1 xfailed
+**`main` HEAD:** Phase 6 T2 merged (PR #33); test suite at 801 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -102,8 +102,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | Task | Status | Notes |
 |------|--------|-------|
 | T1 — `write_opportunities()` generator | ✅ PR #32 | `exports/OPPORTUNITIES.md` — 8-column contract pinned by `TestWriteOpportunities`; raw bracketed status sentinels; idempotent |
-| T2 — `write_progress()` generator | 🔲 next | see "Immediate task" |
-| T3 — `write_recommenders()` generator | 🔲 | after T2 |
+| T2 — `write_progress()` generator | ✅ PR #33 | `exports/PROGRESS.md` — positions × applications × interviews; `_format_confirmation` + `_format_interviews_summary` tri-state helpers; conftest fixture lift (mandatory ride-along) closed T1 pollution |
+| T3 — `write_recommenders()` generator | 🔲 next | see "Immediate task" |
 | T4 — Export page (manual regenerate button + file mtimes) | 🔲 | |
 | T5 — Export page (`st.download_button` per file) | 🔲 | |
 | T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 | |
@@ -115,143 +115,96 @@ Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
 
 ---
 
-## Immediate task — Phase 6 T2 (`write_progress()` exports generator)
+## Immediate task — Phase 6 T3 (`write_recommenders()` exports generator)
 
-**Spec:** `TASKS.md` current sprint Phase 6 T2 · `DESIGN §7` exports
-contract (`exports/PROGRESS.md` from positions JOIN applications
-JOIN interviews) · `exports.py` existing T1 implementation as the
-reference for shape (column contract pinning, idempotency,
-deferred-import, em-dash + raw-bracketed-status conventions).
+**Spec:** `TASKS.md` current sprint Phase 6 T3 · `DESIGN §7` exports
+contract (`exports/RECOMMENDERS.md` from recommenders JOIN positions)
+· `exports.py` existing T1 + T2 implementations as the reference for
+shape (deferred-import, idempotency, em-dash + raw-bracketed-status
+conventions, `_md_escape_cell`, `_format_confirmation` precedent).
 
-T2 ships the second of three Phase 6 generators. Same architectural
-shape as T1 — read DB → render markdown table → write to
-`exports/PROGRESS.md`. The data is **richer** than T1 (positions
-JOIN applications JOIN interviews) so the column set + sort + cell
-shapes need spec'ing first.
+T3 ships the third of three Phase 6 generators — last one before the
+Export page work (T4 + T5) and the Phase 6 close-out (T6 → tag
+`v0.7.0`). Same architectural shape as T1 + T2.
 
-### T2 — `exports.write_progress()` generator
+### T3 — `exports.write_recommenders()` generator
 
-- Output: `exports/PROGRESS.md` (UPPERCASE; mirror of T1
-  `OPPORTUNITIES.md` precedent + DESIGN §7 line 463).
-- Source: positions × applications × interviews join. The closest
-  existing reader is `database.get_applications_table()` (10-column
-  projection) — it covers the positions+applications side; the
-  interviews side needs an additional read (`get_interviews(pid)`
-  per row, OR a richer joined query if you'd rather add one to
-  `database.py`). Pick what reads cleanest; if you add a new query,
-  pin it with tests in `test_database.py` first.
-- Suggested column shape (verify against DESIGN §7 / wireframes
-  before locking; pin via `TestWriteProgress` tests):
-  - Position · Institute · Status · Applied · Confirmation ·
-    Response · Result · Interviews-summary
-  - "Interviews-summary" is the open question — could be a count
-    (`2`), a comma-joined date list (`2026-05-08, 2026-05-15`), or a
-    next-interview cell (`2026-05-08 Virtual`). Pick one and
-    document why in the test class docstring; flag in the PR
-    description so the orchestrator can sanity-check.
-- Sort order: same shape as T1 — `deadline_date ASC NULLS LAST,
-  position_id ASC`, with `pandas.sort_values(... kind="stable")` to
-  add the position_id tiebreaker on top of the upstream SQL order.
-- Cell shapes — **mirror T1 conventions** so the three exports read
-  coherently:
-  - `_safe_str_or_em` for missing TEXT cells → em-dash (`—`).
+- Output: `exports/RECOMMENDERS.md` (UPPERCASE per DESIGN §7 line 464
+  + the existing stub docstring + the T1 / T2 precedent).
+- Source: `database.get_all_recommenders()` — already returns
+  recommenders × positions LEFT JOIN ordered by `recommender_name
+  ASC`. No new reader needed.
+- Suggested column shape (verify against DESIGN §6 recommenders
+  schema; pin via `TestWriteRecommenders` tests):
+  - Recommender · Relationship · Position · Institute · Asked ·
+    Confirmed · Submitted · Reminder
+  - "Reminder" cell folds the `(reminder_sent, reminder_sent_date)`
+    pair via the SAME tri-state shape as T2's
+    `_format_confirmation` — `—` / `✓ {ISO}` / `✓ (no date)`. The
+    semantic is identical (a flag + an optional date), so reuse the
+    helper rather than building a new one. If you'd rather a
+    differently-shaped cell, document why in the test class
+    docstring + flag in the PR.
+  - "Confirmed" cell uses the existing tri-state `_format_confirmed`
+    convention from `pages/3_Recommenders.py` (`—` / `No` / `Yes`)
+    — but you'll need a local `_format_confirmed` helper here per
+    the DESIGN §2 layer rule (pages and exports cannot share
+    helpers). Mirror semantics, ISO over Mon D where applicable.
+- Sort order: `recommender_name ASC, deadline_date ASC NULLS LAST,
+  id ASC`. The first key groups all of one person's owed letters
+  together; the secondary keys order multiple positions for the
+  same recommender by deadline. Re-apply via
+  `pandas.sort_values(... kind="stable")` to defend against
+  upstream SQL changes.
+- Cell shapes — **mirror T1 + T2 conventions**:
+  - `_safe_str_or_em` for missing TEXT cells.
   - Date cells pass-through ISO TEXT.
-  - Status renders **raw bracketed sentinel** (`[APPLIED]`, not
-    `Applied`) — same backup-vs-UI rationale as T1 (cite
-    `reviews/phase-6-tier1-review.md` Q1 if you need the long form).
-  - `_md_escape_cell` on every cell (pipe + newline safety net).
-- Idempotency: same DESIGN §7 #2 contract — pin with
-  `test_idempotent_across_two_calls`. Two calls with no DB change
-  must produce byte-identical output.
+  - `_md_escape_cell` on every cell.
+  - No status sentinel here — recommenders don't carry pipeline
+    status — but if you surface anything ALL-CAPS-bracketed (e.g. a
+    relationship enum), keep it raw per the backup-vs-UI rationale
+    cited in T1 review Q1.
+- Idempotency: pinned by `test_idempotent_across_two_calls`. Two
+  calls with no DB change → byte-identical output.
 
 ### Architecture rules (non-negotiable — DESIGN §7)
 - `exports.py` imports `database` + `config`; **NEVER** `streamlit`.
-- Deferred `database` import inside `write_progress` body (mirror of
-  T1) breaks the `database → exports → database` circular import.
+- Deferred `database` import inside `write_recommenders` body
+  (mirror of T1 / T2) breaks the `database → exports → database`
+  circular import.
 - `EXPORTS_DIR.mkdir(exist_ok=True)` inside the function body
-  (mirror of T1) so it works independently of `write_all`'s prior
-  mkdir — required for the Phase 6 T4 manual-trigger button.
-
-### Mandatory ride-along — lift `db_and_exports` fixture into `tests/conftest.py`
-
-**This is a load-bearing fix, not optional.** With T1 shipped, every
-test that calls `database.add_position` (and there are dozens across
-`test_applications_page.py` / `test_recommenders_page.py` /
-`test_database.py` / etc.) now writes to the project's REAL
-`exports/OPPORTUNITIES.md` as a side effect of the deferred
-`exports.write_all()` call inside the writer. The `db` fixture in
-`conftest.py` only monkeypatches `database.DB_PATH`; without an
-`exports.EXPORTS_DIR` monkeypatch in the same fixture, every full
-pytest run pollutes `exports/` with junk content from whichever test
-ran last. Symptom: `git status` after pytest shows a modified or new
-`exports/OPPORTUNITIES.md` whose content is whatever the last test
-seeded.
-
-T2 lands in the same change set as T1's exposed pollution, so the
-implementer fixes it here. Two acceptable shapes:
-
-1. **Augment the existing `db` fixture** (preferred — single
-   fixture, every consumer benefits automatically):
-   ```python
-   @pytest.fixture
-   def db(tmp_path, monkeypatch):
-       monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.db")
-       import exports as _exports
-       monkeypatch.setattr(_exports, "EXPORTS_DIR", tmp_path / "exports")
-       database.init_db()
-       yield
-   ```
-   After this lands, `tests/test_exports.py::db_and_exports` becomes
-   redundant for every consumer EXCEPT the T1 + T2 + T3 export tests
-   (which need the `exports_dir` path returned for `_read_output`).
-   Keep `db_and_exports` as a thin wrapper that calls into the new
-   conftest `db` and returns the path.
-
-2. **Add a new `_isolated_exports_writer_path` fixture** to
-   conftest.py and explicitly request it from every page test that
-   triggers a DB write — strictly worse (touches every page test
-   file); flagged for completeness only. Don't pick this.
-
-Verify the fix with: `git status` after `pytest tests/ -q` shows
-**zero changes** to `exports/`. If exports/ is dirty after a clean
-run, the lift didn't take.
-
-Document the lift in the PR description as a separate bullet under
-Summary so the orchestrator can cite it cleanly in the close-out
-review.
+  (mirror of T1 / T2).
 
 ### Tests to write first (TDD red commit)
-- After the conftest lift, `db_and_exports` keeps its current shape
-  (returns the exports path) but delegates the DB monkeypatch to
-  the lifted `db` fixture.
-- `TestWriteProgress` class with:
-  - `test_writes_file_at_expected_path` — `exports/PROGRESS.md`
+- Reuse the lifted `db_and_exports` wrapper from T2.
+- `TestWriteRecommenders` class with:
+  - `test_writes_file_at_expected_path` — `exports/RECOMMENDERS.md`
     exists.
   - `test_table_header_matches_contract` — locked column header.
-  - `test_one_row_per_position` — N positions → N data rows
-    (positions ∩ applications LEFT JOIN; rows that lack an
-    application still show up — applications row is auto-inserted
-    by `add_position` per `database.add_position` contract).
-  - `test_sort_order_by_deadline_asc_nulls_last` — mixed deadlines
-    sort correctly.
-  - `test_em_dash_for_missing_text_cells` — NULL `applied_date` /
-    `notes` / etc. surface as `—`.
-  - `test_iso_format_for_date_cells` — Applied column renders as
-    `YYYY-MM-DD`.
-  - `test_status_renders_as_raw_bracketed_sentinel` — `[APPLIED]`
-    in the Status cell (not `Applied`).
+  - `test_one_row_per_recommender_position_pair` — a recommender
+    owing letters for N positions surfaces as N rows in the table
+    (mirror of `get_all_recommenders` row shape).
+  - `test_sort_order_groups_by_recommender_then_deadline` — two
+    recommenders with overlapping positions render with all of
+    person A's rows before any of person B's; within each
+    recommender, rows order by deadline ASC NULLS LAST.
+  - `test_em_dash_for_missing_text_cells` — NULL relationship /
+    notes / etc. → `—`.
+  - `test_iso_format_for_date_cells` — Asked / Submitted columns
+    render as `YYYY-MM-DD`.
   - `test_idempotent_across_two_calls` — byte-identical output.
   - `test_empty_db_writes_header_only` — header + separator only on
-    empty DB (Phase 6 T4 manual-trigger button must work fresh).
-  - `test_interviews_summary_<...>` — pin whatever
-    "interviews-summary" choice you make; multiple interviews → a
-    deterministic single cell.
+    empty DB.
+  - `test_confirmed_tri_state_<...>` — Confirmed cell renders the
+    locked tri-state pattern (`—` / `No` / `Yes`).
+  - `test_reminder_<...>` — Reminder cell renders the locked
+    tri-state pattern (`—` / `✓ {ISO}` / `✓ (no date)`).
 
 ### TDD cadence
 Standard three-commit triplet — `test:` → `feat:` → `chore:` (the
 `chore:` is the orchestrator's).
 
-### Pre-PR gates (GUIDELINES §11) + T2 isolation gate
+### Pre-PR gates (GUIDELINES §11 + T2 isolation gate, now standing)
 ```bash
 ruff check .
 pytest tests/ -q
@@ -259,21 +212,14 @@ pytest -W error::DeprecationWarning tests/ -q
 grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
   | grep -v '^\([^:]*\):[0-9]*:\s*#'
 
-# T2-specific isolation gate — verifies the conftest lift took.
-# After a clean pytest run, exports/ must be untouched. If this prints
-# anything, the conftest fixture isn't monkeypatching EXPORTS_DIR
-# correctly and the lift needs revisiting.
+# T2 isolation gate is permanent now — must stay empty.
 git status --porcelain exports/
 ```
 
-If `git status --porcelain exports/` produces any output after the
-suite runs, the conftest lift is incomplete — fix before opening the
-PR.
-
 ### Branch + cadence
-- Branch name: `feature/phase-6-tier2-WriteProgress`.
-- One PR for the test + feat commits (the conftest lift lands in the
-  test commit); orchestrator handles the chore rollup post-merge.
+- Branch name: `feature/phase-6-tier3-WriteRecommenders`.
+- One PR for the test + feat commits; orchestrator handles the
+  chore rollup post-merge.
 
 ---
 
@@ -281,8 +227,8 @@ PR.
 
 ```
 1. test: commit  → add failing tests to tests/test_exports.py
-                   (write_progress not implemented yet → RED)
-2. feat: commit  → implement write_progress() in exports.py (GREEN)
+                   (write_recommenders not implemented yet → RED)
+2. feat: commit  → implement write_recommenders() in exports.py (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -315,7 +261,7 @@ grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-6-tier2-WriteProgress` |
+| Open PR | You — branch name: `feature/phase-6-tier3-WriteRecommenders` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
