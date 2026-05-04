@@ -7,6 +7,77 @@
 
 ---
 
+## Session bootstrap (read first)
+
+You are the **implementer agent** taking the next task in this
+project. The orchestrator session in Zed has prepared everything you
+need below; your job is to ship the "Immediate task" further down
+this doc.
+
+### Pre-flight (run before writing any code)
+
+```bash
+cd /Users/zhengyu/Desktop/Claude/Project/Postdoc
+git fetch && git checkout main && git pull --ff-only origin main
+git log --oneline -5            # confirm main HEAD matches "Current state"
+source .venv/bin/activate
+pytest tests/ -q                # confirm baseline matches "Current state"
+git status --porcelain exports/ # standing isolation gate — must be empty
+git checkout -b <branch-name-from-Immediate-task>
+```
+
+The "Immediate task" section names the branch to create. If pytest
+baseline or `git status exports/` doesn't match what's recorded under
+"Current state", **stop and flag it** — the tracker is out of sync
+with the repo and the orchestrator needs to hear about it before you
+proceed.
+
+### First action
+
+Pre-announce in one sentence what you are about to do, then read in
+order: `AGENTS.md` "Immediate task" block · `DESIGN.md` sections
+cited there · the existing implementations the spec tells you to
+mirror · the relevant existing tests. Only after that do you write
+any code.
+
+### Standing user preferences (apply throughout session)
+
+- **Pre-announce non-trivial actions** in one sentence before doing
+  them — not a plan document, just a sentence.
+- **Didactic over terse.** When explaining a decision (architecture
+  choice, why a test fails, what a Streamlit gotcha is), give the
+  *reasoning*, not just the conclusion. The user is using this
+  project to learn software engineering.
+- **Show recommendations as something the user can redirect**, not a
+  decided plan. The user reserves merge / strategy decisions.
+- **Standing instruction formula.** When the user asks for a workflow
+  they want repeatedly, codify it (the orchestrator updates this doc
+  to capture it durably).
+
+### Stop boundary
+
+Stop after the PR opens. Do **not**:
+- Touch `TASKS.md` / `CHANGELOG.md` / `reviews/` / `AGENTS.md`
+  "Current state" + "Immediate task" sections — orchestrator-only.
+- Push directly to `main` — PRs only.
+- Skip the pre-commit checklist or the standing isolation gate.
+
+After `gh pr create`, post the PR URL back and stop. The orchestrator
+reviews, merges via admin bypass, and ships the `chore:` rollup
+commit on main.
+
+### PR conventions
+
+- **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
+  — e.g. `feat(phase-6-T3): write_recommenders markdown generator`.
+- **PR body:** `## Summary` bullets per deliverable + `## Test plan`
+  checklist (mirror of recent merged PRs: #32, #33).
+- If you made a non-obvious design call (cell shape, sort key,
+  divergence from spec), flag it under Summary so the orchestrator
+  can sanity-check before merge.
+
+---
+
 ## What this project is
 
 A local, single-user Streamlit web app that answers one daily question for
@@ -252,6 +323,8 @@ pytest -W error::DeprecationWarning tests/ -q   # same
 # status-literal grep (must return 0 lines):
 grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
   | grep -v '^\([^:]*\):[0-9]*:\s*#'
+# T2 isolation gate (standing — added 2026-05-04 with PR #33):
+git status --porcelain exports/                 # must be empty post-pytest
 ```
 
 ---
