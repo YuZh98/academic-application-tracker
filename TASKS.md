@@ -856,9 +856,36 @@ All defensible. Merged via PR #36 (`73a04c4`).
       / 1 xfailed under all seven gates. Branch auto-deleted on
       merge via `gh pr merge --delete-branch`. Merged via PR #41
       (`eac75c3`).
-- [ ] **CL2** `config.py` lifts (next) — EM_DASH + urgency_glyph
-      + FILTER_ALL + REMINDER_TONES + drop TRACKER_PROFILE
-- [ ] **CL3** `tests/helpers.py` extraction
+- [x] **CL2** `config.py` lifts — closed carry-overs **C2** + **C3**
+      in one PR. Four lifts to `config.py`: `EM_DASH = "—"` (was
+      duplicated in 5 modules — `app.py` as `NEXT_INTERVIEW_EMPTY`,
+      three `pages/*.py`, `exports.py` as `_EM_DASH`); new
+      `urgency_glyph(days_away: int | None) -> str` function (was
+      duplicated as `database.py::_urgency_glyph(int)` and
+      `pages/1_Opportunities.py::_deadline_urgency(Any)` — the
+      lifted form takes the canonical `int | None`; the
+      page-layer wrapper retains the date-string parsing concern +
+      delegates; `database.py::_urgency_glyph` deleted entirely
+      with its two `get_upcoming` call sites now passing
+      `config.urgency_glyph` directly into `Series.apply`);
+      `FILTER_ALL = "All"` (was magic literal in 3 pages, lives
+      next to `STATUS_FILTER_ACTIVE` in config); `REMINDER_TONES:
+      tuple[str, ...] = ("gentle", "urgent")` (was page-local
+      `_REMINDER_TONES` in Recommenders). One drop:
+      `TRACKER_PROFILE` + `VALID_PROFILES` + import-time assert +
+      4 `TestTrackerProfile` tests (carry-over **C2** — never read
+      by any module since v1.1 doc refactor). All four lifts are
+      behaviour-preserving refactors; 6 net new tests pin the new
+      contracts at the lift surface; existing per-page urgency /
+      filter / reminder tests pass without modification.
+      **Pyright fence held through the lift** — `pyright .`
+      returns 0/0 post-CL2, confirming no type-shape drift in any
+      of the 6 consumer modules. Suite 864 → 870 under all seven
+      gates. Five commits on branch (1 test red + 4 refactor
+      commits, one per lift/drop) for clean per-line `git blame`
+      attribution. Branch auto-deleted on merge via
+      `--delete-branch`. Merged via PR #42 (`bd76d29`).
+- [ ] **CL3** `tests/helpers.py` extraction (next)
 - [ ] **CL4** Phase 7 polish batched (4 UX fixes)
 - [ ] **CL5** Doc drift retroactive trim + branch-cleanup ritual
       amendment (orchestrator)
@@ -902,6 +929,13 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #42 merged** (`bd76d29`): Phase 7 cleanup CL2
+  shipped — 4 lifts to `config.py` (EM_DASH, urgency_glyph,
+  FILTER_ALL, REMINDER_TONES) + drop of TRACKER_PROFILE block.
+  Closes carry-overs **C2** + **C3** in one PR. Pyright fence
+  held through the lift (0/0). Five commits on branch for clean
+  per-line `git blame`. Suite 864 → 870 under all seven gates.
+  Pre-merge review at [`reviews/phase-7-CL2-review.md`](reviews/phase-7-CL2-review.md).
 - 2026-05-04 — **PR #41 merged** (`eac75c3`): Phase 7 cleanup CL1
   shipped — pyright type-check fence in CI + 45 drift errors → 0.
   `pyright==1.1.409` pinned, `[tool.pyright]` basic mode in
@@ -1188,4 +1222,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 cleanup CL1 merged via PR #41; main HEAD `eac75c3`; suite 864 / 1 xfailed; pyright fence live in CI; Phase 7 cleanup CL2 — `config.py` lifts next; T5 postponed until CL5 closes)_
+_Updated: 2026-05-04 (Phase 7 cleanup CL2 merged via PR #42; main HEAD `bd76d29`; suite 870 / 1 xfailed; carry-overs C2 + C3 closed; Phase 7 cleanup CL3 — `tests/helpers.py` extraction next; T5 postponed until CL5 closes)_
