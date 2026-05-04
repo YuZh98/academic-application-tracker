@@ -451,7 +451,53 @@ DESIGN §8.1 panel rows + empty-state matrix were the contract.
 
 Per **Q6 Option A**, plain markdown tables.
 
-- [ ] **T1** `write_opportunities()` generator
+Branch (T1): on `feature/phase-6-tier1-WriteOpportunities`; pre-merge
+review at [`reviews/phase-6-tier1-review.md`](reviews/phase-6-tier1-review.md);
+suite 777 → 786 green under both pytest gates. Merged via PR #32 (`e9a8a4a`).
+
+- [x] **T1** `write_opportunities()` generator — fills the existing
+      `exports.py` stub with the first markdown export per DESIGN §7.
+      Reads `database.get_all_positions()`, sorts `deadline_date ASC
+      NULLS LAST, position_id ASC` (mirror of
+      `database.get_applications_table()` precedent — the
+      `position_id` tiebreaker is added via `pandas.sort_values(...
+      kind="stable")` so equal-deadline rows have a stable order
+      across rerenders), and writes a single markdown table to
+      `exports/OPPORTUNITIES.md` (UPPERCASE per DESIGN §7 line 462 +
+      the existing stub docstring). 8-column contract pinned by
+      `TestWriteOpportunities.EXPECTED_HEADER`: Position · Institute ·
+      Field · Deadline · Priority · Status · Created · Updated.
+      Cell-shape rules: `_safe_str_or_em` coerces None / NaN / "" →
+      em-dash (mirror of the in-app convention; helper duplicated
+      because pages and exports must NOT share helpers — exports is
+      forbidden from importing streamlit per DESIGN §2 layer rules).
+      Date / datetime cells pass-through ISO TEXT verbatim. **Status
+      renders the raw bracketed sentinel** (`[SAVED]`, `[APPLIED]`,
+      …) NOT `STATUS_LABELS` — markdown is a backup format, not a UI
+      surface, and round-trippable / greppable raw form trumps
+      UI-friendly translation. The pre-PR status-literal grep in
+      GUIDELINES §11 is scoped to `app.py + pages/`, not `exports/`,
+      so this divergence stays grep-clean. Pinned by
+      `test_status_renders_as_raw_bracketed_sentinel` so a future
+      flip can't land silently. `_md_escape_cell` escapes `|` → `\|`
+      and collapses `\n` / `\r` → ` ` — cheap safety net for future
+      user-typed cells. Deferred `database` import inside the
+      function body breaks the `database → exports → database`
+      circular import (mirror of the pattern every `database.py`
+      writer uses to call `exports.write_all`).
+      `EXPORTS_DIR.mkdir(exist_ok=True)` inside the writer keeps it
+      callable independently of `write_all`'s prior mkdir — required
+      for the Phase 6 T4 manual-trigger button. Idempotent — two
+      calls with the same DB state produce byte-identical output;
+      load-bearing for DESIGN §7 contract #2 ("stable markdown
+      format committed to version control"); pinned by
+      `test_idempotent_across_two_calls`. Combined `db_and_exports`
+      fixture monkeypatches both `database.DB_PATH` and
+      `exports.EXPORTS_DIR` (because `add_position` triggers
+      `exports.write_all()` via deferred import; without the second
+      monkeypatch the test would pollute the project's real
+      `exports/` directory). 9 new tests in `TestWriteOpportunities`;
+      suite 777 → 786 under both pytest gates.
 - [ ] **T2** `write_progress()` generator (depends on Phase 5 T3 —
       reads `interviews` data)
 - [ ] **T3** `write_recommenders()` generator
@@ -506,6 +552,17 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #32 merged** (`e9a8a4a`): Phase 6 T1 shipped —
+  `exports.write_opportunities()` filled with an 8-column markdown
+  table writer to `exports/OPPORTUNITIES.md`. Sort: `deadline_date
+  ASC NULLS LAST, position_id ASC` via `pandas.sort_values(...
+  kind="stable")`. Cell shapes: em-dash for NULL TEXT, ISO TEXT
+  pass-through for dates, **raw bracketed sentinel** for Status
+  (`[APPLIED]` not `Applied` — markdown is a backup format, not a
+  UI surface; pinned by `test_status_renders_as_raw_bracketed_sentinel`).
+  Idempotent (DESIGN §7 contract #2). 9 new tests in
+  `TestWriteOpportunities`; suite 777 → 786 under both pytest gates.
+  Pre-merge review at [`reviews/phase-6-tier1-review.md`](reviews/phase-6-tier1-review.md).
 - 2026-05-04 — **`v0.6.0` tagged** on `main` closing Phase 5 — two
   pages complete (Applications + Recommenders) across six tiers
   (T1–T6); close-out cohesion-smoke at
@@ -654,4 +711,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 5 closed; `v0.6.0` tagged; suite 777 / 1 xfailed; Phase 6 T1 — `write_opportunities()` exports generator next)_
+_Updated: 2026-05-04 (Phase 6 T1 merged via PR #32; main HEAD `e9a8a4a`; suite 786 / 1 xfailed; Phase 6 T2 — `write_progress()` exports generator next)_
