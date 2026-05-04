@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `chore(phase-7-CL1): add pyright to CI`.
+  — e.g. `refactor(phase-7-CL2): lift EM_DASH + urgency_glyph + FILTER_ALL + REMINDER_TONES to config`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 T4 merged (PR #40); test suite at 864 passed + 1 xfailed
+**`main` HEAD:** Phase 7 cleanup CL1 merged (PR #41); test suite at 864 passed + 1 xfailed; pyright fence in CI (0/0)
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -229,7 +229,7 @@ User-driven decision (2026-05-04): postpone T5 (responsive layout, user-driven) 
 
 | Sub-tier | What | Who | Blocks |
 |---|---|---|---|
-| **CL1** — Pyright/mypy in CI | Add type-check job to `.github/workflows/ci.yml`; fix any current errors. Fence — every later PR gets free type-check coverage. | Implementer | nothing |
+| **CL1** — Pyright in CI ✅ PR #41 | Pyright fence + 45 errors → 0 across 5 files. `pyright==1.1.409` pinned, `[tool.pyright]` basic mode in `pyproject.toml`, new CI step + checklist rows. | Implementer | done |
 | **CL2** — `config.py` lifts | Lift duplicated constants + helpers to `config.py`: `EM_DASH`, urgency banding (`urgency_glyph(days)`), `"All"` filter sentinel, `_REMINDER_TONES`. Drop unused `TRACKER_PROFILE` (carry-over **C2**). Closes carry-over **C3**. | Implementer | CL1 fence valuable |
 | **CL3** — `tests/helpers.py` extraction | Lift `_link_buttons`, `_decode_mailto`, `_download_buttons`, `_download_button` from per-page test files into shared helper module. | Implementer | parallel-able with CL2 |
 | **CL4** — Phase 7 polish batched | 4 small UX fixes: Save-toast-when-no-dirty wording, subject-pluralization on N=1, `st.markdown` vs `st.write` cohesion, empty-state copy centralization. One PR with 4 commits. | Implementer | CL2 (touches EM_DASH + empty-state sites) |
@@ -241,85 +241,124 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 cleanup CL1 (Pyright/mypy in CI)
+## Immediate task — Phase 7 cleanup CL2 (`config.py` lifts)
 
 **Spec:** This doc's "Phase 7 cleanup + polish sub-tier" table
-(between T4 and T5) · `GUIDELINES §11` "Pre-commit checklist"
-(currently has ruff + pytest but no type-check) · prior PR #22
-(`afc55a6` — "fix: resolve all Pyright type errors in app.py,
-database.py, and tests") which fixed every Pyright error in the
-codebase but did not add CI enforcement. CL1 lands the fence.
+(between T4 and T5) · prior carry-overs **C2** (`TRACKER_PROFILE`
+removal) + **C3** (`"All"` filter sentinel + `_REMINDER_TONES` lift)
+logged across `reviews/phase-5-tier1-review.md`,
+`reviews/phase-5-tier6-review.md`, `reviews/phase-7-tier1-review.md` ·
+DESIGN §2 layer rules (config can be imported by all layers; pages
+and exports cannot share helpers, but can share config constants).
 
-CL1 is the first of five cleanup-and-polish sub-tiers postponed
-T5 introduced (user-driven decision 2026-05-04). Goal: every
-subsequent PR in CL2-CL5 (and onward) gets free type-check
-coverage in CI. If type drift surfaced post-PR-#22, this tier
-catches it; if everything's still clean, ships as a verification-
-only addition with the new CI job + a one-line `[ ] Type-check
-clean` row in the pre-commit checklist.
+CL2 lifts duplicated constants + helpers to `config.py` so the four
+existing duplicate sites (`app.py`, `pages/1_Opportunities.py`,
+`pages/2_Applications.py`, `exports.py`) become one definition.
+Closes carry-overs **C2** + **C3** in one PR. CL1's pyright fence
+(merged in PR #41) catches any type drift introduced by the lift.
 
-### CL1 — Pyright in CI
+### CL2 — `config.py` lifts
 
-- **Pick the tool:** `pyright` is the project precedent (PR #22
-  used it). Mypy is a defensible alternative but pyright is faster
-  + matches the prior cleanup. Default to **pyright** unless you
-  have a strong reason otherwise; flag the choice in the PR.
-- **CI workflow edit** (`.github/workflows/ci.yml`):
-  - Add a `pyright` step in the existing `Tests + Lint (3.14)`
-    job, alongside the existing ruff + pytest steps. Same Python
-    3.14 environment.
-  - Use the `microsoft/setup-pyright@v1` GitHub Action (or
-    `pip install pyright` + bare invocation — pick whichever
-    reads cleanest in the YAML; the action handles caching).
-  - Run on the project root: `pyright .` (or scoped to `app.py
-    config.py database.py exports.py pages/ tests/` if root-level
-    files like `requirements.txt` confuse the type-checker).
-  - Fail the job on any error (exit code ≠ 0).
-- **`pyrightconfig.json` at repo root** (or `pyproject.toml`
-  `[tool.pyright]` if the project already has a `pyproject.toml`):
-  - Set `pythonVersion = "3.14"`.
-  - Set `typeCheckingMode = "basic"` (matching PR #22's working
-    point — `strict` would require widespread additional
-    annotations and is out of scope here).
-  - Exclude generated paths if any (`.venv`, `__pycache__`,
-    `exports/` since the user's local exports/ files are .gitignored
-    but pyright might still scan them on CI fresh-clone — verify).
-- **Fix any current errors** that surface. Most likely candidates
-  (per the project's recent code review):
-  - `pages/1_Opportunities.py::_deadline_urgency` widened type
-    hint to `Any` in Phase 7 T1 — verify no fallout.
-  - `pages/3_Recommenders.py` AppTest helpers (T6 LLM-prompts +
-    download-button helpers) used `at.get('...')` returning
-    `UnknownElement` — pyright may flag the protobuf attribute
-    accesses as `Any`-untyped. Fix with explicit `# type: ignore`
-    + comment, or a typing.cast wrapper.
-  - `tests/test_pages_cohesion.py::_set_parents` already has a
-    `# type: ignore[attr-defined]` annotation — verify pyright
-    accepts it.
-- **Pre-commit checklist update** in `AGENTS.md` "Pre-commit
-  checklist (run before opening PR)" section: add `pyright .`
-  alongside the existing four checks. Also update `GUIDELINES §11`
-  pre-commit checklist to match.
+Four lifts + one drop:
+
+1. **`EM_DASH = "—"` constant.** Currently duplicated in:
+   - `app.py` (as `NEXT_INTERVIEW_EMPTY = "—"` — same value, different name)
+   - `pages/1_Opportunities.py` line 25
+   - `pages/2_Applications.py` (verify)
+   - `pages/3_Recommenders.py` line 63
+   - `exports.py` (as `_EM_DASH` — leading underscore for module-private)
+
+   Lift: add `EM_DASH: str = "—"` to `config.py`. Update all five
+   sites to `from config import EM_DASH` (or keep `config.EM_DASH`
+   if cleaner). Remove the per-file constants. **Naming choice**:
+   `EM_DASH` (matching the page-layer convention) over
+   `NEXT_INTERVIEW_EMPTY` (app.py's specific framing) — the
+   constant is generic, not interview-specific.
+
+2. **Urgency-banding helper.** Currently duplicated as:
+   - `pages/1_Opportunities.py::_deadline_urgency(date_str: Any) -> str`
+     (returns 🔴 / 🟡 / `''` / `—` based on days until deadline)
+   - `database.py::_urgency_glyph(days_away: int) -> str` (same
+     banding, different signature — takes days, not date string)
+
+   Lift: add `config.urgency_glyph(days_away: int | None) -> str`
+   that handles both shapes — `None` → `EM_DASH`, otherwise the
+   🔴 / 🟡 / `''` banding via the existing
+   `DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS` thresholds.
+   Both call sites become thin wrappers: the page-layer helper
+   parses date string → days delta → calls `config.urgency_glyph`;
+   the database-layer helper passes through directly. Mirror of
+   how `STATUS_LABELS` is shared between layers via `config.py`.
+
+3. **`"All"` filter sentinel.** Currently a magic literal in:
+   - `pages/1_Opportunities.py` (verify locations)
+   - `pages/2_Applications.py` (`STATUS_FILTER_ACTIVE` is in
+     `config.py` already; `"All"` is the bare counterpart)
+   - `pages/3_Recommenders.py` line 275 `_FILTER_ALL = "All"`
+
+   Lift: add `FILTER_ALL: str = "All"` to `config.py` alongside
+   `STATUS_FILTER_ACTIVE`. Update all three pages to import from
+   config. Remove per-page literals.
+
+4. **`_REMINDER_TONES` tuple.** Currently page-local:
+   `pages/3_Recommenders.py` line 144
+   `_REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")`.
+
+   Lift: add `REMINDER_TONES: tuple[str, ...] = ("gentle",
+   "urgent")` to `config.py`. Update Recommenders page to import.
+   The `len(_REMINDER_TONES)` reference in the expander label
+   becomes `len(config.REMINDER_TONES)`.
+
+5. **Drop `TRACKER_PROFILE`** (carry-over **C2**) — currently in
+   `config.py` lines 14-28: `TRACKER_PROFILE = "postdoc"`,
+   `VALID_PROFILES = {"postdoc"}`, plus an import-time assertion.
+   Never read by any module; unused since v1.1 doc refactor. Drop
+   all three. Verify with `grep -rn "TRACKER_PROFILE\|VALID_PROFILES"`
+   that no consumer survives — should return only the config.py
+   definitions themselves.
+
+### Architecture rules (non-negotiable — DESIGN §2)
+- `config.py` imports nothing from this project. Pure constants
+  (and now: pure functions like `urgency_glyph` that don't need
+  to import database/streamlit).
+- `database.py` + `pages/*.py` + `exports.py` import from `config`
+  freely.
+- Pages still do not import from each other; the lift to `config`
+  is the structural fix for "two pages need the same string".
 
 ### Tests to write first (TDD red commit)
-- Not strictly applicable — CL1 is CI-config + type-fixes, no new
-  behaviour to test. The "tests" are pyright errors surfacing on
-  the CI run; once it's green, the contract holds.
-- If you find current type errors, the **fix** for each error is
-  the deliverable. Each fix is a discrete commit if it spans more
-  than one file.
+- Two test additions:
+  - `tests/test_config.py` — extend with assertions that the new
+    constants exist + have the expected values (`EM_DASH == "—"`,
+    `FILTER_ALL == "All"`, `REMINDER_TONES == ("gentle",
+    "urgent")`). Mirror of the existing `STATUS_FILTER_ACTIVE`
+    invariant test.
+  - `tests/test_config.py::test_urgency_glyph_*` — band the new
+    helper at boundaries: `days = 0` → 🔴; `days =
+    DEADLINE_URGENT_DAYS` → 🔴; `days = DEADLINE_URGENT_DAYS + 1`
+    → 🟡; `days = DEADLINE_ALERT_DAYS` → 🟡; `days =
+    DEADLINE_ALERT_DAYS + 1` → `''`; `days = None` → `—`. ~6
+    tests covering the banding contract once at the source.
+- Existing per-page tests (urgency tests in
+  `test_opportunities_page.py`, etc.) should keep passing without
+  modification — the lift is a behaviour-preserving refactor.
 
-### Architecture rules (non-negotiable)
-- No new feature code. CL1 is fence + lint-fix.
-- `# type: ignore` is acceptable as a last resort for genuine
-  AppTest / protobuf attribute-access cases that have no clean
-  type story. Add a comment explaining why.
+### Removal verification
+After the lift, run:
+```bash
+grep -rn 'EM_DASH\s*=\s*"—"' app.py pages/ exports.py
+grep -rn '"All"' pages/ | grep -v 'config\.FILTER_ALL\|"All", \*STATUS_VALUES'
+grep -rn '_REMINDER_TONES' pages/
+grep -rn 'TRACKER_PROFILE' .
+```
+First three should show only the new imports / config call sites
+(no surviving local definitions). Last should show zero matches
+(TRACKER_PROFILE fully removed).
 
-### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror)
-Standing checklist + the new pyright check:
+### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror + pyright fence from CL1)
 ```bash
 ruff check .
-pyright .                     # NEW — added in this PR
+pyright .                                       # CL1 fence — must stay 0/0
 pytest tests/ -q
 pytest -W error::DeprecationWarning tests/ -q
 grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
@@ -329,24 +368,24 @@ mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
 ```
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-cleanup-CL1-PyrightCI`.
-- One PR for the workflow edit + any type-fix commits + pre-commit-
-  checklist update. Orchestrator handles the chore rollup
-  post-merge.
+- Branch name: `feature/phase-7-cleanup-CL2-ConfigLifts`.
+- One PR with the test commit (red) + the lift commit(s) (green).
+  Implementer may split lifts into multiple commits (one per
+  constant) for cleaner per-line `git blame` — same precedent as
+  CL1's per-file fix-commit shape.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. chore: commit  → add pyright step to .github/workflows/ci.yml
-                    + pyrightconfig.json (or pyproject.toml [tool.pyright])
-                    + update AGENTS.md / GUIDELINES.md pre-commit
-                    checklist with the new `pyright .` row
-2. fix:   commit  → fix any pyright errors that surface (one
-                    commit per logical fix-set; can be omitted if
-                    pyright is already clean from PR #22's
-                    cleanup work)
+1. test: commit   → add tests/test_config.py assertions for the
+                    new constants + urgency_glyph banding tests
+                    (RED — constants/helper not yet defined)
+2. refactor:      → add constants + helper to config.py; update
+   commit(s)        every consumer (app.py, pages/, exports.py)
+                    to import from config; drop duplicate
+                    locals + TRACKER_PROFILE block (GREEN)
 3. chore: rollup  → orchestrator handles TASKS.md/CHANGELOG/review
                     doc (YOU do not touch these)
 ```
@@ -382,7 +421,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-cleanup-CL1-PyrightCI` |
+| Open PR | You — branch name: `feature/phase-7-cleanup-CL2-ConfigLifts` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

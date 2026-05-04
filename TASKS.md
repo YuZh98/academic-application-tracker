@@ -831,8 +831,41 @@ All defensible. Merged via PR #36 (`73a04c4`).
       `_find_function` / `_ancestors` round out the toolkit. Suite
       853 → 864 under both pytest gates. Merged via PR #40
       (`952f0e9`).
+**Cleanup + polish sub-tier (between T4 and T5; postponed T5 until CL5 closes per 2026-05-04 user-driven decision):**
+
+- [x] **CL1** Pyright/mypy in CI fence + drift cleanup —
+      `pyright==1.1.409` pinned in `requirements-dev.txt`,
+      `[tool.pyright]` basic-mode block in `pyproject.toml` with
+      explicit include/exclude lists, new "Pyright type-check" CI
+      step in `.github/workflows/ci.yml` between Ruff lint and
+      Pytest, `pyright .` row added to AGENTS.md + GUIDELINES.md
+      pre-commit checklists. **45 type-drift errors → 0** across 5
+      files (`tests/test_app_page.py`, `exports.py`,
+      `pages/1_Opportunities.py`, `pages/2_Applications.py`,
+      `pages/3_Recommenders.py`). All fixes follow PR #22's
+      precedent patterns: `Any`-typed locals for `iterrows` cells
+      (pandas-stubs `Series | ndarray | Any` union),
+      `# type: ignore[call-overload]` for pandas `rename`
+      overload-resolution churn, `is not None` guards for AppTest
+      `Button | None` returns, `cast(pd.DataFrame, ...)` for
+      mask-narrowing where the runtime guarantee is "always
+      DataFrame here". All 45 fixes are runtime no-ops (864 → 864
+      passed). Six commits on branch (1 chore + 5 file-scoped
+      fixes — per-file commit split gives per-line `git blame`
+      attribution that survives the cleanup). Suite stable at 864
+      / 1 xfailed under all seven gates. Branch auto-deleted on
+      merge via `gh pr merge --delete-branch`. Merged via PR #41
+      (`eac75c3`).
+- [ ] **CL2** `config.py` lifts (next) — EM_DASH + urgency_glyph
+      + FILTER_ALL + REMINDER_TONES + drop TRACKER_PROFILE
+- [ ] **CL3** `tests/helpers.py` extraction
+- [ ] **CL4** Phase 7 polish batched (4 UX fixes)
+- [ ] **CL5** Doc drift retroactive trim + branch-cleanup ritual
+      amendment (orchestrator)
+
 - [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
       widths; capture screenshots to `docs/ui/screenshots/v0.8.0/`
+      (postponed until CL5 closes)
 - [ ] **T6** Phase 7 review + PR + tag `v0.8.0`
 
 ### v1.0-rc — schema cleanup
@@ -869,6 +902,18 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #41 merged** (`eac75c3`): Phase 7 cleanup CL1
+  shipped — pyright type-check fence in CI + 45 drift errors → 0.
+  `pyright==1.1.409` pinned, `[tool.pyright]` basic mode in
+  `pyproject.toml`, new CI step + checklist rows. All 45 fixes
+  follow PR #22's precedent patterns (Any-typed locals for
+  iterrows, `# type: ignore[call-overload]` for pandas rename,
+  `is not None` guards for AppTest helpers, `cast(pd.DataFrame,
+  ...)`). Suite 864 → 864 (no behavioural change; runtime no-ops).
+  Six commits on branch (1 chore + 5 file-scoped fixes for clean
+  per-line `git blame`). First PR merged with
+  `--delete-branch` flag (testing branch-cleanup-on-merge ritual).
+  Pre-merge review at [`reviews/phase-7-CL1-review.md`](reviews/phase-7-CL1-review.md).
 - 2026-05-04 — **PR #40 merged** (`952f0e9`): Phase 7 T4 shipped —
   confirm-dialog audit + position cascade-copy fix. New
   `TestConfirmDialogAudit` (11 tests across 3 destructive paths)
@@ -1143,4 +1188,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 T4 merged via PR #40; main HEAD `952f0e9`; suite 864 / 1 xfailed; Phase 7 T5 — Responsive layout check next)_
+_Updated: 2026-05-04 (Phase 7 cleanup CL1 merged via PR #41; main HEAD `eac75c3`; suite 864 / 1 xfailed; pyright fence live in CI; Phase 7 cleanup CL2 — `config.py` lifts next; T5 postponed until CL5 closes)_
