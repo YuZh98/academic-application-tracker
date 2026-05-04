@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-04 | Phase 6 T4 — Export page shell + manual regenerate button + mtimes panel | `feature/phase-6-tier4-ExportPage` | Approve | [phase-6-tier4-review.md](phase-6-tier4-review.md) |
 | 2026-05-04 | Phase 6 T3 — `write_recommenders()` markdown generator + smoke-test fixture fix that closed CI-red regression | `feature/phase-6-tier3-WriteRecommenders` | Approve | [phase-6-tier3-review.md](phase-6-tier3-review.md) |
 | 2026-05-04 | Phase 6 T2 — `write_progress()` markdown generator + conftest fixture lift | `feature/phase-6-tier2-WriteProgress` | Approve | [phase-6-tier2-review.md](phase-6-tier2-review.md) |
 | 2026-05-04 | Phase 6 T1 — `write_opportunities()` markdown generator | `feature/phase-6-tier1-WriteOpportunities` | Approve | [phase-6-tier1-review.md](phase-6-tier1-review.md) |
