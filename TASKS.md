@@ -463,6 +463,20 @@ exposed pollution; T2 isolation gate (`git status --porcelain
 exports/` empty post-pytest) now part of the standing pre-PR
 checklist. Merged via PR #33 (`911115a`).
 
+Branch (T3): on `feature/phase-6-tier3-WriteRecommenders`; pre-merge
+review at [`reviews/phase-6-tier3-review.md`](reviews/phase-6-tier3-review.md);
+suite 801 → 815 green under both pytest gates. Three commits on
+branch (`test:` → `feat:` → `fix:`) — the `fix:` augmented
+`isolated_exports_dir` to also monkeypatch `DB_PATH` + run
+`init_db()`, closing the CI-red regression that had been latent on
+main since T1 (smoke tests `test_write_*_does_not_raise` fell
+through to the developer's real `postdoc.db` locally + raised
+`sqlite3.OperationalError` on CI). Process docs amended in
+`c284c20` post-mortem (require CI-green-conclusion before
+admin-bypass; CI-mirror local check `mv postdoc.db postdoc.db.bak
+&& pytest tests/ -q && mv postdoc.db.bak postdoc.db` in standing
+pre-PR checklist). Merged via PR #34 (`c11fde4`).
+
 - [x] **T1** `write_opportunities()` generator — fills the existing
       `exports.py` stub with the first markdown export per DESIGN §7.
       Reads `database.get_all_positions()`, sorts `deadline_date ASC
@@ -557,7 +571,57 @@ checklist. Merged via PR #33 (`911115a`).
       (`git status --porcelain exports/` empty post-pytest) is now
       part of the standing pre-PR checklist. 15 new tests in
       `TestWriteProgress`; suite 786 → 801 under both pytest gates.
-- [ ] **T3** `write_recommenders()` generator
+- [x] **T3** `write_recommenders()` generator — fills the third
+      `exports.py` stub. Reads `database.get_all_recommenders()` (no
+      new DB reader needed — the existing one returns recommenders ×
+      positions LEFT JOIN ordered by `recommender_name ASC`) and
+      writes a single 8-column markdown table to
+      `exports/RECOMMENDERS.md` (UPPERCASE per DESIGN §7 line 464 +
+      the T1 / T2 precedent). Locked column contract pinned by
+      `TestWriteRecommenders.EXPECTED_HEADER`: Recommender ·
+      Relationship · Position · Institute · Asked · Confirmed ·
+      Submitted · Reminder. **`notes` deliberately omitted** —
+      free-form prose is awkward in a markdown table cell; the
+      in-app UI carries it, the export summarises. Two helper-reuse
+      decisions: **Confirmed** uses a NEW local `_format_confirmed`
+      (`—` / `No` / `Yes` tri-state — mirrors the
+      `pages/3_Recommenders.py` helper of the same name; pages and
+      exports cannot share helpers per DESIGN §2 layer rules);
+      **Reminder** REUSES the existing `exports._format_confirmation`
+      helper because the `(reminder_sent, reminder_sent_date)` pair
+      has the same `(flag, date)` shape as the Applications-page
+      Confirmation pattern (DESIGN §8.3 D-A T1-C precedent). Cell
+      shapes mirror T1+T2 (em-dash for missing TEXT, ISO TEXT
+      pass-through for dates, `_md_escape_cell` on every cell). Sort:
+      `recommender_name ASC, deadline_date ASC NULLS LAST, id ASC`.
+      `database.get_all_recommenders()` SQL covers keys 1 + 3 only;
+      `deadline_date` is merged in pandas from
+      `database.get_all_positions()` here in the writer (mirror of
+      T2's "compose multiple reads in `exports.py`" precedent), then
+      re-sorted via `pandas.sort_values(... kind="stable")` to
+      defend against either upstream reader's ORDER BY changing.
+      Idempotent (DESIGN §7 contract #2; pinned by
+      `test_idempotent_across_two_calls`). 14 new tests in
+      `TestWriteRecommenders`. **Three commits on branch (`test:` →
+      `feat:` → `fix:`)** — the `fix:` augmented
+      `isolated_exports_dir` to also monkeypatch `database.DB_PATH`
+      + run `init_db()`, closing the CI-red regression that had
+      been latent on main since T1 (three smoke tests
+      `test_write_*_does_not_raise` used only `isolated_exports_dir`
+      and never init'd a DB; locally they passed because `postdoc.db`
+      sits at the project root + the unmonkeypatched `database.DB_PATH`
+      fell through, but on CI runners with no `postdoc.db` the
+      writers raised `sqlite3.OperationalError`). The fix is mirror
+      of the conftest `db` fixture from Phase 6 T2 (single fixture,
+      every consumer benefits) — closes the gap once for the three
+      smoke tests AND the two `write_all` behaviour tests.
+      **Process amendment in `c284c20` (post-mortem on PRs #32 +
+      #33 + #34):** ORCHESTRATOR_HANDOFF.md now requires CI
+      `conclusion: SUCCESS` (not IN_PROGRESS) before admin-bypass;
+      AGENTS.md "Session bootstrap" adds the CI-mirror local check
+      (`mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv
+      postdoc.db.bak postdoc.db`) to standing pre-PR checklist.
+      Suite 801 → 815 under both pytest gates.
 - [ ] **T4** Export page — manual regenerate button + file mtimes
 - [ ] **T5** Export page — `st.download_button` per file
 - [ ] **T6** Phase 6 review + PR + tag `v0.7.0`
@@ -609,6 +673,22 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #34 merged** (`c11fde4`): Phase 6 T3 shipped —
+  `exports.write_recommenders()` filled with an 8-column markdown
+  table writer to `exports/RECOMMENDERS.md`. Reuses
+  `_format_confirmation` for the Reminder cell + new local
+  `_format_confirmed` for the Confirmed cell; `notes` deliberately
+  omitted; sort `recommender_name ASC, deadline_date ASC NULLS
+  LAST, id ASC` with deadline merged in pandas from
+  `get_all_positions()`. Three-commit branch (test → feat → fix);
+  the fix augmented `isolated_exports_dir` with DB isolation,
+  closing the CI-red regression latent since T1. Process amendment
+  in `c284c20` requires CI-green-conclusion before admin-bypass +
+  CI-mirror local check (`mv postdoc.db postdoc.db.bak && pytest
+  && mv postdoc.db.bak postdoc.db`) in standing pre-PR checklist.
+  14 new tests in `TestWriteRecommenders`; suite 801 → 815 under
+  both pytest gates. Pre-merge review at
+  [`reviews/phase-6-tier3-review.md`](reviews/phase-6-tier3-review.md).
 - 2026-05-04 — **PR #33 merged** (`911115a`): Phase 6 T2 shipped —
   `exports.write_progress()` filled with an 8-column markdown table
   writer to `exports/PROGRESS.md` (positions × applications ×
@@ -781,4 +861,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 6 T2 merged via PR #33; main HEAD `911115a`; suite 801 / 1 xfailed; Phase 6 T3 — `write_recommenders()` exports generator next)_
+_Updated: 2026-05-04 (Phase 6 T3 merged via PR #34; main HEAD `c11fde4`; suite 815 / 1 xfailed; Phase 6 T4 — `pages/4_Export.py` shell + manual regenerate button + file mtimes next)_
