@@ -41,9 +41,10 @@ import streamlit as st
 
 import config
 import database
-
-
-EM_DASH = "—"
+# Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
+# bare name so existing per-page references remain unchanged (every
+# in-file site reads it; ruff won't flag F401).
+from config import EM_DASH
 
 
 # DESIGN §8.0 — first executable Streamlit call on every page. Streamlit

@@ -15,14 +15,14 @@ import streamlit as st
 
 import config
 import database
+# Phase 7 cleanup CL2: EM_DASH is now defined in config.py as the
+# single source of truth. Re-exported under the bare name so the
+# per-page references throughout this file (read-only — every site
+# uses `EM_DASH` as a constant, never assigns to it) keep working
+# without a noise-level diff to rewrite every site to
+# `config.EM_DASH`.
+from config import EM_DASH
 
-# Em-dash placeholder for missing / unparseable cells. Mirror of the same
-# constant in app.py, pages/2_Applications.py, exports.py — pages and
-# layers cannot share helpers (DESIGN §2), so the literal is duplicated
-# rather than imported. Drift is caught at the test level (the urgency
-# tests + applications tests + exports tests all assert against the
-# same em-dash glyph U+2014).
-EM_DASH = "—"
 
 
 def _safe_str(v: Any) -> str:

@@ -15,19 +15,22 @@ import math
 from pathlib import Path
 from typing import Any
 
+import config
+
 logger = logging.getLogger(__name__)
 
 EXPORTS_DIR: Path = Path(__file__).parent / "exports"
 
-# Em-dash glyph used to mark empty/NULL TEXT cells in the rendered
-# markdown tables — single source of truth so the same character flows
-# across every generator and matches the in-app `_safe_str_or_em` form.
-_EM_DASH = "—"
+# Phase 7 cleanup CL2: the em-dash glyph for empty/NULL cells lives on
+# config.EM_DASH now (single source of truth across pages + exports).
+# References below read `config.EM_DASH` directly — the previous
+# module-private `_EM_DASH = "—"` was dropped to avoid a hop through a
+# per-module alias.
 
 
 def _safe_str_or_em(v: Any) -> str:
     """Coerce a SQLite/pandas TEXT cell to a markdown-safe string,
-    rendering ``None`` / NaN / empty string as ``_EM_DASH`` so missing
+    rendering ``None`` / NaN / empty string as ``config.EM_DASH`` so missing
     cells read as a single visible glyph in the rendered table.
 
     Mirrors the in-app ``_safe_str_or_em`` convention from the page
@@ -35,11 +38,11 @@ def _safe_str_or_em(v: Any) -> str:
     helpers (the page layer imports streamlit, which exports.py is
     forbidden from importing per DESIGN §2 layer rules)."""
     if v is None:
-        return _EM_DASH
+        return config.EM_DASH
     if isinstance(v, float) and math.isnan(v):
-        return _EM_DASH
+        return config.EM_DASH
     s = str(v)
-    return s if s else _EM_DASH
+    return s if s else config.EM_DASH
 
 
 def _md_escape_cell(s: str) -> str:
@@ -57,7 +60,7 @@ def _format_confirmation(received: Any, iso_date: Any) -> str:
     single cell — DESIGN §8.3 D-A T1-C inline-text pattern.
 
     Tri-state cell:
-      received=0 / NULL / NaN  → ``_EM_DASH``
+      received=0 / NULL / NaN  → ``config.EM_DASH``
       received=1 + iso_date    → ``"✓ {iso_date}"``
       received=1 + NULL date   → ``"✓ (no date)"``
 
@@ -67,12 +70,12 @@ def _format_confirmation(received: Any, iso_date: Any) -> str:
     and exports must NOT share helpers (DESIGN §2 layer rules — pages
     import streamlit, exports cannot)."""
     if received is None or (isinstance(received, float) and math.isnan(received)):
-        return _EM_DASH
+        return config.EM_DASH
     try:
         if not int(received):
-            return _EM_DASH
+            return config.EM_DASH
     except (TypeError, ValueError):
-        return _EM_DASH
+        return config.EM_DASH
     iso_str = "" if (
         iso_date is None or (isinstance(iso_date, float) and math.isnan(iso_date))
     ) else str(iso_date)
@@ -90,11 +93,11 @@ def _format_confirmed(v: Any) -> str:
     transitively pull in). Identical semantics, just lives here so the
     layer rule holds."""
     if v is None or (isinstance(v, float) and math.isnan(v)):
-        return _EM_DASH
+        return config.EM_DASH
     try:
         i = int(v)
     except (TypeError, ValueError):
-        return _EM_DASH
+        return config.EM_DASH
     return "Yes" if i == 1 else "No"
 
 
@@ -105,7 +108,7 @@ def _format_interviews_summary(scheduled_dates: list[Any]) -> str:
     non-NULL scheduled_date across the position's interviews.
 
     Edge cases:
-      0 interviews → ``_EM_DASH``
+      0 interviews → ``config.EM_DASH``
       ≥1 interviews with at least one non-NULL date → ``"N (last: ISO)"``
       ≥1 interviews + every scheduled_date NULL → ``"N (no dates)"``
 
@@ -115,7 +118,7 @@ def _format_interviews_summary(scheduled_dates: list[Any]) -> str:
     rationale + considered alternatives."""
     n = len(scheduled_dates)
     if n == 0:
-        return _EM_DASH
+        return config.EM_DASH
     iso_dates: list[str] = []
     for v in scheduled_dates:
         if v is None or (isinstance(v, float) and math.isnan(v)):

@@ -10,6 +10,16 @@
 #   - No functions, no I/O, no side effects — constants only.
 #   - All other modules import from here; never hardcode values in page files.
 
+# ── Universal placeholder glyph ───────────────────────────────────────────────
+# Em-dash (U+2014) used to render NULL / NaN / empty TEXT cells across every
+# user-facing surface (page tables, dashboard KPIs, exports markdown). Lifted
+# to config in Phase 7 cleanup CL2 — was previously duplicated as
+# `EM_DASH = "—"` in pages/1_Opportunities.py + pages/2_Applications.py +
+# pages/3_Recommenders.py, as `_EM_DASH` in exports.py, and as
+# `NEXT_INTERVIEW_EMPTY` in app.py (same value, different name). Single
+# source of truth so a future glyph change is a one-line edit.
+EM_DASH: str = "—"
+
 # ── Tracker identity ──────────────────────────────────────────────────────────
 TRACKER_PROFILE: str = "postdoc"   # Options: "postdoc" | "software_eng" | "faculty"
 # Note: TRACKER_PROFILE will be consumed by database.init_db() (Phase 2) and

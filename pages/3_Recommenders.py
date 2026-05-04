@@ -43,6 +43,9 @@ import streamlit as st
 
 import config
 import database
+# Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
+# bare name so existing per-page references remain unchanged.
+from config import EM_DASH
 
 # DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
 # with wide layout. Must precede any other st.* call.
@@ -58,9 +61,6 @@ st.title("Recommenders")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-EM_DASH = "—"
 
 
 def _safe_str(v: Any) -> str:
