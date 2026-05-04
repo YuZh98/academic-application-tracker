@@ -14,6 +14,14 @@ import streamlit as st
 import database
 import config
 
+# Em-dash placeholder for missing / unparseable cells. Mirror of the same
+# constant in app.py, pages/2_Applications.py, exports.py — pages and
+# layers cannot share helpers (DESIGN §2), so the literal is duplicated
+# rather than imported. Drift is caught at the test level (the urgency
+# tests + applications tests + exports tests all assert against the
+# same em-dash glyph U+2014).
+EM_DASH = "—"
+
 
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
@@ -136,21 +144,41 @@ def _confirm_delete_dialog() -> None:
             st.rerun()
 
 
-def _deadline_urgency(date_str: str | None) -> str:
-    """Return 'urgent', 'alert', or '' based on days until the deadline.
+def _deadline_urgency(date_str: Any) -> str:
+    """Return the at-a-glance urgency glyph for a position's deadline.
+
+    Phase 7 T1 contract:
+        days_to_deadline ≤ DEADLINE_URGENT_DAYS → '🔴'
+        ≤ DEADLINE_ALERT_DAYS (but past urgent)  → '🟡'
+        beyond DEADLINE_ALERT_DAYS               → ''  (no urgency signal)
+        NULL / empty / NaN / unparseable date    → '—' (em-dash placeholder)
+
+    Mirrors the dashboard's ``database.py::_urgency_glyph`` banding
+    (DESIGN §2 layer rule prevents importing it directly into a page —
+    helpers stay duplicated rather than crossing the layer boundary).
 
     Thresholds come from config so changing DEADLINE_URGENT_DAYS /
-    DEADLINE_ALERT_DAYS in one place updates both the flag and the dashboard."""
-    if not date_str:
-        return ""
+    DEADLINE_ALERT_DAYS in one place updates both the page and the
+    dashboard.
+
+    NaN handling: pandas DataFrames surface NULL TEXT cells as
+    ``float('nan')`` once any other row in the column has a value.
+    ``not date_str`` doesn't catch NaN (NaN is truthy), so the
+    explicit ``math.isnan`` branch + the ``date.fromisoformat``
+    try/except together cover all three NULL-shaped inputs (None,
+    NaN, empty string) plus malformed strings."""
+    if date_str is None or date_str == "":
+        return EM_DASH
+    if isinstance(date_str, float) and math.isnan(date_str):
+        return EM_DASH
     try:
-        days = (datetime.date.fromisoformat(date_str) - datetime.date.today()).days
+        days = (datetime.date.fromisoformat(str(date_str)) - datetime.date.today()).days
     except (ValueError, TypeError):
-        return ""
+        return EM_DASH
     if days <= config.DEADLINE_URGENT_DAYS:
-        return "urgent"
+        return "🔴"
     if days <= config.DEADLINE_ALERT_DAYS:
-        return "alert"
+        return "🟡"
     return ""
 
 database.init_db()
