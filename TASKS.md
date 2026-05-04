@@ -727,7 +727,37 @@ All defensible. Merged via PR #36 (`73a04c4`).
 
 ### Phase 7 — Polish
 
-- [ ] **T1** Urgency colors on positions table (`st.column_config`)
+- [x] **T1** Urgency colors on positions table (`st.column_config`)
+      — `pages/1_Opportunities.py::_deadline_urgency` returns inline
+      glyphs `🔴` (urgent: `days <= DEADLINE_URGENT_DAYS`), `🟡`
+      (alert: `days <= DEADLINE_ALERT_DAYS`), `''` (distant), `—`
+      (NULL / unparseable) instead of literal-string flags
+      `'urgent'` / `'alert'` / `''`. Display column unchanged — just
+      the value form. Same banding the dashboard's Upcoming panel
+      uses (`database.py::_urgency_glyph`); shared via the
+      `config.DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS`
+      thresholds rather than via a shared helper (DESIGN §2 layer
+      rule: pages cannot import `database.py` privates). New
+      page-local `EM_DASH = "—"` module constant (mirror of the
+      same literal in `app.py`, `pages/2_Applications.py`,
+      `exports.py` — pages and layers cannot share helpers).
+      Type-hint widening from `str | None` to `Any` because
+      pandas' `.apply()` on object columns surfaces NULL TEXT
+      cells as `float('nan')` (gotcha #1); explicit
+      `isinstance + math.isnan` guard added on top of the existing
+      not-falsy + try/except guards so every NULL-shaped input
+      funnels to the em-dash branch consistently. New contract
+      distinguishes "no deadline at all" (em-dash) from "deadline
+      far enough away that no urgency is signaled" (empty cell);
+      the old contract collapsed both into `''`. 7 existing
+      urgency tests in `TestPositionsTable` updated in-place
+      (renamed + assertions flipped); 2 new tests added
+      (`test_today_deadline_renders_red_glyph` boundary +
+      `test_invariant_check_urgent_le_alert` config invariant
+      pin). Class-level constants `URGENT_GLYPH` / `ALERT_GLYPH` /
+      `NO_GLYPH` / `EM_DASH` centralize the locked-copy strings.
+      Suite 834 → 836 under both pytest gates. Merged via PR #37
+      (`e5316fd`).
 - [ ] **T2** Position search bar on Opportunities (substring,
       `regex=False`)
 - [ ] **T3** `set_page_config` sweep on remaining pages (verify
@@ -772,6 +802,22 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #37 merged** (`e5316fd`): Phase 7 T1 shipped —
+  `pages/1_Opportunities.py::_deadline_urgency` returns inline
+  glyphs (`🔴` / `🟡` / `''` / `—`) instead of literal-string
+  flags. New em-dash branch distinguishes "no deadline at all"
+  from "deadline far enough away" (the old contract collapsed
+  both into `''`). Same banding the dashboard's Upcoming panel
+  uses, shared via `config` thresholds rather than a shared helper
+  (DESIGN §2 layer rule). Type hint widened to `Any` + explicit
+  `math.isnan` guard added so every NULL-shaped input funnels to
+  the em-dash branch. 7 existing urgency tests updated in-place +
+  2 new tests (boundary at delta=0, config invariant pin). Suite
+  834 → 836 under both pytest gates. CI procedure followed cleanly:
+  `gh pr checks 37 --watch` blocked until conclusion landed,
+  conclusion verified SUCCESS via `gh pr view --json
+  statusCheckRollup`, then admin-bypass merge. Pre-merge review at
+  [`reviews/phase-7-tier1-review.md`](reviews/phase-7-tier1-review.md).
 - 2026-05-04 — **`v0.7.0` tagged** on `main` closing Phase 6 — three
   markdown generators (`write_opportunities` / `write_progress` /
   `write_recommenders`) backing `OPPORTUNITIES.md` / `PROGRESS.md` /
@@ -998,4 +1044,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 6 closed; `v0.7.0` tagged; suite 834 / 1 xfailed; Phase 7 T1 — Urgency colors on positions table next)_
+_Updated: 2026-05-04 (Phase 7 T1 merged via PR #37; main HEAD `e5316fd`; suite 836 / 1 xfailed; Phase 7 T2 — Position search bar on Opportunities next)_
