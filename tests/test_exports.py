@@ -60,9 +60,16 @@ def test_exports_dir_path_is_correct():
 # matches §9.5's literal "A failure in ANY write_*" wording.
 
 
-def test_write_all_swallows_individual_writer_failure(monkeypatch, caplog):
+def test_write_all_swallows_individual_writer_failure(
+    isolated_exports_dir, monkeypatch, caplog,
+):
     """DESIGN §9.5: a failure in any write_* is caught at the write_all
-    boundary and logged. write_all() itself must not re-raise."""
+    boundary and logged. write_all() itself must not re-raise.
+
+    Takes ``isolated_exports_dir`` so the real ``write_opportunities`` /
+    ``write_recommenders`` calls (the non-monkeypatched ones) write into
+    a tmp directory rather than the project's real ``exports/``.
+    """
 
     def _boom():
         raise RuntimeError("simulated write_progress failure")
@@ -80,10 +87,17 @@ def test_write_all_swallows_individual_writer_failure(monkeypatch, caplog):
     )
 
 
-def test_write_all_continues_after_individual_failure(monkeypatch):
+def test_write_all_continues_after_individual_failure(
+    isolated_exports_dir, monkeypatch,
+):
     """Per-call wrapping: write_progress raising must NOT stop
     write_recommenders from running. Pin the §9.5 sequencing contract —
-    a whole-function try/except wrap would skip the later writers."""
+    a whole-function try/except wrap would skip the later writers.
+
+    Takes ``isolated_exports_dir`` so ``EXPORTS_DIR.mkdir`` inside
+    ``write_all`` doesn't create a stray ``exports/`` directory at the
+    project root.
+    """
     calls: list[str] = []
 
     def _track_opportunities():
@@ -170,23 +184,21 @@ def test_write_all_swallows_mkdir_failure(monkeypatch, caplog):
 
 
 @pytest.fixture
-def db_and_exports(tmp_path, monkeypatch):
-    """Combined isolation fixture: redirects both `database.DB_PATH` and
-    `exports.EXPORTS_DIR` into the same `tmp_path`, then runs `init_db`.
+def db_and_exports(db, tmp_path):
+    """Thin wrapper around ``conftest.py::db`` exposing the exports
+    directory path so the export-content tests can read the rendered
+    markdown.
 
-    Why a combined fixture rather than reusing the existing `db` (from
-    conftest.py) + `isolated_exports_dir`: `database.add_position` calls
-    `exports.write_all()` via deferred import, which writes into
-    `exports.EXPORTS_DIR`. If only `db` is monkeypatched, the auto-fired
-    `write_all` writes into the project's real `exports/` directory and
-    pollutes it across test runs. Pinning both monkeypatches in one
-    fixture eliminates that footgun and matches the precedent of
-    `conftest.py::db` (which monkeypatches `database.DB_PATH`)."""
-    monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.db")
-    exports_dir = tmp_path / "exports"
-    monkeypatch.setattr(exports, "EXPORTS_DIR", exports_dir)
-    database.init_db()
-    return exports_dir
+    Why a wrapper rather than a separate fixture: post-Phase 6 T2, the
+    conftest ``db`` fixture already monkeypatches both
+    ``database.DB_PATH`` and ``exports.EXPORTS_DIR`` (to ``tmp_path /
+    'test.db'`` and ``tmp_path / 'exports'`` respectively). This wrapper
+    exists ONLY to return the exports-dir path so consumers can read
+    files; it adds no isolation logic of its own. The ``db`` parameter
+    activates the conftest fixture (its yield is unused — the
+    monkeypatch side effect is what matters); ``tmp_path`` recovers the
+    same ``Path`` value that ``conftest.py::db`` used."""
+    return tmp_path / "exports"
 
 
 class TestWriteOpportunities:
@@ -373,4 +385,345 @@ class TestWriteOpportunities:
         rows = self._data_rows(content)
         assert rows == [], (
             f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
+        )
+
+
+# ── Phase 6 T2: write_progress() generator ───────────────────────────────────
+#
+# DESIGN §7 names the generator + output file (`exports/PROGRESS.md` from
+# positions × applications × interviews) but does NOT enumerate the column
+# set, the per-cell rendering rules, or the interviews-summary cell shape.
+# This test class pins all three so a future generator change lands alongside
+# an explicit test diff (DESIGN §7 contract #2 — stable markdown format
+# committed to version control).
+#
+# Column contract (locked here):
+#   Position · Institute · Status · Applied · Confirmation · Response · Result · Interviews
+#
+# Cell shapes — mirrors T1 OPPORTUNITIES.md conventions for cohesion across
+# the three exports:
+#   - Empty/NULL TEXT cells → '—' (em-dash) via `_safe_str_or_em`.
+#   - Date cells → pass-through ISO TEXT (`YYYY-MM-DD`).
+#   - Status → raw bracketed sentinel (`[SAVED]` / `[APPLIED]` / …) NOT
+#     STATUS_LABELS translation. Markdown is a backup format, not a UI
+#     surface (DESIGN §7 + Phase 6 T1 review Q1 precedent).
+#   - Confirmation cell folds the (received, date) pair per the same shape
+#     the Applications page uses (DESIGN §8.3 D-A T1-C amendment), but with
+#     ISO dates instead of "Mon D" so the export round-trips cleanly:
+#       received=0 → '—'
+#       received=1 + date set → '✓ {YYYY-MM-DD}'
+#       received=1 + date NULL → '✓ (no date)'
+#
+# Interviews-summary cell shape (the open T2 design question):
+#
+#   Format: '{count} (last: {YYYY-MM-DD})' where `last` = max
+#           `scheduled_date` across the position's interviews.
+#
+#   Edge cases:
+#     - 0 interviews → '—'
+#     - ≥1 interviews with at least one non-NULL scheduled_date →
+#         '{N} (last: {ISO})'
+#     - ≥1 interviews but all NULL scheduled_date →
+#         '{N} (no dates)' (rare in practice — interviews are typically
+#         created with a scheduled_date — but pinned for completeness)
+#
+#   Rationale (didactic, since this is the only T2 design call):
+#     1. Round-trippable + greppable. ISO date matches T1's date convention
+#        so the three exports read coherently. The integer count gives a
+#        quick "how much activity" signal that a date-only cell would lose.
+#     2. Backup framing. Markdown exports are version-controlled backups,
+#        not a working UI surface. "last" reads as max(scheduled_date) and
+#        is unambiguous regardless of "today" or whether interviews are
+#        future or past — both are useful info for review. The Applications
+#        page in-app already shows full per-interview detail; the export
+#        does not need to duplicate that, just summarize.
+#     3. Deterministic. max-of-set is unique (idempotency-safe under
+#        DESIGN §7 contract #2).
+#
+#   Considered + rejected: a count-only cell ('2'; loses chronological
+#   info), a comma-joined date list ('2026-04-15, 2026-05-08, …'; can grow
+#   unbounded — bad for markdown table cells), and a next-interview cell
+#   ('next: 2026-05-08'; relies on "today" semantics that drift over time
+#   and break idempotency).
+#
+# Sort order: same as T1 — `deadline_date ASC NULLS LAST, position_id ASC`.
+# Inherited from `database.get_applications_table()` (which already sorts
+# this way in SQL); the writer additionally re-applies the order via
+# `pandas.sort_values(... kind='stable')` to insure against a future
+# upstream change to that reader.
+
+
+class TestWriteProgress:
+    """Phase 6 T2 — content tests for `exports.write_progress`.
+
+    The function reads positions × applications × interviews and writes
+    a single markdown table to ``exports.EXPORTS_DIR / 'PROGRESS.md'``.
+    See module-level comment for the locked column contract, cell
+    shapes, and the interviews-summary design choice rationale."""
+
+    OUTPUT_FILENAME = "PROGRESS.md"
+
+    EXPECTED_HEADER = (
+        "| Position | Institute | Status | Applied "
+        "| Confirmation | Response | Result | Interviews |"
+    )
+
+    EXPECTED_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- |"
+
+    @classmethod
+    def _read_output(cls, exports_dir: Path) -> str:
+        return (exports_dir / cls.OUTPUT_FILENAME).read_text(encoding="utf-8")
+
+    @classmethod
+    def _data_rows(cls, content: str) -> list[str]:
+        table_lines = [ln for ln in content.splitlines() if ln.startswith("|")]
+        return table_lines[2:]
+
+    # ── AGENTS.md spec'd nine ─────────────────────────────────────────
+
+    def test_writes_file_at_expected_path(self, db_and_exports):
+        database.add_position(make_position({"position_name": "P1"}))
+        exports.write_progress()
+        out = db_and_exports / self.OUTPUT_FILENAME
+        assert out.exists(), (
+            f"Expected file at {out!s}; "
+            f"directory contents: {list(db_and_exports.iterdir()) if db_and_exports.exists() else '(missing)'}"
+        )
+
+    def test_table_header_matches_contract(self, db_and_exports):
+        database.add_position(make_position())
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        assert self.EXPECTED_HEADER in content, (
+            f"Expected header {self.EXPECTED_HEADER!r}; got content:\n{content!r}"
+        )
+        assert self.EXPECTED_SEPARATOR in content, (
+            f"Expected separator {self.EXPECTED_SEPARATOR!r}; got content:\n{content!r}"
+        )
+
+    def test_one_row_per_position(self, db_and_exports):
+        """add_position auto-creates an applications row in the same
+        transaction (database.add_position contract), so every position
+        contributes exactly one row to the joined view."""
+        for name in ("A", "B", "C"):
+            database.add_position(make_position({"position_name": name}))
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = self._data_rows(content)
+        assert len(rows) == 3, (
+            f"Expected 3 data rows (one per position); got {len(rows)}: {rows!r}"
+        )
+
+    def test_sort_order_by_deadline_asc_nulls_last(self, db_and_exports):
+        database.add_position(make_position({
+            "position_name": "Late", "deadline_date": "2026-12-15",
+        }))
+        database.add_position(make_position({
+            "position_name": "NoDate", "deadline_date": None,
+        }))
+        database.add_position(make_position({
+            "position_name": "Early", "deadline_date": "2026-06-01",
+        }))
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        early_idx = content.find("Early")
+        late_idx = content.find("Late")
+        nodate_idx = content.find("NoDate")
+        assert 0 <= early_idx < late_idx < nodate_idx, (
+            f"Expected Early < Late < NoDate by file offset; "
+            f"got early={early_idx}, late={late_idx}, nodate={nodate_idx}"
+        )
+
+    def test_em_dash_for_missing_text_cells(self, db_and_exports):
+        """A row with no Applied date / no Response / no Result-set
+        renders all three as em-dash. Status defaults to [SAVED] +
+        result defaults to 'Pending' so those cells are non-empty."""
+        # Fresh add_position → applied_date NULL, response_type NULL,
+        # institute also NULL here (passed as None).
+        database.add_position({
+            "position_name": "BareName",
+            "institute": None,
+        })
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        bare_lines = [ln for ln in content.splitlines() if "BareName" in ln]
+        assert bare_lines, "Expected the BareName row in output"
+        row = bare_lines[0]
+        assert "—" in row, (
+            f"Expected em-dash for missing cells; got row={row!r}"
+        )
+
+    def test_iso_format_for_date_cells(self, db_and_exports):
+        """Applied column renders as `YYYY-MM-DD` — pass-through of the
+        schema's ISO TEXT."""
+        pid = database.add_position(make_position({
+            "position_name": "DatedRow",
+        }))
+        database.upsert_application(
+            pid, {"applied_date": "2026-06-15"}, propagate_status=False,
+        )
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "DatedRow" in ln]
+        assert rows, "Expected DatedRow in output"
+        assert "2026-06-15" in rows[0], (
+            f"Expected ISO Applied date in row; got row={rows[0]!r}"
+        )
+
+    def test_status_renders_as_raw_bracketed_sentinel(self, db_and_exports):
+        """Backup format → raw bracketed status sentinel ([APPLIED]),
+        NOT STATUS_LABELS translation ('Applied'). Same backup-vs-UI
+        rationale as T1 OPPORTUNITIES.md."""
+        pid = database.add_position(make_position({"position_name": "AppliedRow"}))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        applied_rows = [ln for ln in content.splitlines() if "AppliedRow" in ln]
+        assert applied_rows, "Expected AppliedRow in output"
+        assert config.STATUS_APPLIED in applied_rows[0], (
+            f"Expected raw bracketed status {config.STATUS_APPLIED!r} in row; "
+            f"got row={applied_rows[0]!r}"
+        )
+
+    def test_idempotent_across_two_calls(self, db_and_exports):
+        """DESIGN §7 contract #2: byte-identical output across two calls
+        with no DB change. No timestamps in body, no dict-ordering drift."""
+        database.add_position(make_position({"position_name": "Stable"}))
+        exports.write_progress()
+        first = self._read_output(db_and_exports)
+        exports.write_progress()
+        second = self._read_output(db_and_exports)
+        assert first == second, (
+            "write_progress must be deterministic — two calls with no DB "
+            "change must produce byte-identical output."
+        )
+
+    def test_empty_db_writes_header_only(self, db_and_exports):
+        """Phase 6 T4 manual-trigger button must work on a fresh DB —
+        empty input → header + separator + zero data rows."""
+        # Don't seed anything.
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        assert self.EXPECTED_HEADER in content
+        rows = self._data_rows(content)
+        assert rows == [], (
+            f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
+        )
+
+    # ── Confirmation-cell tri-state pin (DESIGN §8.3 D-A T1-C precedent) ──
+
+    def test_confirmation_em_dash_when_not_received(self, db_and_exports):
+        """``confirmation_received == 0`` → cell text is just '—'.
+        Mirrors the Applications page T1-C convention but renders into
+        the exported markdown rather than the dashboard table."""
+        pid = database.add_position(make_position({"position_name": "NotConfirmed"}))
+        database.upsert_application(
+            pid,
+            {"confirmation_received": 0, "confirmation_date": None},
+            propagate_status=False,
+        )
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "NotConfirmed" in ln]
+        assert rows
+        assert "✓" not in rows[0], (
+            f"Confirmation cell must NOT contain ✓ when received=0; got {rows[0]!r}"
+        )
+        # The em-dash is present somewhere in the row (multiple cells could
+        # be empty); we only need to verify ✓ is absent here.
+
+    def test_confirmation_check_with_iso_date(self, db_and_exports):
+        """``received=1, confirmation_date set`` → ``✓ {YYYY-MM-DD}``."""
+        pid = database.add_position(make_position({"position_name": "DatedConfirm"}))
+        database.upsert_application(
+            pid,
+            {"confirmation_received": 1, "confirmation_date": "2026-04-19"},
+            propagate_status=False,
+        )
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "DatedConfirm" in ln]
+        assert rows
+        assert "✓ 2026-04-19" in rows[0], (
+            f"Expected '✓ 2026-04-19' in Confirmation cell; got row={rows[0]!r}"
+        )
+
+    def test_confirmation_check_no_date_when_date_null(self, db_and_exports):
+        """``received=1, confirmation_date NULL`` → ``✓ (no date)``."""
+        pid = database.add_position(make_position({"position_name": "NoDateConfirm"}))
+        database.upsert_application(
+            pid,
+            {"confirmation_received": 1, "confirmation_date": None},
+            propagate_status=False,
+        )
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "NoDateConfirm" in ln]
+        assert rows
+        assert "✓ (no date)" in rows[0], (
+            f"Expected '✓ (no date)' in Confirmation cell; got row={rows[0]!r}"
+        )
+
+    # ── Interviews-summary tri-state pin ──────────────────────────────
+
+    def test_interviews_summary_em_dash_for_zero_interviews(self, db_and_exports):
+        """No interviews seeded → cell is '—'."""
+        database.add_position(make_position({"position_name": "NoInterviews"}))
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "NoInterviews" in ln]
+        assert rows
+        assert "—" in rows[0], (
+            f"Zero-interviews row must contain em-dash; got row={rows[0]!r}"
+        )
+        # Sanity: the row must NOT carry a digit-then-space-(last pattern.
+        # Defensive check against a regression that always renders count.
+        assert "(last:" not in rows[0], (
+            f"Zero-interviews row must NOT carry '(last:' fragment; got row={rows[0]!r}"
+        )
+
+    def test_interviews_summary_count_and_last_date(self, db_and_exports):
+        """≥1 interviews → ``{N} (last: {YYYY-MM-DD})`` where `last`
+        is the max scheduled_date."""
+        pid = database.add_position(make_position({"position_name": "ThreeIvws"}))
+        # Seed three interviews with different scheduled_dates, latest
+        # last so the sort isn't trivial.
+        database.add_interview(
+            pid, {"scheduled_date": "2026-04-15"}, propagate_status=False,
+        )
+        database.add_interview(
+            pid, {"scheduled_date": "2026-05-01"}, propagate_status=False,
+        )
+        database.add_interview(
+            pid, {"scheduled_date": "2026-06-20"}, propagate_status=False,
+        )
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "ThreeIvws" in ln]
+        assert rows
+        # Pin the exact summary substring — count + last ISO date.
+        assert "3 (last: 2026-06-20)" in rows[0], (
+            f"Expected '3 (last: 2026-06-20)' in Interviews cell; "
+            f"got row={rows[0]!r}"
+        )
+
+    def test_interviews_summary_uses_max_scheduled_date_as_last(self, db_and_exports):
+        """`last` is the MAX scheduled_date — not the most-recently-added,
+        not the lowest-sequence. Inserts in non-monotonic order to catch a
+        bug that uses last() / -1 indexing instead of max()."""
+        pid = database.add_position(make_position({"position_name": "OutOfOrder"}))
+        # Insert latest first so a bug that picks .iloc[-1] would surface.
+        database.add_interview(
+            pid, {"scheduled_date": "2026-09-01"}, propagate_status=False,
+        )
+        database.add_interview(
+            pid, {"scheduled_date": "2026-04-01"}, propagate_status=False,
+        )
+        exports.write_progress()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "OutOfOrder" in ln]
+        assert rows
+        assert "(last: 2026-09-01)" in rows[0], (
+            f"Expected (last: 2026-09-01) — max of seeded scheduled_dates — "
+            f"in Interviews cell; got row={rows[0]!r}"
         )
