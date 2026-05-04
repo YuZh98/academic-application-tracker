@@ -15,13 +15,12 @@ import streamlit as st
 
 import config
 import database
-# Phase 7 cleanup CL2: EM_DASH is now defined in config.py as the
-# single source of truth. Re-exported under the bare name so the
-# per-page references throughout this file (read-only — every site
-# uses `EM_DASH` as a constant, never assigns to it) keep working
-# without a noise-level diff to rewrite every site to
-# `config.EM_DASH`.
-from config import EM_DASH
+
+# Phase 7 cleanup CL2: EM_DASH no longer needs to be re-exported from
+# this module — _deadline_urgency now delegates the em-dash branch to
+# `config.urgency_glyph(None)`, so no in-file site reads `EM_DASH`
+# directly anymore. The constant lives on config.EM_DASH for the
+# rest of the project.
 
 
 

@@ -193,34 +193,11 @@ def test_all_seven_status_aliases_match_status_values_order():
     )
 
 
-# ── VALID_PROFILES + invariant #1 (DESIGN §5.1, §5.2 #1) ──────────────────────
-
-def test_valid_profiles_is_non_empty_set():
-    """VALID_PROFILES must be a non-empty set of profile-name strings."""
-    assert isinstance(config.VALID_PROFILES, set)
-    assert len(config.VALID_PROFILES) > 0
-    assert all(isinstance(p, str) and p for p in config.VALID_PROFILES)
-
-
-def test_valid_profiles_contains_postdoc():
-    """v1 profile is 'postdoc' (DESIGN §5.1 Tracker identity)."""
-    assert "postdoc" in config.VALID_PROFILES
-
-
-def test_invariant_1_tracker_profile_in_valid_profiles():
-    """DESIGN §5.2 invariant #1: TRACKER_PROFILE must be a known profile."""
-    assert config.TRACKER_PROFILE in config.VALID_PROFILES, (
-        f"TRACKER_PROFILE={config.TRACKER_PROFILE!r} not in "
-        f"VALID_PROFILES={config.VALID_PROFILES!r}"
-    )
-
-
-def test_invariant_1_fires_on_unknown_profile():
-    """Replicate DESIGN §5.2 invariant #1 on a synthetic bad value."""
-    broken_profile = "software_eng"
-    assert broken_profile not in config.VALID_PROFILES, (
-        "Guard should fire: unknown profile not in VALID_PROFILES"
-    )
+# Phase 7 cleanup CL2 dropped the TRACKER_PROFILE / VALID_PROFILES block
+# from config.py (carry-over C2 — never read by any module since v1.1).
+# The four tests that pinned that block (test_valid_profiles_*,
+# test_invariant_1_*) went with it. DESIGN §5.2 invariants 2-12 still
+# apply; only #1 is retired.
 
 
 # ── STATUS_LABELS + invariant #3 (DESIGN §5.1, §5.2 #3) ───────────────────────

@@ -20,24 +20,6 @@
 # source of truth so a future glyph change is a one-line edit.
 EM_DASH: str = "—"
 
-# ── Tracker identity ──────────────────────────────────────────────────────────
-TRACKER_PROFILE: str = "postdoc"   # Options: "postdoc" | "software_eng" | "faculty"
-# Note: TRACKER_PROFILE will be consumed by database.init_db() (Phase 2) and
-# page files (Phase 3) to filter profile-specific fields. If unused after
-# Phase 3, remove to avoid dead code.
-
-# Set of known tracker-profile identifiers. Guards TRACKER_PROFILE at import
-# time — catches typos or un-implemented profiles before any page renders.
-# Extending to a new profile (e.g. "faculty") is a two-step: add the value
-# here, then implement the profile-specific behaviour downstream per §12.1.
-VALID_PROFILES: set[str] = {"postdoc"}
-
-# Invariant (DESIGN §5.2 #1): TRACKER_PROFILE must be a known profile.
-assert TRACKER_PROFILE in VALID_PROFILES, (
-    f"TRACKER_PROFILE={TRACKER_PROFILE!r} is not a recognized profile. "
-    f"Known: {sorted(VALID_PROFILES)!r}. Add it to VALID_PROFILES or fix the typo."
-)
-
 # ── Status pipeline ───────────────────────────────────────────────────────────
 # Ordered list: earlier index = earlier stage in the pipeline.
 # Used by st.selectbox() in all page files — never hardcode status strings.
