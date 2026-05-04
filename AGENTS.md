@@ -33,13 +33,13 @@ app.py                 Dashboard home page (Phase 4, complete)
 pages/
   1_Opportunities.py   Position CRUD (Phase 3, complete)
   2_Applications.py    Application tracking (Phase 5 T1-T3, complete)
-  3_Recommenders.py    Recommenders page (Phase 5 T4–T6 done; T7 close-out pending)
+  3_Recommenders.py    Recommenders page (Phase 5 closed at v0.6.0)
 tests/
   conftest.py          Shared fixtures — `db` (temp SQLite) and `make_position()`
   test_database.py     Unit tests for database.py
   test_app_page.py     Integration tests for app.py (AppTest)
   test_applications_page.py
-  test_recommenders_page.py   T4 + T5 + T6 tests done; T7 is close-out / no new tests
+  test_recommenders_page.py   Phase 5 tests complete; Phase 6 work touches test_exports.py
   test_opportunities_page.py
   test_exports.py
 DESIGN.md              Authoritative spec — read §8.4 for Recommenders page contract
@@ -82,10 +82,10 @@ pages/*.py  ← imports database, config; NEVER imports exports
 
 ## Current state (updated after each merged PR)
 
-**Latest tag:** `v0.5.0` (Phase 4 complete — dashboard)
-**`main` HEAD:** Phase 5 T6 merged (PR #31); test suite at 777 passed + 1 xfailed
+**Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
+**`main` HEAD:** Phase 5 closed; test suite at 777 passed + 1 xfailed; next functional work is Phase 6 T1
 
-### Phase 5 — Applications + Recommenders pages
+### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -95,7 +95,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T4 — Recommenders page shell + Pending Alerts panel | ✅ PR #28 | `pages/3_Recommenders.py` created |
 | T5 — Recommenders table + add form + inline edit | ✅ PR #29 | All-Recommenders + filters + Add form + inline edit + dialog Delete |
 | T6 — Reminder helpers (mailto + LLM prompts) | ✅ PR #31 | Compose mailto link button + LLM prompts (2 tones) expander per Pending Alerts card |
-| T7 — Phase 5 review + PR + tag `v0.6.0` | 🔲 next | see "Immediate task" |
+| T7 — Phase 5 close-out + tag `v0.6.0` | ✅ | Cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md); CHANGELOG `[v0.6.0]` split |
 
 ### What's after Phase 5
 Phase 6 (Exports — markdown generators), Phase 7 (Polish),
@@ -104,72 +104,71 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 5 T7 (close-out + tag `v0.6.0`)
+## Immediate task — Phase 6 T1 (`write_opportunities()` exports generator)
 
-**Spec:** `TASKS.md` current sprint T7 entry · `GUIDELINES §11` (version
-scheme: each minor bump marks one completed phase) · prior precedent
-`reviews/phase-4-finish-cohesion-smoke.md` + the Phase 4 close-out
-pattern documented in `TASKS.md` "Prior sprint — Phase 4 finish"
+**Spec:** `TASKS.md` current sprint Phase 6 T1 · `DESIGN §7` exports
+contract (markdown generators, log-and-continue inside every
+`database.py` writer, deferred-import to break circular import) ·
+existing `exports.py` stub for the function signature
 
-T7 closes Phase 5. No new feature code. Three deliverables:
+Phase 6 ships markdown export generators per **Q6 Option A** (plain
+markdown tables). T1 is the first of three generators (T1
+opportunities · T2 progress · T3 recommenders) plus an Export page
+(T4 + T5) and a phase close-out (T6 → tag `v0.7.0`).
 
-### T7-A — Phase 5 cohesion sweep (audit doc)
-Mirror of `reviews/phase-4-finish-cohesion-smoke.md`. Survey the
-six pages of Phase 5 surface (`pages/2_Applications.py`,
-`pages/3_Recommenders.py`) plus their existing test files end-to-end
-under both populated and empty DB seeds; capture verbatim AppTest
-renders or screenshots. Six cohesion dimensions:
-1. Status / pipeline labels — every UI surface uses
-   `STATUS_LABELS.get(v, v)`; no leaked bracketed sentinels (the
-   GUIDELINES §11 status-literal grep is the gate).
-2. Empty-state copy — every panel that can be empty has an
-   explicit `st.info(...)` / equivalent (no silent rendering).
-3. Date formatting — `Mon D` short form on Pending Alerts, ISO on
-   tables; em-dash for NULL.
-4. Toast / error wording — `st.toast` for confirmations,
-   `st.error(str(e))` for handler failures; no `st.success`; no
-   re-raises in save / delete handlers.
-5. NaN coercion — every page uses `_safe_str` / `_safe_str_or_em`
-   on TEXT cells; no `r[col] or ""` idiom (gotcha #1).
-6. Widget-key prefixes — `apps_` on Applications page, `recs_` on
-   Recommenders page; no cross-prefix bleed.
+### T1 — `exports.write_opportunities()` generator
+- Implement `exports.write_opportunities(conn=None)` returning the
+  written file path (or whatever the existing stub signature pins —
+  read `exports.py` first).
+- Output: a single markdown file at `exports/opportunities.md` with
+  one table row per row of `database.get_all_positions()` (or the
+  joined frame the dashboard's Opportunities page uses — pick to
+  match DESIGN §7 if the contract is explicit there).
+- Column contract: read DESIGN §7 / wireframes — typically
+  Position · Institute · Field · Deadline · Priority · Status (per
+  the Opportunities-page table) plus any audit columns the spec
+  calls for (created_at / updated_at).
+- Sort order: deadline ASC NULLS LAST, position_id ASC (mirrors the
+  upstream stable-tiebreaker invariant — see
+  `database.get_applications_table` precedent).
+- NaN / NULL handling: em-dash `—` for missing TEXT cells, ISO date
+  for date cells (markdown tables aren't a working surface — ISO is
+  unambiguous + sortable when grep'd).
 
-Output: `reviews/phase-5-finish-cohesion-smoke.md` per the §14.1
-header schema. Verdict format: 🔴 (block) / 🟠 (must-fix pre-tag) /
-🟡 (nice-to-fix) / 🟢 (defer) per `GUIDELINES §10`.
+### Architecture rules (non-negotiable — DESIGN §7)
+- `exports.py` imports `database` and `config`; **NEVER** imports
+  `streamlit`.
+- Every `database.py` write function calls `exports.write_all()` via
+  **deferred import** (the writer's first line of side-effect work
+  imports `exports` inside the function body) to break the circular
+  import. T1 doesn't add new wiring — `write_all()` stub already
+  delegates; just implement the underlying `write_opportunities`.
+- Wrap the file write in a try/except so a failure in exports
+  doesn't kill the database write — log-and-continue per DESIGN §7
+  contract #1.
 
-### T7-B — Phase 5 close-out review
-Tier-style review doc at `reviews/phase-5-finish-review.md` (or fold
-into the cohesion smoke per the Phase 4 precedent — re-read
-`reviews/phase-4-finish-cohesion-smoke.md` for which approach fit
-that close-out). Structured findings list aggregating any open
-carry-overs from `phase-5-tier1` … `phase-5-tier6` reviews. Closes
-out: which carry-overs survive past v0.6.0 (logged in TASKS.md
-"Up next" / "Code carry-overs"); which were resolved during Phase 5;
-which want addressing as 🟠 hold-the-tag fixes.
+### Tests to write first (TDD red commit)
+- `tests/test_exports.py` already exists; extend it. Test class
+  `TestWriteOpportunities`:
+  - `test_writes_file_at_expected_path` — call writer, assert file
+    exists at `exports/opportunities.md` (use `tmp_path` fixture).
+  - `test_table_header_matches_contract` — read file, assert first
+    table row is the locked column header.
+  - `test_one_row_per_position` — seed N positions, assert N data
+    rows in the markdown table.
+  - `test_sort_order_by_deadline_asc_nulls_last` — seed 3 positions
+    with mixed deadlines (one NULL, two distinct dates), assert
+    rendered order.
+  - `test_em_dash_for_missing_text_cells` — seed a position with
+    NULL field, assert the rendered cell is `—`.
+  - `test_iso_format_for_date_cells` — assert deadline column
+    renders as `YYYY-MM-DD`.
 
-Existing carry-overs to triage:
-- **C2** — `TRACKER_PROFILE` removal (deferred from v1.1)
-- **C3** — `"All"` filter sentinel → `config.py` (logged in
-  `phase-5-tier1-review.md` Finding 1; extended through T5 + T6)
-- **C4** — `CHANGELOG.md` `[Unreleased]` → `[v0.5.0]` split
-  (logged in `phase-5-tier1-review.md` Finding 3 — already
-  partially done; verify the `v0.5.0` section is in place)
-- Phase 7 polish candidates from T5 + T6 reviews
-  (Save-toast-when-no-dirty wording, subject-pluralization on N=1
-  Compose body)
+### TDD cadence
+Standard three-commit triplet — `test:` → `feat:` → `chore:` (the
+`chore:` is the orchestrator's, not yours).
 
-### T7-C — Tag `v0.6.0` + CHANGELOG version-block split
-- Final pre-merge gates run end-to-end (the four GUIDELINES §11
-  checks).
-- `CHANGELOG.md`: split `[Unreleased]` → `[v0.6.0]` at the
-  T6-merge boundary commit `6993ea9`, mirroring the precedent
-  documented in `[v0.5.0]` (commit `db383e3`).
-- `git tag -a v0.6.0 -m "Phase 5 — Applications + Recommenders pages"`
-  with annotation listing the headline T1-T6 deliverables.
-- Push tag.
-
-### Pre-PR gates (GUIDELINES §11) — run before tagging
+### Pre-PR gates (GUIDELINES §11)
 ```bash
 ruff check .
 pytest tests/ -q
@@ -179,21 +178,18 @@ grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
 ```
 
 ### Branch + cadence
-- Branch name: `feature/phase-5-tier7-Phase5Closeout` (or
-  `chore/phase-5-finish` per the Phase 4 precedent — implementer
-  picks per project naming convention).
-- T7 is doc-only; no `feat:` commit. Cadence: one `docs:` or
-  `chore:` commit per deliverable (cohesion smoke, close-out
-  review, CHANGELOG split). Tag annotation written by orchestrator.
+- Branch name: `feature/phase-6-tier1-WriteOpportunities`.
+- One PR for the test + feat commits; orchestrator handles the
+  chore rollup post-merge.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. (T7 is doc-only — no test: / feat: commits)
-2. docs: / chore: commit per deliverable (cohesion smoke, close-out
-                   review, CHANGELOG split)
+1. test: commit  → add failing tests to tests/test_exports.py
+                   (writer not implemented yet → RED)
+2. feat: commit  → implement write_opportunities() in exports.py (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -226,11 +222,11 @@ grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-5-tier7-Phase5Closeout` |
+| Open PR | You — branch name: `feature/phase-6-tier1-WriteOpportunities` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
 
-**If you're unsure about a design decision:** check `DESIGN.md §8.4` first.
+**If you're unsure about a design decision:** check `DESIGN.md §7` (exports contract) first for Phase 6 work; see DESIGN §8 for the per-page UI contracts.
 If it's not there, leave a comment in the code and note it in the PR
 description — the orchestrator will resolve it before merging.

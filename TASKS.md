@@ -346,7 +346,22 @@ suite 756 → 777 green under both pytest gates. Merged via PR #31 (`6993ea9`).
       by one line to collect each row's `days_ago`. 21 new tests
       across `TestT6ComposeButton` (9) + `TestT6LLMPromptsExpander`
       (12); suite 756 → 777 under both pytest gates.
-- [ ] **T7** Phase 5 review + PR + tag `v0.6.0`
+- [x] **T7** Phase 5 review + PR + tag `v0.6.0` — close-out + cohesion
+      sweep at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md)
+      (verbatim AppTest renders for `pages/2_Applications.py` +
+      `pages/3_Recommenders.py` populated + empty + populated-with-row-
+      selected; six cohesion dimensions audited; 3 🟡 polish + 3 ℹ️
+      observations; zero 🔴/🟠). Carry-overs disposed: **C4** closed
+      (CHANGELOG `[v0.5.0]` split landed at `db383e3`); **C2** + **C3**
+      + Phase 7 polish candidates (T5 Save-toast on no-dirty, T6
+      subject-pluralization on N=1) all deferred to Phase 7 / v1.0-rc
+      with explicit homes in TASKS.md. CHANGELOG split — `[Unreleased]`
+      → `[v0.6.0]` (mirror of `db383e3` precedent for v0.5.0); empty
+      `[Unreleased]` accumulates Phase 6 work. All four GUIDELINES §11
+      pre-tag gates green at HEAD: ruff clean, `pytest tests/ -q`
+      777 passed + 1 xfailed, `pytest -W error::DeprecationWarning
+      tests/ -q` 777 passed + 1 xfailed, status-literal grep 0 lines.
+      Tagged `v0.6.0` 2026-05-04.
 
 ## Prior sprint — Phase 4 finish (PR #12 + #13 + #14, tag `v0.5.0`)
 
@@ -491,6 +506,13 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **`v0.6.0` tagged** on `main` closing Phase 5 — two
+  pages complete (Applications + Recommenders) across six tiers
+  (T1–T6); close-out cohesion-smoke at
+  [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md);
+  CHANGELOG `[Unreleased]` → `[v0.6.0]` split at the boundary commit
+  (mirror of `db383e3` precedent); suite at 777 / 1 xfailed under
+  both pytest gates.
 - 2026-05-04 — **PR #31 merged** (`6993ea9`): Phase 5 T6 (T6-A + T6-B)
   shipped — Compose-reminder-email `st.link_button` (locked DESIGN
   §8.4 mailto subject + body, no `to:` field) + `LLM prompts (2 tones)`
@@ -632,4 +654,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 5 T6 merged via PR #31; main HEAD `6993ea9`; suite 777 / 1 xfailed; T7 Phase 5 close-out + tag `v0.6.0` next)_
+_Updated: 2026-05-04 (Phase 5 closed; `v0.6.0` tagged; suite 777 / 1 xfailed; Phase 6 T1 — `write_opportunities()` exports generator next)_

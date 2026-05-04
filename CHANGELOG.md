@@ -17,6 +17,12 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+_(No entries yet — accumulates Phase 6 work and beyond.)_
+
+## [v0.6.0] — 2026-05-04 — Phase 5: Applications + Recommenders pages
+
+_v0.6.0 closes Phase 5 — two new working pages: **Applications** (T1–T3 — `pages/2_Applications.py`: shell + status filter + 7-column table + selection-driven detail card with dirty-diff Save + cascade-promotion toasts + per-row inline interview list with `@st.dialog`-gated Delete) and **Recommenders** (T4–T6 — `pages/3_Recommenders.py`: page shell + Pending Alerts cards grouped by recommender; T5 All-Recommenders table + position/recommender filters + Add expander + inline edit card with dirty-diff Save + dialog Delete; T6 per-card Compose-reminder-email `st.link_button` mailto + `LLM prompts (2 tones)` expander). Six pre-merge tier reviews + the close-out cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md) verified every architectural choice and pinned cross-page consistency. Suite climbed 553 → 777 (+224 tests, 1 xfail unchanged) across the phase. Detailed entries below preserve the original forensic record from when each item shipped._
+
 ### Changed
 - GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, TASKS.md scope rules, wireframe-drift severity, reviews folder index, content-routing table). (`b148dd5`)
 - GUIDELINES §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (`b148dd5`)
