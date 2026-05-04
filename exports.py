@@ -52,6 +52,65 @@ def _md_escape_cell(s: str) -> str:
     return s.replace("|", r"\|").replace("\n", " ").replace("\r", " ")
 
 
+def _format_confirmation(received: Any, iso_date: Any) -> str:
+    """Render the (confirmation_received, confirmation_date) pair as a
+    single cell — DESIGN §8.3 D-A T1-C inline-text pattern.
+
+    Tri-state cell:
+      received=0 / NULL / NaN  → ``_EM_DASH``
+      received=1 + iso_date    → ``"✓ {iso_date}"``
+      received=1 + NULL date   → ``"✓ (no date)"``
+
+    Mirrors the Applications page's `_format_confirmation` shape
+    semantically but uses ISO date pass-through (instead of the
+    page's "Mon D" form) so the export round-trips cleanly. Pages
+    and exports must NOT share helpers (DESIGN §2 layer rules — pages
+    import streamlit, exports cannot)."""
+    if received is None or (isinstance(received, float) and math.isnan(received)):
+        return _EM_DASH
+    try:
+        if not int(received):
+            return _EM_DASH
+    except (TypeError, ValueError):
+        return _EM_DASH
+    iso_str = "" if (
+        iso_date is None or (isinstance(iso_date, float) and math.isnan(iso_date))
+    ) else str(iso_date)
+    if not iso_str:
+        return "✓ (no date)"
+    return f"✓ {iso_str}"
+
+
+def _format_interviews_summary(scheduled_dates: list[Any]) -> str:
+    """Summarize a position's interviews into a single cell.
+
+    Format: ``"{count} (last: {YYYY-MM-DD})"`` where ``last`` = max
+    non-NULL scheduled_date across the position's interviews.
+
+    Edge cases:
+      0 interviews → ``_EM_DASH``
+      ≥1 interviews with at least one non-NULL date → ``"N (last: ISO)"``
+      ≥1 interviews + every scheduled_date NULL → ``"N (no dates)"``
+
+    The "last = max(scheduled_date)" choice is round-trippable, idempotent,
+    and reads coherently in both past + future contexts. See
+    `tests/test_exports.py` module-level comment for the design
+    rationale + considered alternatives."""
+    n = len(scheduled_dates)
+    if n == 0:
+        return _EM_DASH
+    iso_dates: list[str] = []
+    for v in scheduled_dates:
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            continue
+        s = str(v)
+        if s:
+            iso_dates.append(s)
+    if not iso_dates:
+        return f"{n} (no dates)"
+    return f"{n} (last: {max(iso_dates)})"
+
+
 def write_all() -> None:
     """Write all three markdown export files. Called after every database write.
 
@@ -168,8 +227,86 @@ def write_opportunities() -> None:
 
 
 def write_progress() -> None:
-    """Generate exports/PROGRESS.md from positions + applications tables. (Phase 6)"""
-    pass
+    """Generate ``exports/PROGRESS.md`` from positions × applications ×
+    interviews.
+
+    DESIGN §7 contract — markdown backup of the application-progression
+    join. Column contract (locked by tests in
+    ``tests/test_exports.py::TestWriteProgress``):
+
+        | Position | Institute | Status | Applied | Confirmation | Response | Result | Interviews |
+
+    Cell shapes (mirror ``write_opportunities`` for cross-export
+    cohesion):
+      - Empty/NULL TEXT cells → ``—`` (em-dash) via ``_safe_str_or_em``.
+      - Date cells → pass-through ISO TEXT.
+      - Status → raw bracketed sentinel (``[SAVED]`` / ``[APPLIED]`` / …)
+        NOT ``STATUS_LABELS`` translation.
+      - Confirmation cell → ``_format_confirmation`` tri-state
+        (``—`` / ``✓ {ISO}`` / ``✓ (no date)``).
+      - Interviews cell → ``_format_interviews_summary``
+        (``—`` / ``{N} (last: {ISO})`` / ``{N} (no dates)``).
+
+    Sort order: ``deadline_date ASC NULLS LAST, position_id ASC`` —
+    inherited from ``database.get_applications_table()`` (which already
+    sorts in SQL) and re-applied here via pandas with a stable kind
+    so a future change to the upstream reader's ORDER BY clause does
+    not silently break the export's row order.
+
+    Idempotent — no timestamps embedded in the body, no dict-ordering
+    drift. Two calls with the same DB state produce byte-identical
+    output (DESIGN §7 contract #2).
+
+    Deferred ``database`` import inside the function body avoids the
+    ``database → exports → database`` circular import at module load."""
+    import database  # deferred — see module docstring + DESIGN §7
+
+    EXPORTS_DIR.mkdir(exist_ok=True)
+
+    df = database.get_applications_table()
+    if not df.empty:
+        df = df.sort_values(
+            by=["deadline_date", "position_id"],
+            ascending=[True, True],
+            na_position="last",
+            kind="stable",
+        ).reset_index(drop=True)
+
+    header = (
+        "| Position | Institute | Status | Applied "
+        "| Confirmation | Response | Result | Interviews |"
+    )
+    separator = "| --- | --- | --- | --- | --- | --- | --- | --- |"
+
+    lines: list[str] = [header, separator]
+    for _, row in df.iterrows():
+        # Per-row interviews lookup. N+1 queries per row is fine here
+        # (low position counts, single-user app); a richer joined query
+        # in database.py would be premature optimization. The reader's
+        # contract: empty DataFrame for a position with no interviews,
+        # one row per interview ordered by sequence ASC. Only the
+        # `scheduled_date` column matters for the summary cell.
+        position_id = int(row["position_id"])
+        interviews_df = database.get_interviews(position_id)
+        scheduled_dates = (
+            list(interviews_df["scheduled_date"]) if not interviews_df.empty else []
+        )
+
+        cells = [
+            _safe_str_or_em(row["position_name"]),
+            _safe_str_or_em(row["institute"]),
+            _safe_str_or_em(row["status"]),
+            _safe_str_or_em(row["applied_date"]),
+            _format_confirmation(row["confirmation_received"], row["confirmation_date"]),
+            _safe_str_or_em(row["response_type"]),
+            _safe_str_or_em(row["result"]),
+            _format_interviews_summary(scheduled_dates),
+        ]
+        cells = [_md_escape_cell(c) for c in cells]
+        lines.append("| " + " | ".join(cells) + " |")
+
+    out_path = EXPORTS_DIR / "PROGRESS.md"
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_recommenders() -> None:
