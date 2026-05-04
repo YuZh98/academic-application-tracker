@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `test(phase-7-T3): set_page_config sweep across pages`.
+  — e.g. `test(phase-7-T4): confirm-dialog audit across destructive paths`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 T2 merged (PR #38); test suite at 843 passed + 1 xfailed
+**`main` HEAD:** Phase 7 T3 merged (PR #39); test suite at 853 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -217,8 +217,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 |------|--------|-------|
 | T1 — Urgency colors on positions table (`st.column_config`) | ✅ PR #37 | `_deadline_urgency` returns `🔴`/`🟡`/`''`/`—` glyphs (was: `'urgent'`/`'alert'`/`''`); new em-dash branch distinguishes "no deadline at all" from "deadline far enough away"; explicit NaN guard |
 | T2 — Position search bar on Opportunities | ✅ PR #38 | `filter_search` text_input prepended to filter row; `position_name` substring (case-insensitive, regex=False, NaN-safe); AND-combined with status/priority/field |
-| T3 — `set_page_config` sweep on remaining pages | 🔲 next | see "Immediate task" |
-| T4 — Confirm-dialog audit | 🔲 | |
+| T3 — `set_page_config` sweep on remaining pages | ✅ PR #39 | New `tests/test_pages_cohesion.py::TestSetPageConfigSweep` (10 parametrized tests) pins locked-kwargs source-grep + first-Streamlit-statement AST walk; audit found all 5 pages already conform — verification-only PR (no production code touched) |
+| T4 — Confirm-dialog audit | 🔲 next | see "Immediate task" |
 | T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 | |
 | T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | |
 
@@ -228,106 +228,120 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 T3 (`set_page_config` sweep on remaining pages)
+## Immediate task — Phase 7 T4 (Confirm-dialog audit)
 
-**Spec:** `TASKS.md` current sprint Phase 7 T3
-("`set_page_config` sweep on remaining pages (verify GUIDELINES §13
-step 2 holds for every page)") · `GUIDELINES §13` step 2 (locked
-shape: `st.set_page_config(page_title="Postdoc Tracker",
-page_icon="📋", layout="wide")` as first executable statement) ·
-DESIGN §8.0 + D14 (same locked shape) · existing call sites in
-`app.py`, `pages/1_Opportunities.py`, `pages/2_Applications.py`,
-`pages/3_Recommenders.py`, `pages/4_Export.py`.
+**Spec:** `TASKS.md` current sprint Phase 7 T4
+("Confirm-dialog audit (every destructive path wears `@st.dialog`
+with cascade-effect copy)") · `GUIDELINES §8` (irreversible actions:
+`@st.dialog` confirm gate) · `docs/dev-notes/streamlit-state-gotchas.md`
+gotcha #3 (dialog re-open trick — page must explicitly re-open
+while pending sentinel is set) · existing `@st.dialog` call sites
+in `pages/1_Opportunities.py`, `pages/2_Applications.py`,
+`pages/3_Recommenders.py`.
 
-Phase 7 T3 is a verification + harmonization sweep — read each
-page's `st.set_page_config` call, confirm the locked-shape contract
-holds (all four kwargs present + correct values + position before
-any other `st.*` call), tighten any divergence. Pure cohesion work;
-no new behaviour.
+Phase 7 T4 is a verification + harmonization sweep across every
+**destructive path** in the app — verify every delete / cascade-
+removal / irreversible action wears an `@st.dialog` confirm gate,
+that the dialog-body copy includes cascade-effect language (what
+will be lost), and that the gotcha #3 re-open trick is correctly
+implemented at every call site. Pure cohesion work; no new behaviour.
 
-### T3 — `set_page_config` sweep
+### T4 — Confirm-dialog audit
 
-- **Audit each call site** for the locked shape:
-  ```python
-  st.set_page_config(
-      page_title="Postdoc Tracker",
-      page_icon="📋",
-      layout="wide",
-  )
-  ```
-  Five files to check: `app.py`, `pages/1_Opportunities.py`,
-  `pages/2_Applications.py`, `pages/3_Recommenders.py`,
-  `pages/4_Export.py`.
-- **For each page** verify three invariants:
-  1. **All three kwargs present** — `page_title`, `page_icon`,
-     `layout`. Missing kwarg → fix.
-  2. **Locked values** — `page_title="Postdoc Tracker"`,
-     `page_icon="📋"`, `layout="wide"`. Drift → fix.
-  3. **First executable Streamlit statement** — no `st.*` call
-     before `st.set_page_config`. Imports + module-level
-     constants OK; any `st.title` / `st.write` / `st.subheader`
-     call before `set_page_config` fails the contract (Streamlit
-     rejects with a runtime warning).
-- **Fix divergences inline**. If all five pages already satisfy the
-  contract, the tier ships as a verification-only PR with one new
-  test and a no-op page change (just the test commit). Flag the
-  no-op outcome in the PR description.
+- **Inventory every destructive path** in the app:
+  - **Position delete** — `pages/1_Opportunities.py` line 55
+    `@st.dialog("Delete this position?")` on
+    `_confirm_delete_dialog`. Cascade: drops applications +
+    interviews + recommenders for the position.
+  - **Interview delete** — `pages/2_Applications.py` line 165
+    `@st.dialog("Delete this interview?")` on
+    `_confirm_interview_delete_dialog`. Cascade: drops the row
+    only (no nested data).
+  - **Recommender delete** — `pages/3_Recommenders.py` line 551
+    `@st.dialog("Delete this recommender?")` on
+    `_confirm_delete_recommender_dialog`. Cascade: drops the row
+    only.
+  - Verify these three are the ONLY destructive paths. Grep for
+    `database.delete_*` and confirm every call site sits inside
+    a dialog confirm branch (not a bare button click).
+- **For each dialog audit four invariants:**
+  1. **Title locked-shape**: `@st.dialog("Delete this <noun>?")`
+     pattern.
+  2. **Cascade-effect copy in body**: warning text must spell out
+     what gets deleted (the row + any cascading data).
+     Position-delete must mention applications + interviews +
+     recommenders. Interview-delete + recommender-delete should
+     mention "this cannot be undone" at minimum (they have no
+     cascade today).
+  3. **Re-open trick (gotcha #3)**: page must explicitly re-open
+     the dialog while the pending sentinel is set, mirroring:
+     ```python
+     if st.button("Delete", ...):
+         st.session_state[pending_sentinel] = target_id
+         _confirm_dialog()
+     elif st.session_state.get(pending_sentinel) == target_id:
+         _confirm_dialog()
+     ```
+     Verify each call site has both branches.
+  4. **Failure-preserves-state on st.error**: per GUIDELINES §8,
+     a failed delete (e.g. FK constraint violation) must surface
+     `st.error(...)` AND keep the pending sentinel set so the
+     dialog re-opens for retry on the next rerun. NOT pop the
+     sentinel on failure.
+- **Fix any divergence inline**. If all three already satisfy the
+  contract, the tier ships as a verification-only PR with new
+  tests and no production code touched (mirror of T3's no-op
+  outcome path).
 
 ### Tests to write first (TDD red commit)
-- New test class `TestSetPageConfigSweep` in
-  `tests/test_pages_cohesion.py` (NEW file — Phase 7 introduces
-  cross-page cohesion tests as their own surface). Or extend an
-  existing test file if a clean home exists; verify the test
-  layout convention by reading recent test files first.
-- Source-grep tests (no AppTest needed — `set_page_config` is
-  consumed before widgets render and doesn't surface on the
-  AppTest element tree, so source-level pinning is the
-  appropriate granularity, mirroring the precedent in
-  `tests/test_export_page.py::TestExportPageShell::test_page_config_sets_wide_layout`):
-  - `test_app_py_locks_set_page_config` — `app.py` source contains
-    the verbatim three kwargs.
-  - `test_opportunities_page_locks_set_page_config` — same for
-    `pages/1_Opportunities.py`.
-  - `test_applications_page_locks_set_page_config` — same for
-    `pages/2_Applications.py`.
-  - `test_recommenders_page_locks_set_page_config` — same for
-    `pages/3_Recommenders.py`.
-  - `test_export_page_locks_set_page_config` — same for
-    `pages/4_Export.py` (this one already exists in
-    `test_export_page.py` — mirror its source-grep shape rather
-    than re-implementing).
-  - Optionally a parametrize-driven version that loops over the
-    five files with shared assertion logic. Either shape is fine.
-- A separate **first-Streamlit-call** invariant check: parse each
-  file with `ast` to find the line number of the first
-  `st.<call>()` invocation; assert it's the
-  `set_page_config` call. Catches a bug where a future edit adds
-  `st.title("X")` above the `set_page_config` line.
+- Extend `tests/test_pages_cohesion.py` (created in T3) with a
+  new `TestConfirmDialogAudit` class — same parametrize-driven
+  shape as `TestSetPageConfigSweep`. Source-grep + AST + AppTest
+  hybrid:
+  - **Source-grep**: every destructive path's call site shows the
+    `@st.dialog("...?")` decorator pattern.
+  - **AppTest behavioural pin**: for each delete path, simulate
+    the click → assert dialog body contains expected
+    cascade-effect substrings. Mirror the existing per-page tests
+    in `test_opportunities_page.py` /
+    `test_applications_page.py` / `test_recommenders_page.py` —
+    don't duplicate them, but cite them as the per-page contracts
+    + add a cross-page pin in `test_pages_cohesion.py` that asserts
+    "every page-level delete button opens a dialog before writing".
+  - **`database.delete_*` callers grep**: AST-walk all `pages/*.py`
+    + `app.py` looking for `database.delete_*` calls; assert each
+    sits inside a function decorated with `@st.dialog` (or inside
+    the dialog's confirm-button click handler).
 
 ### Architecture rules (non-negotiable)
-- T3 is doc-cohesion + tests; no new imports, no new helpers.
-- Widget keys: T3 doesn't add widgets.
+- T4 is verification + tests; no new helpers in production code.
+- Widget keys: no new widgets.
 
 ### Pre-PR gates
 Standing checklist + CI-mirror check.
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-tier3-SetPageConfigSweep`.
+- Branch name: `feature/phase-7-tier4-ConfirmDialogAudit`.
 - One PR for the test + (optional) feat commits; orchestrator
-  handles the chore rollup post-merge.
+  handles the chore rollup post-merge. T4 may be verification-
+  only like T3, or may surface fixable cascade-copy gaps —
+  implementer flags the outcome shape in the PR description.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test: commit  → add tests to tests/test_pages_cohesion.py (or
-                   equivalent) pinning `set_page_config` shape across
-                   pages (RED if any page diverges from the locked
-                   shape; GREEN if all five pages already conform)
-2. feat: commit  → fix any divergence from the locked shape; OMIT
-                   if all five pages pass on the test commit (no-op
-                   verification PR)
+1. test: commit  → extend tests/test_pages_cohesion.py with
+                   TestConfirmDialogAudit pinning every destructive
+                   path's `@st.dialog` shape, cascade-effect copy,
+                   re-open trick (gotcha #3), and failure-preserves-
+                   state on `st.error` (RED if any divergence; GREEN
+                   if all three already conform)
+2. feat: commit  → fix any divergence (e.g. tighten cascade-effect
+                   copy, add missing re-open branch); OMIT if all
+                   destructive paths pass on the test commit
+                   (no-op verification PR — same pattern as T3)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -362,7 +376,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-tier3-SetPageConfigSweep` |
+| Open PR | You — branch name: `feature/phase-7-tier4-ConfirmDialogAudit` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

@@ -778,8 +778,28 @@ All defensible. Merged via PR #36 (`73a04c4`).
       against swapped predicates that would coincidentally produce
       N=1 with the wrong row. Suite 836 → 843 under both pytest
       gates. Merged via PR #38 (`e67cfed`).
-- [ ] **T3** `set_page_config` sweep on remaining pages (verify
-      GUIDELINES §13 step 2 holds for every page)
+- [x] **T3** `set_page_config` sweep on remaining pages (verify
+      GUIDELINES §13 step 2 holds for every page) — new
+      `tests/test_pages_cohesion.py::TestSetPageConfigSweep` with 10
+      parametrized tests across 5 pages × 2 invariants per page:
+      (1) source-grep for the locked kwargs (`page_title="Postdoc
+      Tracker"`, `page_icon="📋"`, `layout="wide"`); (2) AST-walk
+      for the first module-level `st.<X>()` bare expression
+      statement, asserting it is `set_page_config` (catches a future
+      edit that adds `st.title("X")` above `set_page_config` —
+      Streamlit warns + silently falls back to centered layout in
+      that case). The AST helper deliberately skips decorators —
+      `@st.dialog(...)` on `pages/1_Opportunities.py::_confirm_delete_dialog`
+      sits ABOVE `set_page_config` legitimately because Streamlit's
+      first-call gate is a render-call gate, not a module-load-time
+      gate; decorators are factory-style higher-order calls that
+      don't trip it. Audit outcome: all 5 pages already conform —
+      **verification-only PR** (no production code touched, just
+      the new test file). New `tests/test_pages_cohesion.py` is the
+      home for cross-page cohesion contracts (T4 confirm-dialog
+      audit + T5 responsive-layout check earmarked for the same
+      file). Suite 843 → 853 under both pytest gates. Merged via
+      PR #39 (`85968bb`).
 - [ ] **T4** Confirm-dialog audit (every destructive path wears
       `@st.dialog` with cascade-effect copy)
 - [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
@@ -820,6 +840,16 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #39 merged** (`85968bb`): Phase 7 T3 shipped —
+  verification-only `set_page_config` sweep across all 5 pages
+  (`app.py` + 4 `pages/*.py`). New `tests/test_pages_cohesion.py`
+  with `TestSetPageConfigSweep` (10 parametrized tests, 2
+  invariants per page). Audit outcome: all 5 pages already conform
+  to locked shape — no production code touched. AST helper
+  deliberately skips decorators (load-bearing — `@st.dialog`
+  doesn't trip Streamlit's first-call gate). Suite 843 → 853 under
+  both pytest gates. Pre-merge review at
+  [`reviews/phase-7-tier3-review.md`](reviews/phase-7-tier3-review.md).
 - 2026-05-04 — **PR #38 merged** (`e67cfed`): Phase 7 T2 shipped —
   free-text "Search positions" `text_input` prepended to the
   Opportunities filter row; `position_name` substring match
@@ -1072,4 +1102,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 T2 merged via PR #38; main HEAD `e67cfed`; suite 843 / 1 xfailed; Phase 7 T3 — `set_page_config` sweep on remaining pages next)_
+_Updated: 2026-05-04 (Phase 7 T3 merged via PR #39; main HEAD `85968bb`; suite 853 / 1 xfailed; Phase 7 T4 — Confirm-dialog audit next)_

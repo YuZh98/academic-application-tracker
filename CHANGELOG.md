@@ -18,6 +18,7 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
+- Add `tests/test_pages_cohesion.py` with `TestSetPageConfigSweep` — 10 parametrized tests pinning locked-kwargs source-grep + first-Streamlit-statement AST walk across all 5 pages; audit confirmed all conform (verification-only). PR #39 (`85968bb`) · [review](reviews/phase-7-tier3-review.md)
 - Add free-text "Search positions" `text_input` to Opportunities filter row; substring match against `position_name` (case-insensitive, regex=False, NaN-safe), AND-combined with status/priority/field filters. PR #38 (`e67cfed`) · [review](reviews/phase-7-tier2-review.md)
 - Add 🔴/🟡 urgency glyphs to Opportunities deadline column; `_deadline_urgency` now returns inline glyphs (was: `'urgent'`/`'alert'` literal flags) with new `—` state for NULL deadlines. PR #37 (`e5316fd`) · [review](reviews/phase-7-tier1-review.md)
 
