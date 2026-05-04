@@ -669,6 +669,155 @@ class TestFilterBarBehaviour:
         )
 
 
+# ── Position search bar (Phase 7 T2) ─────────────────────────────────────────
+# Free-text substring search over position_name, sitting on the filter row
+# next to status / priority / field. Mirrors the existing field-filter
+# implementation (str.contains, regex=False, case=False, na=False) so the
+# search behaves consistently with the rest of the filter bar — case-
+# insensitive substring, no regex metacharacter pitfalls, NaN-safe.
+#
+# Search target SCOPE is position_name only (not institute / field). Reasons:
+# field is already covered by filter_field, and a narrower scope keeps the
+# behaviour predictable for the user — what they type in "Search positions"
+# matches what's printed in the Position column. Flagged in PR.
+
+
+class TestPositionSearchStructure:
+    """The search text_input must render with the locked key + label."""
+
+    def test_search_text_input_renders(self, db):
+        at = _run_page()
+        at.text_input(key="filter_search")  # raises KeyError if absent
+
+    def test_search_label_is_search_positions(self, db):
+        at = _run_page()
+        labels = [el.label for el in at.text_input]
+        assert "Search positions" in labels, (
+            f"Expected 'Search positions' label on the search text_input, "
+            f"got: {labels}"
+        )
+
+
+class TestPositionSearchBehaviour:
+    def test_empty_search_returns_all_rows(self, db):
+        """With the search box empty, all positions in the DB must surface
+        (no narrowing). Mirrors test_default_shows_all_positions but for
+        the search predicate specifically — the empty-string branch of
+        the search filter must NOT narrow."""
+        database.add_position({"position_name": "Position A"})
+        database.add_position({"position_name": "Position B"})
+        database.add_position({"position_name": "Position C"})
+        at = _run_page()
+        # Default (no search input) — all three rows.
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "3 position(s)" in at.caption[0].value, (
+            f"Expected '3 position(s)' with empty search, "
+            f"got: {at.caption[0].value!r}"
+        )
+
+    def test_search_substring_filters_rows(self, db):
+        """Substring match against position_name retains only the matching
+        row. Lowercase query against title-case data must hit (the
+        case=False arg) — the row-identity assertion pins which row was
+        kept (not only that count==1), guarding against a swapped predicate
+        that would also produce count=1 in this two-row seeding."""
+        database.add_position({"position_name": "Postdoc Stanford"})
+        database.add_position({"position_name": "Faculty MIT"})
+        at = _run_page()
+        at.text_input(key="filter_search").input("stanford")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected '1 position(s)' after search='stanford', "
+            f"got: {at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["Postdoc Stanford"], (
+            f"search='stanford' (case-insensitive) must retain 'Postdoc "
+            f"Stanford', not 'Faculty MIT'; got {names!r}"
+        )
+
+    def test_search_no_match_renders_empty_state(self, db):
+        """When the search narrows to zero rows, the existing 'No positions
+        match the current filters.' info message fires (same branch used
+        by status / priority / field filters when they reach zero)."""
+        database.add_position({"position_name": "Postdoc Stanford"})
+        database.add_position({"position_name": "Faculty MIT"})
+        at = _run_page()
+        at.text_input(key="filter_search").input("nonexistent-position")
+        at.run()
+        assert not at.exception
+        assert any("No positions match" in el.value for el in at.info), (
+            f"Expected 'No positions match' info when search yields zero "
+            f"rows; got: {[el.value for el in at.info]}"
+        )
+
+    def test_search_special_chars_no_regex_interpretation(self, db):
+        """The search must use regex=False so regex metacharacters don't
+        crash the page or change semantics. '++' is a regex quantifier
+        (illegal at the start of a pattern → re.error) — with regex=False
+        it is a literal substring that matches inside 'C++ Postdoc'.
+        Mirrors test_filter_by_field_with_special_characters; the row-
+        identity assertion guards against a swapped predicate."""
+        database.add_position({"position_name": "C++ Postdoc"})
+        database.add_position({"position_name": "Python Postdoc"})
+        at = _run_page()
+        at.text_input(key="filter_search").input("++")
+        at.run()
+        assert not at.exception, (
+            f"Search with '++' raised an exception (regex=False missing?): "
+            f"{at.exception}"
+        )
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected literal '++' to match 'C++ Postdoc'; got: "
+            f"{at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["C++ Postdoc"], (
+            f"search='++' (literal) must retain 'C++ Postdoc' only; "
+            f"got {names!r}"
+        )
+
+    def test_search_combines_with_status_filter(self, db):
+        """Search and status filters are AND-combined row masks: only rows
+        passing BOTH survive. With three rows wired so each pairwise
+        predicate alone admits two rows but only one row passes both, the
+        row-identity assertion catches an OR-mistake or a swapped
+        predicate that would produce different but also count==1
+        results."""
+        # All three position_names contain 'postdoc' (search hits all 3 alone);
+        # statuses split [SAVED]/[SAVED]/[APPLIED] (status filter alone admits 2).
+        # AND-combined ([SAVED] + 'stanford'): only "Stanford Postdoc" survives.
+        database.add_position(
+            {"position_name": "Stanford Postdoc"}
+        )  # [SAVED] default
+        database.add_position(
+            {"position_name": "MIT Postdoc"}
+        )  # [SAVED] default
+        database.add_position(
+            {"position_name": "Stanford Postdoc 2", "status": "[APPLIED]"}
+        )
+        at = _run_page()
+        at.selectbox(key="filter_status").select("[SAVED]")
+        at.text_input(key="filter_search").input("stanford")
+        at.run()
+        assert not at.exception
+        assert len(at.caption) == 1
+        assert "1 position(s)" in at.caption[0].value, (
+            f"Expected exactly 1 position after [SAVED]+'stanford' AND-filter; "
+            f"got: {at.caption[0].value!r}"
+        )
+        names = list(at.dataframe[0].value["position_name"])
+        assert names == ["Stanford Postdoc"], (
+            f"AND-filter [SAVED]+search='stanford' must retain only "
+            f"'Stanford Postdoc'; 'MIT Postdoc' fails search, "
+            f"'Stanford Postdoc 2' fails status. Got {names!r}"
+        )
+
+
 # ── Row selection (T4-A) ──────────────────────────────────────────────────────
 # The positions table uses st.dataframe(on_select='rerun', selection_mode='single-row').
 # When a row is selected, the row's DB id must land in session_state as
