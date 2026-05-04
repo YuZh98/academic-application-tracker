@@ -172,9 +172,58 @@ shapes need spec'ing first.
   (mirror of T1) so it works independently of `write_all`'s prior
   mkdir — required for the Phase 6 T4 manual-trigger button.
 
+### Mandatory ride-along — lift `db_and_exports` fixture into `tests/conftest.py`
+
+**This is a load-bearing fix, not optional.** With T1 shipped, every
+test that calls `database.add_position` (and there are dozens across
+`test_applications_page.py` / `test_recommenders_page.py` /
+`test_database.py` / etc.) now writes to the project's REAL
+`exports/OPPORTUNITIES.md` as a side effect of the deferred
+`exports.write_all()` call inside the writer. The `db` fixture in
+`conftest.py` only monkeypatches `database.DB_PATH`; without an
+`exports.EXPORTS_DIR` monkeypatch in the same fixture, every full
+pytest run pollutes `exports/` with junk content from whichever test
+ran last. Symptom: `git status` after pytest shows a modified or new
+`exports/OPPORTUNITIES.md` whose content is whatever the last test
+seeded.
+
+T2 lands in the same change set as T1's exposed pollution, so the
+implementer fixes it here. Two acceptable shapes:
+
+1. **Augment the existing `db` fixture** (preferred — single
+   fixture, every consumer benefits automatically):
+   ```python
+   @pytest.fixture
+   def db(tmp_path, monkeypatch):
+       monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.db")
+       import exports as _exports
+       monkeypatch.setattr(_exports, "EXPORTS_DIR", tmp_path / "exports")
+       database.init_db()
+       yield
+   ```
+   After this lands, `tests/test_exports.py::db_and_exports` becomes
+   redundant for every consumer EXCEPT the T1 + T2 + T3 export tests
+   (which need the `exports_dir` path returned for `_read_output`).
+   Keep `db_and_exports` as a thin wrapper that calls into the new
+   conftest `db` and returns the path.
+
+2. **Add a new `_isolated_exports_writer_path` fixture** to
+   conftest.py and explicitly request it from every page test that
+   triggers a DB write — strictly worse (touches every page test
+   file); flagged for completeness only. Don't pick this.
+
+Verify the fix with: `git status` after `pytest tests/ -q` shows
+**zero changes** to `exports/`. If exports/ is dirty after a clean
+run, the lift didn't take.
+
+Document the lift in the PR description as a separate bullet under
+Summary so the orchestrator can cite it cleanly in the close-out
+review.
+
 ### Tests to write first (TDD red commit)
-- Reuse `db_and_exports` fixture from T1 (currently page-local in
-  `test_exports.py`; lift to `conftest.py` only if T3 also wants it).
+- After the conftest lift, `db_and_exports` keeps its current shape
+  (returns the exports path) but delegates the DB monkeypatch to
+  the lifted `db` fixture.
 - `TestWriteProgress` class with:
   - `test_writes_file_at_expected_path` — `exports/PROGRESS.md`
     exists.
@@ -202,19 +251,29 @@ shapes need spec'ing first.
 Standard three-commit triplet — `test:` → `feat:` → `chore:` (the
 `chore:` is the orchestrator's).
 
-### Pre-PR gates (GUIDELINES §11)
+### Pre-PR gates (GUIDELINES §11) + T2 isolation gate
 ```bash
 ruff check .
 pytest tests/ -q
 pytest -W error::DeprecationWarning tests/ -q
 grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
   | grep -v '^\([^:]*\):[0-9]*:\s*#'
+
+# T2-specific isolation gate — verifies the conftest lift took.
+# After a clean pytest run, exports/ must be untouched. If this prints
+# anything, the conftest fixture isn't monkeypatching EXPORTS_DIR
+# correctly and the lift needs revisiting.
+git status --porcelain exports/
 ```
+
+If `git status --porcelain exports/` produces any output after the
+suite runs, the conftest lift is incomplete — fix before opening the
+PR.
 
 ### Branch + cadence
 - Branch name: `feature/phase-6-tier2-WriteProgress`.
-- One PR for the test + feat commits; orchestrator handles the
-  chore rollup post-merge.
+- One PR for the test + feat commits (the conftest lift lands in the
+  test commit); orchestrator handles the chore rollup post-merge.
 
 ---
 
