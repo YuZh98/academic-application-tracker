@@ -90,8 +90,9 @@ def _confirm_delete_dialog() -> None:
     position_name: str = st.session_state.get("_delete_target_name", "")
 
     st.warning(
-        f'Delete **"{position_name}"**? This also removes its application '
-        f'and recommender rows (FK cascade) and **cannot be undone**.'
+        f'Delete **"{position_name}"**? This also removes its '
+        f'application, interview, and recommender rows (FK cascade) '
+        f'and **cannot be undone**.'
     )
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
