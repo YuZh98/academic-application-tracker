@@ -727,3 +727,359 @@ class TestWriteProgress:
             f"Expected (last: 2026-09-01) — max of seeded scheduled_dates — "
             f"in Interviews cell; got row={rows[0]!r}"
         )
+
+
+# ── Phase 6 T3: write_recommenders() generator ───────────────────────────────
+#
+# DESIGN §7 names the generator + output file (`exports/RECOMMENDERS.md` from
+# recommenders JOIN positions). This test class pins the column contract,
+# cell shapes, and sort order so any future generator change lands alongside
+# an explicit test diff (DESIGN §7 contract #2 — stable markdown format).
+#
+# Column contract (locked here):
+#   Recommender · Relationship · Position · Institute · Asked · Confirmed · Submitted · Reminder
+#
+# `notes` is intentionally NOT exported. Recommender notes are typically free-
+# form prose (e.g. "preferred contact method: email; usually responds within
+# a week") that's awkward in a markdown table cell — the in-app UI carries
+# them; the export summarises. If a future revision wants to fold notes in,
+# the natural shape is a per-recommender section with bullets, not a table
+# column.
+#
+# Cell shapes — mirror T1 + T2 conventions for cross-export cohesion:
+#   - Empty/NULL TEXT cells → '—' (em-dash) via `_safe_str_or_em`.
+#   - Date cells → pass-through ISO TEXT.
+#   - `_md_escape_cell` on every cell.
+#   - No status sentinel here — recommenders don't carry pipeline status.
+#
+# Confirmed cell tri-state (mirrors `pages/3_Recommenders.py::_format_confirmed`
+# but lives locally in `exports.py` per the DESIGN §2 layer rule that pages
+# and exports cannot share helpers):
+#     confirmed=NULL → '—'
+#     confirmed=0    → 'No'
+#     confirmed=1    → 'Yes'
+#
+# Reminder cell tri-state — REUSES `exports._format_confirmation` because
+# the (flag, date) shape is identical to the Applications-page Confirmation
+# pattern (DESIGN §8.3 D-A T1-C precedent):
+#     reminder_sent=0 / NULL → '—'
+#     reminder_sent=1 + reminder_sent_date set → '✓ {YYYY-MM-DD}'
+#     reminder_sent=1 + reminder_sent_date NULL → '✓ (no date)'
+# Reusing the helper rather than building a parallel one keeps the cell
+# format coherent across exports and avoids an "almost identical but
+# subtly different" drift trap.
+#
+# Sort order: `recommender_name ASC, deadline_date ASC NULLS LAST, id ASC`.
+#   Primary `recommender_name` groups one person's owed letters together
+#   (the natural reading mode for the file).
+#   Secondary `deadline_date` orders multiple positions for the same
+#   recommender by upcoming-ness (ASC NULLS LAST mirrors T1/T2).
+#   Tertiary `id` is the deterministic tiebreaker.
+#   `database.get_all_recommenders()` SQL only includes the first + third
+#   keys; deadline_date comes from `database.get_all_positions()` and is
+#   merged in pandas in the writer (T2 "compose multiple reads in
+#   exports.py" precedent), then re-sorted with `kind="stable"`.
+
+
+class TestWriteRecommenders:
+    """Phase 6 T3 — content tests for `exports.write_recommenders`.
+
+    The function reads `database.get_all_recommenders()` (recommenders ×
+    positions LEFT JOIN), merges `deadline_date` from
+    `database.get_all_positions()` for the secondary sort key, and
+    writes a single markdown table to ``exports.EXPORTS_DIR /
+    'RECOMMENDERS.md'``. See module-level comment for the locked
+    column contract, cell shapes, sort order, and helper-reuse
+    decisions."""
+
+    OUTPUT_FILENAME = "RECOMMENDERS.md"
+
+    EXPECTED_HEADER = (
+        "| Recommender | Relationship | Position | Institute "
+        "| Asked | Confirmed | Submitted | Reminder |"
+    )
+
+    EXPECTED_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- |"
+
+    @classmethod
+    def _read_output(cls, exports_dir: Path) -> str:
+        return (exports_dir / cls.OUTPUT_FILENAME).read_text(encoding="utf-8")
+
+    @classmethod
+    def _data_rows(cls, content: str) -> list[str]:
+        table_lines = [ln for ln in content.splitlines() if ln.startswith("|")]
+        return table_lines[2:]
+
+    # ── AGENTS.md spec'd nine ─────────────────────────────────────────
+
+    def test_writes_file_at_expected_path(self, db_and_exports):
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {"recommender_name": "Dr. Smith"})
+        exports.write_recommenders()
+        out = db_and_exports / self.OUTPUT_FILENAME
+        assert out.exists(), (
+            f"Expected file at {out!s}; "
+            f"directory contents: {list(db_and_exports.iterdir()) if db_and_exports.exists() else '(missing)'}"
+        )
+
+    def test_table_header_matches_contract(self, db_and_exports):
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {"recommender_name": "Dr. Smith"})
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        assert self.EXPECTED_HEADER in content, (
+            f"Expected header {self.EXPECTED_HEADER!r}; got content:\n{content!r}"
+        )
+        assert self.EXPECTED_SEPARATOR in content, (
+            f"Expected separator {self.EXPECTED_SEPARATOR!r}; got content:\n{content!r}"
+        )
+
+    def test_one_row_per_recommender_position_pair(self, db_and_exports):
+        """A recommender owing letters for N positions surfaces as N
+        rows (matches `get_all_recommenders()`'s row shape — one row
+        per (recommender, position) pair)."""
+        pid_a = database.add_position(make_position({"position_name": "Pos A"}))
+        pid_b = database.add_position(make_position({"position_name": "Pos B"}))
+        pid_c = database.add_position(make_position({"position_name": "Pos C"}))
+        # Dr. Smith owes letters for two positions; Dr. Jones owes one.
+        database.add_recommender(pid_a, {"recommender_name": "Dr. Smith"})
+        database.add_recommender(pid_b, {"recommender_name": "Dr. Smith"})
+        database.add_recommender(pid_c, {"recommender_name": "Dr. Jones"})
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = self._data_rows(content)
+        assert len(rows) == 3, (
+            f"Expected 3 rows (2 for Dr. Smith + 1 for Dr. Jones); "
+            f"got {len(rows)}: {rows!r}"
+        )
+
+    def test_sort_order_groups_by_recommender_then_deadline(self, db_and_exports):
+        """Two recommenders with overlapping positions render with all
+        of person A's rows before any of person B's; within each
+        recommender, rows order by deadline ASC NULLS LAST."""
+        pid_early = database.add_position(make_position({
+            "position_name": "Early Pos", "deadline_date": "2026-06-01",
+        }))
+        pid_late = database.add_position(make_position({
+            "position_name": "Late Pos", "deadline_date": "2026-12-15",
+        }))
+        pid_nodate = database.add_position(make_position({
+            "position_name": "NoDate Pos", "deadline_date": None,
+        }))
+        # Insert recommenders in non-sorted order — Dr. Beta first, then
+        # Dr. Alpha — so any sort bug that relies on insertion order
+        # surfaces.
+        database.add_recommender(pid_late, {"recommender_name": "Dr. Beta"})
+        database.add_recommender(pid_nodate, {"recommender_name": "Dr. Alpha"})
+        database.add_recommender(pid_early, {"recommender_name": "Dr. Beta"})
+        database.add_recommender(pid_early, {"recommender_name": "Dr. Alpha"})
+
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = self._data_rows(content)
+        # Expected order:
+        #   Dr. Alpha + Early Pos     (deadline 2026-06-01)
+        #   Dr. Alpha + NoDate Pos    (NULL deadline, sorts last within Alpha)
+        #   Dr. Beta  + Early Pos     (deadline 2026-06-01)
+        #   Dr. Beta  + Late Pos      (deadline 2026-12-15)
+        assert len(rows) == 4, f"Expected 4 rows; got {len(rows)}: {rows!r}"
+        # Pin every row position rather than substring-search — the
+        # "groupby recommender, then sort within" guarantee can be
+        # subtly broken by a sort bug that intermixes recommenders.
+        assert "Dr. Alpha" in rows[0] and "Early Pos" in rows[0], (
+            f"Row 0 must be Dr. Alpha + Early Pos; got {rows[0]!r}"
+        )
+        assert "Dr. Alpha" in rows[1] and "NoDate Pos" in rows[1], (
+            f"Row 1 must be Dr. Alpha + NoDate Pos (NULL deadline last "
+            f"within Alpha); got {rows[1]!r}"
+        )
+        assert "Dr. Beta" in rows[2] and "Early Pos" in rows[2], (
+            f"Row 2 must be Dr. Beta + Early Pos; got {rows[2]!r}"
+        )
+        assert "Dr. Beta" in rows[3] and "Late Pos" in rows[3], (
+            f"Row 3 must be Dr. Beta + Late Pos; got {rows[3]!r}"
+        )
+
+    def test_em_dash_for_missing_text_cells(self, db_and_exports):
+        """NULL relationship / NULL asked_date / etc. surface as '—'."""
+        pid = database.add_position(make_position({
+            "position_name": "BarePos", "institute": None,
+        }))
+        # Insert a recommender with NULL relationship + NULL asked_date.
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Bare",
+            "relationship": None,
+            "asked_date": None,
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        bare_lines = [ln for ln in content.splitlines() if "Dr. Bare" in ln]
+        assert bare_lines, f"Expected the Dr. Bare row; got content:\n{content!r}"
+        row = bare_lines[0]
+        assert "—" in row, (
+            f"Expected em-dash for missing TEXT cells; got row={row!r}"
+        )
+
+    def test_iso_format_for_date_cells(self, db_and_exports):
+        """Asked + Submitted columns render as `YYYY-MM-DD`."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. Dated",
+            "asked_date": "2026-04-15",
+            "submitted_date": "2026-05-01",
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. Dated" in ln]
+        assert rows
+        assert "2026-04-15" in rows[0], (
+            f"Expected ISO Asked date in row; got {rows[0]!r}"
+        )
+        assert "2026-05-01" in rows[0], (
+            f"Expected ISO Submitted date in row; got {rows[0]!r}"
+        )
+
+    def test_idempotent_across_two_calls(self, db_and_exports):
+        """DESIGN §7 contract #2: byte-identical output across two calls
+        with no DB change."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {"recommender_name": "Dr. Stable"})
+        exports.write_recommenders()
+        first = self._read_output(db_and_exports)
+        exports.write_recommenders()
+        second = self._read_output(db_and_exports)
+        assert first == second, (
+            "write_recommenders must be deterministic — two calls with no "
+            "DB change must produce byte-identical output."
+        )
+
+    def test_empty_db_writes_header_only(self, db_and_exports):
+        """No recommenders seeded → header + separator + zero data rows.
+        The Phase 6 T4 manual-trigger button must work on a fresh DB."""
+        # Don't seed anything.
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        assert self.EXPECTED_HEADER in content
+        rows = self._data_rows(content)
+        assert rows == [], (
+            f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
+        )
+
+    # ── Confirmed-cell tri-state pin (Yes/No/em-dash) ─────────────────
+
+    def test_confirmed_em_dash_when_null(self, db_and_exports):
+        """`confirmed=NULL` → '—'. Mirror of the Recommenders page
+        `_format_confirmed` convention but rendered into the export."""
+        pid = database.add_position(make_position())
+        # Default add → confirmed NULL.
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. NullConf",
+            "confirmed": None,
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. NullConf" in ln]
+        assert rows
+        # The Confirmed cell is the 6th '|'-separated cell. Find it by
+        # splitting; first/last entries are empty strings from leading /
+        # trailing pipes, so the 6th cell is index 6.
+        cells = [c.strip() for c in rows[0].split("|")]
+        # cells: ['', Recommender, Relationship, Position, Institute,
+        #         Asked, Confirmed, Submitted, Reminder, '']
+        assert cells[6] == "—", (
+            f"Confirmed cell must be '—' for NULL; got cells[6]={cells[6]!r} "
+            f"(full row: {rows[0]!r})"
+        )
+
+    def test_confirmed_renders_no_when_zero(self, db_and_exports):
+        """`confirmed=0` → 'No'."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. NoConf",
+            "confirmed": 0,
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. NoConf" in ln]
+        assert rows
+        cells = [c.strip() for c in rows[0].split("|")]
+        assert cells[6] == "No", (
+            f"Confirmed cell must be 'No' for confirmed=0; got cells[6]={cells[6]!r} "
+            f"(full row: {rows[0]!r})"
+        )
+
+    def test_confirmed_renders_yes_when_one(self, db_and_exports):
+        """`confirmed=1` → 'Yes'."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. YesConf",
+            "confirmed": 1,
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. YesConf" in ln]
+        assert rows
+        cells = [c.strip() for c in rows[0].split("|")]
+        assert cells[6] == "Yes", (
+            f"Confirmed cell must be 'Yes' for confirmed=1; got cells[6]={cells[6]!r} "
+            f"(full row: {rows[0]!r})"
+        )
+
+    # ── Reminder-cell tri-state pin (em-dash / ✓ ISO / ✓ no date) ─────
+
+    def test_reminder_em_dash_when_not_sent(self, db_and_exports):
+        """`reminder_sent=0` (default) → '—'. The cell reuses
+        `_format_confirmation` because the (flag, date) shape is
+        identical to the Applications-page Confirmation pattern."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. NoReminder",
+            "reminder_sent": 0,
+            "reminder_sent_date": None,
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. NoReminder" in ln]
+        assert rows
+        cells = [c.strip() for c in rows[0].split("|")]
+        # cells[8] is Reminder (index 8 with leading-pipe ghost).
+        assert cells[8] == "—", (
+            f"Reminder cell must be '—' for reminder_sent=0; "
+            f"got cells[8]={cells[8]!r} (full row: {rows[0]!r})"
+        )
+
+    def test_reminder_check_with_iso_date(self, db_and_exports):
+        """`reminder_sent=1, reminder_sent_date set` → '✓ {YYYY-MM-DD}'."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. DatedReminder",
+            "reminder_sent": 1,
+            "reminder_sent_date": "2026-04-19",
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. DatedReminder" in ln]
+        assert rows
+        cells = [c.strip() for c in rows[0].split("|")]
+        assert cells[8] == "✓ 2026-04-19", (
+            f"Reminder cell must be '✓ 2026-04-19'; got cells[8]={cells[8]!r} "
+            f"(full row: {rows[0]!r})"
+        )
+
+    def test_reminder_check_no_date_when_date_null(self, db_and_exports):
+        """`reminder_sent=1, reminder_sent_date NULL` → '✓ (no date)'."""
+        pid = database.add_position(make_position())
+        database.add_recommender(pid, {
+            "recommender_name": "Dr. NoDateReminder",
+            "reminder_sent": 1,
+            "reminder_sent_date": None,
+        })
+        exports.write_recommenders()
+        content = self._read_output(db_and_exports)
+        rows = [ln for ln in content.splitlines() if "Dr. NoDateReminder" in ln]
+        assert rows
+        cells = [c.strip() for c in rows[0].split("|")]
+        assert cells[8] == "✓ (no date)", (
+            f"Reminder cell must be '✓ (no date)'; got cells[8]={cells[8]!r} "
+            f"(full row: {rows[0]!r})"
+        )
