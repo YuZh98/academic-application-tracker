@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-04 | Phase 6 finish — cohesion smoke + close-out (T6 — `v0.7.0` tag) | _(direct-to-main; orchestrator close-out doc)_ | Approve `v0.7.0` tag | [phase-6-finish-cohesion-smoke.md](phase-6-finish-cohesion-smoke.md) |
 | 2026-05-04 | Phase 6 T5 — Export page download buttons + Download section header | `feature/phase-6-tier5-DownloadButtons` | Approve | [phase-6-tier5-review.md](phase-6-tier5-review.md) |
 | 2026-05-04 | Phase 6 T4 — Export page shell + manual regenerate button + mtimes panel | `feature/phase-6-tier4-ExportPage` | Approve | [phase-6-tier4-review.md](phase-6-tier4-review.md) |
 | 2026-05-04 | Phase 6 T3 — `write_recommenders()` markdown generator + smoke-test fixture fix that closed CI-red regression | `feature/phase-6-tier3-WriteRecommenders` | Approve | [phase-6-tier3-review.md](phase-6-tier3-review.md) |

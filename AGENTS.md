@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `chore(phase-6-T6): close-out + v0.7.0 tag prep` (T6 is doc-only, orchestrator-owned).
+  — e.g. `feat(phase-7-T1): Urgency colors on positions table`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -185,8 +185,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 
 ## Current state (updated after each merged PR)
 
-**Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
-**`main` HEAD:** Phase 6 T5 merged (PR #36); test suite at 834 passed + 1 xfailed
+**Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
+**`main` HEAD:** Phase 6 closed; test suite at 834 passed + 1 xfailed; next functional work is Phase 7 T1
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -209,7 +209,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T3 — `write_recommenders()` generator | ✅ PR #34 | `exports/RECOMMENDERS.md` — 8-column contract; new local `_format_confirmed` (`—`/`No`/`Yes`); Reminder cell reuses `_format_confirmation`; `notes` deliberately omitted; smoke-test `fix:` commit augmented `isolated_exports_dir` to also monkeypatch DB_PATH (closed CI-red regression that had been latent since T1) |
 | T4 — Export page (manual regenerate button + file mtimes) | ✅ PR #35 | `pages/4_Export.py` shell + regenerate button (try/except `write_all`, success toast, friendly `st.error`) + per-file mtimes panel (`st.markdown` lines, `Path.exists()` check + `os.utime`-deterministic test) |
 | T5 — Export page (`st.download_button` per file) | ✅ PR #36 | three `st.download_button` widgets (one per locked filename) + `st.divider()` + `st.subheader("Download")` section header; `disabled=True` + `data=b""` when file absent, `data=Path.read_bytes()` when present; stacked layout above existing T4 mtime line |
-| T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 next | see "Immediate task" — orchestrator-owned (no implementer work) |
+| T6 — Phase 6 close-out + tag `v0.7.0` | ✅ | Cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md); CHANGELOG `[v0.7.0]` split |
 
 ### What's after Phase 6
 Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
@@ -218,80 +218,91 @@ Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
 
 ---
 
-## Immediate task — Phase 6 T6 (close-out + tag `v0.7.0`) — **orchestrator-owned, no implementer work**
+## Immediate task — Phase 7 T1 (Urgency colors on positions table)
 
-**Spec:** `TASKS.md` current sprint Phase 6 T6 · `GUIDELINES §11`
-(version scheme — each minor bump marks one completed phase) ·
-prior precedent `reviews/phase-5-finish-cohesion-smoke.md` (Phase 5
-T7 close-out shape, written 2026-05-04 by orchestrator).
+**Spec:** `TASKS.md` current sprint Phase 7 T1 · `DESIGN §6`
+positions schema (`deadline_date` is the column to color against) ·
+`config.py` (`DEADLINE_URGENT_DAYS` + `DEADLINE_ALERT_DAYS`
+constants — already used by the dashboard's Upcoming panel for the
+🔴 / 🟡 urgency-band convention) · `pages/1_Opportunities.py`
+positions table (the surface to extend).
 
-T6 closes Phase 6. **No implementer work** — same shape as Phase 5
-T7. If you're an implementer agent and you've reached this block:
-stop, ping the orchestrator, do not branch. The orchestrator will
-ship T6 directly on main per the post-merge ritual.
+Phase 7 ships polish (no new pages, no new schema). T1 surfaces
+deadline-urgency at-a-glance on the Opportunities-page positions
+table — same 🔴 (urgent) / 🟡 (alert window) / no-glyph (beyond
+window or no deadline) banding the dashboard already uses, applied
+to the per-row deadline cell as a `st.column_config` rule.
 
-### T6 deliverables (orchestrator-owned)
+### T1 — Urgency colors on positions table
 
-1. **Phase 6 cohesion-smoke + close-out doc**
-   (`reviews/phase-6-finish-cohesion-smoke.md`) — mirror of
-   `reviews/phase-5-finish-cohesion-smoke.md`. AppTest probes (Export
-   page populated + empty + click-regenerate + post-regenerate); six
-   cohesion dimensions audited (status labels, empty-state copy,
-   date format, toast/error wording, NaN coercion, widget-key
-   prefixes); tier-review carry-over triage across
-   `phase-6-tier1-review.md` … `phase-6-tier5-review.md`.
+- Reuse the existing config invariants:
+  - `DEADLINE_URGENT_DAYS` → 🔴 if `deadline_date` is within this
+    many days of today
+  - `DEADLINE_ALERT_DAYS` → 🟡 if within this many days but past
+    `DEADLINE_URGENT_DAYS`
+  - Otherwise no urgency glyph (or em-dash for NULL deadline)
+- Mirror the dashboard's `app.py` T4 Upcoming panel formatter where
+  it already renders the urgency glyph in the rendered cell.
+- Apply to the positions-table render in `pages/1_Opportunities.py`.
+  The existing table already renders `deadline_date`; the new
+  contract is "Deadline cell carries the urgency glyph inline" or
+  "a new Urgency column is added between Deadline and the next
+  column" — implementer picks whichever reads cleanest in the page
+  context, flag in PR description.
+- Streamlit 1.56's `st.column_config.TextColumn` doesn't support
+  per-cell color; the urgency signal lands as a glyph (🔴 / 🟡)
+  in the cell text rather than as a CSS background. Same precedent
+  as the dashboard's Upcoming panel.
 
-   Carry-overs to triage:
-   - **No carry-overs from T1, T2, T3.** Each tier-review doc's
-     "Carry-overs" section either resolved its findings inline or
-     noted them as kept-by-design (e.g. T2 N+1 interviews lookup,
-     T3 `notes` column omission).
-   - **T4** flagged `st.markdown` vs `st.write` cohesion as a Phase
-     7 polish candidate (Finding #3). Track only.
-   - **T5** flagged the wireframe-deviation stacked layout as
-     kept-by-design (Finding #1). No follow-up needed.
-   - **C2** (TRACKER_PROFILE) + **C3** ("All" filter sentinel +
-     `_REMINDER_TONES`) still open from prior phases. Defer per
-     the Phase 5 T7 disposition.
-   - **Privacy amendment** (`exports/` `.gitignore`d, DESIGN §7
-     contract #2 amended) landed in `43b3f3c` 2026-05-04 — note in
-     the close-out as a structural change between v0.6.0 and v0.7.0.
+### Tests to write first (TDD red commit)
+- Extend `tests/test_opportunities_page.py`. Mirror the AppTest-
+  driven shape of the existing tests there.
+- New `TestPositionsTableUrgencyColors` class (or extend an existing
+  positions-table class — implementer picks):
+  - `test_urgent_deadline_renders_red_glyph` — seed a position with
+    `deadline_date = today + (DEADLINE_URGENT_DAYS - 1)` days;
+    rendered cell contains 🔴.
+  - `test_alert_deadline_renders_yellow_glyph` — seed a position
+    with `deadline_date = today + (DEADLINE_URGENT_DAYS + 1)` days;
+    rendered cell contains 🟡.
+  - `test_distant_deadline_no_glyph` — seed `today +
+    (DEADLINE_ALERT_DAYS + 7)` days; cell contains no urgency
+    glyph.
+  - `test_null_deadline_renders_em_dash` — seed `deadline_date =
+    None`; cell renders `—` (existing T1-C convention from Phase
+    5 T1 + the dashboard panel).
+  - `test_today_deadline_renders_red_glyph` — boundary case at
+    delta = 0.
+  - `test_invariant_check_urgent_le_alert` — pin
+    `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` (already in
+    `config.py`'s assert block; this test surfaces the contract
+    in the test suite).
 
-2. **CHANGELOG.md split** — `[Unreleased]` → `[v0.7.0]` at the
-   boundary commit (the T6 close-out commit itself), mirroring the
-   Phase 5 v0.6.0 split precedent (commit `6f936d7`). Empty
-   `[Unreleased]` accumulates Phase 7 work.
+### Architecture rules (non-negotiable)
+- `pages/1_Opportunities.py` already imports `database`, `config`,
+  `streamlit`, `pandas`. Reuse existing `_safe_str_or_em` etc.
+- Reuse the dashboard's urgency-formatter helper if it lives in
+  `database.py` or a shared utility; if it's page-local in
+  `app.py`, duplicate it in `pages/1_Opportunities.py` per DESIGN
+  §2 layer rules (pages don't import from app.py).
 
-3. **Tag** — `git tag -a v0.7.0 -m "Phase 6 — Exports (markdown
-   generators + Export page)"` with annotation listing the headline
-   T1-T6 deliverables. Push.
+### Pre-PR gates
+Standing checklist below + the CI-mirror local check from "Session
+bootstrap" — both apply.
 
-4. **TASKS.md / AGENTS.md final flip** — T6 ✅; main HEAD line
-   bumped; Immediate-task replaced with **Phase 7 T1** (Urgency
-   colors on positions table per `TASKS.md` "Up next" → Phase 7).
-
-5. **Recently-done entry** — one bullet for the v0.7.0 tag close-out.
-
-### Pre-tag gates (GUIDELINES §11 + standing isolation + CI-mirror)
-All six gates green at HEAD before tagging:
-```bash
-ruff check .
-pytest tests/ -q
-pytest -W error::DeprecationWarning tests/ -q
-grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
-  | grep -v '^\([^:]*\):[0-9]*:\s*#'
-git status --porcelain exports/
-mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
-```
+### Branch + cadence
+- Branch name: `feature/phase-7-tier1-UrgencyColors`.
+- One PR for the test + feat commits; orchestrator handles the
+  chore rollup post-merge.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. (T6 is doc-only, orchestrator-owned — no implementer test:/feat:
-   commits. Implementer agents who reach this block should stop and
-   ping the orchestrator. The next implementer task is Phase 7 T1.)
+1. test: commit  → add failing tests to tests/test_opportunities_page.py
+                   (urgency colors not implemented yet → RED)
+2. feat: commit  → extend pages/1_Opportunities.py with urgency formatter (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -326,7 +337,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-tier1-UrgencyColors` (Phase 7 T1, after the orchestrator ships T6 close-out) |
+| Open PR | You — branch name: `feature/phase-7-tier1-UrgencyColors` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

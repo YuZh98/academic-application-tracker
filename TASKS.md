@@ -704,7 +704,26 @@ All defensible. Merged via PR #36 (`73a04c4`).
       test `test_download_button_enabled_when_file_present` is the
       belt-and-suspenders pin against the source-grep layer. Suite
       827 → 834 under both pytest gates.
-- [ ] **T6** Phase 6 review + PR + tag `v0.7.0`
+- [x] **T6** Phase 6 review + PR + tag `v0.7.0` — close-out +
+      cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md)
+      (verbatim AppTest renders for `pages/4_Export.py` across four
+      states: populated DB + no exports, populated + exports written,
+      populated + post-click regenerate, empty DB + no exports; six
+      cohesion dimensions audited; tier1-tier5 carry-overs all
+      disposed; structural changes between v0.6.0 and v0.7.0
+      catalogued — test-isolation lift `911115a`, CI procedure
+      `c284c20`, privacy amendment `43b3f3c`). Carry-overs disposed:
+      **C2** + **C3** continue to defer to v1.0-rc / cleanup tier;
+      Phase 7 polish candidate (T4's `st.markdown` vs `st.write`
+      cohesion) parked; remaining T2-T5 findings all kept-by-design.
+      CHANGELOG split — `[Unreleased]` → `[v0.7.0]` (mirror of
+      `6f936d7` precedent for v0.6.0); empty `[Unreleased]`
+      accumulates Phase 7 work. All six pre-tag gates green at HEAD:
+      ruff clean, `pytest tests/ -q` 834 passed + 1 xfailed,
+      `pytest -W error::DeprecationWarning tests/ -q` 834 passed +
+      1 xfailed, status-literal grep 0 lines, standing isolation
+      gate empty, CI-mirror local check 834 + 1 xfailed. Tagged
+      `v0.7.0` 2026-05-04.
 
 ### Phase 7 — Polish
 
@@ -753,6 +772,19 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **`v0.7.0` tagged** on `main` closing Phase 6 — three
+  markdown generators (`write_opportunities` / `write_progress` /
+  `write_recommenders`) backing `OPPORTUNITIES.md` / `PROGRESS.md` /
+  `RECOMMENDERS.md` plus the new `pages/4_Export.py` (manual
+  regenerate + per-file mtimes + per-file download buttons).
+  Cohesion-smoke at
+  [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md);
+  CHANGELOG `[Unreleased]` → `[v0.7.0]` split at the boundary commit
+  (mirror of `6f936d7` precedent for v0.6.0). Three durable
+  structural changes shipped during the phase too: the conftest
+  fixture lift (`911115a`), the CI-green-conclusion-before-bypass
+  procedure (`c284c20`), and the privacy amendment (`43b3f3c`).
+  Suite 777 → 834 (+57 tests across the phase, 1 xfail unchanged).
 - 2026-05-04 — **PR #36 merged** (`73a04c4`): Phase 6 T5 shipped —
   three `st.download_button` widgets + `st.divider()` +
   `st.subheader("Download")` section header on `pages/4_Export.py`.
@@ -966,4 +998,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 6 T5 merged via PR #36; main HEAD `73a04c4`; suite 834 / 1 xfailed; Phase 6 T6 — close-out cohesion-smoke + tag `v0.7.0` next, orchestrator-owned)_
+_Updated: 2026-05-04 (Phase 6 closed; `v0.7.0` tagged; suite 834 / 1 xfailed; Phase 7 T1 — Urgency colors on positions table next)_
