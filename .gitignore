@@ -10,9 +10,13 @@ env/
 # Streamlit
 .streamlit/secrets.toml
 
-# Database (binary — doesn't diff; sensitive personal data)
-# Track schema in database.py; track human-readable exports in exports/
+# Personal data — sensitive job-search content, not for the public repo.
+# Schema lives in database.py (versioned); the actual data does not.
+# Both the SQLite DB and the markdown exports it regenerates are user-only.
+# (DESIGN §7 originally framed exports/ as committed-to-VC; amended
+# 2026-05-04 to privacy-first — see CHANGELOG entry.)
 postdoc.db
+exports/
 
 # Environment & secrets
 .env
