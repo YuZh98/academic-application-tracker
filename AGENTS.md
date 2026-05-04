@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `feat(phase-6-T3): write_recommenders markdown generator`.
+  — e.g. `feat(phase-6-T4): Export page shell + manual regenerate button`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -130,7 +130,7 @@ pandas · Plotly · pytest · ruff
 ```
 config.py              Constants only — statuses, thresholds, vocabularies
 database.py            All SQL reads/writes; calls exports.write_all() after every write
-exports.py             Markdown generators (T1 `write_opportunities` + T2 `write_progress` shipped; T3 `write_recommenders` pending)
+exports.py             Markdown generators (T1 + T2 + T3 all shipped; Phase 6 generator group complete)
 app.py                 Dashboard home page (Phase 4, complete)
 pages/
   1_Opportunities.py   Position CRUD (Phase 3, complete)
@@ -141,7 +141,8 @@ tests/
   test_database.py     Unit tests for database.py
   test_app_page.py     Integration tests for app.py (AppTest)
   test_applications_page.py
-  test_recommenders_page.py   Phase 5 tests complete; Phase 6 work touches test_exports.py
+  test_recommenders_page.py   Phase 5 tests complete
+  test_export_page.py    Phase 6 T4 + T5 work creates this file (AppTest-driven)
   test_opportunities_page.py
   test_exports.py
 DESIGN.md              Authoritative spec — read §8.4 for Recommenders page contract
@@ -185,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
-**`main` HEAD:** Phase 6 T2 merged (PR #33); test suite at 801 passed + 1 xfailed
+**`main` HEAD:** Phase 6 T3 merged (PR #34); test suite at 815 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -205,10 +206,10 @@ pages/*.py  ← imports database, config; NEVER imports exports
 |------|--------|-------|
 | T1 — `write_opportunities()` generator | ✅ PR #32 | `exports/OPPORTUNITIES.md` — 8-column contract pinned by `TestWriteOpportunities`; raw bracketed status sentinels; idempotent |
 | T2 — `write_progress()` generator | ✅ PR #33 | `exports/PROGRESS.md` — positions × applications × interviews; `_format_confirmation` + `_format_interviews_summary` tri-state helpers; conftest fixture lift (mandatory ride-along) closed T1 pollution |
-| T3 — `write_recommenders()` generator | 🔲 next | see "Immediate task" |
-| T4 — Export page (manual regenerate button + file mtimes) | 🔲 | |
-| T5 — Export page (`st.download_button` per file) | 🔲 | |
-| T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 | |
+| T3 — `write_recommenders()` generator | ✅ PR #34 | `exports/RECOMMENDERS.md` — 8-column contract; new local `_format_confirmed` (`—`/`No`/`Yes`); Reminder cell reuses `_format_confirmation`; `notes` deliberately omitted; smoke-test `fix:` commit augmented `isolated_exports_dir` to also monkeypatch DB_PATH (closed CI-red regression that had been latent since T1) |
+| T4 — Export page (manual regenerate button + file mtimes) | 🔲 next | see "Immediate task" |
+| T5 — Export page (`st.download_button` per file) | 🔲 | after T4 |
+| T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 | after T5 |
 
 ### What's after Phase 6
 Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
@@ -217,96 +218,110 @@ Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
 
 ---
 
-## Immediate task — Phase 6 T3 (`write_recommenders()` exports generator)
+## Immediate task — Phase 6 T4 (`pages/4_Export.py` — Export page shell + manual regenerate button + file mtimes)
 
-**Spec:** `TASKS.md` current sprint Phase 6 T3 · `DESIGN §7` exports
-contract (`exports/RECOMMENDERS.md` from recommenders JOIN positions)
-· `exports.py` existing T1 + T2 implementations as the reference for
-shape (deferred-import, idempotency, em-dash + raw-bracketed-status
-conventions, `_md_escape_cell`, `_format_confirmation` precedent).
+**Spec:** `TASKS.md` current sprint Phase 6 T4 · `DESIGN §8.5`
+(Export page) · `docs/ui/wireframes.md#export` (ASCII layout: title
++ intro line + `[ Regenerate all markdown files ]` button + per-file
+"Last generated: <file mtime>" lines, with download buttons added in
+T5) · existing `exports.py` (`write_all`, `write_opportunities`,
+`write_progress`, `write_recommenders` all shipped) and DESIGN §7
+contract #1 ("log-and-continue on failure") for the manual-trigger
+error semantics.
 
-T3 ships the third of three Phase 6 generators — last one before the
-Export page work (T4 + T5) and the Phase 6 close-out (T6 → tag
-`v0.7.0`). Same architectural shape as T1 + T2.
+T4 ships the Export page shell + the manual-regenerate button +
+per-file mtimes display. **T5 adds the `st.download_button` per file
+on top of this shell.** Keep T4 scoped to "Regenerate + show mtimes";
+download buttons land separately so each tier stays one PR.
 
-### T3 — `exports.write_recommenders()` generator
+### T4 — `pages/4_Export.py`
 
-- Output: `exports/RECOMMENDERS.md` (UPPERCASE per DESIGN §7 line 464
-  + the existing stub docstring + the T1 / T2 precedent).
-- Source: `database.get_all_recommenders()` — already returns
-  recommenders × positions LEFT JOIN ordered by `recommender_name
-  ASC`. No new reader needed.
-- Suggested column shape (verify against DESIGN §6 recommenders
-  schema; pin via `TestWriteRecommenders` tests):
-  - Recommender · Relationship · Position · Institute · Asked ·
-    Confirmed · Submitted · Reminder
-  - "Reminder" cell folds the `(reminder_sent, reminder_sent_date)`
-    pair via the SAME tri-state shape as T2's
-    `_format_confirmation` — `—` / `✓ {ISO}` / `✓ (no date)`. The
-    semantic is identical (a flag + an optional date), so reuse the
-    helper rather than building a new one. If you'd rather a
-    differently-shaped cell, document why in the test class
-    docstring + flag in the PR.
-  - "Confirmed" cell uses the existing tri-state `_format_confirmed`
-    convention from `pages/3_Recommenders.py` (`—` / `No` / `Yes`)
-    — but you'll need a local `_format_confirmed` helper here per
-    the DESIGN §2 layer rule (pages and exports cannot share
-    helpers). Mirror semantics, ISO over Mon D where applicable.
-- Sort order: `recommender_name ASC, deadline_date ASC NULLS LAST,
-  id ASC`. The first key groups all of one person's owed letters
-  together; the secondary keys order multiple positions for the
-  same recommender by deadline. Re-apply via
-  `pandas.sort_values(... kind="stable")` to defend against
-  upstream SQL changes.
-- Cell shapes — **mirror T1 + T2 conventions**:
-  - `_safe_str_or_em` for missing TEXT cells.
-  - Date cells pass-through ISO TEXT.
-  - `_md_escape_cell` on every cell.
-  - No status sentinel here — recommenders don't carry pipeline
-    status — but if you surface anything ALL-CAPS-bracketed (e.g. a
-    relationship enum), keep it raw per the backup-vs-UI rationale
-    cited in T1 review Q1.
-- Idempotency: pinned by `test_idempotent_across_two_calls`. Two
-  calls with no DB change → byte-identical output.
+- Create the file. Mirror the page-shell pattern of
+  `pages/2_Applications.py` / `pages/3_Recommenders.py`:
+  - `st.set_page_config(page_title="Postdoc Tracker",
+    page_icon="📋", layout="wide")` as first executable statement
+    (DESIGN §8.0 + D14).
+  - `database.init_db()` — same idempotent-init pattern every page
+    runs.
+  - `st.title("Export")`.
+  - One-line intro under the title per the wireframe: "Markdown
+    files are auto-exported after every data change. Use this page
+    to trigger a manual export or download files."
+- **Regenerate button** (`st.button("Regenerate all markdown files",
+  key="export_regenerate", type="primary")`):
+  - Calls `exports.write_all()`. Per DESIGN §7 contract #1, that
+    function logs-and-continues on individual writer failure (already
+    done in `exports.py` — no changes needed there).
+  - Success path: `st.toast("Markdown files regenerated.")`.
+  - Failure path: `exports.write_all()` doesn't propagate per-writer
+    exceptions, so the button itself shouldn't see one. But the
+    `EXPORTS_DIR.mkdir` call inside `write_all` CAN raise
+    (permissions, disk full); wrap the whole `write_all()` call in
+    `try / except Exception as e: st.error(f"Could not regenerate:
+    {e}")` per GUIDELINES §8 (friendly error, no re-raise).
+- **File mtimes panel** below the regenerate button:
+  - For each of `OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`:
+    - Compute `(exports.EXPORTS_DIR / filename).stat().st_mtime`
+      converted to a human-readable timestamp via
+      `datetime.fromtimestamp(...).strftime("%Y-%m-%d %H:%M:%S")`.
+    - Render: `st.write(f"**{filename}** — last generated:
+      {timestamp}")` (or `st.markdown(...)` per the
+      wireframe-equivalent shape; pick whichever reads cleaner with
+      the rest of the page).
+  - **Missing-file branch:** if a file doesn't exist yet (fresh DB,
+    user hasn't triggered the regen), render `st.write(f"**{filename}**
+    — not yet generated")`. Catch `FileNotFoundError` (or check
+    `Path.exists()` first — both are idiomatic, pick one).
+  - The mtimes block is read-only — no widgets, just text. `st.rerun()`
+    after the regenerate-button success refreshes them.
 
-### Architecture rules (non-negotiable — DESIGN §7)
-- `exports.py` imports `database` + `config`; **NEVER** `streamlit`.
-- Deferred `database` import inside `write_recommenders` body
-  (mirror of T1 / T2) breaks the `database → exports → database`
-  circular import.
-- `EXPORTS_DIR.mkdir(exist_ok=True)` inside the function body
-  (mirror of T1 / T2).
+### Architecture rules (non-negotiable)
+- `pages/4_Export.py` imports `database`, `config`, `exports`,
+  `streamlit`, `datetime`, `pathlib`. **NEVER** imports `pages/`
+  modules (no cross-page imports per DESIGN §2 layer rules).
+- Widget keys use the `export_` prefix (the
+  Coordination-protocol-pinned page prefix). Today T4 has only
+  `export_regenerate`; T5 will add `export_download_<filename>`.
 
 ### Tests to write first (TDD red commit)
-- Reuse the lifted `db_and_exports` wrapper from T2.
-- `TestWriteRecommenders` class with:
-  - `test_writes_file_at_expected_path` — `exports/RECOMMENDERS.md`
-    exists.
-  - `test_table_header_matches_contract` — locked column header.
-  - `test_one_row_per_recommender_position_pair` — a recommender
-    owing letters for N positions surfaces as N rows in the table
-    (mirror of `get_all_recommenders` row shape).
-  - `test_sort_order_groups_by_recommender_then_deadline` — two
-    recommenders with overlapping positions render with all of
-    person A's rows before any of person B's; within each
-    recommender, rows order by deadline ASC NULLS LAST.
-  - `test_em_dash_for_missing_text_cells` — NULL relationship /
-    notes / etc. → `—`.
-  - `test_iso_format_for_date_cells` — Asked / Submitted columns
-    render as `YYYY-MM-DD`.
-  - `test_idempotent_across_two_calls` — byte-identical output.
-  - `test_empty_db_writes_header_only` — header + separator only on
-    empty DB.
-  - `test_confirmed_tri_state_<...>` — Confirmed cell renders the
-    locked tri-state pattern (`—` / `No` / `Yes`).
-  - `test_reminder_<...>` — Reminder cell renders the locked
-    tri-state pattern (`—` / `✓ {ISO}` / `✓ (no date)`).
+- New test file `tests/test_export_page.py`. Mirror the
+  AppTest-driven pattern in `test_applications_page.py` /
+  `test_recommenders_page.py`.
+- `TestExportPageShell` class:
+  - `test_page_runs_without_exception_on_empty_db` — AppTest renders
+    the page on an empty (init'd) DB; `at.exception` is empty.
+  - `test_page_title_is_export` — `at.title[0].value == "Export"`.
+  - `test_intro_line_present` — verifies the wireframe-pinned intro.
+  - `test_regenerate_button_renders` — `at.button(key="export_
+    regenerate")` exists, label matches the wireframe.
+- `TestExportPageRegenerateButton` class:
+  - `test_click_calls_write_all` — monkeypatch `exports.write_all`
+    to a tracking lambda; click the button; assert it was called
+    once.
+  - `test_click_emits_toast_on_success` — click; assert
+    `at.toast[0].value` matches the locked-copy success toast.
+  - `test_click_emits_error_on_write_all_failure` — monkeypatch
+    `exports.write_all` to raise `OSError("simulated")`; click;
+    assert `at.error[0].value` includes the error message and the
+    button is still rendered (no re-raise).
+- `TestExportPageMtimesPanel` class:
+  - `test_mtimes_show_not_yet_generated_when_files_absent` — fresh
+    DB, no files in `EXPORTS_DIR`; rendered text contains
+    `"OPPORTUNITIES.md"` + `"not yet generated"` for each of the
+    three filenames.
+  - `test_mtimes_show_timestamps_when_files_present` — pre-create
+    each of the three files (touch + set mtime); assert rendered
+    text includes the expected `YYYY-MM-DD HH:MM:SS` formatted
+    string for each.
+  - `test_regenerate_then_mtimes_update` — click regenerate; the
+    rerendered mtimes panel shows non-"not yet generated" timestamps
+    for all three files (cohesion-of-state across the rerun).
 
-### TDD cadence
-Standard three-commit triplet — `test:` → `feat:` → `chore:` (the
-`chore:` is the orchestrator's).
+### Architecture rules (non-negotiable — DESIGN §2 + §7)
+- `pages/4_Export.py` imports `streamlit` (UI surface).
+- `database.init_db()` runs at top of every page.
 
-### Pre-PR gates (GUIDELINES §11 + T2 isolation gate, now standing)
+### Pre-PR gates (GUIDELINES §11 + standing isolation gate)
 ```bash
 ruff check .
 pytest tests/ -q
@@ -319,7 +334,7 @@ git status --porcelain exports/
 ```
 
 ### Branch + cadence
-- Branch name: `feature/phase-6-tier3-WriteRecommenders`.
+- Branch name: `feature/phase-6-tier4-ExportPage`.
 - One PR for the test + feat commits; orchestrator handles the
   chore rollup post-merge.
 
@@ -328,9 +343,9 @@ git status --porcelain exports/
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test: commit  → add failing tests to tests/test_exports.py
-                   (write_recommenders not implemented yet → RED)
-2. feat: commit  → implement write_recommenders() in exports.py (GREEN)
+1. test: commit  → add failing tests to tests/test_export_page.py
+                   (Export page not implemented yet → RED)
+2. feat: commit  → implement pages/4_Export.py (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -365,7 +380,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-6-tier3-WriteRecommenders` |
+| Open PR | You — branch name: `feature/phase-6-tier4-ExportPage` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
