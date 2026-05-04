@@ -27,6 +27,7 @@ from streamlit.testing.v1 import AppTest
 import config
 import database
 from tests.conftest import make_position
+from tests.helpers import decode_mailto, link_buttons
 
 PAGE = "pages/3_Recommenders.py"
 
@@ -1389,33 +1390,9 @@ class TestRecommenderEditDelete:
 # 1.56 has no typed `at.link_button` accessor — link buttons surface as
 # `UnknownElement` instances accessible via `at.get('link_button')` whose
 # `.proto` carries the LinkButton protobuf with `.label`, `.url`, `.id`
-# fields. The two helpers below isolate that quirk so the test bodies stay
-# tidy and survive any future Streamlit upgrade that introduces a typed
-# accessor.
-
-
-def _link_buttons(at: AppTest) -> list:
-    """All link buttons on the page, as UnknownElement instances. Each
-    has ``.proto.label`` and ``.proto.url`` attributes."""
-    return list(at.get("link_button"))
-
-
-def _decode_mailto(url: str) -> dict[str, str]:
-    """Parse a ``mailto:?subject=…&body=…`` URL into a {'subject', 'body'}
-    dict with the values URL-decoded. Verifies the scheme so a malformed
-    URL surfaces a clear AssertionError rather than silently returning
-    empty values."""
-    from urllib.parse import urlparse, parse_qs
-
-    parsed = urlparse(url)
-    assert parsed.scheme == "mailto", (
-        f"Compose URL must use the mailto: scheme; got {url!r}"
-    )
-    qs = parse_qs(parsed.query, keep_blank_values=True)
-    return {
-        "subject": qs.get("subject", [""])[0],
-        "body":    qs.get("body",    [""])[0],
-    }
+# fields. Phase 7 cleanup CL3 lifted `link_buttons` and `decode_mailto`
+# into the shared `tests/helpers.py` module so test_export_page.py +
+# future tests reach for one place.
 
 
 # ── T6-A: Compose reminder email button (mailto link) ────────────────────────
@@ -1446,7 +1423,7 @@ class TestT6ComposeButton:
         but no link buttons."""
         at = _run_page()
         assert not at.exception, f"Page raised: {at.exception}"
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         assert compose == [], (
             f"Empty DB must not render any Compose buttons; got "
             f"{len(compose)}: labels={[b.proto.label for b in compose]!r}"
@@ -1456,10 +1433,10 @@ class TestT6ComposeButton:
         """One pending recommender → exactly one Compose button."""
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         assert len(compose) == 1, (
             f"One pending recommender must produce exactly one Compose "
-            f"button; got {len(compose)}: {[b.proto.label for b in _link_buttons(at)]!r}"
+            f"button; got {len(compose)}: {[b.proto.label for b in link_buttons(at)]!r}"
         )
 
     def test_button_label_is_verbatim(self, db):
@@ -1467,10 +1444,10 @@ class TestT6ComposeButton:
         DESIGN §8.4 spells the string out."""
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         assert compose, (
             f"Expected a link button labelled {self.LABEL!r}; got "
-            f"{[b.proto.label for b in _link_buttons(at)]!r}"
+            f"{[b.proto.label for b in link_buttons(at)]!r}"
         )
 
     def test_button_url_uses_mailto_with_no_recipient(self, db):
@@ -1478,7 +1455,7 @@ class TestT6ComposeButton:
         recommenders schema doesn't store emails."""
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         assert compose, "precondition: compose button must render"
         url = compose[0].proto.url
         assert url.startswith("mailto:?"), (
@@ -1490,8 +1467,8 @@ class TestT6ComposeButton:
         count. Single position → ``N=1``."""
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
-        decoded = _decode_mailto(compose[0].proto.url)
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
+        decoded = decode_mailto(compose[0].proto.url)
         expected = "Following up: letters for 1 postdoc applications"
         assert decoded["subject"] == expected, (
             f"Subject must be {expected!r}; got {decoded['subject']!r}"
@@ -1513,11 +1490,11 @@ class TestT6ComposeButton:
             })
 
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         assert len(compose) == 1, (
             f"Two-position single-recommender → one Compose button; got {len(compose)}"
         )
-        decoded = _decode_mailto(compose[0].proto.url)
+        decoded = decode_mailto(compose[0].proto.url)
         expected = "Following up: letters for 2 postdoc applications"
         assert decoded["subject"] == expected, (
             f"Subject N must equal owed-position count; expected {expected!r}, "
@@ -1529,8 +1506,8 @@ class TestT6ComposeButton:
         name interpolated."""
         TestPendingAlertsPanel._seed_pending(recommender_name="Dr. Jones")
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
-        decoded = _decode_mailto(compose[0].proto.url)
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
+        decoded = decode_mailto(compose[0].proto.url)
         expected = (
             "Hi Dr. Jones, just a quick check-in on the letters of "
             "recommendation you offered. Thank you so much!"
@@ -1555,7 +1532,7 @@ class TestT6ComposeButton:
             f"Page raised on two-card render — likely a DuplicateWidgetID from "
             f"non-unique compose-button keys: {at.exception!r}"
         )
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         assert len(compose) == 2, (
             f"Two recommenders → two Compose buttons; got {len(compose)}"
         )
@@ -1571,8 +1548,8 @@ class TestT6ComposeButton:
             recommender_name="Dr. Beta", position_name="Beta Postdoc",
         )
         at = _run_page()
-        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
-        bodies = [_decode_mailto(b.proto.url)["body"] for b in compose]
+        compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
+        bodies = [decode_mailto(b.proto.url)["body"] for b in compose]
         assert any("Dr. Alpha" in b for b in bodies), (
             f"One Compose body must reference Dr. Alpha; got {bodies!r}"
         )
