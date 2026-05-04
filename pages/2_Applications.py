@@ -41,9 +41,10 @@ import streamlit as st
 
 import config
 import database
-
-
-EM_DASH = "—"
+# Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
+# bare name so existing per-page references remain unchanged (every
+# in-file site reads it; ruff won't flag F401).
+from config import EM_DASH
 
 
 # DESIGN §8.0 — first executable Streamlit call on every page. Streamlit
@@ -275,16 +276,14 @@ def _confirm_interview_delete_dialog() -> None:
 # entries, so they render as themselves; STATUS_VALUES entries
 # (bracketed sentinels in storage) render as their human labels.
 #
-# "All" stays a magic literal here for parity with the existing
-# pages/1_Opportunities.py filter bar; promoting it to config is a
-# project-wide refactor outside T1-B's scope.
-_FILTER_ALL = "All"
-
+# Phase 7 cleanup CL2 closed the previous "magic literal" carry-over —
+# the "All" sentinel now lives on `config.FILTER_ALL` alongside
+# STATUS_FILTER_ACTIVE, so all three pages reach for the same name.
 selected_filter = st.selectbox(
     "Status",
     options=[
         config.STATUS_FILTER_ACTIVE,
-        _FILTER_ALL,
+        config.FILTER_ALL,
         *config.STATUS_VALUES,
     ],
     index=0,
@@ -329,7 +328,7 @@ if selected_filter == config.STATUS_FILTER_ACTIVE:
         pd.DataFrame,
         df[~df["status"].isin(list(config.STATUS_FILTER_ACTIVE_EXCLUDED))],
     )
-elif selected_filter == _FILTER_ALL:
+elif selected_filter == config.FILTER_ALL:
     df_filtered = df
 else:
     df_filtered = cast(pd.DataFrame, df[df["status"] == selected_filter])

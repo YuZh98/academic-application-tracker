@@ -10,23 +10,15 @@
 #   - No functions, no I/O, no side effects — constants only.
 #   - All other modules import from here; never hardcode values in page files.
 
-# ── Tracker identity ──────────────────────────────────────────────────────────
-TRACKER_PROFILE: str = "postdoc"   # Options: "postdoc" | "software_eng" | "faculty"
-# Note: TRACKER_PROFILE will be consumed by database.init_db() (Phase 2) and
-# page files (Phase 3) to filter profile-specific fields. If unused after
-# Phase 3, remove to avoid dead code.
-
-# Set of known tracker-profile identifiers. Guards TRACKER_PROFILE at import
-# time — catches typos or un-implemented profiles before any page renders.
-# Extending to a new profile (e.g. "faculty") is a two-step: add the value
-# here, then implement the profile-specific behaviour downstream per §12.1.
-VALID_PROFILES: set[str] = {"postdoc"}
-
-# Invariant (DESIGN §5.2 #1): TRACKER_PROFILE must be a known profile.
-assert TRACKER_PROFILE in VALID_PROFILES, (
-    f"TRACKER_PROFILE={TRACKER_PROFILE!r} is not a recognized profile. "
-    f"Known: {sorted(VALID_PROFILES)!r}. Add it to VALID_PROFILES or fix the typo."
-)
+# ── Universal placeholder glyph ───────────────────────────────────────────────
+# Em-dash (U+2014) used to render NULL / NaN / empty TEXT cells across every
+# user-facing surface (page tables, dashboard KPIs, exports markdown). Lifted
+# to config in Phase 7 cleanup CL2 — was previously duplicated as
+# `EM_DASH = "—"` in pages/1_Opportunities.py + pages/2_Applications.py +
+# pages/3_Recommenders.py, as `_EM_DASH` in exports.py, and as
+# `NEXT_INTERVIEW_EMPTY` in app.py (same value, different name). Single
+# source of truth so a future glyph change is a one-line edit.
+EM_DASH: str = "—"
 
 # ── Status pipeline ───────────────────────────────────────────────────────────
 # Ordered list: earlier index = earlier stage in the pipeline.
@@ -100,6 +92,15 @@ TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 # a "Tracked: Active" KPI variant on the dashboard — can reference it
 # without hardcoding. Drift caught by §5.2 invariant #12.
 STATUS_FILTER_ACTIVE: str = "Active"
+
+# Universal "no narrowing applied" sentinel for filter selectboxes
+# (Opportunities, Applications, Recommenders). The filter selectbox is
+# rendered as `[FILTER_ALL] + <real options>` and the page checks
+# `if selected != config.FILTER_ALL: ...narrow...`. Lifted to config in
+# Phase 7 cleanup CL2 — was a magic "All" literal in three pages.
+# Lives alongside STATUS_FILTER_ACTIVE because the two are the
+# Applications page's two sentinel options on its single status filter.
+FILTER_ALL: str = "All"
 
 # Statuses removed by the "Active" filter sentinel above. Frozen so a
 # page can't accidentally mutate it via .add()/.remove() and silently
@@ -281,6 +282,15 @@ RELATIONSHIP_VALUES: list[str] = [
 # list doesn't bloat with one-off formats (hybrid, dinner, campus visit…).
 INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
 
+# Tones offered by the Recommenders-page LLM-prompts expander
+# (Phase 5 T6). The expander renders one prompt per tone — the label
+# `f"LLM prompts ({len(REMINDER_TONES)} tones)"` reads its count from
+# this tuple so adding a third tone (e.g. "formal") is a config-only
+# edit. Tuple (not list) so it's hashable + immutable. Lifted to config
+# in Phase 7 cleanup CL2 — was a private `_REMINDER_TONES` in
+# pages/3_Recommenders.py.
+REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
+
 # ── Requirement document types ────────────────────────────────────────────────
 # Each tuple: (db_req_column, db_done_column, display_label)
 #
@@ -406,3 +416,40 @@ assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
     f"Unknown entries: "
     f"{STATUS_FILTER_ACTIVE_EXCLUDED - set(STATUS_VALUES)!r}"
 )
+
+
+# ── Urgency banding (Phase 7 T1 contract; CL2 lift) ───────────────────────────
+# The same banding fires on the dashboard's Upcoming panel, in the
+# Opportunities table's Urgency column, and (potentially) in any
+# future surface that needs the at-a-glance "how close is this?" cue.
+# Lifted here in CL2 so the threshold logic exists in exactly one
+# place — page + database wrappers parse their input shapes (date
+# string vs. integer days) and delegate to this function.
+def urgency_glyph(days_away: int | None) -> str:
+    """Return the urgency glyph for ``days_away`` days until a deadline.
+
+    Banding (lower-inclusive at every boundary):
+        days_away ≤ DEADLINE_URGENT_DAYS    → '🔴'
+        ≤ DEADLINE_ALERT_DAYS (past urgent)  → '🟡'
+        beyond DEADLINE_ALERT_DAYS           → ''     (no signal)
+        None (no deadline at all)            → EM_DASH
+
+    The ``None`` branch distinguishes "no deadline at all" (em-dash
+    placeholder, Phase 7 T1) from "deadline far enough away that no
+    signal fires" (empty string). Both look "absent" to a casual
+    reader, but the em-dash makes "we know there's nothing scheduled"
+    visible, while the empty string lets the table cell read as
+    ordinary whitespace for a far-future deadline.
+
+    Negative inputs (past-due) fall into the urgent band — at least
+    as extreme as 'due today', and pinned by
+    test_urgency_glyph_negative_days_is_red so a future band-rewrite
+    can't silently regress this case.
+    """
+    if days_away is None:
+        return EM_DASH
+    if days_away <= DEADLINE_URGENT_DAYS:
+        return "🔴"
+    if days_away <= DEADLINE_ALERT_DAYS:
+        return "🟡"
+    return ""
