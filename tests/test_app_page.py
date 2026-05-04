@@ -1465,11 +1465,20 @@ class TestT6FunnelToggle:
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "B", "status": "[CLOSED]"}))
         at = _run_page()
-        initial_label = self._toggle(at).label
+        initial_toggle = self._toggle(at)
+        assert initial_toggle is not None, (
+            "Initial render: toggle must exist (branch (c)). "
+            f"Got button labels: {[b.label for b in at.button]}"
+        )
+        initial_label = initial_toggle.label
         initial_state = at.session_state[self.STATE_KEY]
         initial_count = self._chart_bucket_count(at)
         # Click 1 (expand).
-        self._toggle(at, label=self.EXPAND_LABEL).click().run()
+        toggle_1 = self._toggle(at, label=self.EXPAND_LABEL)
+        assert toggle_1 is not None, (
+            "Round-trip click 1: expand-labelled toggle must render."
+        )
+        toggle_1.click().run()
         assert not at.exception
         # Click 2 (collapse) — state-aware lookup so a missing button
         # surfaces a clearer assertion than a cryptic NoneType chain.
@@ -1481,7 +1490,11 @@ class TestT6FunnelToggle:
         toggle_2.click().run()
         assert not at.exception
         # Final state matches initial — involution.
-        final_label = self._toggle(at).label
+        final_toggle = self._toggle(at)
+        assert final_toggle is not None, (
+            "Final render: toggle must exist after round-trip."
+        )
+        final_label = final_toggle.label
         final_state = at.session_state[self.STATE_KEY]
         final_count = self._chart_bucket_count(at)
         assert final_label == initial_label, (
@@ -1515,7 +1528,12 @@ class TestT6FunnelToggle:
             "Precondition: branch (b) info copy must render."
         )
         # Click 1: expand → branch (c).
-        self._toggle(at, label=self.EXPAND_LABEL).click().run()
+        toggle_1 = self._toggle(at, label=self.EXPAND_LABEL)
+        assert toggle_1 is not None, (
+            "Branch (b) → (c) expand: toggle must render in the info "
+            "branch so the user can flip into the chart branch."
+        )
+        toggle_1.click().run()
         assert not at.exception
         assert at.session_state[self.STATE_KEY] is True
         assert len(at.get("plotly_chart")) >= 1, (
@@ -1667,7 +1685,11 @@ class TestT6FunnelToggle:
             "Branch (c) collapsed: expand-labelled toggle must render."
         )
         # Expanded — click to flip.
-        self._toggle(at, label=self.EXPAND_LABEL).click().run()
+        expand_toggle = self._toggle(at, label=self.EXPAND_LABEL)
+        assert expand_toggle is not None, (
+            "Branch (c) collapsed: expand toggle must render before flip."
+        )
+        expand_toggle.click().run()
         assert not at.exception
         assert self._toggle(at, label=self.COLLAPSE_LABEL) is not None, (
             "Branch (c) expanded: collapse-labelled toggle must render. "
