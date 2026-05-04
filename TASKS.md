@@ -33,6 +33,10 @@ Branch (T5): on `feature/phase-5-tier5-RecommendersTableAddEdit`; pre-merge
 review at [`reviews/phase-5-tier5-review.md`](reviews/phase-5-tier5-review.md);
 suite 700 → 756 green under both pytest gates. Merged via PR #29 (`2293ebd`).
 
+Branch (T6): on `feature/phase-5-tier6-RecommenderReminders`; pre-merge
+review at [`reviews/phase-5-tier6-review.md`](reviews/phase-5-tier6-review.md);
+suite 756 → 777 green under both pytest gates. Merged via PR #31 (`6993ea9`).
+
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
       `STATUS_SAVED + STATUS_CLOSED`, table view sorted by deadline
@@ -311,9 +315,37 @@ suite 700 → 756 green under both pytest gates. Merged via PR #29 (`2293ebd`).
       (project-wide `*_VALUES` naming convention) plus two prose
       references in `DESIGN.md` + `docs/dev-notes/extending.md`. 56 new
       tests; suite 700 → 756 under both pytest gates.
-- [ ] **T6** Recommender reminder helpers per DESIGN §8.4 D-C (locked
+- [x] **T6** Recommender reminder helpers per DESIGN §8.4 (locked
       subject + body for primary mailto; `LLM prompts (N tones)`
       expander rendering pre-filled prompts as `st.code(...)` blocks)
+      — wired into each Pending Alerts card on `pages/3_Recommenders.py`
+      (T4 surface, NOT the T5-C inline edit card). T6-A:
+      `st.link_button("Compose reminder email", url=mailto:?…)` per card
+      with the verbatim DESIGN §8.4 subject (`Following up: letters for
+      {N} postdoc applications`, `N` = card's owed-position count) +
+      body (`Hi {recommender_name}, just a quick check-in on the letters
+      of recommendation you offered. Thank you so much!`). No `to:`
+      field — the recommenders schema doesn't store emails today; the
+      OS-level mail client prompts for the recipient. Per-card unique
+      key `recs_compose_{idx}` (`enumerate` over the groupby) prevents
+      Streamlit `DuplicateWidgetID` across multi-card pages. T6-B:
+      `st.expander(f"LLM prompts ({len(_REMINDER_TONES)} tones)")` per
+      card holding one `st.code(prompt, language="text")` per locked
+      tone — `_REMINDER_TONES = ("gentle", "urgent")` per DESIGN §8.4;
+      expander label computes its count from `len(_REMINDER_TONES)` so a
+      future tone addition flows through automatically. Each prompt
+      embeds: recommender name + relationship (relationship omitted on
+      NULL), every owed position (institute: position_name + deadline
+      ISO or "no deadline"), days-since-asked (max wait across the
+      card's positions — one summary integer per prompt), the target
+      tone keyword, and an instruction asking the LLM to return BOTH
+      subject and body. Two pure helpers carry the construction:
+      `_build_compose_mailto(recommender_name, n_positions)` and
+      `_build_llm_prompt(tone, recommender_name, relationship, group,
+      days_ago)`; the existing T4 `_bullets`-building loop is extended
+      by one line to collect each row's `days_ago`. 21 new tests
+      across `TestT6ComposeButton` (9) + `TestT6LLMPromptsExpander`
+      (12); suite 756 → 777 under both pytest gates.
 - [ ] **T7** Phase 5 review + PR + tag `v0.6.0`
 
 ## Prior sprint — Phase 4 finish (PR #12 + #13 + #14, tag `v0.5.0`)
@@ -459,6 +491,16 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #31 merged** (`6993ea9`): Phase 5 T6 (T6-A + T6-B)
+  shipped — Compose-reminder-email `st.link_button` (locked DESIGN
+  §8.4 mailto subject + body, no `to:` field) + `LLM prompts (2 tones)`
+  expander with one `st.code(prompt, language="text")` per locked tone
+  (`gentle`, `urgent`), wired into each Pending Alerts card on
+  `pages/3_Recommenders.py`. Two pure helpers
+  (`_build_compose_mailto`, `_build_llm_prompt`); existing T4
+  `_bullets`-building loop extended by one line for `days_ago`
+  collection. Suite 756 → 777 under both pytest gates. Pre-merge
+  review at [`reviews/phase-5-tier6-review.md`](reviews/phase-5-tier6-review.md).
 - 2026-05-03 — **PR #29 merged** (`2293ebd`): Phase 5 T5 (T5-A + T5-B
   + T5-C) shipped — All-Recommenders table + filters + Add form +
   inline edit card + dialog-gated Delete on `pages/3_Recommenders.py`
@@ -590,4 +632,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-03 (Phase 5 T5 merged via PR #29; main HEAD `2293ebd`; suite 756 / 1 xfailed; T6 Reminder helpers next)_
+_Updated: 2026-05-04 (Phase 5 T6 merged via PR #31; main HEAD `6993ea9`; suite 777 / 1 xfailed; T7 Phase 5 close-out + tag `v0.6.0` next)_
