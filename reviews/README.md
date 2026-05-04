@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-04 | Phase 7 cleanup CL1 — pyright type-check fence + 45-error drift cleanup | `feature/phase-7-cleanup-CL1-PyrightCI` | Approve | [phase-7-CL1-review.md](phase-7-CL1-review.md) |
 | 2026-05-04 | Phase 7 T4 — Confirm-dialog audit + position cascade-copy fix | `feature/phase-7-tier4-ConfirmDialogAudit` | Approve | [phase-7-tier4-review.md](phase-7-tier4-review.md) |
 | 2026-05-04 | Phase 7 T3 — `set_page_config` sweep across 5 pages (verification-only) | `feature/phase-7-tier3-SetPageConfigSweep` | Approve | [phase-7-tier3-review.md](phase-7-tier3-review.md) |
 | 2026-05-04 | Phase 7 T2 — Position search bar on Opportunities page | `feature/phase-7-tier2-PositionSearch` | Approve | [phase-7-tier2-review.md](phase-7-tier2-review.md) |

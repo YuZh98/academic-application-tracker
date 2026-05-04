@@ -18,6 +18,7 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
+- Add pyright type-check fence to CI (basic mode, pythonVersion 3.14, `pyright==1.1.409` pinned); `pyright .` row added to standing pre-commit checklists. PR #41 (`eac75c3`) · [review](reviews/phase-7-CL1-review.md)
 - Add `TestConfirmDialogAudit` to `tests/test_pages_cohesion.py` — 11 tests across 3 destructive paths pinning dialog title shape, irreversibility cue, cascade-effect copy enumeration, dialog-gating of every `database.delete_*` caller, and failure-preserves-pending-sentinel. PR #40 (`952f0e9`) · [review](reviews/phase-7-tier4-review.md)
 - Add `tests/test_pages_cohesion.py` with `TestSetPageConfigSweep` — 10 parametrized tests pinning locked-kwargs source-grep + first-Streamlit-statement AST walk across all 5 pages; audit confirmed all conform (verification-only). PR #39 (`85968bb`) · [review](reviews/phase-7-tier3-review.md)
 - Add free-text "Search positions" `text_input` to Opportunities filter row; substring match against `position_name` (case-insensitive, regex=False, NaN-safe), AND-combined with status/priority/field filters. PR #38 (`e67cfed`) · [review](reviews/phase-7-tier2-review.md)
@@ -27,6 +28,7 @@ manual steps to run against a pre-existing database.
 - Trim recent CHANGELOG entries to GUIDELINES §14.4 one-line shape; add bottom link references; restructure phase-6-tier5 + phase-7-tier1 review docs to move `Kept by design` rows from Findings table to Q&A per §10. ([drift audit])
 
 ### Fixed
+- Resolve 45 pyright drift errors across 5 files (`exports.py`, `pages/1_Opportunities.py`, `pages/2_Applications.py`, `pages/3_Recommenders.py`, `tests/test_app_page.py`) accumulated since PR #22; all fixes runtime no-ops. PR #41 (`eac75c3`)
 - Position-delete dialog warning text now lists "application, interview, and recommender rows" — was missing "interview" despite FK chain `positions → applications (CASCADE) → interviews (CASCADE)` dropping interview rows on cascade. Surfaced by Phase 7 T4 cohesion test. PR #40 (`952f0e9`)
 
 ## [v0.7.0] — 2026-05-04 — Phase 6: Exports (markdown generators + Export page)
