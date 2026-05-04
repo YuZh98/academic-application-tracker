@@ -70,12 +70,11 @@ before admin-bypass per the standing `c284c20` procedure.
 
 | # | File · Location | Issue | Severity | Status |
 |---|---|---|---|---|
-| 1 | `pages/1_Opportunities.py` `_deadline_urgency` helper duplication | Duplicates banding logic from `database.py::_urgency_glyph`. Implementer's commit body cites the DESIGN §2 layer rule (pages cannot import `database.py` privates) + the signature mismatch (page helper takes a date string, dashboard helper takes `days_away: int`) as the rationale. Both read from the same config thresholds, so drift is structurally-impossible — a future config change updates both surfaces in lockstep. The third-state em-dash branch is page-specific (the dashboard's `_urgency_glyph` doesn't have a "no deadline at all" case because Upcoming is filtered to known-future deadlines). | ℹ️ | Kept-by-design. Cite-able if Phase 7 / v1.0-rc surfaces a third consumer of the urgency banding — at that point a shared helper in `config.py` (which both layers can import) becomes worth extracting. |
-| 2 | `pages/1_Opportunities.py` `EM_DASH = "—"` constant | New module-level constant. Mirror of the same literal in `app.py`, `pages/2_Applications.py`, `exports.py`. Implementer accepts the duplication per the same DESIGN §2 layer-rule rationale that drove the urgency-helper duplication. Drift is caught at the test level — every page test asserts against the same U+2014 glyph. | ℹ️ | Kept-by-design. Same Phase 7 / v1.0-rc carry-over as Finding #1 — a shared `config.EM_DASH` would consolidate four call sites if the project ever wants the lift. |
-| 3 | `tests/test_opportunities_page.py::TestPositionsTable` in-place updates | 7 existing tests renamed + assertions flipped from literal strings to glyphs; 2 new tests added inside the same class. Implementer flagged this as a design call (PR description). The alternative — a parallel `TestPositionsTableUrgencyGlyph` class — would have left the existing 7 tests asserting against the *old* literal strings, contradicting the new ones for the same column on the same page. In-place flip is the correct framing: there's one column, one contract, one test class for it. | ℹ️ | Kept-by-design. |
-| 4 | New contract introduces em-dash as a fourth state | Phase 3 T3's original contract collapsed "no deadline at all" and "deadline far enough away" both into `''`. Phase 7 T1 distinguishes the two (em-dash vs empty cell). Genuinely a contract widening — but the user-facing improvement is real (a position with no deadline can now be visually distinguished from one with a distant deadline at table-scan time). Pinned by `test_null_deadline_renders_em_dash`. The change is one-way: future tests / code reading the column should treat `''` and `—` as semantically distinct values. | ℹ️ | Observation. No drift risk — the contract is locked in tests. |
+| 1 | New contract introduces em-dash as a fourth state | Phase 3 T3's original contract collapsed "no deadline at all" and "deadline far enough away" both into `''`. Phase 7 T1 distinguishes the two (em-dash vs empty cell). Genuinely a contract widening — the user-facing improvement is real (a position with no deadline can now be visually distinguished from one with a distant deadline at table-scan time). Pinned by `test_null_deadline_renders_em_dash`. The change is one-way: future tests / code reading the column should treat `''` and `—` as semantically distinct values. | ℹ️ | Observation |
 
-*No 🔴 / 🟠 / 🟡 findings.*
+*No 🔴 / 🟠 / 🟡 / 🟢 findings.*
+
+*Three additional kept-by-design choices (`_deadline_urgency` helper duplication vs `database.py::_urgency_glyph`, page-local `EM_DASH = "—"` constant duplication, in-place test updates rather than parallel test class) are addressed in the Q&A section per `GUIDELINES §10` ("`Kept by design` observations belong in the Q&A section, not in the Findings table — they are not defects").*
 
 ---
 
@@ -101,12 +100,16 @@ A. `days_to_deadline = 0` satisfies `0 <= DEADLINE_URGENT_DAYS` for any positive
 
 A. The procedural cost is one extra `gh pr checks --watch` + `gh pr view ... --jq` step before merge, which adds ~3 minutes to the orchestrator's review-to-merge cycle (the time CI takes to run). The cost is bounded — the orchestrator can run local six-gate verification while CI is in flight, so the human-attention overhead is ~10 seconds for the verification command itself. The benefit: zero risk of merging a green-locally + red-on-CI regression like the smoke-test gap that shipped main red across PRs #32-#34. The procedure also doesn't depend on `mergeStateStatus` (CLEAN vs BLOCKED is unrelated to the verification step — the `c284c20` amendment cares about CI conclusion only). PR #37 surfaced the BLOCKED state again after PRs #35/#36's CLEAN shift; the procedure handled both transparently.
 
+**Q6. The implementer flipped 7 existing tests in-place rather than adding a parallel `TestPositionsTableUrgencyGlyph` class. Why is the in-place flip the right call?**
+
+A. There's one column on the page (`deadline_urgency`), one contract for it, and one test class pinning it. The parallel-class alternative would have left the existing 7 tests asserting against the OLD literal-string contract (`'urgent'` / `'alert'` / `''`) while the new tests asserted glyphs (`🔴` / `🟡` / `''` / `—`) — both classes would be testing the same column with contradictory expectations, and depending on import order pytest might run them in an order where the page renders one shape and a stale class fails. The in-place rename pattern (`_flagged_as_urgent` → `_renders_red_glyph`) is honest about what the new contract actually pins; the diff makes the change visible at review time without leaving a dead-test-class shadow. The parallel-class pattern works when adding NEW behaviour alongside existing behaviour; here the contract is being WIDENED for the same column, so the right shape is in-place edit. The implementer flagged this as a design call in the PR description specifically because it crosses the "tests are append-only" instinct — but the rename + assertion-flip preserves git-blame on the tests while making the contract change reviewable.
+
 ---
 
 ## Carry-overs
 
 - **Phase 7 polish candidate:** the `EM_DASH` constant + the urgency banding logic are now duplicated across enough call sites (`app.py`, `pages/1_Opportunities.py`, `pages/2_Applications.py`, `exports.py`) that a `config.py` lift starts to make sense. Track for the eventual cleanup tier mentioned in `phase-6-finish-cohesion-smoke.md` (between Phase 7 polish and v1.0-rc).
-- **No new carry-overs introduced.** Findings 1-4 are all kept-by-design or observations.
+- **No new carry-overs introduced.** Findings table now carries one Observation row; the kept-by-design choices live in Q&A entries Q3 (helper duplication + EM_DASH constant) and Q6 (in-place test updates).
 
 ---
 
