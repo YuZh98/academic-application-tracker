@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `feat(phase-6-T4): Export page shell + manual regenerate button`.
+  — e.g. `feat(phase-6-T5): Export page download buttons`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
-**`main` HEAD:** Phase 6 T3 merged (PR #34); test suite at 815 passed + 1 xfailed
+**`main` HEAD:** Phase 6 T4 merged (PR #35); test suite at 827 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -207,8 +207,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T1 — `write_opportunities()` generator | ✅ PR #32 | `exports/OPPORTUNITIES.md` — 8-column contract pinned by `TestWriteOpportunities`; raw bracketed status sentinels; idempotent |
 | T2 — `write_progress()` generator | ✅ PR #33 | `exports/PROGRESS.md` — positions × applications × interviews; `_format_confirmation` + `_format_interviews_summary` tri-state helpers; conftest fixture lift (mandatory ride-along) closed T1 pollution |
 | T3 — `write_recommenders()` generator | ✅ PR #34 | `exports/RECOMMENDERS.md` — 8-column contract; new local `_format_confirmed` (`—`/`No`/`Yes`); Reminder cell reuses `_format_confirmation`; `notes` deliberately omitted; smoke-test `fix:` commit augmented `isolated_exports_dir` to also monkeypatch DB_PATH (closed CI-red regression that had been latent since T1) |
-| T4 — Export page (manual regenerate button + file mtimes) | 🔲 next | see "Immediate task" |
-| T5 — Export page (`st.download_button` per file) | 🔲 | after T4 |
+| T4 — Export page (manual regenerate button + file mtimes) | ✅ PR #35 | `pages/4_Export.py` shell + regenerate button (try/except `write_all`, success toast, friendly `st.error`) + per-file mtimes panel (`st.markdown` lines, `Path.exists()` check + `os.utime`-deterministic test) |
+| T5 — Export page (`st.download_button` per file) | 🔲 next | see "Immediate task" |
 | T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 | after T5 |
 
 ### What's after Phase 6
@@ -218,123 +218,109 @@ Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
 
 ---
 
-## Immediate task — Phase 6 T4 (`pages/4_Export.py` — Export page shell + manual regenerate button + file mtimes)
+## Immediate task — Phase 6 T5 (Export page — `st.download_button` per file + "── Download ───" wireframe section header)
 
-**Spec:** `TASKS.md` current sprint Phase 6 T4 · `DESIGN §8.5`
-(Export page) · `docs/ui/wireframes.md#export` (ASCII layout: title
-+ intro line + `[ Regenerate all markdown files ]` button + per-file
-"Last generated: <file mtime>" lines, with download buttons added in
-T5) · existing `exports.py` (`write_all`, `write_opportunities`,
-`write_progress`, `write_recommenders` all shipped) and DESIGN §7
-contract #1 ("log-and-continue on failure") for the manual-trigger
-error semantics.
+**Spec:** `TASKS.md` current sprint Phase 6 T5 · `DESIGN §8.5`
+(Export page) · `docs/ui/wireframes.md#export` (ASCII layout pins
+the "── Download ───" section header above three `[ ⬇ FILENAME.md ]`
+buttons next to their `Last generated: <file mtime>` lines) ·
+existing `pages/4_Export.py` shipped in T4 (page shell + regenerate
+button + mtimes panel — extend, don't rewrite) · DESIGN §7 (exports
+contract).
 
-T4 ships the Export page shell + the manual-regenerate button +
-per-file mtimes display. **T5 adds the `st.download_button` per file
-on top of this shell.** Keep T4 scoped to "Regenerate + show mtimes";
-download buttons land separately so each tier stays one PR.
+T5 adds three `st.download_button` widgets to the existing T4
+Export-page shell, alongside the wireframe-pinned "── Download ───"
+section header that T4 deliberately omitted. Mechanical extension
+on top of T4.
 
-### T4 — `pages/4_Export.py`
+### T5 — extend `pages/4_Export.py` with download buttons
 
-- Create the file. Mirror the page-shell pattern of
-  `pages/2_Applications.py` / `pages/3_Recommenders.py`:
-  - `st.set_page_config(page_title="Postdoc Tracker",
-    page_icon="📋", layout="wide")` as first executable statement
-    (DESIGN §8.0 + D14).
-  - `database.init_db()` — same idempotent-init pattern every page
-    runs.
-  - `st.title("Export")`.
-  - One-line intro under the title per the wireframe: "Markdown
-    files are auto-exported after every data change. Use this page
-    to trigger a manual export or download files."
-- **Regenerate button** (`st.button("Regenerate all markdown files",
-  key="export_regenerate", type="primary")`):
-  - Calls `exports.write_all()`. Per DESIGN §7 contract #1, that
-    function logs-and-continues on individual writer failure (already
-    done in `exports.py` — no changes needed there).
-  - Success path: `st.toast("Markdown files regenerated.")`.
-  - Failure path: `exports.write_all()` doesn't propagate per-writer
-    exceptions, so the button itself shouldn't see one. But the
-    `EXPORTS_DIR.mkdir` call inside `write_all` CAN raise
-    (permissions, disk full); wrap the whole `write_all()` call in
-    `try / except Exception as e: st.error(f"Could not regenerate:
-    {e}")` per GUIDELINES §8 (friendly error, no re-raise).
-- **File mtimes panel** below the regenerate button:
-  - For each of `OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`:
-    - Compute `(exports.EXPORTS_DIR / filename).stat().st_mtime`
-      converted to a human-readable timestamp via
-      `datetime.fromtimestamp(...).strftime("%Y-%m-%d %H:%M:%S")`.
-    - Render: `st.write(f"**{filename}** — last generated:
-      {timestamp}")` (or `st.markdown(...)` per the
-      wireframe-equivalent shape; pick whichever reads cleaner with
-      the rest of the page).
-  - **Missing-file branch:** if a file doesn't exist yet (fresh DB,
-    user hasn't triggered the regen), render `st.write(f"**{filename}**
-    — not yet generated")`. Catch `FileNotFoundError` (or check
-    `Path.exists()` first — both are idiomatic, pick one).
-  - The mtimes block is read-only — no widgets, just text. `st.rerun()`
-    after the regenerate-button success refreshes them.
+- **Section header:** render `"── Download ───"` (or whatever the
+  wireframe shape resolves to once you read it — verify against
+  `docs/ui/wireframes.md#export` line 176) ABOVE the three
+  download-button + mtime rows. Implementer's call: keep the rule
+  prose-as-markdown (`st.markdown("── Download ───")`) or use a
+  Streamlit primitive (`st.divider()` + a subheader). Pick what
+  reads cleanest; flag the choice in the PR description.
+- **Three `st.download_button` widgets**, one per locked filename,
+  in the wireframe order (`OPPORTUNITIES.md` → `PROGRESS.md` →
+  `RECOMMENDERS.md`):
+  - `st.download_button(label=f"⬇ {filename}", data=file_bytes,
+    file_name=filename, mime="text/markdown",
+    key=f"export_download_{filename}")`.
+  - `data` arg is `(EXPORTS_DIR / filename).read_bytes()` if the
+    file exists.
+  - **Missing-file branch:** if `(EXPORTS_DIR / filename).exists()`
+    is False, render the button as **disabled** (`disabled=True`
+    on `st.download_button`) with empty `data=b""`. The user gets
+    the "click Regenerate first" affordance from the existing
+    mtimes panel ("not yet generated" placeholder); the disabled
+    button is the visual signal that the file isn't downloadable yet.
+- **Layout:** the wireframe shows download button + mtime line on
+  the same logical row. Two valid renderings: (a) `st.columns([1, 3])`
+  per file with the button left + the mtime line right, or (b)
+  keep the existing per-file `st.markdown` mtime line and render
+  the download button right above or below it. Pick (a) if it
+  reads close to the wireframe; (b) if column rendering looks
+  awkward at narrow viewports.
+- **Re-use the existing T4 mtimes panel** — don't duplicate the
+  `Path.exists()` + `datetime.fromtimestamp` logic. T5 either
+  inserts the download button into the existing per-file loop, or
+  the loop is restructured to render `(button, mtime-line)` pairs.
 
 ### Architecture rules (non-negotiable)
-- `pages/4_Export.py` imports `database`, `config`, `exports`,
-  `streamlit`, `datetime`, `pathlib`. **NEVER** imports `pages/`
-  modules (no cross-page imports per DESIGN §2 layer rules).
-- Widget keys use the `export_` prefix (the
-  Coordination-protocol-pinned page prefix). Today T4 has only
-  `export_regenerate`; T5 will add `export_download_<filename>`.
+- Same as T4 — `pages/4_Export.py` imports `database`, `config`,
+  `exports`, `streamlit`, `datetime`, `pathlib`. **NEVER** imports
+  `pages/` modules.
+- Widget keys: `export_download_<filename>` per the
+  Coordination-protocol-pinned page prefix.
 
 ### Tests to write first (TDD red commit)
-- New test file `tests/test_export_page.py`. Mirror the
-  AppTest-driven pattern in `test_applications_page.py` /
-  `test_recommenders_page.py`.
-- `TestExportPageShell` class:
-  - `test_page_runs_without_exception_on_empty_db` — AppTest renders
-    the page on an empty (init'd) DB; `at.exception` is empty.
-  - `test_page_title_is_export` — `at.title[0].value == "Export"`.
-  - `test_intro_line_present` — verifies the wireframe-pinned intro.
-  - `test_regenerate_button_renders` — `at.button(key="export_
-    regenerate")` exists, label matches the wireframe.
-- `TestExportPageRegenerateButton` class:
-  - `test_click_calls_write_all` — monkeypatch `exports.write_all`
-    to a tracking lambda; click the button; assert it was called
-    once.
-  - `test_click_emits_toast_on_success` — click; assert
-    `at.toast[0].value` matches the locked-copy success toast.
-  - `test_click_emits_error_on_write_all_failure` — monkeypatch
-    `exports.write_all` to raise `OSError("simulated")`; click;
-    assert `at.error[0].value` includes the error message and the
-    button is still rendered (no re-raise).
-- `TestExportPageMtimesPanel` class:
-  - `test_mtimes_show_not_yet_generated_when_files_absent` — fresh
-    DB, no files in `EXPORTS_DIR`; rendered text contains
-    `"OPPORTUNITIES.md"` + `"not yet generated"` for each of the
-    three filenames.
-  - `test_mtimes_show_timestamps_when_files_present` — pre-create
-    each of the three files (touch + set mtime); assert rendered
-    text includes the expected `YYYY-MM-DD HH:MM:SS` formatted
-    string for each.
-  - `test_regenerate_then_mtimes_update` — click regenerate; the
-    rerendered mtimes panel shows non-"not yet generated" timestamps
-    for all three files (cohesion-of-state across the rerun).
+- Extend the existing `tests/test_export_page.py`. Mirror the
+  three-class shape from T4.
+- New `TestExportPageDownloadButtons` class:
+  - `test_three_download_buttons_render` — three widgets with
+    keys `export_download_OPPORTUNITIES.md`,
+    `export_download_PROGRESS.md`,
+    `export_download_RECOMMENDERS.md` exist with labels matching
+    the wireframe (`⬇ OPPORTUNITIES.md` etc.).
+  - `test_download_button_disabled_when_file_absent` — fresh DB,
+    no files in `EXPORTS_DIR`; each download button has
+    `disabled=True`. AppTest exposes button disabled-state via
+    `at.download_button(key=...).disabled`.
+  - `test_download_button_enabled_when_file_present` — pre-populate
+    a file; the corresponding download button has `disabled=False`.
+  - `test_download_data_matches_file_bytes` — pre-populate a file
+    with known content; the button's `data` value matches the file
+    bytes. AppTest exposes the download button's data via
+    `.data` or similar — verify against
+    `streamlit.testing.v1` API at implementation time.
+  - `test_download_filename_attribute` — the button's `file_name`
+    attribute matches the locked export filename (so the user's
+    saved file lands as `OPPORTUNITIES.md`, not the page's
+    internal slug).
+  - `test_download_section_header_rendered` — the wireframe-pinned
+    "── Download ───" header (or whatever shape lands per the
+    above) appears in the rendered page above the buttons.
+  - `test_regenerate_then_download_buttons_enable` — cohesion test:
+    fresh DB → buttons disabled → click regenerate → re-rendered
+    buttons enabled. Catches a bug where the disabled state is
+    cached across the rerun.
 
 ### Architecture rules (non-negotiable — DESIGN §2 + §7)
-- `pages/4_Export.py` imports `streamlit` (UI surface).
-- `database.init_db()` runs at top of every page.
+- `pages/4_Export.py` extends the existing file (created in T4);
+  do not rewrite the page-shell / regenerate-button / mtimes
+  sections.
+- Imports already in place from T4 (`from pathlib import Path`,
+  `import streamlit as st`, `import exports`); add only what's
+  new.
 
-### Pre-PR gates (GUIDELINES §11 + standing isolation gate)
-```bash
-ruff check .
-pytest tests/ -q
-pytest -W error::DeprecationWarning tests/ -q
-grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
-  | grep -v '^\([^:]*\):[0-9]*:\s*#'
-
-# T2 isolation gate is permanent now — must stay empty.
-git status --porcelain exports/
-```
+### Pre-PR gates (GUIDELINES §11 + standing isolation gate + standing CI-mirror check)
+Standing checklist below in "Pre-commit checklist" + the CI-mirror
+check from "Session bootstrap" — both apply to every PR.
 
 ### Branch + cadence
-- Branch name: `feature/phase-6-tier4-ExportPage`.
+- Branch name: `feature/phase-6-tier5-DownloadButtons`.
 - One PR for the test + feat commits; orchestrator handles the
   chore rollup post-merge.
 
@@ -344,8 +330,8 @@ git status --porcelain exports/
 
 ```
 1. test: commit  → add failing tests to tests/test_export_page.py
-                   (Export page not implemented yet → RED)
-2. feat: commit  → implement pages/4_Export.py (GREEN)
+                   (download buttons not implemented yet → RED)
+2. feat: commit  → extend pages/4_Export.py with download buttons (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -380,7 +366,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-6-tier4-ExportPage` |
+| Open PR | You — branch name: `feature/phase-6-tier5-DownloadButtons` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

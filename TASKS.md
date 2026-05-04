@@ -477,6 +477,13 @@ admin-bypass; CI-mirror local check `mv postdoc.db postdoc.db.bak
 && pytest tests/ -q && mv postdoc.db.bak postdoc.db` in standing
 pre-PR checklist). Merged via PR #34 (`c11fde4`).
 
+Branch (T4): on `feature/phase-6-tier4-ExportPage`; pre-merge review
+at [`reviews/phase-6-tier4-review.md`](reviews/phase-6-tier4-review.md);
+suite 815 → 827 green under both pytest gates. First PR in the
+project's history to land with `mergeStateStatus: CLEAN` (rather
+than `BLOCKED`); admin-bypass merge used anyway for procedure
+consistency. Merged via PR #35 (`3235f60`).
+
 - [x] **T1** `write_opportunities()` generator — fills the existing
       `exports.py` stub with the first markdown export per DESIGN §7.
       Reads `database.get_all_positions()`, sorts `deadline_date ASC
@@ -622,7 +629,41 @@ pre-PR checklist). Merged via PR #34 (`c11fde4`).
       (`mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv
       postdoc.db.bak postdoc.db`) to standing pre-PR checklist.
       Suite 801 → 815 under both pytest gates.
-- [ ] **T4** Export page — manual regenerate button + file mtimes
+- [x] **T4** Export page — manual regenerate button + file mtimes —
+      `pages/4_Export.py` created. Page shell (`set_page_config(layout=
+      "wide")` first, `database.init_db()`, `st.title("Export")`,
+      verbatim wireframe-pinned intro line via `st.markdown`).
+      Regenerate button (`st.button("Regenerate all markdown files",
+      key="export_regenerate", type="primary")`) wraps
+      `exports.write_all()` in try/except per GUIDELINES §8 — friendly
+      `st.error(f"Could not regenerate: {e}")` on failure with the
+      button still rendered for retry, no re-raise; success path fires
+      `st.toast("Markdown files regenerated.")`. Per DESIGN §7 contract
+      #1, the inner per-writer calls already log-and-continue, so only
+      the `EXPORTS_DIR.mkdir` leg can surface here. Mtimes panel below
+      the button: one `st.markdown` line per locked filename
+      (`OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`, in
+      wireframe order) — either `**{filename}** — last generated:
+      {YYYY-MM-DD HH:MM:SS}` (file present, computed via
+      `datetime.fromtimestamp(Path.stat().st_mtime).strftime(...)`) or
+      `**{filename}** — not yet generated` (absent, via
+      `Path.exists()` check). The "── Download ───" wireframe section
+      header is deliberately omitted from T4 — that header scopes T5's
+      download buttons, so adding it here with no buttons under it
+      would read as a stray section header. 12 new tests in
+      `tests/test_export_page.py` across 3 classes
+      (`TestExportPageShell`, `TestExportPageRegenerateButton`,
+      `TestExportPageMtimesPanel`) with all locked-copy strings
+      centralized in module-level constants for one-edit drift
+      surface; mtimes test uses `os.utime` to a deterministic epoch
+      (`1700000000`) so timestamp assertions are exact rather than
+      wall-clock-approximated. Local fixture `db_and_exports` (thin
+      wrapper around the conftest `db` fixture) returns
+      `tmp_path / "exports"` for the mtimes-panel tests. Suite 815 →
+      827 under both pytest gates. Notable: PR #35 was the first PR
+      to land with `mergeStateStatus: CLEAN` rather than `BLOCKED` —
+      orchestrator-merged via standard admin-bypass for consistency
+      with the `c284c20` procedure.
 - [ ] **T5** Export page — `st.download_button` per file
 - [ ] **T6** Phase 6 review + PR + tag `v0.7.0`
 
@@ -673,6 +714,20 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #35 merged** (`3235f60`): Phase 6 T4 shipped —
+  `pages/4_Export.py` page shell + manual regenerate button +
+  per-file mtimes panel. Regenerate button wraps
+  `exports.write_all()` in try/except per GUIDELINES §8 (friendly
+  `st.error`, no re-raise; success toast persists across rerun).
+  Mtimes panel: one `st.markdown` line per locked filename via
+  `Path.exists()` + `datetime.fromtimestamp` formatting; "── Download
+  ───" wireframe section header deliberately omitted (scopes T5).
+  12 new tests in `TestExportPageShell` + `TestExportPageRegenerateButton`
+  + `TestExportPageMtimesPanel`; mtimes test uses `os.utime` to a
+  deterministic epoch for exact-string assertions. Suite 815 → 827
+  under both pytest gates. First project PR to land with
+  `mergeStateStatus: CLEAN`. Pre-merge review at
+  [`reviews/phase-6-tier4-review.md`](reviews/phase-6-tier4-review.md).
 - 2026-05-04 — **PR #34 merged** (`c11fde4`): Phase 6 T3 shipped —
   `exports.write_recommenders()` filled with an 8-column markdown
   table writer to `exports/RECOMMENDERS.md`. Reuses
@@ -861,4 +916,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 6 T3 merged via PR #34; main HEAD `c11fde4`; suite 815 / 1 xfailed; Phase 6 T4 — `pages/4_Export.py` shell + manual regenerate button + file mtimes next)_
+_Updated: 2026-05-04 (Phase 6 T4 merged via PR #35; main HEAD `3235f60`; suite 827 / 1 xfailed; Phase 6 T5 — Export page download buttons + "── Download ───" section header next)_
