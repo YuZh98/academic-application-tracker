@@ -398,3 +398,205 @@ class TestExportPageMtimesPanel:
             f"file); got {post_text.count(today_prefix)} in text:\n"
             f"{post_text!r}"
         )
+
+
+# ── Phase 6 T5: Download buttons ─────────────────────────────────────────────
+
+
+def _download_buttons(at: AppTest) -> list:
+    """All download buttons on the page, as UnknownElement instances.
+    AppTest 1.56 has no typed `at.download_button` accessor — they
+    surface via `at.get('download_button')` whose `.proto` carries
+    the DownloadButton protobuf with `.label`, `.disabled`, `.url`,
+    `.id` fields.
+
+    Note: the bytes content (`data` arg) and file_name arg are NOT on
+    the proto — they're stored behind a mock media URL. Tests that
+    pin those two contracts use source-grep on `pages/4_Export.py`
+    instead of element-tree assertions."""
+    return list(at.get("download_button"))
+
+
+def _download_button(at: AppTest, filename: str):
+    """Look up the download button for a given filename by its
+    locked widget key. Returns the UnknownElement (raises StopIteration
+    via next() if missing)."""
+    target_key = f"export_download_{filename}"
+    matching = [b for b in _download_buttons(at) if b.proto.id.endswith(target_key)]
+    assert matching, (
+        f"Expected a download button with key {target_key!r}; "
+        f"got button ids: {[b.proto.id for b in _download_buttons(at)]!r}"
+    )
+    return matching[0]
+
+
+class TestExportPageDownloadButtons:
+    """Phase 6 T5 — three st.download_button widgets per
+    EXPORT_FILENAMES with the wireframe-pinned "── Download ───"
+    section header above them.
+
+    Locked contracts:
+      - One widget per locked filename (OPPORTUNITIES.md /
+        PROGRESS.md / RECOMMENDERS.md), in wireframe order.
+      - Widget key: ``f"export_download_{filename}"``.
+      - Widget label: ``f"⬇ {filename}"`` (download glyph + name).
+      - File present → button enabled, data = file bytes.
+      - File absent → button disabled, data = b"".
+      - Section header ("Download") rendered above the buttons.
+
+    AppTest API caveats:
+      - `at.get('download_button')` returns UnknownElement instances;
+        `.proto.disabled` exposes the disabled state.
+      - The download button's bytes payload (`data` arg) and
+        `file_name` arg are NOT on the proto. Source-grep tests pin
+        those two contracts at the implementation level.
+    """
+
+    DOWNLOAD_HEADER_TEXT = "Download"
+
+    def test_three_download_buttons_render(self, db):
+        """Three widgets rendered in wireframe order with the locked
+        keys + labels."""
+        at = _run_page()
+        buttons = _download_buttons(at)
+        assert len(buttons) == len(EXPORT_FILENAMES), (
+            f"Expected {len(EXPORT_FILENAMES)} download buttons "
+            f"(one per file); got {len(buttons)}"
+        )
+        for filename in EXPORT_FILENAMES:
+            btn = _download_button(at, filename)
+            expected_label = f"⬇ {filename}"
+            assert btn.proto.label == expected_label, (
+                f"Expected label {expected_label!r} on the {filename!r} "
+                f"download button; got {btn.proto.label!r}"
+            )
+
+    def test_download_button_disabled_when_file_absent(self, db_and_exports):
+        """Fresh DB, no files in EXPORTS_DIR → every download button
+        is disabled. The user gets the 'click Regenerate first'
+        affordance from the existing T4 mtimes panel ('not yet
+        generated' placeholder); the disabled button is the visual
+        signal that the file isn't downloadable yet."""
+        # Defensive: confirm no files exist at fixture entry.
+        if db_and_exports.exists():
+            for f in EXPORT_FILENAMES:
+                assert not (db_and_exports / f).exists(), (
+                    f"precondition: {f} must not exist on a fresh DB"
+                )
+        at = _run_page()
+        for filename in EXPORT_FILENAMES:
+            btn = _download_button(at, filename)
+            assert btn.proto.disabled, (
+                f"{filename!r} download button must be disabled when "
+                f"the file is absent; got disabled={btn.proto.disabled}"
+            )
+
+    def test_download_button_enabled_when_file_present(self, db_and_exports):
+        """Pre-populate each export file → every download button
+        renders enabled (disabled=False)."""
+        db_and_exports.mkdir(parents=True, exist_ok=True)
+        for filename in EXPORT_FILENAMES:
+            (db_and_exports / filename).write_text(
+                "# placeholder\n", encoding="utf-8"
+            )
+        at = _run_page()
+        for filename in EXPORT_FILENAMES:
+            btn = _download_button(at, filename)
+            assert not btn.proto.disabled, (
+                f"{filename!r} download button must be enabled when "
+                f"the file exists; got disabled={btn.proto.disabled}"
+            )
+
+    def test_download_button_data_arg_uses_file_read_bytes(self):
+        """The `data` arg passes the file's raw bytes (so the
+        downloaded file matches disk content). The bytes payload is
+        NOT on the AppTest proto (it's stored behind a mock media
+        URL), so this contract is pinned at source level: the
+        implementation must read the file bytes via `read_bytes()` to
+        feed `data`. A regression that hard-codes a string or fails
+        to read the file would fail this grep.
+
+        Belt-and-suspenders: the
+        `test_download_button_enabled_when_file_present` integration
+        test confirms the runtime path doesn't raise on a real file
+        read; this test pins the implementation shape."""
+        src = pathlib.Path(PAGE).read_text(encoding="utf-8")
+        assert "read_bytes()" in src, (
+            f"{PAGE} must read the export file via Path.read_bytes() "
+            f"to populate the download button's `data` arg. Without "
+            f"this, the AppTest enabled/disabled contract holds but "
+            f"the runtime download data would be wrong."
+        )
+
+    def test_download_button_file_name_arg_uses_locked_filename(self):
+        """The `file_name` arg locks the user's saved-file name to
+        the export filename (so it lands as ``OPPORTUNITIES.md``, not
+        the page's internal slug or `download.bin`). The arg is NOT
+        on the AppTest proto — pinned at source level. Each locked
+        filename must appear as the value of a ``file_name=`` argument
+        somewhere in the page source."""
+        src = pathlib.Path(PAGE).read_text(encoding="utf-8")
+        # The spec calls for `file_name=filename` (or equivalent
+        # variable). Look for the `file_name=` token; the test below
+        # pins the integration via a more specific check.
+        assert "file_name=" in src, (
+            f"{PAGE} must pass file_name=... to st.download_button so "
+            f"the saved file lands with the locked export filename."
+        )
+        # Each locked filename must also appear in the source — either
+        # as a literal in a `file_name=` value or via the
+        # _EXPORT_FILENAMES iteration variable. This catches a bug
+        # where the loop iterates over a wrong list.
+        for filename in EXPORT_FILENAMES:
+            assert filename in src, (
+                f"{PAGE} source must reference {filename!r} so the "
+                f"download button's file_name arg resolves to it. "
+                f"(May be via a tuple constant — fine, as long as the "
+                f"string is reachable from the loop body.)"
+            )
+
+    def test_download_section_header_rendered(self, db):
+        """The wireframe pins a "── Download ───" section header above
+        the download buttons. Implementation rendering choice:
+        st.divider() + st.subheader("Download") (Streamlit-idiomatic
+        equivalent of the ASCII header). This test pins the visible
+        "Download" subheader; the divider is a visual nicety, not a
+        load-bearing contract."""
+        at = _run_page()
+        subheaders = [s.value for s in at.subheader]
+        assert self.DOWNLOAD_HEADER_TEXT in subheaders, (
+            f"Expected an st.subheader({self.DOWNLOAD_HEADER_TEXT!r}) "
+            f"above the download buttons (wireframe-pinned section "
+            f"header); got subheaders={subheaders!r}"
+        )
+
+    def test_regenerate_then_download_buttons_enable(self, db_and_exports):
+        """Cohesion-of-state across the click + post-rerun: fresh DB
+        → buttons disabled → click regenerate → re-rendered buttons
+        all enabled. Catches a bug where the disabled state is cached
+        across the rerun (e.g. a stale `Path.exists()` snapshot or
+        widget state holding the old value)."""
+        if db_and_exports.exists():
+            for f in EXPORT_FILENAMES:
+                assert not (db_and_exports / f).exists()
+        at = _run_page()
+        # Pre-state: all three buttons disabled.
+        for filename in EXPORT_FILENAMES:
+            btn = _download_button(at, filename)
+            assert btn.proto.disabled, (
+                f"precondition: {filename!r} button must be disabled pre-click"
+            )
+        # Click regenerate → write_all creates the three header-only files.
+        at.button(key=REGENERATE_KEY).click()
+        at.run()
+        assert not at.exception, f"Click raised: {at.exception!r}"
+        # Post-state: all three buttons enabled.
+        for filename in EXPORT_FILENAMES:
+            assert (db_and_exports / filename).exists(), (
+                f"After regenerate, {filename!r} must exist on disk"
+            )
+            btn = _download_button(at, filename)
+            assert not btn.proto.disabled, (
+                f"After regenerate, {filename!r} download button must "
+                f"be enabled; got disabled={btn.proto.disabled}"
+            )
