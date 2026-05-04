@@ -365,6 +365,7 @@ Types: `feat` · `fix` · `test` · `chore` · `docs` · `refactor`
 
 ```bash
 ruff check .                                    # must be clean
+pyright .                                       # must be clean (CL1 fence — added 2026-05-04)
 pytest tests/ -q                                # all pass (+ 1 xfail OK)
 pytest -W error::DeprecationWarning tests/ -q   # same
 # status-literal grep (must return 0 lines):

@@ -8,11 +8,13 @@
 
 import datetime
 import math
-from typing import Any
+from typing import Any, cast
 
+import pandas as pd
 import streamlit as st
-import database
+
 import config
+import database
 
 # Em-dash placeholder for missing / unparseable cells. Mirror of the same
 # constant in app.py, pages/2_Applications.py, exports.py — pages and
@@ -283,11 +285,16 @@ with col_status:
     # values. format_func wraps the literal dict.get so the "All" sentinel
     # passes through (vanilla `STATUS_LABELS.get("All")` would return None
     # and leak a blank option into the rendered dropdown).
+    # PR #22 / CL1 type-clean: pandas-stubs widens the lambda return to
+    # `str | None` because `STATUS_LABELS.get(v, v)` with `v: Any` can't
+    # be narrowed to `str`. Wrap in `str(...)` so format_func unambiguously
+    # returns `str` per Streamlit's selectbox signature. Runtime no-op
+    # (every value of v is already a str — STATUS_VALUES + "All" sentinel).
     status_filter = st.selectbox(
         "Status",
         ["All"] + config.STATUS_VALUES,
         index=0,
-        format_func=lambda v: config.STATUS_LABELS.get(v, v),
+        format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
         key="filter_status",
     )
 with col_priority:
@@ -303,29 +310,45 @@ with col_field:
 df = database.get_all_positions()
 
 # T2-B: apply filters sequentially; each active filter narrows df_filtered further.
-df_filtered = df
+# PR #22 / CL1 type-clean: pandas-stubs widens `df[bool_mask]` to
+# `Series | DataFrame`, so chaining filter steps loses the DataFrame
+# type and downstream `.str` / `.apply` / `.iloc` accesses fail
+# pyright. Cast each filter step's RHS back to `pd.DataFrame` —
+# runtime no-op since boolean indexing always returns a DataFrame
+# in practice; the cast just pins the type for the next step.
+df_filtered: pd.DataFrame = df
 if status_filter != "All":
-    df_filtered = df_filtered[df_filtered["status"] == status_filter]
+    df_filtered = cast(
+        pd.DataFrame, df_filtered[df_filtered["status"] == status_filter]
+    )
 if priority_filter != "All":
-    df_filtered = df_filtered[df_filtered["priority"] == priority_filter]
+    df_filtered = cast(
+        pd.DataFrame, df_filtered[df_filtered["priority"] == priority_filter]
+    )
 if field_filter.strip():
     # F1: regex=False treats the search term as a literal string, not a regex
     # pattern. Without it, "C++" raises re.error and crashes the page.
-    df_filtered = df_filtered[
-        df_filtered["field"].str.contains(
-            field_filter.strip(), case=False, na=False, regex=False
-        )
-    ]
+    df_filtered = cast(
+        pd.DataFrame,
+        df_filtered[
+            df_filtered["field"].str.contains(
+                field_filter.strip(), case=False, na=False, regex=False
+            )
+        ],
+    )
 # Phase 7 T2: position-name search. Mirrors the field-filter idiom above
 # (regex=False so '++' / '.' are literals; case=False; na=False so any
 # theoretical NULL position_name is filtered out rather than NaN-propagated).
 # AND-combined with the other filters — each row mask narrows further.
 if search_filter.strip():
-    df_filtered = df_filtered[
-        df_filtered["position_name"].str.contains(
-            search_filter.strip(), case=False, na=False, regex=False
-        )
-    ]
+    df_filtered = cast(
+        pd.DataFrame,
+        df_filtered[
+            df_filtered["position_name"].str.contains(
+                search_filter.strip(), case=False, na=False, regex=False
+            )
+        ],
+    )
 
 if df.empty:
     # T4-A: table not rendered → clear any stale selection from a prior rerun
@@ -354,7 +377,13 @@ else:
     # raw `status` and render that one instead — the raw column stays on
     # df_display for the row-index → id lookup below (selection plumbing),
     # but is kept out of column_order so the UI never surfaces it.
-    df_display["status_label"] = df_display["status"].map(config.STATUS_LABELS)
+    # PR #22 / CL1 type-clean: pandas-stubs declares Series.map(func)
+    # but the dict overload is missing in the stubs; wrap as a lambda
+    # so pyright accepts the callable form (runtime semantics identical
+    # since every status row already has a STATUS_LABELS entry).
+    df_display["status_label"] = df_display["status"].map(
+        lambda v: config.STATUS_LABELS.get(v, v)
+    )
 
     display_cols = [
         "position_name", "institute", "priority", "status_label",
@@ -391,7 +420,14 @@ else:
 
     # T4-A: map the selected positional row index back to its DB id so later
     # tiers (tabs, edit fields, Save/Delete) can load the right position.
-    selected_rows = list(event.selection.rows) if event is not None else []
+    # `event.selection.rows` is the documented runtime form (Streamlit
+    # 1.56), but pandas-stubs / streamlit-stubs declare DataframeState
+    # as a TypedDict so attribute access fails pyright. AppTest writes
+    # session_state[TABLE_KEY] as a plain dict, but the live page sees
+    # a wrapper that exposes both attribute + subscript access. Keep
+    # attribute form (matches Streamlit docs + the other two pages)
+    # and ignore the stub gap.
+    selected_rows = list(event.selection.rows) if event is not None else []  # type: ignore[attr-defined]
     if selected_rows and 0 <= selected_rows[0] < len(df_display):
         new_sid = int(df_display.iloc[selected_rows[0]]["id"])
         # Review Fix #2 (phase-3-tier5-review.md): clear any stale
@@ -629,12 +665,16 @@ if "selected_position_id" in st.session_state:
                 # DESIGN §8.0 Status label convention: UI shows labels
                 # (`config.STATUS_LABELS`), storage holds raw bracketed
                 # values. The Overview form only shows real pipeline
-                # statuses (no "All" sentinel to pass through), so the
-                # vanilla `STATUS_LABELS.get` is sufficient here —
-                # mirrors the filter_status call above, minus the "All"
-                # passthrough wrapper.
+                # statuses (no "All" sentinel to pass through), so a
+                # bare-method bind would suffice at runtime — but
+                # pandas-stubs / streamlit-stubs widen
+                # `dict.get` to `(key) -> str | None`, which fails
+                # selectbox's `format_func: (Any) -> str` requirement.
+                # Wrap in `str(...)` (CL1 type-clean — runtime no-op
+                # because every value of v is already a key in
+                # STATUS_LABELS).
                 st.selectbox("Status",   config.STATUS_VALUES,
-                             format_func=config.STATUS_LABELS.get,
+                             format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
                              key="edit_status")
                 st.date_input("Deadline",      key="edit_deadline_date")
                 st.text_input("Link",          key="edit_link")

@@ -31,6 +31,12 @@ jobs:
       - name: Ruff lint
         run: ruff check .
 
+      - name: Pyright type-check
+        # Phase 7 cleanup CL1: enforce pyright basic mode on every PR.
+        # Config: pyproject.toml [tool.pyright]. PR #22 fixed the
+        # initial sweep; this fence catches drift on subsequent PRs.
+        run: pyright .
+
       - name: Pytest
         run: pytest tests/ -q
 

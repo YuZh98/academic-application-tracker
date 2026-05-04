@@ -392,10 +392,11 @@ publishable release; `v1.x.y` post-v1.
 **What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/`
 · `CLAUDE.md` · `PHASE_*_GUIDELINES.md`.
 
-**Pre-commit checklist** (CI re-runs the first three on every push and PR
+**Pre-commit checklist** (CI re-runs the first four on every push and PR
 via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 
 - [ ] `ruff check .` clean
+- [ ] `pyright .` clean (Phase 7 cleanup CL1 fence — `[tool.pyright]` config in `pyproject.toml`)
 - [ ] `pytest tests/ -q` passes
 - [ ] `pytest -W error::DeprecationWarning tests/ -q` passes
 - [ ] §6 status-literal grep clean (code-only):
