@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `docs(phase-7-T5): responsive layout capture instructions`.
+  — e.g. `chore(phase-7-CL1): add pyright to CI`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -219,8 +219,21 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T2 — Position search bar on Opportunities | ✅ PR #38 | `filter_search` text_input prepended to filter row; `position_name` substring (case-insensitive, regex=False, NaN-safe); AND-combined with status/priority/field |
 | T3 — `set_page_config` sweep on remaining pages | ✅ PR #39 | New `tests/test_pages_cohesion.py::TestSetPageConfigSweep` (10 parametrized tests) pins locked-kwargs source-grep + first-Streamlit-statement AST walk; audit found all 5 pages already conform — verification-only PR (no production code touched) |
 | T4 — Confirm-dialog audit | ✅ PR #40 | New `TestConfirmDialogAudit` (11 tests across 3 destructive paths); audit surfaced + fixed real bug (position-delete dialog warning was missing "interview" from FK cascade enumeration) |
-| T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 next | see "Immediate task" |
-| T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | |
+| **Cleanup + polish sub-tier** (CL1–CL5) | 🔲 in flight | Inserted between T4 and T5 — Pyright CI fence, `config.py` lifts, test-helper extraction, batched UX polish, retroactive doc-drift fix. See sub-table below. |
+| T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 postponed | resumes after CL5 closes |
+| T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | after T5 |
+
+### Phase 7 cleanup + polish sub-tier (between T4 and T5)
+
+User-driven decision (2026-05-04): postpone T5 (responsive layout, user-driven) until accumulated cleanup + polish carry-overs are landed. Five sub-tiers:
+
+| Sub-tier | What | Who | Blocks |
+|---|---|---|---|
+| **CL1** — Pyright/mypy in CI | Add type-check job to `.github/workflows/ci.yml`; fix any current errors. Fence — every later PR gets free type-check coverage. | Implementer | nothing |
+| **CL2** — `config.py` lifts | Lift duplicated constants + helpers to `config.py`: `EM_DASH`, urgency banding (`urgency_glyph(days)`), `"All"` filter sentinel, `_REMINDER_TONES`. Drop unused `TRACKER_PROFILE` (carry-over **C2**). Closes carry-over **C3**. | Implementer | CL1 fence valuable |
+| **CL3** — `tests/helpers.py` extraction | Lift `_link_buttons`, `_decode_mailto`, `_download_buttons`, `_download_button` from per-page test files into shared helper module. | Implementer | parallel-able with CL2 |
+| **CL4** — Phase 7 polish batched | 4 small UX fixes: Save-toast-when-no-dirty wording, subject-pluralization on N=1, `st.markdown` vs `st.write` cohesion, empty-state copy centralization. One PR with 4 commits. | Implementer | CL2 (touches EM_DASH + empty-state sites) |
+| **CL5** — Doc drift + branch-cleanup process amendment | Retroactive trim of older review docs (Phase 5 + Phase 6 tier reviews still have `Kept by design` rows in Findings tables); CHANGELOG older blocks; add `--delete-branch` to ORCHESTRATOR_HANDOFF.md "Recurring post-merge ritual". | Orchestrator | CL1-4 done |
 
 ### What's after Phase 7
 v1.0-rc schema cleanup, then publish scaffolding (README, LICENSE,
@@ -228,100 +241,114 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 T5 (Responsive layout check) — **user-driven, not implementer-coded**
+## Immediate task — Phase 7 cleanup CL1 (Pyright/mypy in CI)
 
-**Spec:** `TASKS.md` current sprint Phase 7 T5
-("Responsive layout check at 1024 / 1280 / 1440 / 1680 widths;
-capture screenshots to `docs/ui/screenshots/v0.8.0/`") · prior
-precedent `reviews/phase-4-finish-cohesion-smoke.md` "Capture
-instructions" section (Phase 4 T6 used the same shape — cohesion
-audit then user manual capture).
+**Spec:** This doc's "Phase 7 cleanup + polish sub-tier" table
+(between T4 and T5) · `GUIDELINES §11` "Pre-commit checklist"
+(currently has ruff + pytest but no type-check) · prior PR #22
+(`afc55a6` — "fix: resolve all Pyright type errors in app.py,
+database.py, and tests") which fixed every Pyright error in the
+codebase but did not add CI enforcement. CL1 lands the fence.
 
-T5 is **user-driven**, not implementer-coded. Streamlit's responsive
-layout can't be tested headlessly via AppTest (no DOM, no CSS
-rendering, no viewport simulation). Capture is a manual act
-requiring the user's actual browser at four target widths. The
-implementer's deliverable is a **capture-instructions doc** + a
-verification checklist, not behavioural tests.
+CL1 is the first of five cleanup-and-polish sub-tiers postponed
+T5 introduced (user-driven decision 2026-05-04). Goal: every
+subsequent PR in CL2-CL5 (and onward) gets free type-check
+coverage in CI. If type drift surfaced post-PR-#22, this tier
+catches it; if everything's still clean, ships as a verification-
+only addition with the new CI job + a one-line `[ ] Type-check
+clean` row in the pre-commit checklist.
 
-### T5 — Responsive layout capture
+### CL1 — Pyright in CI
 
-- **Capture-instructions doc** at
-  `docs/ui/screenshots/v0.8.0/CAPTURE.md` (or extend a similar doc
-  if precedent exists — read `docs/ui/` first for Phase 4's shape).
-  Mirror of `reviews/phase-4-finish-cohesion-smoke.md` "Capture
-  instructions" subsection: tells the user
-  - which page to capture (Dashboard, Opportunities, Applications,
-    Recommenders, Export — five pages × four widths = 20 PNGs);
-  - which seed to use (the user's real `postdoc.db` works; a fresh
-    init + minimum-seed alternative for cleaner public-facing
-    screenshots);
-  - browser instruction (`streamlit run app.py`, then resize OUTER
-    window to 1024 / 1280 / 1440 / 1680 — dev-tools
-    "responsive design mode" works too);
-  - filename convention (`<page>-<width>.png`, e.g.
-    `dashboard-1280.png`, `opportunities-1024.png`).
-- **Cohesion checklist** the user eyeballs at each width:
-  - All headers + subheaders visible without horizontal scroll.
-  - Tables show every column (no column truncation).
-  - Filter bars wrap cleanly (4 columns on the Opportunities filter
-    row from T2 — verify no overflow at 1024).
-  - Confirm dialogs render readably (modal width adapts).
-  - Status / urgency glyphs render correctly (em-dash + 🔴 / 🟡
-    use system fonts that may differ across browsers).
-- **No tests written by implementer.** This tier ships as a
-  user-action checklist + the capture-instructions doc; the user
-  performs the capture themselves and commits the PNGs in a
-  separate user commit (or as part of T6 close-out).
-
-### Implementer scope
-
-- Write `docs/ui/screenshots/v0.8.0/CAPTURE.md` with the
-  instructions + checklist. Read `reviews/phase-4-finish-cohesion-smoke.md`
-  "Capture instructions" subsection for the precedent shape; extend
-  that pattern to five pages instead of one.
-- Optionally seed a `tests/test_pages_cohesion.py::TestCapturePrep`
-  class with a single test that asserts the capture doc exists +
-  contains the four target widths verbatim. Mirror of T3's
-  source-grep pattern for paranoid drift detection. Keep light —
-  this isn't a behavioural test.
-- Flag in PR description: this is a setup-only PR; the actual
-  capture happens user-side, not in CI.
+- **Pick the tool:** `pyright` is the project precedent (PR #22
+  used it). Mypy is a defensible alternative but pyright is faster
+  + matches the prior cleanup. Default to **pyright** unless you
+  have a strong reason otherwise; flag the choice in the PR.
+- **CI workflow edit** (`.github/workflows/ci.yml`):
+  - Add a `pyright` step in the existing `Tests + Lint (3.14)`
+    job, alongside the existing ruff + pytest steps. Same Python
+    3.14 environment.
+  - Use the `microsoft/setup-pyright@v1` GitHub Action (or
+    `pip install pyright` + bare invocation — pick whichever
+    reads cleanest in the YAML; the action handles caching).
+  - Run on the project root: `pyright .` (or scoped to `app.py
+    config.py database.py exports.py pages/ tests/` if root-level
+    files like `requirements.txt` confuse the type-checker).
+  - Fail the job on any error (exit code ≠ 0).
+- **`pyrightconfig.json` at repo root** (or `pyproject.toml`
+  `[tool.pyright]` if the project already has a `pyproject.toml`):
+  - Set `pythonVersion = "3.14"`.
+  - Set `typeCheckingMode = "basic"` (matching PR #22's working
+    point — `strict` would require widespread additional
+    annotations and is out of scope here).
+  - Exclude generated paths if any (`.venv`, `__pycache__`,
+    `exports/` since the user's local exports/ files are .gitignored
+    but pyright might still scan them on CI fresh-clone — verify).
+- **Fix any current errors** that surface. Most likely candidates
+  (per the project's recent code review):
+  - `pages/1_Opportunities.py::_deadline_urgency` widened type
+    hint to `Any` in Phase 7 T1 — verify no fallout.
+  - `pages/3_Recommenders.py` AppTest helpers (T6 LLM-prompts +
+    download-button helpers) used `at.get('...')` returning
+    `UnknownElement` — pyright may flag the protobuf attribute
+    accesses as `Any`-untyped. Fix with explicit `# type: ignore`
+    + comment, or a typing.cast wrapper.
+  - `tests/test_pages_cohesion.py::_set_parents` already has a
+    `# type: ignore[attr-defined]` annotation — verify pyright
+    accepts it.
+- **Pre-commit checklist update** in `AGENTS.md` "Pre-commit
+  checklist (run before opening PR)" section: add `pyright .`
+  alongside the existing four checks. Also update `GUIDELINES §11`
+  pre-commit checklist to match.
 
 ### Tests to write first (TDD red commit)
-- Optional. If the implementer writes a `TestCapturePrep` class, it
-  pins the doc-existence + width-list contract. If not, T5 is a
-  doc-only PR — skip the test commit.
+- Not strictly applicable — CL1 is CI-config + type-fixes, no new
+  behaviour to test. The "tests" are pyright errors surfacing on
+  the CI run; once it's green, the contract holds.
+- If you find current type errors, the **fix** for each error is
+  the deliverable. Each fix is a discrete commit if it spans more
+  than one file.
 
 ### Architecture rules (non-negotiable)
-- T5 is doc + (optional) cohesion-test addition. No production code
-  touched.
+- No new feature code. CL1 is fence + lint-fix.
+- `# type: ignore` is acceptable as a last resort for genuine
+  AppTest / protobuf attribute-access cases that have no clean
+  type story. Add a comment explaining why.
 
-### Pre-PR gates
-Standing checklist + CI-mirror check.
+### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror)
+Standing checklist + the new pyright check:
+```bash
+ruff check .
+pyright .                     # NEW — added in this PR
+pytest tests/ -q
+pytest -W error::DeprecationWarning tests/ -q
+grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
+  | grep -v '^\([^:]*\):[0-9]*:\s*#'
+git status --porcelain exports/
+mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
+```
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-tier5-ResponsiveLayoutCheck`.
-- One PR for the doc + (optional) test commits. **The user takes
-  the screenshots themselves before T6 close-out** — that's
-  outside the implementer's scope.
-
----
+- Branch name: `feature/phase-7-cleanup-CL1-PyrightCI`.
+- One PR for the workflow edit + any type-fix commits + pre-commit-
+  checklist update. Orchestrator handles the chore rollup
+  post-merge.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. docs: commit  → write docs/ui/screenshots/v0.8.0/CAPTURE.md
-                   (capture-instructions doc + cohesion checklist
-                   for the user). Optional: seed
-                   tests/test_pages_cohesion.py::TestCapturePrep
-                   pinning doc-existence + width-list contract.
-2. (no feat: commit — T5 is doc-only; the user takes the actual
-                       screenshots themselves before T6 close-out)
-3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
-                   (YOU do not touch these)
+1. chore: commit  → add pyright step to .github/workflows/ci.yml
+                    + pyrightconfig.json (or pyproject.toml [tool.pyright])
+                    + update AGENTS.md / GUIDELINES.md pre-commit
+                    checklist with the new `pyright .` row
+2. fix:   commit  → fix any pyright errors that surface (one
+                    commit per logical fix-set; can be omitted if
+                    pyright is already clean from PR #22's
+                    cleanup work)
+3. chore: rollup  → orchestrator handles TASKS.md/CHANGELOG/review
+                    doc (YOU do not touch these)
 ```
 
 **Commit message format:**
@@ -354,7 +381,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-tier5-ResponsiveLayoutCheck` |
+| Open PR | You — branch name: `feature/phase-7-cleanup-CL1-PyrightCI` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
