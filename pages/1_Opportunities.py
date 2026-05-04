@@ -150,39 +150,29 @@ def _confirm_delete_dialog() -> None:
 def _deadline_urgency(date_str: Any) -> str:
     """Return the at-a-glance urgency glyph for a position's deadline.
 
-    Phase 7 T1 contract:
-        days_to_deadline ≤ DEADLINE_URGENT_DAYS → '🔴'
-        ≤ DEADLINE_ALERT_DAYS (but past urgent)  → '🟡'
-        beyond DEADLINE_ALERT_DAYS               → ''  (no urgency signal)
-        NULL / empty / NaN / unparseable date    → '—' (em-dash placeholder)
-
-    Mirrors the dashboard's ``database.py::_urgency_glyph`` banding
-    (DESIGN §2 layer rule prevents importing it directly into a page —
-    helpers stay duplicated rather than crossing the layer boundary).
-
-    Thresholds come from config so changing DEADLINE_URGENT_DAYS /
-    DEADLINE_ALERT_DAYS in one place updates both the page and the
-    dashboard.
+    Phase 7 T1 contract — delegates the days-→-glyph banding to
+    ``config.urgency_glyph`` (lifted in CL2). This wrapper owns the
+    page-layer-specific concern: parse ``date_str`` (a possibly-NULL
+    DataFrame TEXT cell, possibly NaN) into ``int days_away``, then
+    pass through. ``None`` flows through to ``config.urgency_glyph``,
+    which returns the em-dash placeholder.
 
     NaN handling: pandas DataFrames surface NULL TEXT cells as
     ``float('nan')`` once any other row in the column has a value.
     ``not date_str`` doesn't catch NaN (NaN is truthy), so the
     explicit ``math.isnan`` branch + the ``date.fromisoformat``
     try/except together cover all three NULL-shaped inputs (None,
-    NaN, empty string) plus malformed strings."""
+    NaN, empty string) plus malformed strings — every "no usable
+    date" path collapses to ``days_away=None`` and the em-dash."""
     if date_str is None or date_str == "":
-        return EM_DASH
+        return config.urgency_glyph(None)
     if isinstance(date_str, float) and math.isnan(date_str):
-        return EM_DASH
+        return config.urgency_glyph(None)
     try:
         days = (datetime.date.fromisoformat(str(date_str)) - datetime.date.today()).days
     except (ValueError, TypeError):
-        return EM_DASH
-    if days <= config.DEADLINE_URGENT_DAYS:
-        return "🔴"
-    if days <= config.DEADLINE_ALERT_DAYS:
-        return "🟡"
-    return ""
+        return config.urgency_glyph(None)
+    return config.urgency_glyph(days)
 
 database.init_db()
 

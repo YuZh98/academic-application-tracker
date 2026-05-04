@@ -416,3 +416,40 @@ assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
     f"Unknown entries: "
     f"{STATUS_FILTER_ACTIVE_EXCLUDED - set(STATUS_VALUES)!r}"
 )
+
+
+# ── Urgency banding (Phase 7 T1 contract; CL2 lift) ───────────────────────────
+# The same banding fires on the dashboard's Upcoming panel, in the
+# Opportunities table's Urgency column, and (potentially) in any
+# future surface that needs the at-a-glance "how close is this?" cue.
+# Lifted here in CL2 so the threshold logic exists in exactly one
+# place — page + database wrappers parse their input shapes (date
+# string vs. integer days) and delegate to this function.
+def urgency_glyph(days_away: int | None) -> str:
+    """Return the urgency glyph for ``days_away`` days until a deadline.
+
+    Banding (lower-inclusive at every boundary):
+        days_away ≤ DEADLINE_URGENT_DAYS    → '🔴'
+        ≤ DEADLINE_ALERT_DAYS (past urgent)  → '🟡'
+        beyond DEADLINE_ALERT_DAYS           → ''     (no signal)
+        None (no deadline at all)            → EM_DASH
+
+    The ``None`` branch distinguishes "no deadline at all" (em-dash
+    placeholder, Phase 7 T1) from "deadline far enough away that no
+    signal fires" (empty string). Both look "absent" to a casual
+    reader, but the em-dash makes "we know there's nothing scheduled"
+    visible, while the empty string lets the table cell read as
+    ordinary whitespace for a far-future deadline.
+
+    Negative inputs (past-due) fall into the urgent band — at least
+    as extreme as 'due today', and pinned by
+    test_urgency_glyph_negative_days_is_red so a future band-rewrite
+    can't silently regress this case.
+    """
+    if days_away is None:
+        return EM_DASH
+    if days_away <= DEADLINE_URGENT_DAYS:
+        return "🔴"
+    if days_away <= DEADLINE_ALERT_DAYS:
+        return "🟡"
+    return ""
