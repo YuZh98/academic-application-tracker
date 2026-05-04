@@ -303,7 +303,11 @@ def write_progress() -> None:
         # contract: empty DataFrame for a position with no interviews,
         # one row per interview ordered by sequence ASC. Only the
         # `scheduled_date` column matters for the summary cell.
-        position_id = int(row["position_id"])
+        # PR #22 precedent: iterrows cells get Series | ndarray | Any
+        # union types from pandas-stubs. Funnel through Any so int()
+        # only sees the (real, runtime) scalar.
+        pid_raw: Any = row["position_id"]
+        position_id = int(pid_raw)
         interviews_df = database.get_interviews(position_id)
         scheduled_dates = (
             list(interviews_df["scheduled_date"]) if not interviews_df.empty else []
@@ -389,7 +393,9 @@ def write_recommenders() -> None:
         positions = (
             database.get_all_positions()
             [["id", "deadline_date"]]
-            .rename(columns={"id": "position_id", "deadline_date": "_pos_deadline"})
+            .rename(  # type: ignore[call-overload]
+                columns={"id": "position_id", "deadline_date": "_pos_deadline"},
+            )
         )
         df = df.merge(positions, on="position_id", how="left")
         df = df.sort_values(
