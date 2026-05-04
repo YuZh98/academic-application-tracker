@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `test(phase-7-T4): confirm-dialog audit across destructive paths`.
+  — e.g. `docs(phase-7-T5): responsive layout capture instructions`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 T3 merged (PR #39); test suite at 853 passed + 1 xfailed
+**`main` HEAD:** Phase 7 T4 merged (PR #40); test suite at 864 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -218,8 +218,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T1 — Urgency colors on positions table (`st.column_config`) | ✅ PR #37 | `_deadline_urgency` returns `🔴`/`🟡`/`''`/`—` glyphs (was: `'urgent'`/`'alert'`/`''`); new em-dash branch distinguishes "no deadline at all" from "deadline far enough away"; explicit NaN guard |
 | T2 — Position search bar on Opportunities | ✅ PR #38 | `filter_search` text_input prepended to filter row; `position_name` substring (case-insensitive, regex=False, NaN-safe); AND-combined with status/priority/field |
 | T3 — `set_page_config` sweep on remaining pages | ✅ PR #39 | New `tests/test_pages_cohesion.py::TestSetPageConfigSweep` (10 parametrized tests) pins locked-kwargs source-grep + first-Streamlit-statement AST walk; audit found all 5 pages already conform — verification-only PR (no production code touched) |
-| T4 — Confirm-dialog audit | 🔲 next | see "Immediate task" |
-| T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 | |
+| T4 — Confirm-dialog audit | ✅ PR #40 | New `TestConfirmDialogAudit` (11 tests across 3 destructive paths); audit surfaced + fixed real bug (position-delete dialog warning was missing "interview" from FK cascade enumeration) |
+| T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 next | see "Immediate task" |
 | T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | |
 
 ### What's after Phase 7
@@ -228,120 +228,98 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 T4 (Confirm-dialog audit)
+## Immediate task — Phase 7 T5 (Responsive layout check) — **user-driven, not implementer-coded**
 
-**Spec:** `TASKS.md` current sprint Phase 7 T4
-("Confirm-dialog audit (every destructive path wears `@st.dialog`
-with cascade-effect copy)") · `GUIDELINES §8` (irreversible actions:
-`@st.dialog` confirm gate) · `docs/dev-notes/streamlit-state-gotchas.md`
-gotcha #3 (dialog re-open trick — page must explicitly re-open
-while pending sentinel is set) · existing `@st.dialog` call sites
-in `pages/1_Opportunities.py`, `pages/2_Applications.py`,
-`pages/3_Recommenders.py`.
+**Spec:** `TASKS.md` current sprint Phase 7 T5
+("Responsive layout check at 1024 / 1280 / 1440 / 1680 widths;
+capture screenshots to `docs/ui/screenshots/v0.8.0/`") · prior
+precedent `reviews/phase-4-finish-cohesion-smoke.md` "Capture
+instructions" section (Phase 4 T6 used the same shape — cohesion
+audit then user manual capture).
 
-Phase 7 T4 is a verification + harmonization sweep across every
-**destructive path** in the app — verify every delete / cascade-
-removal / irreversible action wears an `@st.dialog` confirm gate,
-that the dialog-body copy includes cascade-effect language (what
-will be lost), and that the gotcha #3 re-open trick is correctly
-implemented at every call site. Pure cohesion work; no new behaviour.
+T5 is **user-driven**, not implementer-coded. Streamlit's responsive
+layout can't be tested headlessly via AppTest (no DOM, no CSS
+rendering, no viewport simulation). Capture is a manual act
+requiring the user's actual browser at four target widths. The
+implementer's deliverable is a **capture-instructions doc** + a
+verification checklist, not behavioural tests.
 
-### T4 — Confirm-dialog audit
+### T5 — Responsive layout capture
 
-- **Inventory every destructive path** in the app:
-  - **Position delete** — `pages/1_Opportunities.py` line 55
-    `@st.dialog("Delete this position?")` on
-    `_confirm_delete_dialog`. Cascade: drops applications +
-    interviews + recommenders for the position.
-  - **Interview delete** — `pages/2_Applications.py` line 165
-    `@st.dialog("Delete this interview?")` on
-    `_confirm_interview_delete_dialog`. Cascade: drops the row
-    only (no nested data).
-  - **Recommender delete** — `pages/3_Recommenders.py` line 551
-    `@st.dialog("Delete this recommender?")` on
-    `_confirm_delete_recommender_dialog`. Cascade: drops the row
-    only.
-  - Verify these three are the ONLY destructive paths. Grep for
-    `database.delete_*` and confirm every call site sits inside
-    a dialog confirm branch (not a bare button click).
-- **For each dialog audit four invariants:**
-  1. **Title locked-shape**: `@st.dialog("Delete this <noun>?")`
-     pattern.
-  2. **Cascade-effect copy in body**: warning text must spell out
-     what gets deleted (the row + any cascading data).
-     Position-delete must mention applications + interviews +
-     recommenders. Interview-delete + recommender-delete should
-     mention "this cannot be undone" at minimum (they have no
-     cascade today).
-  3. **Re-open trick (gotcha #3)**: page must explicitly re-open
-     the dialog while the pending sentinel is set, mirroring:
-     ```python
-     if st.button("Delete", ...):
-         st.session_state[pending_sentinel] = target_id
-         _confirm_dialog()
-     elif st.session_state.get(pending_sentinel) == target_id:
-         _confirm_dialog()
-     ```
-     Verify each call site has both branches.
-  4. **Failure-preserves-state on st.error**: per GUIDELINES §8,
-     a failed delete (e.g. FK constraint violation) must surface
-     `st.error(...)` AND keep the pending sentinel set so the
-     dialog re-opens for retry on the next rerun. NOT pop the
-     sentinel on failure.
-- **Fix any divergence inline**. If all three already satisfy the
-  contract, the tier ships as a verification-only PR with new
-  tests and no production code touched (mirror of T3's no-op
-  outcome path).
+- **Capture-instructions doc** at
+  `docs/ui/screenshots/v0.8.0/CAPTURE.md` (or extend a similar doc
+  if precedent exists — read `docs/ui/` first for Phase 4's shape).
+  Mirror of `reviews/phase-4-finish-cohesion-smoke.md` "Capture
+  instructions" subsection: tells the user
+  - which page to capture (Dashboard, Opportunities, Applications,
+    Recommenders, Export — five pages × four widths = 20 PNGs);
+  - which seed to use (the user's real `postdoc.db` works; a fresh
+    init + minimum-seed alternative for cleaner public-facing
+    screenshots);
+  - browser instruction (`streamlit run app.py`, then resize OUTER
+    window to 1024 / 1280 / 1440 / 1680 — dev-tools
+    "responsive design mode" works too);
+  - filename convention (`<page>-<width>.png`, e.g.
+    `dashboard-1280.png`, `opportunities-1024.png`).
+- **Cohesion checklist** the user eyeballs at each width:
+  - All headers + subheaders visible without horizontal scroll.
+  - Tables show every column (no column truncation).
+  - Filter bars wrap cleanly (4 columns on the Opportunities filter
+    row from T2 — verify no overflow at 1024).
+  - Confirm dialogs render readably (modal width adapts).
+  - Status / urgency glyphs render correctly (em-dash + 🔴 / 🟡
+    use system fonts that may differ across browsers).
+- **No tests written by implementer.** This tier ships as a
+  user-action checklist + the capture-instructions doc; the user
+  performs the capture themselves and commits the PNGs in a
+  separate user commit (or as part of T6 close-out).
+
+### Implementer scope
+
+- Write `docs/ui/screenshots/v0.8.0/CAPTURE.md` with the
+  instructions + checklist. Read `reviews/phase-4-finish-cohesion-smoke.md`
+  "Capture instructions" subsection for the precedent shape; extend
+  that pattern to five pages instead of one.
+- Optionally seed a `tests/test_pages_cohesion.py::TestCapturePrep`
+  class with a single test that asserts the capture doc exists +
+  contains the four target widths verbatim. Mirror of T3's
+  source-grep pattern for paranoid drift detection. Keep light —
+  this isn't a behavioural test.
+- Flag in PR description: this is a setup-only PR; the actual
+  capture happens user-side, not in CI.
 
 ### Tests to write first (TDD red commit)
-- Extend `tests/test_pages_cohesion.py` (created in T3) with a
-  new `TestConfirmDialogAudit` class — same parametrize-driven
-  shape as `TestSetPageConfigSweep`. Source-grep + AST + AppTest
-  hybrid:
-  - **Source-grep**: every destructive path's call site shows the
-    `@st.dialog("...?")` decorator pattern.
-  - **AppTest behavioural pin**: for each delete path, simulate
-    the click → assert dialog body contains expected
-    cascade-effect substrings. Mirror the existing per-page tests
-    in `test_opportunities_page.py` /
-    `test_applications_page.py` / `test_recommenders_page.py` —
-    don't duplicate them, but cite them as the per-page contracts
-    + add a cross-page pin in `test_pages_cohesion.py` that asserts
-    "every page-level delete button opens a dialog before writing".
-  - **`database.delete_*` callers grep**: AST-walk all `pages/*.py`
-    + `app.py` looking for `database.delete_*` calls; assert each
-    sits inside a function decorated with `@st.dialog` (or inside
-    the dialog's confirm-button click handler).
+- Optional. If the implementer writes a `TestCapturePrep` class, it
+  pins the doc-existence + width-list contract. If not, T5 is a
+  doc-only PR — skip the test commit.
 
 ### Architecture rules (non-negotiable)
-- T4 is verification + tests; no new helpers in production code.
-- Widget keys: no new widgets.
+- T5 is doc + (optional) cohesion-test addition. No production code
+  touched.
 
 ### Pre-PR gates
 Standing checklist + CI-mirror check.
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-tier4-ConfirmDialogAudit`.
-- One PR for the test + (optional) feat commits; orchestrator
-  handles the chore rollup post-merge. T4 may be verification-
-  only like T3, or may surface fixable cascade-copy gaps —
-  implementer flags the outcome shape in the PR description.
+- Branch name: `feature/phase-7-tier5-ResponsiveLayoutCheck`.
+- One PR for the doc + (optional) test commits. **The user takes
+  the screenshots themselves before T6 close-out** — that's
+  outside the implementer's scope.
+
+---
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test: commit  → extend tests/test_pages_cohesion.py with
-                   TestConfirmDialogAudit pinning every destructive
-                   path's `@st.dialog` shape, cascade-effect copy,
-                   re-open trick (gotcha #3), and failure-preserves-
-                   state on `st.error` (RED if any divergence; GREEN
-                   if all three already conform)
-2. feat: commit  → fix any divergence (e.g. tighten cascade-effect
-                   copy, add missing re-open branch); OMIT if all
-                   destructive paths pass on the test commit
-                   (no-op verification PR — same pattern as T3)
+1. docs: commit  → write docs/ui/screenshots/v0.8.0/CAPTURE.md
+                   (capture-instructions doc + cohesion checklist
+                   for the user). Optional: seed
+                   tests/test_pages_cohesion.py::TestCapturePrep
+                   pinning doc-existence + width-list contract.
+2. (no feat: commit — T5 is doc-only; the user takes the actual
+                       screenshots themselves before T6 close-out)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -376,7 +354,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-tier4-ConfirmDialogAudit` |
+| Open PR | You — branch name: `feature/phase-7-tier5-ResponsiveLayoutCheck` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
