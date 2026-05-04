@@ -800,8 +800,37 @@ All defensible. Merged via PR #36 (`73a04c4`).
       audit + T5 responsive-layout check earmarked for the same
       file). Suite 843 → 853 under both pytest gates. Merged via
       PR #39 (`85968bb`).
-- [ ] **T4** Confirm-dialog audit (every destructive path wears
-      `@st.dialog` with cascade-effect copy)
+- [x] **T4** Confirm-dialog audit (every destructive path wears
+      `@st.dialog` with cascade-effect copy) — new
+      `tests/test_pages_cohesion.py::TestConfirmDialogAudit` with
+      11 tests across 3 destructive paths (position / interview /
+      recommender delete). Five test methods, 4 parametrized + 1
+      cross-page AST walk: (1) title locked-shape source-grep; (2)
+      "cannot be undone" universal cue; (3) cascade-effect copy
+      enumeration (positive enumeration via `cascade_substrings`
+      list — auto-extends if new paths gain cascades); (4)
+      `database.delete_*` callers all inside `@st.dialog`-decorated
+      functions (cross-page AST walk for forward-defence against
+      future quick-delete buttons that bypass dialogs); (5) failure-
+      preserves-pending-sentinel (AST walk for
+      `st.session_state.pop` calls inside `except` handlers —
+      asserts none exist; pins the documented dialog re-open
+      contract structurally). **Not a no-op outcome — surfaced and
+      fixed a real bug**: position-delete dialog warning text said
+      "application and recommender rows" but FK chain
+      `positions → applications (CASCADE) → interviews (CASCADE)`
+      + `positions → recommenders (CASCADE)` actually drops three
+      child tables in one transactional sweep. Copy fixed inline
+      to "application, interview, and recommender rows". Per-page
+      `TestDeleteAction` had the same gap (asserted partial
+      substrings, didn't enumerate the FK chain) — kept as-is
+      because the cohesion test is now the single source of truth
+      for "every child table in the FK chain is mentioned". AST
+      helper `_set_parents` annotates parent links on the tree for
+      ancestor-chain queries; `_has_dialog_decorator` /
+      `_find_function` / `_ancestors` round out the toolkit. Suite
+      853 → 864 under both pytest gates. Merged via PR #40
+      (`952f0e9`).
 - [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
       widths; capture screenshots to `docs/ui/screenshots/v0.8.0/`
 - [ ] **T6** Phase 7 review + PR + tag `v0.8.0`
@@ -840,6 +869,18 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #40 merged** (`952f0e9`): Phase 7 T4 shipped —
+  confirm-dialog audit + position cascade-copy fix. New
+  `TestConfirmDialogAudit` (11 tests across 3 destructive paths)
+  surfaced a real bug: position-delete dialog warning was missing
+  "interview" from the FK cascade enumeration even though the
+  schema's `positions → applications (CASCADE) → interviews
+  (CASCADE)` chain drops interview rows too. Copy fixed inline.
+  Cohesion-test pattern paid off — per-page `TestDeleteAction`
+  passed because it asserted partial substrings; the cohesion
+  test caught it via positive enumeration of the FK chain.
+  Suite 853 → 864 under both pytest gates. Pre-merge review at
+  [`reviews/phase-7-tier4-review.md`](reviews/phase-7-tier4-review.md).
 - 2026-05-04 — **PR #39 merged** (`85968bb`): Phase 7 T3 shipped —
   verification-only `set_page_config` sweep across all 5 pages
   (`app.py` + 4 `pages/*.py`). New `tests/test_pages_cohesion.py`
@@ -1102,4 +1143,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 T3 merged via PR #39; main HEAD `85968bb`; suite 853 / 1 xfailed; Phase 7 T4 — Confirm-dialog audit next)_
+_Updated: 2026-05-04 (Phase 7 T4 merged via PR #40; main HEAD `952f0e9`; suite 864 / 1 xfailed; Phase 7 T5 — Responsive layout check next)_
