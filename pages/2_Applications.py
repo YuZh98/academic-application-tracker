@@ -34,7 +34,7 @@
 
 import datetime
 import math
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import streamlit as st
@@ -288,7 +288,10 @@ selected_filter = st.selectbox(
         *config.STATUS_VALUES,
     ],
     index=0,
-    format_func=lambda v: config.STATUS_LABELS.get(v, v),
+    # CL1 type-clean (mirror of pages/1_Opportunities.py): wrap in
+    # `str(...)` so format_func unambiguously returns `str`. Runtime
+    # no-op — every option value is already a `str`.
+    format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
     key="apps_filter_status",
 )
 
@@ -315,12 +318,21 @@ selected_filter = st.selectbox(
 
 df = database.get_applications_table()
 
+# CL1 type-clean: pandas-stubs declares Series.isin with a Series /
+# DataFrame / Sequence / Mapping union — `frozenset` doesn't satisfy
+# any branch of that, so wrap in `list(...)` (runtime no-op for set
+# membership). Same boolean-indexing widening as pages/1_Opportunities
+# requires `cast(pd.DataFrame, ...)` on each branch's RHS so downstream
+# `.reset_index` / `.apply` / `.iloc` / `.empty` access stays typed.
 if selected_filter == config.STATUS_FILTER_ACTIVE:
-    df_filtered = df[~df["status"].isin(config.STATUS_FILTER_ACTIVE_EXCLUDED)]
+    df_filtered = cast(
+        pd.DataFrame,
+        df[~df["status"].isin(list(config.STATUS_FILTER_ACTIVE_EXCLUDED))],
+    )
 elif selected_filter == _FILTER_ALL:
     df_filtered = df
 else:
-    df_filtered = df[df["status"] == selected_filter]
+    df_filtered = cast(pd.DataFrame, df[df["status"] == selected_filter])
 
 if df_filtered.empty:
     st.info("No applications match the current filter.")
@@ -395,7 +407,11 @@ else:
     # `_applications_skip_table_reset` one-shot to preserve selection
     # across the post-Save rerun (gotcha #11 — st.dataframe resets its
     # selection event on data-change reruns).
-    selected_rows = list(event.selection.rows) if event is not None else []
+    # CL1 type-clean: streamlit-stubs declares DataframeState as
+    # TypedDict so attribute access trips pyright; runtime exposes a
+    # wrapper supporting both subscript and attribute. Mirror the form
+    # used on pages/1_Opportunities.py + pages/3_Recommenders.py.
+    selected_rows = list(event.selection.rows) if event is not None else []  # type: ignore[attr-defined]
     if selected_rows and 0 <= selected_rows[0] < len(df_filtered):
         new_sid = int(df_filtered.iloc[selected_rows[0]]["position_id"])
         st.session_state["applications_selected_position_id"] = new_sid
@@ -622,7 +638,11 @@ if "applications_selected_position_id" in st.session_state:
             )
             seeded_ids = saved_sentinel & current_ids
             for _, _iv_row in interviews_df.iterrows():
-                _iid = int(_iv_row["id"])
+                # CL1 type-clean: pandas-stubs widens iterrows cells to
+                # Series | ndarray | Any. Funnel through Any so int()
+                # only sees the runtime scalar (PR #22 precedent).
+                _iid_raw: Any = _iv_row["id"]
+                _iid = int(_iid_raw)
                 if _iid in seeded_ids:
                     continue
                 # Pre-seed every widget key for this fresh id. The
@@ -665,8 +685,12 @@ if "applications_selected_position_id" in st.session_state:
             # reads top-to-bottom: heading → detail → Save → Delete.
             saves_clicked: list[tuple[int, int]] = []
             for _i, (_, _iv_row) in enumerate(interviews_df.iterrows()):
-                _iid = int(_iv_row["id"])
-                _seq = int(_iv_row["sequence"])
+                # CL1 type-clean: same iterrows-Series-widening fix as
+                # the seed loop above. Funnel through Any before int().
+                _iid_raw: Any = _iv_row["id"]
+                _seq_raw: Any = _iv_row["sequence"]
+                _iid = int(_iid_raw)
+                _seq = int(_seq_raw)
 
                 if _i > 0:
                     # Visual separator between blocks. The first row
