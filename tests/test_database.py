@@ -14,6 +14,7 @@ import pytest
 
 import config
 import database
+import exports
 from tests.conftest import make_position
 
 # ── Schema / init_db ──────────────────────────────────────────────────────────
@@ -222,6 +223,11 @@ class TestInitDb:
         )
         monkeypatch.setattr(config, "RESULT_DEFAULT", sentinel_result)
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "ddl_probe.db")
+        # Pair the DB isolation with EXPORTS_DIR isolation — every database.py
+        # writer fires exports.write_all() via deferred import; without the
+        # paired EXPORTS_DIR monkeypatch the writer would pollute the project's
+        # real exports/ directory whenever this test seeds a row.
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
 
         database.init_db()
 
@@ -375,6 +381,13 @@ class TestInitDb:
         and must leave the backfilled stamp untouched (the backfill UPDATE
         is scoped WHERE updated_at IS NULL, so it no-ops the second time)."""
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        # Pair the DB isolation with EXPORTS_DIR isolation — every database.py
+        # writer fires exports.write_all() via deferred import, which would
+        # otherwise pollute the project's real exports/ directory. The
+        # conftest db fixture handles this for tests that use it; the migration
+        # tests below opt out of `db` for tmp_path-direct setup, so this
+        # second monkeypatch line keeps the pair coherent.
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
 
         # Simulate a pre-v1.3 positions table (no updated_at) with an
         # existing row — mirrors what a user's local DB looks like before
@@ -480,6 +493,13 @@ class TestInitDb:
         Idempotence: a second init_db() finds the column already
         present and skips the ALTER entirely."""
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        # Pair the DB isolation with EXPORTS_DIR isolation — every database.py
+        # writer fires exports.write_all() via deferred import, which would
+        # otherwise pollute the project's real exports/ directory. The
+        # conftest db fixture handles this for tests that use it; the migration
+        # tests below opt out of `db` for tmp_path-direct setup, so this
+        # second monkeypatch line keeps the pair coherent.
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
 
         # Pre-v1.3 positions table — has work_auth (v1.2 already had it)
         # but NO work_auth_note, no updated_at, no req_*/done_* columns.
@@ -2300,6 +2320,13 @@ class TestInterviewsMigration:
         callers call database.init_db() after seeding and inspect the
         resulting tables."""
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        # Pair the DB isolation with EXPORTS_DIR isolation — every database.py
+        # writer fires exports.write_all() via deferred import, which would
+        # otherwise pollute the project's real exports/ directory. The
+        # conftest db fixture handles this for tests that use it; the migration
+        # tests below opt out of `db` for tmp_path-direct setup, so this
+        # second monkeypatch line keeps the pair coherent.
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
         with database._connect() as conn:
             conn.execute("""
                 CREATE TABLE positions (
@@ -2471,6 +2498,13 @@ class TestConfirmationSplitMigration:
         deadline_date is required on positions so idx_positions_deadline
         CREATE in init_db() does not fail."""
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        # Pair the DB isolation with EXPORTS_DIR isolation — every database.py
+        # writer fires exports.write_all() via deferred import, which would
+        # otherwise pollute the project's real exports/ directory. The
+        # conftest db fixture handles this for tests that use it; the migration
+        # tests below opt out of `db` for tmp_path-direct setup, so this
+        # second monkeypatch line keeps the pair coherent.
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
         with database._connect() as conn:
             conn.execute("""
                 CREATE TABLE positions (
@@ -2736,6 +2770,13 @@ class TestRecommendersRebuildMigration:
         those migrations, Sub-task 11 only touches recommenders, so
         the other tables can stay bare."""
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        # Pair the DB isolation with EXPORTS_DIR isolation — every database.py
+        # writer fires exports.write_all() via deferred import, which would
+        # otherwise pollute the project's real exports/ directory. The
+        # conftest db fixture handles this for tests that use it; the migration
+        # tests below opt out of `db` for tmp_path-direct setup, so this
+        # second monkeypatch line keeps the pair coherent.
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
         with database._connect() as conn:
             conn.execute("""
                 CREATE TABLE positions (
