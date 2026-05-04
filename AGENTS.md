@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `feat(phase-7-T2): Position search bar on Opportunities page`.
+  — e.g. `test(phase-7-T3): set_page_config sweep across pages`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 T1 merged (PR #37); test suite at 836 passed + 1 xfailed
+**`main` HEAD:** Phase 7 T2 merged (PR #38); test suite at 843 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -216,8 +216,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | Task | Status | Notes |
 |------|--------|-------|
 | T1 — Urgency colors on positions table (`st.column_config`) | ✅ PR #37 | `_deadline_urgency` returns `🔴`/`🟡`/`''`/`—` glyphs (was: `'urgent'`/`'alert'`/`''`); new em-dash branch distinguishes "no deadline at all" from "deadline far enough away"; explicit NaN guard |
-| T2 — Position search bar on Opportunities | 🔲 next | see "Immediate task" |
-| T3 — `set_page_config` sweep on remaining pages | 🔲 | |
+| T2 — Position search bar on Opportunities | ✅ PR #38 | `filter_search` text_input prepended to filter row; `position_name` substring (case-insensitive, regex=False, NaN-safe); AND-combined with status/priority/field |
+| T3 — `set_page_config` sweep on remaining pages | 🔲 next | see "Immediate task" |
 | T4 — Confirm-dialog audit | 🔲 | |
 | T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 | |
 | T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | |
@@ -228,95 +228,106 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 T2 (Position search bar on Opportunities page)
+## Immediate task — Phase 7 T3 (`set_page_config` sweep on remaining pages)
 
-**Spec:** `TASKS.md` current sprint Phase 7 T2
-("Position search bar on Opportunities (substring, `regex=False`)")
-· existing `pages/1_Opportunities.py` filter bar (the surface to
-extend) · `pandas.Series.str.contains(..., regex=False, case=False,
-na=False)` API (case-insensitive substring without regex
-metacharacters mattering, NaN-safe).
+**Spec:** `TASKS.md` current sprint Phase 7 T3
+("`set_page_config` sweep on remaining pages (verify GUIDELINES §13
+step 2 holds for every page)") · `GUIDELINES §13` step 2 (locked
+shape: `st.set_page_config(page_title="Postdoc Tracker",
+page_icon="📋", layout="wide")` as first executable statement) ·
+DESIGN §8.0 + D14 (same locked shape) · existing call sites in
+`app.py`, `pages/1_Opportunities.py`, `pages/2_Applications.py`,
+`pages/3_Recommenders.py`, `pages/4_Export.py`.
 
-Phase 7 T2 adds a free-text search bar to the Opportunities page
-filter row so the user can narrow the positions table by partial
-match against `position_name` (and arguably `institute` /
-`field` — implementer picks; flag in PR description). Substring
-match, no regex.
+Phase 7 T3 is a verification + harmonization sweep — read each
+page's `st.set_page_config` call, confirm the locked-shape contract
+holds (all four kwargs present + correct values + position before
+any other `st.*` call), tighten any divergence. Pure cohesion work;
+no new behaviour.
 
-### T2 — Position search bar
+### T3 — `set_page_config` sweep
 
-- Add an `st.text_input("Search positions", ...,
-  key="opps_filter_search")` (or whatever key fits the existing
-  filter prefix on the page — verify against the page's existing
-  filter-bar widget keys; the project convention is `filter_` or
-  page-prefix-`filter_`, but this page may use `opps_` or have
-  established a different prefix in Phase 3 — read the file first).
-- Apply the filter as a row-mask over the table's source DataFrame
-  via `df["position_name"].str.contains(query, regex=False,
-  case=False, na=False)`. `na=False` excludes NULL position-name
-  rows (they shouldn't exist per the schema's NOT NULL constraint,
-  but defensive). Empty query → no narrowing (all rows pass).
-- Decide the search-target column scope: position_name only, OR
-  position_name + institute + field. Wider scope is more useful
-  for the user; narrower scope is simpler to test. Pick one + flag
-  in PR description.
-- The search filter applies AFTER the existing status / priority /
-  field filters (or in concert with them — order doesn't matter
-  because all are AND-combined row masks).
-- Empty-state copy: if the search narrows to zero rows AND the
-  other filters don't match anything either, fall through to the
-  existing empty-state branch. If JUST the search narrows to zero,
-  the user's mental model is "their search didn't match" — same
-  empty branch handles it via the existing message.
+- **Audit each call site** for the locked shape:
+  ```python
+  st.set_page_config(
+      page_title="Postdoc Tracker",
+      page_icon="📋",
+      layout="wide",
+  )
+  ```
+  Five files to check: `app.py`, `pages/1_Opportunities.py`,
+  `pages/2_Applications.py`, `pages/3_Recommenders.py`,
+  `pages/4_Export.py`.
+- **For each page** verify three invariants:
+  1. **All three kwargs present** — `page_title`, `page_icon`,
+     `layout`. Missing kwarg → fix.
+  2. **Locked values** — `page_title="Postdoc Tracker"`,
+     `page_icon="📋"`, `layout="wide"`. Drift → fix.
+  3. **First executable Streamlit statement** — no `st.*` call
+     before `st.set_page_config`. Imports + module-level
+     constants OK; any `st.title` / `st.write` / `st.subheader`
+     call before `set_page_config` fails the contract (Streamlit
+     rejects with a runtime warning).
+- **Fix divergences inline**. If all five pages already satisfy the
+  contract, the tier ships as a verification-only PR with one new
+  test and a no-op page change (just the test commit). Flag the
+  no-op outcome in the PR description.
 
 ### Tests to write first (TDD red commit)
-- Extend `tests/test_opportunities_page.py`. Mirror the AppTest-
-  driven shape of `TestPositionsTable`.
-- New `TestPositionsTableSearch` class (or extend an existing
-  filter-bar class):
-  - `test_search_input_renders` — `at.text_input(key=...)` exists
-    with the locked label.
-  - `test_empty_search_returns_all_rows` — seed N positions, leave
-    search empty; assert N data rows.
-  - `test_search_substring_filters_rows` — seed positions
-    `"Postdoc Stanford"` + `"Faculty MIT"`; set search to
-    `"stanford"` (lowercase); assert only the Stanford row
-    surfaces (case-insensitive).
-  - `test_search_no_match_renders_empty` — seed positions; set
-    search to a string that doesn't match; assert the existing
-    empty-state branch fires.
-  - `test_search_special_chars_no_regex_interpretation` — seed
-    `"C++ Postdoc"`; set search to `"++"`; assert the row
-    surfaces (regex `++` would be an invalid quantifier; the
-    `regex=False` arg makes this a literal substring match).
-  - `test_search_combines_with_status_filter` — set status filter
-    to a specific value AND a search string; assert the
-    intersection (only rows matching BOTH filters surface).
+- New test class `TestSetPageConfigSweep` in
+  `tests/test_pages_cohesion.py` (NEW file — Phase 7 introduces
+  cross-page cohesion tests as their own surface). Or extend an
+  existing test file if a clean home exists; verify the test
+  layout convention by reading recent test files first.
+- Source-grep tests (no AppTest needed — `set_page_config` is
+  consumed before widgets render and doesn't surface on the
+  AppTest element tree, so source-level pinning is the
+  appropriate granularity, mirroring the precedent in
+  `tests/test_export_page.py::TestExportPageShell::test_page_config_sets_wide_layout`):
+  - `test_app_py_locks_set_page_config` — `app.py` source contains
+    the verbatim three kwargs.
+  - `test_opportunities_page_locks_set_page_config` — same for
+    `pages/1_Opportunities.py`.
+  - `test_applications_page_locks_set_page_config` — same for
+    `pages/2_Applications.py`.
+  - `test_recommenders_page_locks_set_page_config` — same for
+    `pages/3_Recommenders.py`.
+  - `test_export_page_locks_set_page_config` — same for
+    `pages/4_Export.py` (this one already exists in
+    `test_export_page.py` — mirror its source-grep shape rather
+    than re-implementing).
+  - Optionally a parametrize-driven version that loops over the
+    five files with shared assertion logic. Either shape is fine.
+- A separate **first-Streamlit-call** invariant check: parse each
+  file with `ast` to find the line number of the first
+  `st.<call>()` invocation; assert it's the
+  `set_page_config` call. Catches a bug where a future edit adds
+  `st.title("X")` above the `set_page_config` line.
 
 ### Architecture rules (non-negotiable)
-- `pages/1_Opportunities.py` already imports `database`, `config`,
-  `streamlit`, `pandas`. No new imports needed.
-- Widget key follows the existing page's filter-prefix convention
-  (read the file to confirm whether to use `opps_filter_search`
-  or `filter_search` or another shape).
+- T3 is doc-cohesion + tests; no new imports, no new helpers.
+- Widget keys: T3 doesn't add widgets.
 
 ### Pre-PR gates
-Standing checklist below + the CI-mirror local check from "Session
-bootstrap" — both apply.
+Standing checklist + CI-mirror check.
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-tier2-PositionSearch`.
-- One PR for the test + feat commits; orchestrator handles the
-  chore rollup post-merge.
+- Branch name: `feature/phase-7-tier3-SetPageConfigSweep`.
+- One PR for the test + (optional) feat commits; orchestrator
+  handles the chore rollup post-merge.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test: commit  → add failing tests to tests/test_opportunities_page.py
-                   (search bar not implemented yet → RED)
-2. feat: commit  → extend pages/1_Opportunities.py with search-bar filter (GREEN)
+1. test: commit  → add tests to tests/test_pages_cohesion.py (or
+                   equivalent) pinning `set_page_config` shape across
+                   pages (RED if any page diverges from the locked
+                   shape; GREEN if all five pages already conform)
+2. feat: commit  → fix any divergence from the locked shape; OMIT
+                   if all five pages pass on the test commit (no-op
+                   verification PR)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -351,7 +362,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-tier2-PositionSearch` |
+| Open PR | You — branch name: `feature/phase-7-tier3-SetPageConfigSweep` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
