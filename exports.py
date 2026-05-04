@@ -81,6 +81,23 @@ def _format_confirmation(received: Any, iso_date: Any) -> str:
     return f"✓ {iso_str}"
 
 
+def _format_confirmed(v: Any) -> str:
+    """Tri-state Confirmed cell: NULL → '—', 0 → 'No', 1 → 'Yes'.
+
+    Local mirror of ``pages/3_Recommenders.py::_format_confirmed`` —
+    DESIGN §2 layer rules forbid pages and exports from sharing helpers
+    (the page module imports ``streamlit`` which ``exports.py`` cannot
+    transitively pull in). Identical semantics, just lives here so the
+    layer rule holds."""
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return _EM_DASH
+    try:
+        i = int(v)
+    except (TypeError, ValueError):
+        return _EM_DASH
+    return "Yes" if i == 1 else "No"
+
+
 def _format_interviews_summary(scheduled_dates: list[Any]) -> str:
     """Summarize a position's interviews into a single cell.
 
@@ -310,5 +327,98 @@ def write_progress() -> None:
 
 
 def write_recommenders() -> None:
-    """Generate exports/RECOMMENDERS.md from the recommenders table. (Phase 6)"""
-    pass
+    """Generate ``exports/RECOMMENDERS.md`` from recommenders × positions.
+
+    DESIGN §7 contract — markdown backup of every recommender × position
+    pair (one row per letter owed). Column contract (locked by tests in
+    ``tests/test_exports.py::TestWriteRecommenders``):
+
+        | Recommender | Relationship | Position | Institute | Asked | Confirmed | Submitted | Reminder |
+
+    ``notes`` is intentionally NOT exported — recommender notes are
+    typically free-form prose that's awkward in a markdown table cell.
+    The in-app UI carries them; the export summarises.
+
+    Cell shapes (mirror T1 + T2 conventions for cross-export cohesion):
+      - ``_safe_str_or_em`` for missing TEXT cells → em-dash.
+      - Date cells (Asked, Submitted) pass-through ISO TEXT.
+      - ``_format_confirmed`` for the Confirmed tri-state
+        (``—`` / ``No`` / ``Yes``) — local mirror of the
+        ``pages/3_Recommenders.py`` helper per the DESIGN §2 layer rule.
+      - ``_format_confirmation`` for the Reminder tri-state
+        (``—`` / ``✓ {ISO}`` / ``✓ (no date)``) — REUSED because the
+        ``(reminder_sent, reminder_sent_date)`` pair has the same
+        ``(flag, date)`` shape as the Applications-page Confirmation
+        pattern (DESIGN §8.3 D-A T1-C precedent).
+      - ``_md_escape_cell`` on every cell.
+      - No status sentinel — recommenders don't carry pipeline status.
+
+    Sort order: ``recommender_name ASC, deadline_date ASC NULLS LAST,
+    id ASC``.
+
+      - Primary ``recommender_name`` groups one person's owed letters
+        together (the natural reading mode for the file).
+      - Secondary ``deadline_date`` orders multiple positions for the
+        same recommender by upcoming-ness.
+      - Tertiary ``id`` is the deterministic tiebreaker.
+
+    ``database.get_all_recommenders()`` SQL covers the first + third
+    keys (``recommender_name ASC, id ASC``); ``deadline_date`` is
+    merged in from ``database.get_all_positions()`` here in pandas
+    (mirror of T2's "compose multiple reads in exports.py" precedent).
+    The ``pandas.sort_values(... kind='stable')`` re-sort on top of
+    that defends against a future upstream change to either reader's
+    SQL ORDER BY clause.
+
+    Idempotent — no timestamps in body, no dict-ordering drift. Two
+    calls with the same DB state produce byte-identical output
+    (DESIGN §7 contract #2).
+
+    Deferred ``database`` import inside the function body avoids the
+    ``database → exports → database`` circular import at module load."""
+    import database  # deferred — see module docstring + DESIGN §7
+
+    EXPORTS_DIR.mkdir(exist_ok=True)
+
+    df = database.get_all_recommenders()
+    if not df.empty:
+        # Merge deadline_date from positions for the secondary sort key.
+        # Trim positions to (id, deadline_date) so the merge doesn't
+        # pollute the row with stray columns; rename id → position_id
+        # to align with df's join column.
+        positions = (
+            database.get_all_positions()
+            [["id", "deadline_date"]]
+            .rename(columns={"id": "position_id", "deadline_date": "_pos_deadline"})
+        )
+        df = df.merge(positions, on="position_id", how="left")
+        df = df.sort_values(
+            by=["recommender_name", "_pos_deadline", "id"],
+            ascending=[True, True, True],
+            na_position="last",
+            kind="stable",
+        ).reset_index(drop=True)
+
+    header = (
+        "| Recommender | Relationship | Position | Institute "
+        "| Asked | Confirmed | Submitted | Reminder |"
+    )
+    separator = "| --- | --- | --- | --- | --- | --- | --- | --- |"
+
+    lines: list[str] = [header, separator]
+    for _, row in df.iterrows():
+        cells = [
+            _safe_str_or_em(row["recommender_name"]),
+            _safe_str_or_em(row["relationship"]),
+            _safe_str_or_em(row["position_name"]),
+            _safe_str_or_em(row["institute"]),
+            _safe_str_or_em(row["asked_date"]),
+            _format_confirmed(row["confirmed"]),
+            _safe_str_or_em(row["submitted_date"]),
+            _format_confirmation(row["reminder_sent"], row["reminder_sent_date"]),
+        ]
+        cells = [_md_escape_cell(c) for c in cells]
+        lines.append("| " + " | ".join(cells) + " |")
+
+    out_path = EXPORTS_DIR / "RECOMMENDERS.md"
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
