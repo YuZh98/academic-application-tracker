@@ -55,12 +55,11 @@ admin-bypass per the standing `c284c20` procedure for consistency.
 
 | # | File · Location | Issue | Severity | Status |
 |---|---|---|---|---|
-| 1 | `pages/4_Export.py` download section | Wireframe deviation: stacked button-above-mtime layout instead of side-by-side. Implementer rationale (PR description + commit body): preserving T4 substring assertions + cleaner narrow-viewport rendering. The wireframe is "intent-only" per `docs/ui/wireframes.md` line 3, and the visual association between button and mtime line is still clear. | ℹ️ | Kept-by-design. If a future Phase 7 cohesion sweep wants exact wireframe fidelity, the test-compatibility cost is one substring rewrite in `TestExportPageMtimesPanel`. |
-| 2 | `pages/4_Export.py` "Download" section header rendering | `st.divider()` + `st.subheader("Download")` instead of literal `"── Download ───"` markdown. Streamlit's markdown doesn't render Unicode dashes as a horizontal rule — they'd appear as literal characters. Divider + subheader pair is the idiomatic equivalent: same visual intent (rule + label), better-rendered. | ℹ️ | Kept-by-design. |
-| 3 | `tests/test_export_page.py` source-grep tests | Two of the seven new tests (`test_download_button_data_arg_uses_file_read_bytes` + `test_download_button_file_name_arg_uses_locked_filename`) are source-grep rather than runtime assertions because AppTest 1.56's DownloadButton proto doesn't expose the `data` bytes or `file_name` arg (they're stored behind a mock media URL). Source-grep is the correct fallback when the test framework can't reach the field. The integration test `test_download_button_enabled_when_file_present` is the belt-and-suspenders pin. | ℹ️ | Kept-by-design. Cite-able if a future Streamlit upgrade exposes these fields on the proto — at that point both source-grep tests can become runtime assertions. |
-| 4 | `tests/test_export_page.py::_download_button` helper | Looks up by `proto.id.endswith(target_key)` rather than exact match. The `proto.id` is Streamlit's full widget id (includes a generated prefix); `endswith` reliably matches the user-set key suffix. Same precedent the T6 LLM-prompts test in `test_recommenders_page.py` uses for its link-button lookups. | ℹ️ | Observation. |
+| 1 | `tests/test_export_page.py::_download_button` helper | Looks up by `proto.id.endswith(target_key)` rather than exact match. The `proto.id` is Streamlit's full widget id (includes a generated prefix); `endswith` reliably matches the user-set key suffix. Same precedent the T6 LLM-prompts test in `test_recommenders_page.py` uses for its link-button lookups. | ℹ️ | Observation |
 
-*No 🔴 / 🟠 / 🟡 findings.*
+*No 🔴 / 🟠 / 🟡 / 🟢 findings.*
+
+*Three additional kept-by-design choices (stacked layout, divider+subheader for the section header, source-grep tests for AppTest-unobservable fields) are addressed in the Q&A section per `GUIDELINES §10` ("`Kept by design` observations belong in the Q&A section, not in the Findings table — they are not defects").*
 
 ---
 
@@ -89,6 +88,14 @@ A. Streamlit doesn't impose a key-format convention beyond uniqueness; the dot i
 **Q6. Phase 6 generators (T1-T3) used DESIGN §7 contract #2's "stable markdown format" pin via `test_idempotent_across_two_calls`. Why doesn't T5 add a corresponding test?**
 
 A. T5 doesn't change the markdown format — it consumes the files the T1-T3 writers produce, doesn't generate new content. Any idempotency drift would surface in the T1-T3 tests, not here. T5's contract is "the download button reads the file's current bytes and serves them" — `Path.read_bytes()` is byte-for-byte deterministic by definition (filesystem semantics). The integration test `test_download_button_enabled_when_file_present` confirms the runtime path; the source-grep test pins the implementation shape; nothing more is needed at the T5 level. If a future T6 cohesion sweep wants a "regenerate then download produces the same bytes" round-trip test, it lands at the cohesion-smoke layer, not in `TestExportPageDownloadButtons`.
+
+**Q7. The wireframe shows download button + mtime line side-by-side; the implementation stacks them. Why deviate?**
+
+A. Side-by-side via `st.columns([1, 3])` would have moved the **bold filename** onto the button label (the natural "left cell"), leaving the mtime line on the right with just the timestamp. The T4 mtime tests (`TestExportPageMtimesPanel`) assert against the substring `"**FILENAME.md**"` in the rendered markdown bodies — moving the filename onto the button label puts it in the button's `proto.label` field instead, which AppTest treats as a different element type. The breakage cascade: column rendering → filename leaves `at.markdown` → 9 T4 substring assertions fail. Stacked rendering keeps the filename in the per-row markdown line, preserves T4's contract, and reads cleanly at narrow viewport widths (where side-by-side would compress the timestamp into ~30% of the row). The wireframe is "intent-only" per `docs/ui/wireframes.md` line 3, so the deviation is documented and accepted — the visual association between button and mtime stays clear because they're directly adjacent and share the bold filename in the markdown line.
+
+**Q8. Why `st.divider()` + `st.subheader("Download")` instead of a literal `"── Download ───"` markdown rendering?**
+
+A. Streamlit's markdown renderer treats Unicode box-drawing characters (`─`) as literal glyphs, not as a horizontal rule. A line of three em-dashes in the source markdown produces three em-dashes in the output, not a `<hr>` tag. The wireframe's ASCII rule was illustrating intent — "section break with a label" — not pinning the literal characters. `st.divider()` is the Streamlit primitive for "horizontal rule"; `st.subheader("Download")` is the primitive for "labelled section break". The pair gives the same intent in idiomatic primitives that actually render. A separate concern: even if the dashes did render as a rule, the section-header text ("Download") needs a heading element for screen-reader navigation, which `st.subheader` provides via `<h3>` semantics that plain markdown prose doesn't.
 
 ---
 
