@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-04 | Phase 5 T6 — Recommender reminder helpers (Compose mailto + LLM prompts expander) | `feature/phase-5-tier6-RecommenderReminders` | Approve | [phase-5-tier6-review.md](phase-5-tier6-review.md) |
 | 2026-05-03 | Phase 5 T5 — Recommenders table + filters + Add form + inline edit + dialog Delete | `feature/phase-5-tier5-RecommendersTableAddEdit` | Approve (post-merge) | [phase-5-tier5-review.md](phase-5-tier5-review.md) |
 | 2026-04-30 | Phase 5 T4 — Recommenders page shell + Pending Alerts panel | `feature/phase-5-tier4-RecommendersAlertPanel` | Approve | [phase-5-tier4-review.md](phase-5-tier4-review.md) |
 | 2026-04-30 | Phase 5 T3 — Inline interview list UI (T3-A + T3-B + T3-rev) | `feature/phase-5-tier3-InterviewManagementUI` | Approve | [phase-5-Tier3-review.md](phase-5-Tier3-review.md) |
