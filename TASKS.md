@@ -758,8 +758,26 @@ All defensible. Merged via PR #36 (`73a04c4`).
       `NO_GLYPH` / `EM_DASH` centralize the locked-copy strings.
       Suite 834 → 836 under both pytest gates. Merged via PR #37
       (`e5316fd`).
-- [ ] **T2** Position search bar on Opportunities (substring,
-      `regex=False`)
+- [x] **T2** Position search bar on Opportunities (substring,
+      `regex=False`) — `filter_search` text_input prepended to the
+      filter row (`st.columns([3, 2, 2, 3])` reweighting; search
+      column widest because user-typed queries are variable length).
+      `df["position_name"].str.contains(query, regex=False,
+      case=False, na=False)` row mask AND-combined with the existing
+      status / priority / field filters via successive
+      `df_filtered = df_filtered[mask]` narrowings. Search scope
+      `position_name` only — institute / field deliberately excluded
+      (field has its own filter; narrower scope keeps "what you type
+      matches what's printed in the Position column" predictable).
+      7 new tests across `TestPositionSearchStructure` (2: widget +
+      label) + `TestPositionSearchBehaviour` (5: empty-search,
+      substring case-insensitive, zero-match empty-state,
+      regex-special-chars-as-literal `'++'`-in-`'C++ Postdoc'`,
+      AND-combined with status filter). Every N=1 behaviour test
+      includes row-identity assertion (not just count) — guards
+      against swapped predicates that would coincidentally produce
+      N=1 with the wrong row. Suite 836 → 843 under both pytest
+      gates. Merged via PR #38 (`e67cfed`).
 - [ ] **T3** `set_page_config` sweep on remaining pages (verify
       GUIDELINES §13 step 2 holds for every page)
 - [ ] **T4** Confirm-dialog audit (every destructive path wears
@@ -802,6 +820,16 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #38 merged** (`e67cfed`): Phase 7 T2 shipped —
+  free-text "Search positions" `text_input` prepended to the
+  Opportunities filter row; `position_name` substring match
+  (case-insensitive, regex=False, NaN-safe) AND-combined with
+  status / priority / field filters. Search scope `position_name`
+  only (kept-by-design — field has its own filter widget). Filter
+  row reweights `[2, 2, 3]` → `[3, 2, 2, 3]` with search widest.
+  7 new tests; suite 836 → 843 under both pytest gates. CI procedure
+  followed cleanly (third clean end-to-end run). Pre-merge review
+  at [`reviews/phase-7-tier2-review.md`](reviews/phase-7-tier2-review.md).
 - 2026-05-04 — **PR #37 merged** (`e5316fd`): Phase 7 T1 shipped —
   `pages/1_Opportunities.py::_deadline_urgency` returns inline
   glyphs (`🔴` / `🟡` / `''` / `—`) instead of literal-string
@@ -1044,4 +1072,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 T1 merged via PR #37; main HEAD `e5316fd`; suite 836 / 1 xfailed; Phase 7 T2 — Position search bar on Opportunities next)_
+_Updated: 2026-05-04 (Phase 7 T2 merged via PR #38; main HEAD `e67cfed`; suite 843 / 1 xfailed; Phase 7 T3 — `set_page_config` sweep on remaining pages next)_
