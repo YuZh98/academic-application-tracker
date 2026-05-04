@@ -27,7 +27,11 @@ review at [`reviews/phase-5-Tier3-review.md`](reviews/phase-5-Tier3-review.md).
 
 Branch (T4): on `feature/phase-5-tier4-RecommendersAlertPanel`; pre-merge
 review at [`reviews/phase-5-tier4-review.md`](reviews/phase-5-tier4-review.md);
-suite 682 → 700 green under both pytest gates.
+suite 682 → 700 green under both pytest gates. Merged via PR #28 (`a491be3`).
+
+Branch (T5): on `feature/phase-5-tier5-RecommendersTableAddEdit`; pre-merge
+review at [`reviews/phase-5-tier5-review.md`](reviews/phase-5-tier5-review.md);
+suite 700 → 756 green under both pytest gates. Merged via PR #29 (`2293ebd`).
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
       `set_page_config`, title, default filter excluding
@@ -274,9 +278,39 @@ suite 682 → 700 green under both pytest gates.
         under both pytest gates.
 - [x] **T4** Recommenders alert panel (`pages/3_Recommenders.py`) —
       grouped by `recommender_name`
-- [ ] **T5** Recommenders table + add form + inline edit (`asked_date`,
+- [x] **T5** Recommenders table + add form + inline edit (`asked_date`,
       `confirmed`, `submitted_date`, `reminder_sent`+`reminder_sent_date`,
-      `notes`)
+      `notes`) — three sub-areas shipped as one PR on
+      `feature/phase-5-tier5-RecommendersTableAddEdit`. T5-A: read-only
+      `st.dataframe` (`recs_table`) backed by `database.get_all_recommenders()`
+      with the locked six-column display contract (Position · Recommender ·
+      Relationship · Asked · Confirmed · Submitted) + two filter selectboxes
+      (`recs_filter_position`, `recs_filter_recommender`) defaulting to
+      `"All"`; recommender filter dedupes repeat names across positions.
+      T5-B: `st.form("recs_add_form")` inside an "Add Recommender" expander
+      (Opportunities Quick-Add precedent — keeps the table above the fold);
+      position selectbox uses label-as-value with submit-time
+      `_position_label_to_id` lookup so IDs never surface to the user
+      (DESIGN §8.4); whitespace-only name → `st.error`; success →
+      `st.toast(f"Added {name}.")`. T5-C: single-row selection captures
+      `recs_selected_id`; inline edit card (`st.container(border=True)`)
+      below the table with `st.form("recs_edit_form")` over asked_date /
+      confirmed (`[None, 0, 1]` → `—`/`No`/`Yes`) / submitted_date /
+      reminder_sent + reminder_sent_date / notes; Save computes a
+      per-field dirty diff against the persisted row and writes ONLY
+      changed fields via `database.update_recommender`; Delete button
+      OUTSIDE the form opens an `@st.dialog` confirm gate
+      (`recs_delete_confirm` / `recs_delete_cancel`) that cascades via
+      `database.delete_recommender` on Confirm and preserves selection
+      across the Cancel-driven rerun via the `_recs_skip_table_reset`
+      one-shot. Mirrors the Opportunities-page dialog re-open trick
+      (gotcha #3): single dialog call site post-loop guarded by
+      `pending_id == _rec_id`, doubling as automatic stale-target cleanup
+      on row-change. Ride-along constant rename
+      `config.RELATIONSHIP_TYPES` → `config.RELATIONSHIP_VALUES`
+      (project-wide `*_VALUES` naming convention) plus two prose
+      references in `DESIGN.md` + `docs/dev-notes/extending.md`. 56 new
+      tests; suite 700 → 756 under both pytest gates.
 - [ ] **T6** Recommender reminder helpers per DESIGN §8.4 D-C (locked
       subject + body for primary mailto; `LLM prompts (N tones)`
       expander rendering pre-filled prompts as `st.code(...)` blocks)
@@ -425,6 +459,19 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-03 — **PR #29 merged** (`2293ebd`): Phase 5 T5 (T5-A + T5-B
+  + T5-C) shipped — All-Recommenders table + filters + Add form +
+  inline edit card + dialog-gated Delete on `pages/3_Recommenders.py`
+  with the `RELATIONSHIP_TYPES` → `RELATIONSHIP_VALUES` cohesion
+  rename. Suite 700 → 756 under both pytest gates. Pre-merge review
+  at [`reviews/phase-5-tier5-review.md`](reviews/phase-5-tier5-review.md).
+- 2026-05-03 — **PR #28 merged** (`a491be3`): Phase 5 T4 shipped —
+  `pages/3_Recommenders.py` page shell (`set_page_config`, title,
+  `database.init_db()`) + Pending Alerts panel (`get_pending_recommenders()`
+  grouped by `recommender_name`, one `st.container(border=True)` per
+  person with relationship in header, em-dash on NULL deadlines).
+  Suite 682 → 700 under both pytest gates. Pre-merge review at
+  [`reviews/phase-5-tier4-review.md`](reviews/phase-5-tier4-review.md).
 - 2026-05-01 — **Phase 5 T3-rev (T3-rev-A + T3-rev-B) shipped on
   branch** `feature/phase-5-tier3-InterviewManagementUI` —
   truth-file alignment for the Applications page. T3-rev-A: split
@@ -543,4 +590,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-01 (Phase 5 T3-rev-A + T3-rev-B both shipped on `feature/phase-5-tier3-InterviewManagementUI`; pre-merge review + PR pending)_
+_Updated: 2026-05-03 (Phase 5 T5 merged via PR #29; main HEAD `2293ebd`; suite 756 / 1 xfailed; T6 Reminder helpers next)_
