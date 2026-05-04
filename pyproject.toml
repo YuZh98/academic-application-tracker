@@ -28,3 +28,36 @@ quote-style = "double"
 indent-style = "space"
 # Format is configured but NOT yet enforced via CI / pre-commit. When the
 # 14-file reformat lands as its own PR, add `ruff-format` to the hook list.
+
+[tool.pyright]
+# Phase 7 cleanup CL1: type-check fence in CI. Matches PR #22's working
+# point ("basic" mode) — strict would require widespread additional
+# annotations and is out of scope here. Re-runs of pyright against this
+# config must stay clean for every subsequent PR (CI gate).
+pythonVersion = "3.14"
+typeCheckingMode = "basic"
+# Scope to project source + tests. Top-level files like requirements.txt,
+# pyproject.toml itself, and CI configs aren't Python so don't need
+# explicit include — pyright's default file discovery handles them, but
+# being explicit keeps the type-check surface predictable across CI fresh
+# clones and local runs.
+include = [
+    "app.py",
+    "config.py",
+    "database.py",
+    "exports.py",
+    "pages",
+    "tests",
+]
+# .venv (local virtualenv) and __pycache__ are auto-discovered junk; docs
+# contains screenshot seed snippets, not source; exports is generated
+# markdown output (.gitignored locally but a fresh CI clone may still see
+# stub directories in some setups).
+exclude = [
+    ".venv",
+    "**/__pycache__",
+    "docs",
+    "exports",
+    "build",
+    "dist",
+]
