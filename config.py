@@ -111,6 +111,15 @@ TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 # without hardcoding. Drift caught by §5.2 invariant #12.
 STATUS_FILTER_ACTIVE: str = "Active"
 
+# Universal "no narrowing applied" sentinel for filter selectboxes
+# (Opportunities, Applications, Recommenders). The filter selectbox is
+# rendered as `[FILTER_ALL] + <real options>` and the page checks
+# `if selected != config.FILTER_ALL: ...narrow...`. Lifted to config in
+# Phase 7 cleanup CL2 — was a magic "All" literal in three pages.
+# Lives alongside STATUS_FILTER_ACTIVE because the two are the
+# Applications page's two sentinel options on its single status filter.
+FILTER_ALL: str = "All"
+
 # Statuses removed by the "Active" filter sentinel above. Frozen so a
 # page can't accidentally mutate it via .add()/.remove() and silently
 # broaden the page's default filter at runtime. The selectbox stores
@@ -290,6 +299,15 @@ RELATIONSHIP_VALUES: list[str] = [
 # Kept small on purpose — "Other" is the escape hatch for edge cases so the
 # list doesn't bloat with one-off formats (hybrid, dinner, campus visit…).
 INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
+
+# Tones offered by the Recommenders-page LLM-prompts expander
+# (Phase 5 T6). The expander renders one prompt per tone — the label
+# `f"LLM prompts ({len(REMINDER_TONES)} tones)"` reads its count from
+# this tuple so adding a third tone (e.g. "formal") is a config-only
+# edit. Tuple (not list) so it's hashable + immutable. Lifted to config
+# in Phase 7 cleanup CL2 — was a private `_REMINDER_TONES` in
+# pages/3_Recommenders.py.
+REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
 
 # ── Requirement document types ────────────────────────────────────────────────
 # Each tuple: (db_req_column, db_done_column, display_label)
