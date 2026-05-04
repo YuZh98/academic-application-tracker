@@ -310,8 +310,29 @@ class TestPositionsTable:
         missing = required - cols
         assert not missing, f"Columns missing from table: {missing}"
 
-    def test_urgent_deadline_flagged_as_urgent(self, db):
-        """Deadline within DEADLINE_URGENT_DAYS must produce deadline_urgency='urgent'."""
+    # ── Phase 7 T1: urgency glyph in the deadline_urgency column ──────────
+    #
+    # Phase 3 T3 introduced the deadline_urgency column with literal-string
+    # values ('urgent' / 'alert' / ''). Phase 7 T1 (this contract) flips
+    # the value form to inline glyphs so the user reads urgency at a glance
+    # — same 🔴 / 🟡 banding the dashboard's Upcoming panel uses. Locked:
+    #
+    #   days_to_deadline ≤ DEADLINE_URGENT_DAYS → '🔴'
+    #   ≤ DEADLINE_ALERT_DAYS (but past urgent)  → '🟡'
+    #   beyond DEADLINE_ALERT_DAYS               → ''  (no urgency)
+    #   NULL / unparseable deadline              → '—' (em-dash placeholder)
+    #
+    # Streamlit 1.56's st.column_config.TextColumn doesn't support per-cell
+    # CSS color, so the urgency signal lives as glyph text — same precedent
+    # as the dashboard Upcoming panel.
+
+    URGENT_GLYPH = "🔴"
+    ALERT_GLYPH = "🟡"
+    NO_GLYPH = ""
+    EM_DASH = "—"
+
+    def test_urgent_deadline_renders_red_glyph(self, db):
+        """Deadline within DEADLINE_URGENT_DAYS → 🔴 in the urgency cell."""
         deadline = (
             datetime.date.today() + datetime.timedelta(days=config.DEADLINE_URGENT_DAYS - 1)
         ).isoformat()
@@ -319,13 +340,13 @@ class TestPositionsTable:
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "Urgent"])
-        assert row["deadline_urgency"].iloc[0] == "urgent", (
-            f"Expected 'urgent' for deadline {deadline}, got '{row['deadline_urgency'].iloc[0]}'"
+        assert row["deadline_urgency"].iloc[0] == self.URGENT_GLYPH, (
+            f"Expected {self.URGENT_GLYPH!r} for deadline {deadline}, "
+            f"got {row['deadline_urgency'].iloc[0]!r}"
         )
 
-    def test_alert_deadline_flagged_as_alert(self, db):
-        """Deadline > DEADLINE_URGENT_DAYS but ≤ DEADLINE_ALERT_DAYS must produce
-        deadline_urgency='alert'."""
+    def test_alert_deadline_renders_yellow_glyph(self, db):
+        """Deadline > DEADLINE_URGENT_DAYS but ≤ DEADLINE_ALERT_DAYS → 🟡."""
         deadline = (
             datetime.date.today() + datetime.timedelta(days=config.DEADLINE_URGENT_DAYS + 1)
         ).isoformat()
@@ -333,38 +354,42 @@ class TestPositionsTable:
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "Alert"])
-        assert row["deadline_urgency"].iloc[0] == "alert", (
-            f"Expected 'alert' for deadline {deadline}, got '{row['deadline_urgency'].iloc[0]}'"
+        assert row["deadline_urgency"].iloc[0] == self.ALERT_GLYPH, (
+            f"Expected {self.ALERT_GLYPH!r} for deadline {deadline}, "
+            f"got {row['deadline_urgency'].iloc[0]!r}"
         )
 
-    def test_normal_deadline_not_flagged(self, db):
-        """Deadline beyond DEADLINE_ALERT_DAYS must produce deadline_urgency=''."""
+    def test_distant_deadline_no_glyph(self, db):
+        """Deadline beyond DEADLINE_ALERT_DAYS → empty cell (no urgency)."""
         deadline = (
             datetime.date.today() + datetime.timedelta(days=config.DEADLINE_ALERT_DAYS + 10)
         ).isoformat()
-        database.add_position({"position_name": "Normal", "deadline_date": deadline})
+        database.add_position({"position_name": "Distant", "deadline_date": deadline})
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
-        row = cast(pd.DataFrame, df[df["position_name"] == "Normal"])
-        assert row["deadline_urgency"].iloc[0] == "", (
-            f"Expected '' for deadline {deadline}, got '{row['deadline_urgency'].iloc[0]}'"
+        row = cast(pd.DataFrame, df[df["position_name"] == "Distant"])
+        assert row["deadline_urgency"].iloc[0] == self.NO_GLYPH, (
+            f"Expected empty cell for deadline {deadline} (beyond alert "
+            f"window), got {row['deadline_urgency'].iloc[0]!r}"
         )
 
-    def test_no_deadline_not_flagged(self, db):
-        """A position without a deadline_date must produce deadline_urgency=''."""
+    def test_null_deadline_renders_em_dash(self, db):
+        """A position without a deadline_date → '—' (em-dash placeholder).
+        Distinguishes 'no deadline at all' from 'deadline far enough away
+        that no urgency is signalled' (both used to surface as ''; the
+        new contract distinguishes the two states)."""
         database.add_position({"position_name": "No Deadline"})  # no deadline_date supplied
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "No Deadline"])
-        assert row["deadline_urgency"].iloc[0] == "", (
-            f"Expected '' when no deadline, got '{row['deadline_urgency'].iloc[0]}'"
+        assert row["deadline_urgency"].iloc[0] == self.EM_DASH, (
+            f"Expected {self.EM_DASH!r} when no deadline, "
+            f"got {row['deadline_urgency'].iloc[0]!r}"
         )
 
     def test_urgency_at_urgent_threshold_boundary(self, db):
-        """Deadline exactly DEADLINE_URGENT_DAYS away must produce 'urgent' (F3: ≤ boundary).
-
-        Tests the boundary of `days <= DEADLINE_URGENT_DAYS` — a `<` operator
-        would incorrectly return 'alert' for this case."""
+        """Deadline EXACTLY DEADLINE_URGENT_DAYS away → 🔴 (≤ boundary).
+        A `<` operator instead of `<=` would incorrectly drop to 🟡 here."""
         deadline = (
             datetime.date.today() + datetime.timedelta(days=config.DEADLINE_URGENT_DAYS)
         ).isoformat()
@@ -372,16 +397,15 @@ class TestPositionsTable:
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "At Urgent Boundary"])
-        assert row["deadline_urgency"].iloc[0] == "urgent", (
-            f"Expected 'urgent' at boundary days={config.DEADLINE_URGENT_DAYS}, "
-            f"got '{row['deadline_urgency'].iloc[0]}'"
+        assert row["deadline_urgency"].iloc[0] == self.URGENT_GLYPH, (
+            f"Expected {self.URGENT_GLYPH!r} at boundary days="
+            f"{config.DEADLINE_URGENT_DAYS}, got "
+            f"{row['deadline_urgency'].iloc[0]!r}"
         )
 
     def test_urgency_at_alert_threshold_boundary(self, db):
-        """Deadline exactly DEADLINE_ALERT_DAYS away must produce 'alert' (F3: ≤ boundary).
-
-        Tests the boundary of `days <= DEADLINE_ALERT_DAYS` — a `<` operator
-        would incorrectly return '' for this case."""
+        """Deadline EXACTLY DEADLINE_ALERT_DAYS away → 🟡 (≤ boundary).
+        A `<` operator instead of `<=` would incorrectly drop to '' here."""
         deadline = (
             datetime.date.today() + datetime.timedelta(days=config.DEADLINE_ALERT_DAYS)
         ).isoformat()
@@ -389,24 +413,52 @@ class TestPositionsTable:
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "At Alert Boundary"])
-        assert row["deadline_urgency"].iloc[0] == "alert", (
-            f"Expected 'alert' at boundary days={config.DEADLINE_ALERT_DAYS}, "
-            f"got '{row['deadline_urgency'].iloc[0]}'"
+        assert row["deadline_urgency"].iloc[0] == self.ALERT_GLYPH, (
+            f"Expected {self.ALERT_GLYPH!r} at boundary days="
+            f"{config.DEADLINE_ALERT_DAYS}, got "
+            f"{row['deadline_urgency'].iloc[0]!r}"
         )
 
-    def test_past_deadline_flagged_as_urgent(self, db):
-        """A deadline that has already passed (days < 0) must produce 'urgent' (F4).
+    def test_today_deadline_renders_red_glyph(self, db):
+        """Boundary case at delta=0: a deadline of today → 🔴 (urgent).
+        days=0 satisfies `0 <= DEADLINE_URGENT_DAYS` since
+        DEADLINE_URGENT_DAYS is positive — the user must act today."""
+        deadline = datetime.date.today().isoformat()
+        database.add_position({"position_name": "Today", "deadline_date": deadline})
+        at = _run_page()
+        df = cast(pd.DataFrame, at.dataframe[0].value)
+        row = cast(pd.DataFrame, df[df["position_name"] == "Today"])
+        assert row["deadline_urgency"].iloc[0] == self.URGENT_GLYPH, (
+            f"Expected {self.URGENT_GLYPH!r} for a deadline of today; got "
+            f"{row['deadline_urgency'].iloc[0]!r}"
+        )
 
-        days < 0 satisfies `days <= DEADLINE_URGENT_DAYS`, so past deadlines are
-        surfaced as urgent — the user must either apply or close them."""
+    def test_past_deadline_renders_red_glyph(self, db):
+        """A deadline that has already passed (days < 0) → 🔴 (urgent).
+        days < 0 satisfies `days <= DEADLINE_URGENT_DAYS`, so past
+        deadlines stay flagged red — the user must either apply or close
+        them."""
         deadline = (datetime.date.today() - datetime.timedelta(days=5)).isoformat()
         database.add_position({"position_name": "Expired", "deadline_date": deadline})
         at = _run_page()
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "Expired"])
-        assert row["deadline_urgency"].iloc[0] == "urgent", (
-            f"Expected 'urgent' for past deadline {deadline}, "
-            f"got '{row['deadline_urgency'].iloc[0]}'"
+        assert row["deadline_urgency"].iloc[0] == self.URGENT_GLYPH, (
+            f"Expected {self.URGENT_GLYPH!r} for past deadline {deadline}, "
+            f"got {row['deadline_urgency'].iloc[0]!r}"
+        )
+
+    def test_invariant_check_urgent_le_alert(self):
+        """Pin the config invariant `DEADLINE_URGENT_DAYS <= DEADLINE_
+        ALERT_DAYS` in the test suite, mirroring config.py's import-time
+        assert. If the two thresholds were ever swapped, the urgency
+        bands would collapse — this test surfaces the contract at the
+        suite level rather than only at module import."""
+        assert config.DEADLINE_URGENT_DAYS <= config.DEADLINE_ALERT_DAYS, (
+            f"DEADLINE_URGENT_DAYS={config.DEADLINE_URGENT_DAYS} must be "
+            f"<= DEADLINE_ALERT_DAYS={config.DEADLINE_ALERT_DAYS} so the "
+            f"🔴 (urgent) band sits inside the 🟡 (alert) band rather "
+            f"than overlapping or inverting it."
         )
 
 
