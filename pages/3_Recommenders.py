@@ -35,7 +35,7 @@
 
 import math
 from datetime import date
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import pandas as pd
@@ -330,7 +330,11 @@ for _, _pos_row in _positions_df.iterrows():
         _safe_str(_pos_row["institute"]),
         _safe_str(_pos_row["position_name"]),
     )
-    _position_label_to_id[_label] = int(_pos_row["id"])
+    # CL1 type-clean: pandas-stubs widens iterrows cells to
+    # Series | ndarray | Any. Funnel through Any so int() only sees
+    # the runtime scalar (PR #22 precedent).
+    _pos_id_raw: Any = _pos_row["id"]
+    _position_label_to_id[_label] = int(_pos_id_raw)
 
 
 # ── T5-B: Add recommender form ───────────────────────────────────────────────
@@ -459,13 +463,23 @@ with _filter_col2:
 # / selection_mode='single-row'. The selection-resolution block below
 # captures `recs_selected_id` for the inline edit card.
 
-_filtered_df = _recs_df.copy()
+# CL1 type-clean: boolean indexing widens df to Series | DataFrame
+# per pandas-stubs, so cast each filter step's RHS back to
+# `pd.DataFrame` so downstream `.reset_index` / `.apply` / `.iloc` /
+# `.empty` access stays typed.
+_filtered_df: pd.DataFrame = _recs_df.copy()
 if _pos_filter != _FILTER_ALL:
     _target_pos_id = _position_label_to_id.get(_pos_filter)
     if _target_pos_id is not None:
-        _filtered_df = _filtered_df[_filtered_df["position_id"] == _target_pos_id]
+        _filtered_df = cast(
+            pd.DataFrame,
+            _filtered_df[_filtered_df["position_id"] == _target_pos_id],
+        )
 if _rec_filter != _FILTER_ALL:
-    _filtered_df = _filtered_df[_filtered_df["recommender_name"] == _rec_filter]
+    _filtered_df = cast(
+        pd.DataFrame,
+        _filtered_df[_filtered_df["recommender_name"] == _rec_filter],
+    )
 
 _filtered_df = _filtered_df.reset_index(drop=True)
 
@@ -523,7 +537,11 @@ _event = st.dataframe(
 # pair so a previously-opened-but-X-dismissed dialog can't re-fire as a
 # phantom on a sibling row (Opportunities review fix #2 precedent).
 
-_selected_rows = list(_event.selection.rows) if _event is not None else []
+# CL1 type-clean: streamlit-stubs declares DataframeState as
+# TypedDict so attribute access trips pyright; runtime exposes a
+# wrapper supporting both subscript and attribute. Mirror the form
+# used on pages/1_Opportunities.py + pages/2_Applications.py.
+_selected_rows = list(_event.selection.rows) if _event is not None else []  # type: ignore[attr-defined]
 if _selected_rows and 0 <= _selected_rows[0] < len(_filtered_df):
     _new_rec_id = int(_filtered_df.iloc[_selected_rows[0]]["id"])
     _prev_rec_id = st.session_state.get("recs_selected_id")
