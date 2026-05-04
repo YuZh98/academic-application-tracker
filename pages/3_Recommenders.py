@@ -19,11 +19,24 @@
 #           database.delete_recommender. Mirrors the Opportunities-page
 #           dialog re-open trick (gotcha #3) so AppTest's script-run
 #           model can reach the dialog body.
-# Phase 5 T6: Reminder helpers (mailto + LLM prompts). (later tier)
+# Phase 5 T6: Reminder helpers wired into each Pending Alerts card.
+#   - T6-A: st.link_button("Compose reminder email", url=mailto:?…) per card,
+#           subject + body locked verbatim per DESIGN §8.4 with N (subject)
+#           and recommender_name (body) interpolated. URL-quoted via
+#           urllib.parse.quote so the OS hands the formatted draft to the
+#           user's default mail client. No `to:` field — the recommenders
+#           schema doesn't store emails today.
+#   - T6-B: st.expander(f"LLM prompts ({len(TONES)} tones)", …) beneath the
+#           Compose button, holding one st.code(prompt, language="text")
+#           per tone (gentle / urgent). Each prompt embeds recommender
+#           name + relationship + every owed position (name / institute /
+#           deadline) + days-since-asked + tone + an instruction asking
+#           the LLM to return both subject and body.
 
 import math
 from datetime import date
 from typing import Any
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
@@ -117,19 +130,98 @@ def _format_confirmed(v: Any) -> str:
     return "Yes" if i == 1 else "No"
 
 
+# ── T6: Reminder helpers ──────────────────────────────────────────────────────
+#
+# DESIGN §8.4 + AGENTS §T6 pin two affordances per Pending-Alerts card:
+#   - A `Compose reminder email` link button opening a `mailto:` URL with
+#     the locked subject + body copy below.
+#   - An `LLM prompts ({len(_REMINDER_TONES)} tones)` expander holding one
+#     `st.code(prompt, language="text")` per tone.
+# The tone vocabulary is locked at (gentle, urgent) per DESIGN §8.4; the
+# expander label computes its count from `len(_REMINDER_TONES)` so a
+# future tone addition flows through to the UI without a separate edit.
+
+_REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
+
+
+def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
+    """Build the verbatim DESIGN §8.4 mailto URL for the Compose button
+    (T6-A). The subject interpolates the position count; the body
+    interpolates the recommender's name. No `to:` field — the
+    recommenders schema doesn't store emails today, so the OS-level
+    mail client prompts the user for the recipient."""
+    subject = f"Following up: letters for {n_positions} postdoc applications"
+    body = (
+        f"Hi {recommender_name}, just a quick check-in on the letters of "
+        f"recommendation you offered. Thank you so much!"
+    )
+    return f"mailto:?subject={quote(subject)}&body={quote(body)}"
+
+
+def _build_llm_prompt(
+    *,
+    tone: str,
+    recommender_name: str,
+    relationship: str | None,
+    group: pd.DataFrame,
+    days_ago: int,
+) -> str:
+    """Build one LLM-prompt code block body per DESIGN §8.4 (T6-B).
+
+    Embeds:
+      - recommender name + relationship (relationship omitted on NULL),
+      - every owed position (institute: position_name + deadline ISO),
+      - days-since-asked summary (max wait across the group),
+      - target tone keyword,
+      - explicit instruction asking the LLM to return BOTH subject and
+        body so the user can paste either / both into their mail client.
+
+    The prompt is plain prose (rendered via `st.code(..., language='text')`
+    so Streamlit's copy-on-hover button is exposed without applying any
+    syntax highlighting that would mis-color the prose)."""
+    rel_str = (
+        f" ({relationship})"
+        if relationship and not pd.isna(relationship)
+        else ""
+    )
+
+    pos_lines: list[str] = []
+    for _, row in group.iterrows():
+        inst = _safe_str(row["institute"])
+        pname = _safe_str(row["position_name"])
+        label = f"{inst}: {pname}" if inst else pname
+        deadline_iso = _safe_str(row["deadline_date"])
+        deadline_part = deadline_iso if deadline_iso else "no deadline"
+        pos_lines.append(f"- {label} (deadline {deadline_part})")
+    positions_block = "\n".join(pos_lines)
+
+    return (
+        f"Please draft a {tone} reminder email to my recommender about "
+        f"pending letters of recommendation.\n"
+        f"\n"
+        f"Recommender: {recommender_name}{rel_str}\n"
+        f"Days since I asked: {days_ago}\n"
+        f"Positions still owed:\n"
+        f"{positions_block}\n"
+        f"\n"
+        f"Return BOTH a subject line and a body so I can paste either or "
+        f"both into my mail client. Do not include a signature."
+    )
+
+
 # ── Pending Alerts ────────────────────────────────────────────────────────────
 #
 # Driven by database.get_pending_recommenders() (default RECOMMENDER_ALERT_DAYS).
 # One st.container(border=True) per distinct recommender_name; each card lists
-# every position that recommender still owes a letter for.
+# every position that recommender still owes a letter for and (T6) carries the
+# Compose reminder email link button + LLM prompts expander.
 #
 # Locked card format (DESIGN §8.4):
 #   **⚠ {name}** ({relationship})          ← relationship omitted when NULL
 #   - {institute}: {position_name} (asked {N}d ago, due {Mon D})
 #   - ...
-#
-# Reminder helpers (Compose button + LLM prompts expander) are Phase 5 T6 —
-# NOT rendered here.
+#   [Compose reminder email]               ← T6-A mailto link button
+#   ▸ LLM prompts (N tones)                 ← T6-B expander, N = len(_REMINDER_TONES)
 
 st.subheader("Pending Alerts")
 _pending_recs = database.get_pending_recommenders()
@@ -142,8 +234,11 @@ else:
     # Stable iteration order: get_pending_recommenders() already sorts by
     # recommender_name ASC, deadline_date ASC NULLS LAST, so a plain groupby
     # preserves both within-group deadline order and across-group alphabetical
-    # order without any extra sort.
-    for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
+    # order without any extra sort. enumerate() supplies a per-card index for
+    # the T6 link-button key so two cards never collide on a duplicate widget id.
+    for _idx, (_name, _group) in enumerate(
+        _pending_recs.groupby("recommender_name", sort=False)
+    ):
         with st.container(border=True):
             # Relationship: first row's value (same recommender → same person).
             # Guard against NaN surfaced by pandas for NULL TEXT columns.
@@ -151,18 +246,61 @@ else:
             _rel_str = f" ({_rel})" if _rel and not pd.isna(_rel) else ""
 
             _bullets: list[str] = []
+            _per_row_days: list[int] = []
             for _, _row in _group.iterrows():
                 _inst: Any = _row["institute"]
                 _pos_name: Any = _row["position_name"]
                 _label = _format_label(_inst, str(_pos_name))
                 _asked_iso: str = str(_row["asked_date"])
                 _days_ago = (_today - date.fromisoformat(_asked_iso)).days
+                _per_row_days.append(_days_ago)
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
                 _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
 
             _body = f"**⚠ {_name}**{_rel_str}\n" + "\n".join(_bullets)
             st.markdown(_body)
+
+            # ── T6-A: Compose reminder email ────────────────────────────
+            # Locked-copy mailto URL per DESIGN §8.4. N (subject) is the
+            # owed-position count for THIS card; recommender_name (body)
+            # is interpolated. Per-card unique key avoids a Streamlit
+            # DuplicateWidgetID across multiple cards.
+            _mailto_url = _build_compose_mailto(
+                recommender_name=str(_name),
+                n_positions=len(_group),
+            )
+            st.link_button(
+                "Compose reminder email",
+                url=_mailto_url,
+                key=f"recs_compose_{_idx}",
+            )
+
+            # ── T6-B: LLM prompts expander ──────────────────────────────
+            # One st.code(prompt, language="text") per locked tone. The
+            # expander label computes its tone count from
+            # _REMINDER_TONES so a future tone addition flows through to
+            # the UI label automatically. days-since-asked is the MAX
+            # across the card's positions (the longest wait) — the
+            # prompt is one block per tone, not per position, so a
+            # single integer summary keeps the prompt text clean.
+            _max_days = max(_per_row_days) if _per_row_days else 0
+            _rel_for_prompt: str | None = (
+                None if (_rel is None or pd.isna(_rel)) else str(_rel)
+            )
+            with st.expander(
+                f"LLM prompts ({len(_REMINDER_TONES)} tones)",
+                expanded=False,
+            ):
+                for _tone in _REMINDER_TONES:
+                    _prompt = _build_llm_prompt(
+                        tone=_tone,
+                        recommender_name=str(_name),
+                        relationship=_rel_for_prompt,
+                        group=_group,
+                        days_ago=_max_days,
+                    )
+                    st.code(_prompt, language="text")
 
 
 # ── T5: All Recommenders ─────────────────────────────────────────────────────

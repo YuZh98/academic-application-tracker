@@ -1381,3 +1381,419 @@ class TestRecommenderEditDelete:
             f"Failed delete must leave the row in DB; rec_id={rec_id} "
             f"missing from {list(recs['id'])!r}"
         )
+
+
+# ── T6 helpers ────────────────────────────────────────────────────────────────
+#
+# T6 wires reminder helpers into each Pending Alerts card from T4. AppTest
+# 1.56 has no typed `at.link_button` accessor — link buttons surface as
+# `UnknownElement` instances accessible via `at.get('link_button')` whose
+# `.proto` carries the LinkButton protobuf with `.label`, `.url`, `.id`
+# fields. The two helpers below isolate that quirk so the test bodies stay
+# tidy and survive any future Streamlit upgrade that introduces a typed
+# accessor.
+
+
+def _link_buttons(at: AppTest) -> list:
+    """All link buttons on the page, as UnknownElement instances. Each
+    has ``.proto.label`` and ``.proto.url`` attributes."""
+    return list(at.get("link_button"))
+
+
+def _decode_mailto(url: str) -> dict[str, str]:
+    """Parse a ``mailto:?subject=…&body=…`` URL into a {'subject', 'body'}
+    dict with the values URL-decoded. Verifies the scheme so a malformed
+    URL surfaces a clear AssertionError rather than silently returning
+    empty values."""
+    from urllib.parse import urlparse, parse_qs
+
+    parsed = urlparse(url)
+    assert parsed.scheme == "mailto", (
+        f"Compose URL must use the mailto: scheme; got {url!r}"
+    )
+    qs = parse_qs(parsed.query, keep_blank_values=True)
+    return {
+        "subject": qs.get("subject", [""])[0],
+        "body":    qs.get("body",    [""])[0],
+    }
+
+
+# ── T6-A: Compose reminder email button (mailto link) ────────────────────────
+
+
+class TestT6ComposeButton:
+    """Phase 5 T6-A: per-Pending-Alert-card ``st.link_button`` opening a
+    locked-copy ``mailto:`` URL.
+
+    Locked contract (DESIGN §8.4 + AGENTS §T6-A):
+      - Label: ``Compose reminder email`` verbatim.
+      - URL scheme: ``mailto:`` with empty path (no ``to:`` field — the
+        recommenders schema doesn't store emails today).
+      - Subject: ``Following up: letters for {N} postdoc applications``
+        where ``N`` is the count of positions that recommender owes
+        letters for.
+      - Body: ``Hi {recommender_name}, just a quick check-in on the
+        letters of recommendation you offered. Thank you so much!``
+      - One button per alert card — same cardinality as the cards
+        themselves (groupby on recommender_name).
+    """
+
+    LABEL = "Compose reminder email"
+
+    def test_no_buttons_on_empty_db(self, db):
+        """Empty DB → no alert cards → no compose buttons. The page
+        still renders the Pending-Alerts subheader + empty-state info,
+        but no link buttons."""
+        at = _run_page()
+        assert not at.exception, f"Page raised: {at.exception}"
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        assert compose == [], (
+            f"Empty DB must not render any Compose buttons; got "
+            f"{len(compose)}: labels={[b.proto.label for b in compose]!r}"
+        )
+
+    def test_single_pending_recommender_renders_one_button(self, db):
+        """One pending recommender → exactly one Compose button."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        assert len(compose) == 1, (
+            f"One pending recommender must produce exactly one Compose "
+            f"button; got {len(compose)}: {[b.proto.label for b in _link_buttons(at)]!r}"
+        )
+
+    def test_button_label_is_verbatim(self, db):
+        """Label is ``Compose reminder email`` verbatim — pinned because
+        DESIGN §8.4 spells the string out."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        assert compose, (
+            f"Expected a link button labelled {self.LABEL!r}; got "
+            f"{[b.proto.label for b in _link_buttons(at)]!r}"
+        )
+
+    def test_button_url_uses_mailto_with_no_recipient(self, db):
+        """URL is ``mailto:?subject=…&body=…`` — no ``to:`` because the
+        recommenders schema doesn't store emails."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        assert compose, "precondition: compose button must render"
+        url = compose[0].proto.url
+        assert url.startswith("mailto:?"), (
+            f"Compose URL must start with 'mailto:?' (no recipient); got {url!r}"
+        )
+
+    def test_subject_uses_locked_string_with_position_count(self, db):
+        """``N`` in the subject equals the recommender's owed-position
+        count. Single position → ``N=1``."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        decoded = _decode_mailto(compose[0].proto.url)
+        expected = "Following up: letters for 1 postdoc applications"
+        assert decoded["subject"] == expected, (
+            f"Subject must be {expected!r}; got {decoded['subject']!r}"
+        )
+
+    def test_subject_position_count_matches_card(self, db):
+        """Multi-position case: a recommender owing two letters → ``N=2``
+        in the subject. Coupled to the groupby cardinality, so a future
+        bug that miscounts (e.g. uses len(unfiltered df) instead of len
+        of the group) would surface here."""
+        # Two positions, same recommender — one card, two bullets.
+        pos_a = database.add_position(make_position({"position_name": "Pos A"}))
+        pos_b = database.add_position(make_position({"position_name": "Pos B"}))
+        asked = (datetime.date.today() - datetime.timedelta(days=14)).isoformat()
+        for pid in (pos_a, pos_b):
+            database.add_recommender(pid, {
+                "recommender_name": "Dr. Smith",
+                "asked_date": asked,
+            })
+
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        assert len(compose) == 1, (
+            f"Two-position single-recommender → one Compose button; got {len(compose)}"
+        )
+        decoded = _decode_mailto(compose[0].proto.url)
+        expected = "Following up: letters for 2 postdoc applications"
+        assert decoded["subject"] == expected, (
+            f"Subject N must equal owed-position count; expected {expected!r}, "
+            f"got {decoded['subject']!r}"
+        )
+
+    def test_body_uses_locked_string_with_recommender_name(self, db):
+        """Body is the verbatim DESIGN §8.4 string with the recommender's
+        name interpolated."""
+        TestPendingAlertsPanel._seed_pending(recommender_name="Dr. Jones")
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        decoded = _decode_mailto(compose[0].proto.url)
+        expected = (
+            "Hi Dr. Jones, just a quick check-in on the letters of "
+            "recommendation you offered. Thank you so much!"
+        )
+        assert decoded["body"] == expected, (
+            f"Body must be the locked DESIGN §8.4 string with the recommender's "
+            f"name interpolated; expected {expected!r}, got {decoded['body']!r}"
+        )
+
+    def test_two_recommenders_two_buttons(self, db):
+        """One Compose button per alert card — two distinct recommenders
+        → two buttons. Per-card uniqueness of widget keys is implied
+        (Streamlit raises DuplicateWidgetID otherwise)."""
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Alpha", position_name="Alpha Postdoc",
+        )
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Beta", position_name="Beta Postdoc",
+        )
+        at = _run_page()
+        assert not at.exception, (
+            f"Page raised on two-card render — likely a DuplicateWidgetID from "
+            f"non-unique compose-button keys: {at.exception!r}"
+        )
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        assert len(compose) == 2, (
+            f"Two recommenders → two Compose buttons; got {len(compose)}"
+        )
+
+    def test_body_per_card_uses_correct_recommender_name(self, db):
+        """Multi-card: each Compose button's body must use ITS recommender's
+        name, not a shared / first-card name. Catches a bug where the body
+        is computed once outside the groupby loop."""
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Alpha", position_name="Alpha Postdoc",
+        )
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Beta", position_name="Beta Postdoc",
+        )
+        at = _run_page()
+        compose = [b for b in _link_buttons(at) if b.proto.label == self.LABEL]
+        bodies = [_decode_mailto(b.proto.url)["body"] for b in compose]
+        assert any("Dr. Alpha" in b for b in bodies), (
+            f"One Compose body must reference Dr. Alpha; got {bodies!r}"
+        )
+        assert any("Dr. Beta" in b for b in bodies), (
+            f"One Compose body must reference Dr. Beta; got {bodies!r}"
+        )
+
+
+# ── T6-B: LLM prompts expander ───────────────────────────────────────────────
+
+
+class TestT6LLMPromptsExpander:
+    """Phase 5 T6-B: per-card ``st.expander`` revealing N pre-filled LLM
+    prompts (one per tone). DESIGN §8.4 + AGENTS §T6-B fix N=2 with tones
+    ``gentle`` and ``urgent``, so the expander label reads
+    ``LLM prompts (2 tones)``.
+
+    Each prompt block is rendered via ``st.code(text, language='text')``
+    so Streamlit's built-in copy-on-hover affordance works. Required
+    prompt content:
+      - recommender name + relationship,
+      - every owed position (name, institute, deadline),
+      - days-since-asked,
+      - target tone keyword (``gentle`` / ``urgent``),
+      - explicit instruction asking the LLM to return BOTH subject and body.
+    """
+
+    EXPANDER_LABEL = "LLM prompts (2 tones)"
+    TONES = ("gentle", "urgent")
+
+    def test_no_expander_on_empty_db(self, db):
+        """Empty DB → no alert cards → no LLM-prompts expanders."""
+        at = _run_page()
+        labels = [e.label for e in at.expander]
+        assert self.EXPANDER_LABEL not in labels, (
+            f"Empty DB must not render the LLM-prompts expander; got "
+            f"expander labels={labels!r}"
+        )
+
+    def test_single_pending_renders_one_expander(self, db):
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        matching = [e for e in at.expander if e.label == self.EXPANDER_LABEL]
+        assert len(matching) == 1, (
+            f"One pending recommender → one expander labelled "
+            f"{self.EXPANDER_LABEL!r}; got {len(matching)} (all labels: "
+            f"{[e.label for e in at.expander]!r})"
+        )
+
+    def test_expander_label_includes_tone_count(self, db):
+        """Label format is ``LLM prompts ({N} tones)`` where N is the
+        live tone count. DESIGN §8.4: 'Expander label includes prompt
+        count, e.g. LLM prompts (2 tones)'."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        labels = [e.label for e in at.expander]
+        assert any(self.EXPANDER_LABEL in label for label in labels), (
+            f"Expected an expander labelled {self.EXPANDER_LABEL!r}; "
+            f"got labels={labels!r}"
+        )
+
+    def test_expander_holds_two_code_blocks(self, db):
+        """One pending recommender → two ``st.code`` blocks (one per
+        tone). ``at.code`` collects every code block on the page; with
+        only one alert card, the count equals the per-card tone count."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        codes = list(at.code)
+        assert len(codes) == 2, (
+            f"One alert card → two code blocks (one per tone); got "
+            f"{len(codes)}: {[c.value[:60] for c in codes]!r}"
+        )
+
+    def test_two_recommenders_two_expanders(self, db):
+        """Two distinct recommenders → two expanders + 4 code blocks
+        total (2 tones × 2 cards). Pins both the per-card cardinality
+        and that the same widget keys aren't reused (Streamlit raises
+        DuplicateWidgetID otherwise)."""
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Alpha", position_name="Alpha Postdoc",
+        )
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Beta", position_name="Beta Postdoc",
+        )
+        at = _run_page()
+        assert not at.exception, (
+            f"Page raised on two-card render — likely a duplicate-widget "
+            f"issue from the expander keys: {at.exception!r}"
+        )
+        matching = [e for e in at.expander if e.label == self.EXPANDER_LABEL]
+        assert len(matching) == 2, (
+            f"Two recommenders → two expanders; got {len(matching)}"
+        )
+        codes = list(at.code)
+        assert len(codes) == 4, (
+            f"Two cards × two tones each → 4 code blocks; got {len(codes)}"
+        )
+
+    def test_each_prompt_includes_recommender_name_and_relationship(self, db):
+        TestPendingAlertsPanel._seed_pending(
+            recommender_name="Dr. Jones",
+            relationship="Committee Member",
+        )
+        at = _run_page()
+        codes = list(at.code)
+        assert codes, (
+            "precondition: pending recommender must produce prompt code blocks"
+        )
+        for c in codes:
+            assert "Dr. Jones" in c.value, (
+                f"Every prompt must reference the recommender name; got "
+                f"prompt={c.value!r}"
+            )
+            assert "Committee Member" in c.value, (
+                f"Every prompt must reference the recommender's "
+                f"relationship; got prompt={c.value!r}"
+            )
+
+    def test_each_prompt_includes_owed_position_details(self, db):
+        """Owed positions surface in the prompt with their name, institute,
+        and deadline — matches DESIGN §8.4 'positions owed (position name,
+        institute, deadline)'."""
+        TestPendingAlertsPanel._seed_pending(
+            position_name="CSAIL Postdoc",
+            institute="MIT",
+            deadline_offset=10,
+        )
+        deadline_iso = (
+            datetime.date.today() + datetime.timedelta(days=10)
+        ).isoformat()
+        at = _run_page()
+        codes = list(at.code)
+        assert codes, (
+            "precondition: pending recommender must produce prompt code blocks"
+        )
+        for c in codes:
+            assert "CSAIL Postdoc" in c.value, (
+                f"Every prompt must include the position name; got "
+                f"prompt={c.value!r}"
+            )
+            assert "MIT" in c.value, (
+                f"Every prompt must include the institute; got "
+                f"prompt={c.value!r}"
+            )
+            assert deadline_iso in c.value, (
+                f"Every prompt must include the deadline (ISO date); got "
+                f"prompt={c.value!r}"
+            )
+
+    def test_each_prompt_includes_days_since_asked(self, db):
+        """Days-since-asked is the integer count surfaced on the alert card
+        bullet too — keep the prompts coherent with the bullet text."""
+        TestPendingAlertsPanel._seed_pending(days_ago=14)
+        at = _run_page()
+        codes = list(at.code)
+        assert codes, (
+            "precondition: pending recommender must produce prompt code blocks"
+        )
+        for c in codes:
+            assert "14" in c.value, (
+                f"Every prompt must include the days-since-asked count "
+                f"(14); got prompt={c.value!r}"
+            )
+
+    def test_each_prompt_carries_a_target_tone_keyword(self, db):
+        """Two prompts, two tones — across the pair every locked-tone
+        keyword (``gentle``, ``urgent``) appears at least once."""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        codes = list(at.code)
+        joined = "\n\n".join(c.value.lower() for c in codes)
+        for tone in self.TONES:
+            assert tone in joined, (
+                f"Locked tone keyword {tone!r} must appear in some prompt; "
+                f"got code-bodies={[c.value[:80] for c in codes]!r}"
+            )
+
+    def test_each_prompt_asks_for_subject_and_body(self, db):
+        """DESIGN §8.4: 'Prompts ask LLM to return both subject and body
+        so user can paste either / both into mail client.'"""
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        codes = list(at.code)
+        assert codes, (
+            "precondition: pending recommender must produce prompt code blocks"
+        )
+        for c in codes:
+            v = c.value.lower()
+            assert "subject" in v, (
+                f"Every prompt must instruct the LLM to return a subject; "
+                f"got prompt={c.value!r}"
+            )
+            assert "body" in v, (
+                f"Every prompt must instruct the LLM to return a body; "
+                f"got prompt={c.value!r}"
+            )
+
+    def test_code_blocks_use_text_language(self):
+        """``st.code(prompt_text, language='text')`` per AGENTS §T6-B —
+        keeps Streamlit from syntax-highlighting prose. Pinned at the
+        source level because the proto's ``language`` field on the Code
+        element is exposed to AppTest and we want to avoid a regression
+        to ``language='python'`` (which would highlight the prose as
+        Python and look wrong)."""
+        src = pathlib.Path(PAGE).read_text(encoding="utf-8")
+        # Mostly a sanity grep; combined with the runtime test below
+        # we have both source-level and runtime coverage.
+        assert 'language="text"' in src or "language='text'" in src, (
+            f"{PAGE} must call st.code(..., language='text') for the "
+            f"LLM-prompt blocks per AGENTS §T6-B"
+        )
+
+    def test_code_blocks_render_with_text_language(self, db):
+        TestPendingAlertsPanel._seed_pending()
+        at = _run_page()
+        codes = list(at.code)
+        assert codes, (
+            "precondition: pending recommender must produce prompt code blocks"
+        )
+        for c in codes:
+            assert c.language == "text", (
+                f"Every prompt code block must render with language='text'; "
+                f"got language={c.language!r} on body={c.value[:60]!r}"
+            )
