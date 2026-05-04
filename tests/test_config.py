@@ -705,3 +705,86 @@ def test_config_reimports_cleanly():
         importlib.reload(sys.modules["config"])
     else:
         importlib.import_module("config")
+
+
+# ── Phase 7 cleanup CL2: lifted constants + urgency_glyph helper ─────────────
+# EM_DASH, FILTER_ALL, REMINDER_TONES were duplicated across page files +
+# exports.py before CL2; the lift centralises them in config so a future
+# rename is a single-file edit. urgency_glyph subsumes both
+# pages/1_Opportunities.py::_deadline_urgency and database.py::_urgency_glyph
+# at the days_away→glyph banding step (the page-layer wrapper still does the
+# date-string parse + None-coercion before delegating).
+
+def test_em_dash_value():
+    """EM_DASH is the unicode em-dash (U+2014), used as the NULL/empty
+    placeholder across every page + exports. Lifted to config in CL2."""
+    assert config.EM_DASH == "—"
+    assert config.EM_DASH == "—"
+
+
+def test_filter_all_value():
+    """FILTER_ALL is the magic 'All' literal used by every page's filter
+    selectbox to mean 'no narrowing applied'. Was a magic literal in
+    pages/1, pages/2, pages/3 before CL2."""
+    assert config.FILTER_ALL == "All"
+
+
+def test_reminder_tones_tuple():
+    """REMINDER_TONES is the LLM-prompts expander's tone vocabulary
+    (Phase 5 T6). Tuple so it's hashable + immutable; len() drives the
+    expander label (`f"LLM prompts ({len(REMINDER_TONES)} tones)"`)."""
+    assert config.REMINDER_TONES == ("gentle", "urgent")
+    assert isinstance(config.REMINDER_TONES, tuple)
+
+
+# ── urgency_glyph banding (Phase 7 T1 contract; CL2 lift) ────────────────────
+# Banding contract:
+#   days_away ≤ DEADLINE_URGENT_DAYS   → '🔴'
+#   ≤ DEADLINE_ALERT_DAYS (past urgent) → '🟡'
+#   beyond DEADLINE_ALERT_DAYS          → ''   (no signal)
+#   None (no deadline at all)           → EM_DASH
+# Tests exercise each band's interior + every boundary so a future
+# threshold tweak surfaces as exactly the boundary tests that move,
+# rather than as a vague "urgency drift" failure.
+
+def test_urgency_glyph_zero_days_is_red():
+    """Today's deadline is urgent."""
+    assert config.urgency_glyph(0) == "🔴"
+
+
+def test_urgency_glyph_at_urgent_threshold_is_red():
+    """Boundary days_away == DEADLINE_URGENT_DAYS lands INSIDE the urgent
+    band (lower threshold inclusive — the existing `<=` check)."""
+    assert config.urgency_glyph(config.DEADLINE_URGENT_DAYS) == "🔴"
+
+
+def test_urgency_glyph_one_past_urgent_is_yellow():
+    """One day past the urgent threshold lands in the alert band."""
+    assert config.urgency_glyph(config.DEADLINE_URGENT_DAYS + 1) == "🟡"
+
+
+def test_urgency_glyph_at_alert_threshold_is_yellow():
+    """Boundary days_away == DEADLINE_ALERT_DAYS lands INSIDE the alert
+    band (upper threshold inclusive)."""
+    assert config.urgency_glyph(config.DEADLINE_ALERT_DAYS) == "🟡"
+
+
+def test_urgency_glyph_one_past_alert_is_empty():
+    """One day past the alert threshold lands in the no-signal band."""
+    assert config.urgency_glyph(config.DEADLINE_ALERT_DAYS + 1) == ""
+
+
+def test_urgency_glyph_negative_days_is_red():
+    """Past-due deadlines (negative days_away) are urgent — at least as
+    extreme as 'due today' and must not silently fall through to the
+    empty band via the 'beyond alert threshold' branch."""
+    assert config.urgency_glyph(-5) == "🔴"
+
+
+def test_urgency_glyph_none_is_em_dash():
+    """A NULL deadline (no days_away) renders the em-dash placeholder so
+    the Urgency column distinguishes 'no deadline at all' from 'deadline
+    far enough away'. Phase 7 T1 contract — pages-side _deadline_urgency
+    had this behaviour; CL2 hoists it to config so the page wrapper
+    only owns the date-string→days conversion."""
+    assert config.urgency_glyph(None) == config.EM_DASH
