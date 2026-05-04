@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `refactor(phase-7-CL2): lift EM_DASH + urgency_glyph + FILTER_ALL + REMINDER_TONES to config`.
+  — e.g. `refactor(phase-7-CL3): extract AppTest helpers to tests/helpers.py`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 cleanup CL1 merged (PR #41); test suite at 864 passed + 1 xfailed; pyright fence in CI (0/0)
+**`main` HEAD:** Phase 7 cleanup CL2 merged (PR #42); test suite at 870 passed + 1 xfailed; pyright fence holds (0/0); carry-overs C2 + C3 closed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -230,7 +230,7 @@ User-driven decision (2026-05-04): postpone T5 (responsive layout, user-driven) 
 | Sub-tier | What | Who | Blocks |
 |---|---|---|---|
 | **CL1** — Pyright in CI ✅ PR #41 | Pyright fence + 45 errors → 0 across 5 files. `pyright==1.1.409` pinned, `[tool.pyright]` basic mode in `pyproject.toml`, new CI step + checklist rows. | Implementer | done |
-| **CL2** — `config.py` lifts | Lift duplicated constants + helpers to `config.py`: `EM_DASH`, urgency banding (`urgency_glyph(days)`), `"All"` filter sentinel, `_REMINDER_TONES`. Drop unused `TRACKER_PROFILE` (carry-over **C2**). Closes carry-over **C3**. | Implementer | CL1 fence valuable |
+| **CL2** — `config.py` lifts ✅ PR #42 | 4 lifts (EM_DASH + urgency_glyph + FILTER_ALL + REMINDER_TONES) + 1 drop (TRACKER_PROFILE block + 4 tests). Carry-overs C2 + C3 closed. Pyright fence held (0/0 post-lift). | Implementer | done |
 | **CL3** — `tests/helpers.py` extraction | Lift `_link_buttons`, `_decode_mailto`, `_download_buttons`, `_download_button` from per-page test files into shared helper module. | Implementer | parallel-able with CL2 |
 | **CL4** — Phase 7 polish batched | 4 small UX fixes: Save-toast-when-no-dirty wording, subject-pluralization on N=1, `st.markdown` vs `st.write` cohesion, empty-state copy centralization. One PR with 4 commits. | Implementer | CL2 (touches EM_DASH + empty-state sites) |
 | **CL5** — Doc drift + branch-cleanup process amendment | Retroactive trim of older review docs (Phase 5 + Phase 6 tier reviews still have `Kept by design` rows in Findings tables); CHANGELOG older blocks; add `--delete-branch` to ORCHESTRATOR_HANDOFF.md "Recurring post-merge ritual". | Orchestrator | CL1-4 done |
@@ -241,125 +241,104 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 cleanup CL2 (`config.py` lifts)
+## Immediate task — Phase 7 cleanup CL3 (`tests/helpers.py` extraction)
 
 **Spec:** This doc's "Phase 7 cleanup + polish sub-tier" table
-(between T4 and T5) · prior carry-overs **C2** (`TRACKER_PROFILE`
-removal) + **C3** (`"All"` filter sentinel + `_REMINDER_TONES` lift)
-logged across `reviews/phase-5-tier1-review.md`,
-`reviews/phase-5-tier6-review.md`, `reviews/phase-7-tier1-review.md` ·
-DESIGN §2 layer rules (config can be imported by all layers; pages
-and exports cannot share helpers, but can share config constants).
+(between T4 and T5) · existing helpers `_link_buttons` +
+`_decode_mailto` in `tests/test_recommenders_page.py` (lines
+1397-1416) and `_download_buttons` + `_download_button` in
+`tests/test_export_page.py` (lines 406-431) · Phase 5 T6 review Q3
++ Phase 6 T5 review Q4 (both flagged the source-grep + AppTest-
+proto-access pattern as fall-back when typed accessors don't exist).
 
-CL2 lifts duplicated constants + helpers to `config.py` so the four
-existing duplicate sites (`app.py`, `pages/1_Opportunities.py`,
-`pages/2_Applications.py`, `exports.py`) become one definition.
-Closes carry-overs **C2** + **C3** in one PR. CL1's pyright fence
-(merged in PR #41) catches any type drift introduced by the lift.
+CL3 lifts the four AppTest-helper functions from per-page test
+files into a shared `tests/helpers.py` module so future tests that
+need them (CL4 polish work, post-CL5 T5 + T6 cohesion-smoke,
+ongoing tier work) can import from one place. Pure refactor; no
+new behaviour, no new tests beyond import-compatibility checks.
 
-### CL2 — `config.py` lifts
+### CL3 — `tests/helpers.py` extraction
 
-Four lifts + one drop:
+Four helpers to lift, all currently page-test-local:
 
-1. **`EM_DASH = "—"` constant.** Currently duplicated in:
-   - `app.py` (as `NEXT_INTERVIEW_EMPTY = "—"` — same value, different name)
-   - `pages/1_Opportunities.py` line 25
-   - `pages/2_Applications.py` (verify)
-   - `pages/3_Recommenders.py` line 63
-   - `exports.py` (as `_EM_DASH` — leading underscore for module-private)
+1. **`_link_buttons(at: AppTest) -> list`** — wraps
+   `at.get('link_button')` since AppTest 1.56 has no typed
+   accessor. Returns UnknownElement instances exposing `.proto`
+   (LinkButton protobuf with `.label`, `.url`, `.id` fields).
+   Currently in `tests/test_recommenders_page.py:1397`.
 
-   Lift: add `EM_DASH: str = "—"` to `config.py`. Update all five
-   sites to `from config import EM_DASH` (or keep `config.EM_DASH`
-   if cleaner). Remove the per-file constants. **Naming choice**:
-   `EM_DASH` (matching the page-layer convention) over
-   `NEXT_INTERVIEW_EMPTY` (app.py's specific framing) — the
-   constant is generic, not interview-specific.
+2. **`_decode_mailto(url: str) -> dict[str, str]`** — parses a
+   `mailto:?subject=…&body=…` URL into a `{'subject', 'body'}`
+   dict with values URL-decoded. Asserts `mailto:` scheme so
+   malformed URLs surface as a clear error.
+   Currently in `tests/test_recommenders_page.py:1403`.
 
-2. **Urgency-banding helper.** Currently duplicated as:
-   - `pages/1_Opportunities.py::_deadline_urgency(date_str: Any) -> str`
-     (returns 🔴 / 🟡 / `''` / `—` based on days until deadline)
-   - `database.py::_urgency_glyph(days_away: int) -> str` (same
-     banding, different signature — takes days, not date string)
+3. **`_download_buttons(at: AppTest) -> list`** — wraps
+   `at.get('download_button')` since AppTest 1.56 has no typed
+   accessor. Same shape as `_link_buttons` for the DownloadButton
+   element type.
+   Currently in `tests/test_export_page.py:406`.
 
-   Lift: add `config.urgency_glyph(days_away: int | None) -> str`
-   that handles both shapes — `None` → `EM_DASH`, otherwise the
-   🔴 / 🟡 / `''` banding via the existing
-   `DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS` thresholds.
-   Both call sites become thin wrappers: the page-layer helper
-   parses date string → days delta → calls `config.urgency_glyph`;
-   the database-layer helper passes through directly. Mirror of
-   how `STATUS_LABELS` is shared between layers via `config.py`.
+4. **`_download_button(at: AppTest, filename: str)`** — looks up a
+   download button by its locked widget key
+   (`f"export_download_{filename}"`) via
+   `proto.id.endswith(...)`. Returns the matching UnknownElement.
+   Currently in `tests/test_export_page.py:420`.
 
-3. **`"All"` filter sentinel.** Currently a magic literal in:
-   - `pages/1_Opportunities.py` (verify locations)
-   - `pages/2_Applications.py` (`STATUS_FILTER_ACTIVE` is in
-     `config.py` already; `"All"` is the bare counterpart)
-   - `pages/3_Recommenders.py` line 275 `_FILTER_ALL = "All"`
+### Lift mechanics
 
-   Lift: add `FILTER_ALL: str = "All"` to `config.py` alongside
-   `STATUS_FILTER_ACTIVE`. Update all three pages to import from
-   config. Remove per-page literals.
-
-4. **`_REMINDER_TONES` tuple.** Currently page-local:
-   `pages/3_Recommenders.py` line 144
-   `_REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")`.
-
-   Lift: add `REMINDER_TONES: tuple[str, ...] = ("gentle",
-   "urgent")` to `config.py`. Update Recommenders page to import.
-   The `len(_REMINDER_TONES)` reference in the expander label
-   becomes `len(config.REMINDER_TONES)`.
-
-5. **Drop `TRACKER_PROFILE`** (carry-over **C2**) — currently in
-   `config.py` lines 14-28: `TRACKER_PROFILE = "postdoc"`,
-   `VALID_PROFILES = {"postdoc"}`, plus an import-time assertion.
-   Never read by any module; unused since v1.1 doc refactor. Drop
-   all three. Verify with `grep -rn "TRACKER_PROFILE\|VALID_PROFILES"`
-   that no consumer survives — should return only the config.py
-   definitions themselves.
-
-### Architecture rules (non-negotiable — DESIGN §2)
-- `config.py` imports nothing from this project. Pure constants
-  (and now: pure functions like `urgency_glyph` that don't need
-  to import database/streamlit).
-- `database.py` + `pages/*.py` + `exports.py` import from `config`
-  freely.
-- Pages still do not import from each other; the lift to `config`
-  is the structural fix for "two pages need the same string".
+- **Create `tests/helpers.py`.** Module-level docstring explains
+  the file's purpose ("shared AppTest helpers — wrap
+  `at.get('<element>')` since AppTest 1.56 lacks typed accessors
+  for some element types; lift candidates surface as 'we use this
+  in two test files'").
+- **Move the four functions** verbatim. Drop the leading
+  underscore on the public API (the underscore was page-local
+  hiding; in a shared module the public form is appropriate).
+  Names become: `link_buttons`, `decode_mailto`, `download_buttons`,
+  `download_button`. Keep docstrings intact.
+- **Update both consumer files**:
+  - `tests/test_recommenders_page.py` — replace local definitions
+    with `from tests.helpers import link_buttons, decode_mailto`.
+    Update every call site (mechanical rename: `_link_buttons` →
+    `link_buttons`, `_decode_mailto` → `decode_mailto`).
+  - `tests/test_export_page.py` — replace local definitions with
+    `from tests.helpers import download_buttons, download_button`.
+    Update every call site (`_download_buttons` → `download_buttons`,
+    `_download_button` → `download_button`).
+- **Verify call site count matches** — grep for old names should
+  return zero matches in both files; grep for new names should
+  return the expected count.
 
 ### Tests to write first (TDD red commit)
-- Two test additions:
-  - `tests/test_config.py` — extend with assertions that the new
-    constants exist + have the expected values (`EM_DASH == "—"`,
-    `FILTER_ALL == "All"`, `REMINDER_TONES == ("gentle",
-    "urgent")`). Mirror of the existing `STATUS_FILTER_ACTIVE`
-    invariant test.
-  - `tests/test_config.py::test_urgency_glyph_*` — band the new
-    helper at boundaries: `days = 0` → 🔴; `days =
-    DEADLINE_URGENT_DAYS` → 🔴; `days = DEADLINE_URGENT_DAYS + 1`
-    → 🟡; `days = DEADLINE_ALERT_DAYS` → 🟡; `days =
-    DEADLINE_ALERT_DAYS + 1` → `''`; `days = None` → `—`. ~6
-    tests covering the banding contract once at the source.
-- Existing per-page tests (urgency tests in
-  `test_opportunities_page.py`, etc.) should keep passing without
-  modification — the lift is a behaviour-preserving refactor.
 
-### Removal verification
-After the lift, run:
-```bash
-grep -rn 'EM_DASH\s*=\s*"—"' app.py pages/ exports.py
-grep -rn '"All"' pages/ | grep -v 'config\.FILTER_ALL\|"All", \*STATUS_VALUES'
-grep -rn '_REMINDER_TONES' pages/
-grep -rn 'TRACKER_PROFILE' .
-```
-First three should show only the new imports / config call sites
-(no surviving local definitions). Last should show zero matches
-(TRACKER_PROFILE fully removed).
+CL3 is a refactor with no behaviour change — the existing tests in
+`test_recommenders_page.py` + `test_export_page.py` ARE the
+behavioural pin. They must continue to pass without modification
+(other than the import lines + the rename of every call site).
 
-### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror + pyright fence from CL1)
+Optionally add `tests/test_helpers.py` with import-compat smoke
+tests:
+- `from tests.helpers import link_buttons, decode_mailto, download_buttons, download_button` doesn't raise.
+- `decode_mailto("mailto:?subject=hi&body=there")` returns
+  `{"subject": "hi", "body": "there"}`.
+- `decode_mailto("https://...")` raises AssertionError.
+
+These are nice-to-haves; the existing 870 tests provide the real
+contract gate.
+
+### Architecture rules (non-negotiable — DESIGN §2)
+- `tests/helpers.py` imports `streamlit.testing.v1` (AppTest type)
+  and `urllib.parse` only. No project-internal imports — pure test
+  utility.
+- Other test files import from `tests.helpers` via standard
+  package-relative form.
+
+### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror + pyright fence)
 ```bash
 ruff check .
 pyright .                                       # CL1 fence — must stay 0/0
-pytest tests/ -q
+pytest tests/ -q                                # 870 pre-CL3, expect 870 post-CL3
 pytest -W error::DeprecationWarning tests/ -q
 grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
   | grep -v '^\([^:]*\):[0-9]*:\s*#'
@@ -368,26 +347,29 @@ mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
 ```
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-cleanup-CL2-ConfigLifts`.
-- One PR with the test commit (red) + the lift commit(s) (green).
-  Implementer may split lifts into multiple commits (one per
-  constant) for cleaner per-line `git blame` — same precedent as
-  CL1's per-file fix-commit shape.
+- Branch name: `feature/phase-7-cleanup-CL3-TestHelpers`.
+- Two commits suggested: 1 `refactor:` create `tests/helpers.py`
+  + delete page-local definitions + update imports/call sites; 1
+  optional `test:` add smoke tests in `tests/test_helpers.py`.
+  Implementer may collapse into one commit if smoke tests are
+  skipped.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test: commit   → add tests/test_config.py assertions for the
-                    new constants + urgency_glyph banding tests
-                    (RED — constants/helper not yet defined)
-2. refactor:      → add constants + helper to config.py; update
-   commit(s)        every consumer (app.py, pages/, exports.py)
-                    to import from config; drop duplicate
-                    locals + TRACKER_PROFILE block (GREEN)
-3. chore: rollup  → orchestrator handles TASKS.md/CHANGELOG/review
-                    doc (YOU do not touch these)
+1. refactor: commit → create tests/helpers.py with the four lifted
+                      functions; delete page-local definitions in
+                      tests/test_recommenders_page.py +
+                      tests/test_export_page.py; rename every call
+                      site (drop leading underscore on each name)
+2. test: commit     → optional tests/test_helpers.py smoke tests
+                      (import-compat + decode_mailto positive +
+                      negative) — implementer may skip if the
+                      existing 870 tests provide the gate
+3. chore: rollup    → orchestrator handles TASKS.md/CHANGELOG/review
+                      doc (YOU do not touch these)
 ```
 
 **Commit message format:**
@@ -421,7 +403,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-cleanup-CL2-ConfigLifts` |
+| Open PR | You — branch name: `feature/phase-7-cleanup-CL3-TestHelpers` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

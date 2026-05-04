@@ -18,6 +18,7 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
+- Add `config.urgency_glyph(days_away: int | None) -> str` function (lifted from `database.py::_urgency_glyph` + `pages/1_Opportunities.py::_deadline_urgency`); `EM_DASH`, `FILTER_ALL`, `REMINDER_TONES` constants on `config.py` (lifted from 5 / 3 / 1 duplicate sites respectively). Closes carry-overs C2 + C3. PR #42 (`bd76d29`) · [review](reviews/phase-7-CL2-review.md)
 - Add pyright type-check fence to CI (basic mode, pythonVersion 3.14, `pyright==1.1.409` pinned); `pyright .` row added to standing pre-commit checklists. PR #41 (`eac75c3`) · [review](reviews/phase-7-CL1-review.md)
 - Add `TestConfirmDialogAudit` to `tests/test_pages_cohesion.py` — 11 tests across 3 destructive paths pinning dialog title shape, irreversibility cue, cascade-effect copy enumeration, dialog-gating of every `database.delete_*` caller, and failure-preserves-pending-sentinel. PR #40 (`952f0e9`) · [review](reviews/phase-7-tier4-review.md)
 - Add `tests/test_pages_cohesion.py` with `TestSetPageConfigSweep` — 10 parametrized tests pinning locked-kwargs source-grep + first-Streamlit-statement AST walk across all 5 pages; audit confirmed all conform (verification-only). PR #39 (`85968bb`) · [review](reviews/phase-7-tier3-review.md)
@@ -26,6 +27,9 @@ manual steps to run against a pre-existing database.
 
 ### Changed
 - Trim recent CHANGELOG entries to GUIDELINES §14.4 one-line shape; add bottom link references; restructure phase-6-tier5 + phase-7-tier1 review docs to move `Kept by design` rows from Findings table to Q&A per §10. ([drift audit])
+
+### Removed
+- Drop unused `TRACKER_PROFILE` + `VALID_PROFILES` block + import-time assertion + 4 `TestTrackerProfile` tests from `config.py` / `tests/test_config.py` (carry-over C2 — never read by any module since v1.1 doc refactor). PR #42 (`bd76d29`)
 
 ### Fixed
 - Resolve 45 pyright drift errors across 5 files (`exports.py`, `pages/1_Opportunities.py`, `pages/2_Applications.py`, `pages/3_Recommenders.py`, `tests/test_app_page.py`) accumulated since PR #22; all fixes runtime no-ops. PR #41 (`eac75c3`)
