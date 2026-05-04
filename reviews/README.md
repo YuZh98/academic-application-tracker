@@ -19,6 +19,8 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-04 | Phase 6 T1 — `write_opportunities()` markdown generator | `feature/phase-6-tier1-WriteOpportunities` | Approve | [phase-6-tier1-review.md](phase-6-tier1-review.md) |
+| 2026-05-04 | Phase 5 finish — cohesion smoke + close-out (T7 — `v0.6.0` tag) | _(direct-to-main; orchestrator close-out doc)_ | Approve `v0.6.0` tag | [phase-5-finish-cohesion-smoke.md](phase-5-finish-cohesion-smoke.md) |
 | 2026-05-04 | Phase 5 T6 — Recommender reminder helpers (Compose mailto + LLM prompts expander) | `feature/phase-5-tier6-RecommenderReminders` | Approve | [phase-5-tier6-review.md](phase-5-tier6-review.md) |
 | 2026-05-03 | Phase 5 T5 — Recommenders table + filters + Add form + inline edit + dialog Delete | `feature/phase-5-tier5-RecommendersTableAddEdit` | Approve (post-merge) | [phase-5-tier5-review.md](phase-5-tier5-review.md) |
 | 2026-04-30 | Phase 5 T4 — Recommenders page shell + Pending Alerts panel | `feature/phase-5-tier4-RecommendersAlertPanel` | Approve | [phase-5-tier4-review.md](phase-5-tier4-review.md) |

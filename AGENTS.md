@@ -28,7 +28,7 @@ pandas · Plotly · pytest · ruff
 ```
 config.py              Constants only — statuses, thresholds, vocabularies
 database.py            All SQL reads/writes; calls exports.write_all() after every write
-exports.py             Markdown generators (Phase 6 stubs for now)
+exports.py             Markdown generators (T1 `write_opportunities` shipped; T2 / T3 pending)
 app.py                 Dashboard home page (Phase 4, complete)
 pages/
   1_Opportunities.py   Position CRUD (Phase 3, complete)
@@ -83,7 +83,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
-**`main` HEAD:** Phase 5 closed; test suite at 777 passed + 1 xfailed; next functional work is Phase 6 T1
+**`main` HEAD:** Phase 6 T1 merged (PR #32); test suite at 786 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -97,76 +97,110 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T6 — Reminder helpers (mailto + LLM prompts) | ✅ PR #31 | Compose mailto link button + LLM prompts (2 tones) expander per Pending Alerts card |
 | T7 — Phase 5 close-out + tag `v0.6.0` | ✅ | Cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md); CHANGELOG `[v0.6.0]` split |
 
-### What's after Phase 5
-Phase 6 (Exports — markdown generators), Phase 7 (Polish),
-v1.0-rc schema cleanup, then publish scaffolding (README, LICENSE,
-Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
+### Phase 6 — Exports (markdown generators)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| T1 — `write_opportunities()` generator | ✅ PR #32 | `exports/OPPORTUNITIES.md` — 8-column contract pinned by `TestWriteOpportunities`; raw bracketed status sentinels; idempotent |
+| T2 — `write_progress()` generator | 🔲 next | see "Immediate task" |
+| T3 — `write_recommenders()` generator | 🔲 | after T2 |
+| T4 — Export page (manual regenerate button + file mtimes) | 🔲 | |
+| T5 — Export page (`st.download_button` per file) | 🔲 | |
+| T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 | |
+
+### What's after Phase 6
+Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
+(README, LICENSE, Streamlit Cloud deploy). Full list in `TASKS.md`
+§"Up next".
 
 ---
 
-## Immediate task — Phase 6 T1 (`write_opportunities()` exports generator)
+## Immediate task — Phase 6 T2 (`write_progress()` exports generator)
 
-**Spec:** `TASKS.md` current sprint Phase 6 T1 · `DESIGN §7` exports
-contract (markdown generators, log-and-continue inside every
-`database.py` writer, deferred-import to break circular import) ·
-existing `exports.py` stub for the function signature
+**Spec:** `TASKS.md` current sprint Phase 6 T2 · `DESIGN §7` exports
+contract (`exports/PROGRESS.md` from positions JOIN applications
+JOIN interviews) · `exports.py` existing T1 implementation as the
+reference for shape (column contract pinning, idempotency,
+deferred-import, em-dash + raw-bracketed-status conventions).
 
-Phase 6 ships markdown export generators per **Q6 Option A** (plain
-markdown tables). T1 is the first of three generators (T1
-opportunities · T2 progress · T3 recommenders) plus an Export page
-(T4 + T5) and a phase close-out (T6 → tag `v0.7.0`).
+T2 ships the second of three Phase 6 generators. Same architectural
+shape as T1 — read DB → render markdown table → write to
+`exports/PROGRESS.md`. The data is **richer** than T1 (positions
+JOIN applications JOIN interviews) so the column set + sort + cell
+shapes need spec'ing first.
 
-### T1 — `exports.write_opportunities()` generator
-- Implement `exports.write_opportunities(conn=None)` returning the
-  written file path (or whatever the existing stub signature pins —
-  read `exports.py` first).
-- Output: a single markdown file at `exports/opportunities.md` with
-  one table row per row of `database.get_all_positions()` (or the
-  joined frame the dashboard's Opportunities page uses — pick to
-  match DESIGN §7 if the contract is explicit there).
-- Column contract: read DESIGN §7 / wireframes — typically
-  Position · Institute · Field · Deadline · Priority · Status (per
-  the Opportunities-page table) plus any audit columns the spec
-  calls for (created_at / updated_at).
-- Sort order: deadline ASC NULLS LAST, position_id ASC (mirrors the
-  upstream stable-tiebreaker invariant — see
-  `database.get_applications_table` precedent).
-- NaN / NULL handling: em-dash `—` for missing TEXT cells, ISO date
-  for date cells (markdown tables aren't a working surface — ISO is
-  unambiguous + sortable when grep'd).
+### T2 — `exports.write_progress()` generator
+
+- Output: `exports/PROGRESS.md` (UPPERCASE; mirror of T1
+  `OPPORTUNITIES.md` precedent + DESIGN §7 line 463).
+- Source: positions × applications × interviews join. The closest
+  existing reader is `database.get_applications_table()` (10-column
+  projection) — it covers the positions+applications side; the
+  interviews side needs an additional read (`get_interviews(pid)`
+  per row, OR a richer joined query if you'd rather add one to
+  `database.py`). Pick what reads cleanest; if you add a new query,
+  pin it with tests in `test_database.py` first.
+- Suggested column shape (verify against DESIGN §7 / wireframes
+  before locking; pin via `TestWriteProgress` tests):
+  - Position · Institute · Status · Applied · Confirmation ·
+    Response · Result · Interviews-summary
+  - "Interviews-summary" is the open question — could be a count
+    (`2`), a comma-joined date list (`2026-05-08, 2026-05-15`), or a
+    next-interview cell (`2026-05-08 Virtual`). Pick one and
+    document why in the test class docstring; flag in the PR
+    description so the orchestrator can sanity-check.
+- Sort order: same shape as T1 — `deadline_date ASC NULLS LAST,
+  position_id ASC`, with `pandas.sort_values(... kind="stable")` to
+  add the position_id tiebreaker on top of the upstream SQL order.
+- Cell shapes — **mirror T1 conventions** so the three exports read
+  coherently:
+  - `_safe_str_or_em` for missing TEXT cells → em-dash (`—`).
+  - Date cells pass-through ISO TEXT.
+  - Status renders **raw bracketed sentinel** (`[APPLIED]`, not
+    `Applied`) — same backup-vs-UI rationale as T1 (cite
+    `reviews/phase-6-tier1-review.md` Q1 if you need the long form).
+  - `_md_escape_cell` on every cell (pipe + newline safety net).
+- Idempotency: same DESIGN §7 #2 contract — pin with
+  `test_idempotent_across_two_calls`. Two calls with no DB change
+  must produce byte-identical output.
 
 ### Architecture rules (non-negotiable — DESIGN §7)
-- `exports.py` imports `database` and `config`; **NEVER** imports
-  `streamlit`.
-- Every `database.py` write function calls `exports.write_all()` via
-  **deferred import** (the writer's first line of side-effect work
-  imports `exports` inside the function body) to break the circular
-  import. T1 doesn't add new wiring — `write_all()` stub already
-  delegates; just implement the underlying `write_opportunities`.
-- Wrap the file write in a try/except so a failure in exports
-  doesn't kill the database write — log-and-continue per DESIGN §7
-  contract #1.
+- `exports.py` imports `database` + `config`; **NEVER** `streamlit`.
+- Deferred `database` import inside `write_progress` body (mirror of
+  T1) breaks the `database → exports → database` circular import.
+- `EXPORTS_DIR.mkdir(exist_ok=True)` inside the function body
+  (mirror of T1) so it works independently of `write_all`'s prior
+  mkdir — required for the Phase 6 T4 manual-trigger button.
 
 ### Tests to write first (TDD red commit)
-- `tests/test_exports.py` already exists; extend it. Test class
-  `TestWriteOpportunities`:
-  - `test_writes_file_at_expected_path` — call writer, assert file
-    exists at `exports/opportunities.md` (use `tmp_path` fixture).
-  - `test_table_header_matches_contract` — read file, assert first
-    table row is the locked column header.
-  - `test_one_row_per_position` — seed N positions, assert N data
-    rows in the markdown table.
-  - `test_sort_order_by_deadline_asc_nulls_last` — seed 3 positions
-    with mixed deadlines (one NULL, two distinct dates), assert
-    rendered order.
-  - `test_em_dash_for_missing_text_cells` — seed a position with
-    NULL field, assert the rendered cell is `—`.
-  - `test_iso_format_for_date_cells` — assert deadline column
-    renders as `YYYY-MM-DD`.
+- Reuse `db_and_exports` fixture from T1 (currently page-local in
+  `test_exports.py`; lift to `conftest.py` only if T3 also wants it).
+- `TestWriteProgress` class with:
+  - `test_writes_file_at_expected_path` — `exports/PROGRESS.md`
+    exists.
+  - `test_table_header_matches_contract` — locked column header.
+  - `test_one_row_per_position` — N positions → N data rows
+    (positions ∩ applications LEFT JOIN; rows that lack an
+    application still show up — applications row is auto-inserted
+    by `add_position` per `database.add_position` contract).
+  - `test_sort_order_by_deadline_asc_nulls_last` — mixed deadlines
+    sort correctly.
+  - `test_em_dash_for_missing_text_cells` — NULL `applied_date` /
+    `notes` / etc. surface as `—`.
+  - `test_iso_format_for_date_cells` — Applied column renders as
+    `YYYY-MM-DD`.
+  - `test_status_renders_as_raw_bracketed_sentinel` — `[APPLIED]`
+    in the Status cell (not `Applied`).
+  - `test_idempotent_across_two_calls` — byte-identical output.
+  - `test_empty_db_writes_header_only` — header + separator only on
+    empty DB (Phase 6 T4 manual-trigger button must work fresh).
+  - `test_interviews_summary_<...>` — pin whatever
+    "interviews-summary" choice you make; multiple interviews → a
+    deterministic single cell.
 
 ### TDD cadence
 Standard three-commit triplet — `test:` → `feat:` → `chore:` (the
-`chore:` is the orchestrator's, not yours).
+`chore:` is the orchestrator's).
 
 ### Pre-PR gates (GUIDELINES §11)
 ```bash
@@ -178,7 +212,7 @@ grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
 ```
 
 ### Branch + cadence
-- Branch name: `feature/phase-6-tier1-WriteOpportunities`.
+- Branch name: `feature/phase-6-tier2-WriteProgress`.
 - One PR for the test + feat commits; orchestrator handles the
   chore rollup post-merge.
 
@@ -188,8 +222,8 @@ grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
 
 ```
 1. test: commit  → add failing tests to tests/test_exports.py
-                   (writer not implemented yet → RED)
-2. feat: commit  → implement write_opportunities() in exports.py (GREEN)
+                   (write_progress not implemented yet → RED)
+2. feat: commit  → implement write_progress() in exports.py (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -222,7 +256,7 @@ grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-6-tier1-WriteOpportunities` |
+| Open PR | You — branch name: `feature/phase-6-tier2-WriteProgress` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |
