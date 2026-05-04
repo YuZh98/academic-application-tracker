@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `feat(phase-7-T1): Urgency colors on positions table`.
+  — e.g. `feat(phase-7-T2): Position search bar on Opportunities page`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 6 closed; test suite at 834 passed + 1 xfailed; next functional work is Phase 7 T1
+**`main` HEAD:** Phase 7 T1 merged (PR #37); test suite at 836 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -200,7 +200,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T6 — Reminder helpers (mailto + LLM prompts) | ✅ PR #31 | Compose mailto link button + LLM prompts (2 tones) expander per Pending Alerts card |
 | T7 — Phase 5 close-out + tag `v0.6.0` | ✅ | Cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md); CHANGELOG `[v0.6.0]` split |
 
-### Phase 6 — Exports (markdown generators)
+### Phase 6 — Exports (markdown generators) ✅ closed at `v0.7.0`
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -211,87 +211,101 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T5 — Export page (`st.download_button` per file) | ✅ PR #36 | three `st.download_button` widgets (one per locked filename) + `st.divider()` + `st.subheader("Download")` section header; `disabled=True` + `data=b""` when file absent, `data=Path.read_bytes()` when present; stacked layout above existing T4 mtime line |
 | T6 — Phase 6 close-out + tag `v0.7.0` | ✅ | Cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md); CHANGELOG `[v0.7.0]` split |
 
-### What's after Phase 6
-Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
-(README, LICENSE, Streamlit Cloud deploy). Full list in `TASKS.md`
-§"Up next".
+### Phase 7 — Polish
+
+| Task | Status | Notes |
+|------|--------|-------|
+| T1 — Urgency colors on positions table (`st.column_config`) | ✅ PR #37 | `_deadline_urgency` returns `🔴`/`🟡`/`''`/`—` glyphs (was: `'urgent'`/`'alert'`/`''`); new em-dash branch distinguishes "no deadline at all" from "deadline far enough away"; explicit NaN guard |
+| T2 — Position search bar on Opportunities | 🔲 next | see "Immediate task" |
+| T3 — `set_page_config` sweep on remaining pages | 🔲 | |
+| T4 — Confirm-dialog audit | 🔲 | |
+| T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 | |
+| T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | |
+
+### What's after Phase 7
+v1.0-rc schema cleanup, then publish scaffolding (README, LICENSE,
+Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 T1 (Urgency colors on positions table)
+## Immediate task — Phase 7 T2 (Position search bar on Opportunities page)
 
-**Spec:** `TASKS.md` current sprint Phase 7 T1 · `DESIGN §6`
-positions schema (`deadline_date` is the column to color against) ·
-`config.py` (`DEADLINE_URGENT_DAYS` + `DEADLINE_ALERT_DAYS`
-constants — already used by the dashboard's Upcoming panel for the
-🔴 / 🟡 urgency-band convention) · `pages/1_Opportunities.py`
-positions table (the surface to extend).
+**Spec:** `TASKS.md` current sprint Phase 7 T2
+("Position search bar on Opportunities (substring, `regex=False`)")
+· existing `pages/1_Opportunities.py` filter bar (the surface to
+extend) · `pandas.Series.str.contains(..., regex=False, case=False,
+na=False)` API (case-insensitive substring without regex
+metacharacters mattering, NaN-safe).
 
-Phase 7 ships polish (no new pages, no new schema). T1 surfaces
-deadline-urgency at-a-glance on the Opportunities-page positions
-table — same 🔴 (urgent) / 🟡 (alert window) / no-glyph (beyond
-window or no deadline) banding the dashboard already uses, applied
-to the per-row deadline cell as a `st.column_config` rule.
+Phase 7 T2 adds a free-text search bar to the Opportunities page
+filter row so the user can narrow the positions table by partial
+match against `position_name` (and arguably `institute` /
+`field` — implementer picks; flag in PR description). Substring
+match, no regex.
 
-### T1 — Urgency colors on positions table
+### T2 — Position search bar
 
-- Reuse the existing config invariants:
-  - `DEADLINE_URGENT_DAYS` → 🔴 if `deadline_date` is within this
-    many days of today
-  - `DEADLINE_ALERT_DAYS` → 🟡 if within this many days but past
-    `DEADLINE_URGENT_DAYS`
-  - Otherwise no urgency glyph (or em-dash for NULL deadline)
-- Mirror the dashboard's `app.py` T4 Upcoming panel formatter where
-  it already renders the urgency glyph in the rendered cell.
-- Apply to the positions-table render in `pages/1_Opportunities.py`.
-  The existing table already renders `deadline_date`; the new
-  contract is "Deadline cell carries the urgency glyph inline" or
-  "a new Urgency column is added between Deadline and the next
-  column" — implementer picks whichever reads cleanest in the page
-  context, flag in PR description.
-- Streamlit 1.56's `st.column_config.TextColumn` doesn't support
-  per-cell color; the urgency signal lands as a glyph (🔴 / 🟡)
-  in the cell text rather than as a CSS background. Same precedent
-  as the dashboard's Upcoming panel.
+- Add an `st.text_input("Search positions", ...,
+  key="opps_filter_search")` (or whatever key fits the existing
+  filter prefix on the page — verify against the page's existing
+  filter-bar widget keys; the project convention is `filter_` or
+  page-prefix-`filter_`, but this page may use `opps_` or have
+  established a different prefix in Phase 3 — read the file first).
+- Apply the filter as a row-mask over the table's source DataFrame
+  via `df["position_name"].str.contains(query, regex=False,
+  case=False, na=False)`. `na=False` excludes NULL position-name
+  rows (they shouldn't exist per the schema's NOT NULL constraint,
+  but defensive). Empty query → no narrowing (all rows pass).
+- Decide the search-target column scope: position_name only, OR
+  position_name + institute + field. Wider scope is more useful
+  for the user; narrower scope is simpler to test. Pick one + flag
+  in PR description.
+- The search filter applies AFTER the existing status / priority /
+  field filters (or in concert with them — order doesn't matter
+  because all are AND-combined row masks).
+- Empty-state copy: if the search narrows to zero rows AND the
+  other filters don't match anything either, fall through to the
+  existing empty-state branch. If JUST the search narrows to zero,
+  the user's mental model is "their search didn't match" — same
+  empty branch handles it via the existing message.
 
 ### Tests to write first (TDD red commit)
 - Extend `tests/test_opportunities_page.py`. Mirror the AppTest-
-  driven shape of the existing tests there.
-- New `TestPositionsTableUrgencyColors` class (or extend an existing
-  positions-table class — implementer picks):
-  - `test_urgent_deadline_renders_red_glyph` — seed a position with
-    `deadline_date = today + (DEADLINE_URGENT_DAYS - 1)` days;
-    rendered cell contains 🔴.
-  - `test_alert_deadline_renders_yellow_glyph` — seed a position
-    with `deadline_date = today + (DEADLINE_URGENT_DAYS + 1)` days;
-    rendered cell contains 🟡.
-  - `test_distant_deadline_no_glyph` — seed `today +
-    (DEADLINE_ALERT_DAYS + 7)` days; cell contains no urgency
-    glyph.
-  - `test_null_deadline_renders_em_dash` — seed `deadline_date =
-    None`; cell renders `—` (existing T1-C convention from Phase
-    5 T1 + the dashboard panel).
-  - `test_today_deadline_renders_red_glyph` — boundary case at
-    delta = 0.
-  - `test_invariant_check_urgent_le_alert` — pin
-    `DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS` (already in
-    `config.py`'s assert block; this test surfaces the contract
-    in the test suite).
+  driven shape of `TestPositionsTable`.
+- New `TestPositionsTableSearch` class (or extend an existing
+  filter-bar class):
+  - `test_search_input_renders` — `at.text_input(key=...)` exists
+    with the locked label.
+  - `test_empty_search_returns_all_rows` — seed N positions, leave
+    search empty; assert N data rows.
+  - `test_search_substring_filters_rows` — seed positions
+    `"Postdoc Stanford"` + `"Faculty MIT"`; set search to
+    `"stanford"` (lowercase); assert only the Stanford row
+    surfaces (case-insensitive).
+  - `test_search_no_match_renders_empty` — seed positions; set
+    search to a string that doesn't match; assert the existing
+    empty-state branch fires.
+  - `test_search_special_chars_no_regex_interpretation` — seed
+    `"C++ Postdoc"`; set search to `"++"`; assert the row
+    surfaces (regex `++` would be an invalid quantifier; the
+    `regex=False` arg makes this a literal substring match).
+  - `test_search_combines_with_status_filter` — set status filter
+    to a specific value AND a search string; assert the
+    intersection (only rows matching BOTH filters surface).
 
 ### Architecture rules (non-negotiable)
 - `pages/1_Opportunities.py` already imports `database`, `config`,
-  `streamlit`, `pandas`. Reuse existing `_safe_str_or_em` etc.
-- Reuse the dashboard's urgency-formatter helper if it lives in
-  `database.py` or a shared utility; if it's page-local in
-  `app.py`, duplicate it in `pages/1_Opportunities.py` per DESIGN
-  §2 layer rules (pages don't import from app.py).
+  `streamlit`, `pandas`. No new imports needed.
+- Widget key follows the existing page's filter-prefix convention
+  (read the file to confirm whether to use `opps_filter_search`
+  or `filter_search` or another shape).
 
 ### Pre-PR gates
 Standing checklist below + the CI-mirror local check from "Session
 bootstrap" — both apply.
 
 ### Branch + cadence
-- Branch name: `feature/phase-7-tier1-UrgencyColors`.
+- Branch name: `feature/phase-7-tier2-PositionSearch`.
 - One PR for the test + feat commits; orchestrator handles the
   chore rollup post-merge.
 
@@ -301,8 +315,8 @@ bootstrap" — both apply.
 
 ```
 1. test: commit  → add failing tests to tests/test_opportunities_page.py
-                   (urgency colors not implemented yet → RED)
-2. feat: commit  → extend pages/1_Opportunities.py with urgency formatter (GREEN)
+                   (search bar not implemented yet → RED)
+2. feat: commit  → extend pages/1_Opportunities.py with search-bar filter (GREEN)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -337,7 +351,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-tier1-UrgencyColors` |
+| Open PR | You — branch name: `feature/phase-7-tier2-PositionSearch` |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

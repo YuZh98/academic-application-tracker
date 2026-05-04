@@ -17,7 +17,8 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
-_(No entries yet — accumulates Phase 7 work and beyond.)_
+### Added
+- Phase 7 T1: `pages/1_Opportunities.py::_deadline_urgency` returns inline glyphs (`🔴` for urgent: `days <= DEADLINE_URGENT_DAYS`; `🟡` for alert: `days <= DEADLINE_ALERT_DAYS`; `''` for distant; `—` for NULL / unparseable) instead of literal-string flags (`'urgent'` / `'alert'` / `''`). Display column unchanged — only the value form changes. Same banding the dashboard's Upcoming panel uses (`database.py::_urgency_glyph`); shared via the `config.DEADLINE_URGENT_DAYS` / `DEADLINE_ALERT_DAYS` thresholds rather than a shared helper (DESIGN §2 layer rule: pages cannot import `database.py` privates). New page-local `EM_DASH = "—"` module constant (mirror of the same literal in `app.py`, `pages/2_Applications.py`, `exports.py`). New contract distinguishes "no deadline at all" (em-dash) from "deadline far enough away that no urgency is signaled" (empty cell); the old contract collapsed both into `''`. Type hint widened from `str | None` to `Any` (pandas `.apply()` on object columns surfaces NULL TEXT cells as `float('nan')`); explicit `isinstance + math.isnan` guard added on top of the existing not-falsy + try/except guards so every NULL-shaped input funnels to the em-dash branch consistently. 7 existing urgency tests in `TestPositionsTable` updated in-place (renamed + assertions flipped); 2 new tests added (`test_today_deadline_renders_red_glyph` boundary at delta=0, `test_invariant_check_urgent_le_alert` config invariant pin). Class-level constants `URGENT_GLYPH` / `ALERT_GLYPH` / `NO_GLYPH` / `EM_DASH` centralize the locked-copy strings. Suite 834 → 836 under both pytest gates. Merged via PR #37 (`e5316fd`). ([`reviews/phase-7-tier1-review.md`](reviews/phase-7-tier1-review.md))
 
 ## [v0.7.0] — 2026-05-04 — Phase 6: Exports (markdown generators + Export page)
 
