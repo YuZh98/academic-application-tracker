@@ -260,7 +260,22 @@ if submitted:
             st.error(f"Could not save position: {e}")
 
 # ── TIER 2: Filter bar ────────────────────────────────────────────────────────
-col_status, col_priority, col_field = st.columns([2, 2, 3])
+# Phase 7 T2: prepend a free-text search box at the start of the filter row.
+# Wider weight (3) than status / priority (2) because typed queries are
+# variable-length and the search is the primary navigation tool — placing
+# it left, prominent, mirrors common UX (Google / GitHub search).
+col_search, col_status, col_priority, col_field = st.columns([3, 2, 2, 3])
+with col_search:
+    # Phase 7 T2: substring search against position_name. Scope is
+    # position_name only — institute / field are intentionally excluded
+    # (field already has its own filter widget; narrowing the search to
+    # one column keeps "what you type matches what's printed in the
+    # Position column" predictable).
+    search_filter = st.text_input(
+        "Search positions",
+        placeholder="Search by position name…",
+        key="filter_search",
+    )
 with col_status:
     # DESIGN §8.0 Status label convention: UI shows labels
     # (`config.STATUS_LABELS`), storage/compare holds the raw bracketed
@@ -298,6 +313,16 @@ if field_filter.strip():
     df_filtered = df_filtered[
         df_filtered["field"].str.contains(
             field_filter.strip(), case=False, na=False, regex=False
+        )
+    ]
+# Phase 7 T2: position-name search. Mirrors the field-filter idiom above
+# (regex=False so '++' / '.' are literals; case=False; na=False so any
+# theoretical NULL position_name is filtered out rather than NaN-propagated).
+# AND-combined with the other filters — each row mask narrows further.
+if search_filter.strip():
+    df_filtered = df_filtered[
+        df_filtered["position_name"].str.contains(
+            search_filter.strip(), case=False, na=False, regex=False
         )
     ]
 
