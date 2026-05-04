@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `feat(phase-6-T5): Export page download buttons`.
+  — e.g. `chore(phase-6-T6): close-out + v0.7.0 tag prep` (T6 is doc-only, orchestrator-owned).
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -142,7 +142,7 @@ tests/
   test_app_page.py     Integration tests for app.py (AppTest)
   test_applications_page.py
   test_recommenders_page.py   Phase 5 tests complete
-  test_export_page.py    Phase 6 T4 + T5 work creates this file (AppTest-driven)
+  test_export_page.py    Phase 6 T4 + T5 complete (AppTest-driven)
   test_opportunities_page.py
   test_exports.py
 DESIGN.md              Authoritative spec — read §8.4 for Recommenders page contract
@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.6.0` (Phase 5 complete — Applications + Recommenders pages)
-**`main` HEAD:** Phase 6 T4 merged (PR #35); test suite at 827 passed + 1 xfailed
+**`main` HEAD:** Phase 6 T5 merged (PR #36); test suite at 834 passed + 1 xfailed
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -208,8 +208,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T2 — `write_progress()` generator | ✅ PR #33 | `exports/PROGRESS.md` — positions × applications × interviews; `_format_confirmation` + `_format_interviews_summary` tri-state helpers; conftest fixture lift (mandatory ride-along) closed T1 pollution |
 | T3 — `write_recommenders()` generator | ✅ PR #34 | `exports/RECOMMENDERS.md` — 8-column contract; new local `_format_confirmed` (`—`/`No`/`Yes`); Reminder cell reuses `_format_confirmation`; `notes` deliberately omitted; smoke-test `fix:` commit augmented `isolated_exports_dir` to also monkeypatch DB_PATH (closed CI-red regression that had been latent since T1) |
 | T4 — Export page (manual regenerate button + file mtimes) | ✅ PR #35 | `pages/4_Export.py` shell + regenerate button (try/except `write_all`, success toast, friendly `st.error`) + per-file mtimes panel (`st.markdown` lines, `Path.exists()` check + `os.utime`-deterministic test) |
-| T5 — Export page (`st.download_button` per file) | 🔲 next | see "Immediate task" |
-| T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 | after T5 |
+| T5 — Export page (`st.download_button` per file) | ✅ PR #36 | three `st.download_button` widgets (one per locked filename) + `st.divider()` + `st.subheader("Download")` section header; `disabled=True` + `data=b""` when file absent, `data=Path.read_bytes()` when present; stacked layout above existing T4 mtime line |
+| T6 — Phase 6 close-out + tag `v0.7.0` | 🔲 next | see "Immediate task" — orchestrator-owned (no implementer work) |
 
 ### What's after Phase 6
 Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
@@ -218,120 +218,80 @@ Phase 7 (Polish), v1.0-rc schema cleanup, then publish scaffolding
 
 ---
 
-## Immediate task — Phase 6 T5 (Export page — `st.download_button` per file + "── Download ───" wireframe section header)
+## Immediate task — Phase 6 T6 (close-out + tag `v0.7.0`) — **orchestrator-owned, no implementer work**
 
-**Spec:** `TASKS.md` current sprint Phase 6 T5 · `DESIGN §8.5`
-(Export page) · `docs/ui/wireframes.md#export` (ASCII layout pins
-the "── Download ───" section header above three `[ ⬇ FILENAME.md ]`
-buttons next to their `Last generated: <file mtime>` lines) ·
-existing `pages/4_Export.py` shipped in T4 (page shell + regenerate
-button + mtimes panel — extend, don't rewrite) · DESIGN §7 (exports
-contract).
+**Spec:** `TASKS.md` current sprint Phase 6 T6 · `GUIDELINES §11`
+(version scheme — each minor bump marks one completed phase) ·
+prior precedent `reviews/phase-5-finish-cohesion-smoke.md` (Phase 5
+T7 close-out shape, written 2026-05-04 by orchestrator).
 
-T5 adds three `st.download_button` widgets to the existing T4
-Export-page shell, alongside the wireframe-pinned "── Download ───"
-section header that T4 deliberately omitted. Mechanical extension
-on top of T4.
+T6 closes Phase 6. **No implementer work** — same shape as Phase 5
+T7. If you're an implementer agent and you've reached this block:
+stop, ping the orchestrator, do not branch. The orchestrator will
+ship T6 directly on main per the post-merge ritual.
 
-### T5 — extend `pages/4_Export.py` with download buttons
+### T6 deliverables (orchestrator-owned)
 
-- **Section header:** render `"── Download ───"` (or whatever the
-  wireframe shape resolves to once you read it — verify against
-  `docs/ui/wireframes.md#export` line 176) ABOVE the three
-  download-button + mtime rows. Implementer's call: keep the rule
-  prose-as-markdown (`st.markdown("── Download ───")`) or use a
-  Streamlit primitive (`st.divider()` + a subheader). Pick what
-  reads cleanest; flag the choice in the PR description.
-- **Three `st.download_button` widgets**, one per locked filename,
-  in the wireframe order (`OPPORTUNITIES.md` → `PROGRESS.md` →
-  `RECOMMENDERS.md`):
-  - `st.download_button(label=f"⬇ {filename}", data=file_bytes,
-    file_name=filename, mime="text/markdown",
-    key=f"export_download_{filename}")`.
-  - `data` arg is `(EXPORTS_DIR / filename).read_bytes()` if the
-    file exists.
-  - **Missing-file branch:** if `(EXPORTS_DIR / filename).exists()`
-    is False, render the button as **disabled** (`disabled=True`
-    on `st.download_button`) with empty `data=b""`. The user gets
-    the "click Regenerate first" affordance from the existing
-    mtimes panel ("not yet generated" placeholder); the disabled
-    button is the visual signal that the file isn't downloadable yet.
-- **Layout:** the wireframe shows download button + mtime line on
-  the same logical row. Two valid renderings: (a) `st.columns([1, 3])`
-  per file with the button left + the mtime line right, or (b)
-  keep the existing per-file `st.markdown` mtime line and render
-  the download button right above or below it. Pick (a) if it
-  reads close to the wireframe; (b) if column rendering looks
-  awkward at narrow viewports.
-- **Re-use the existing T4 mtimes panel** — don't duplicate the
-  `Path.exists()` + `datetime.fromtimestamp` logic. T5 either
-  inserts the download button into the existing per-file loop, or
-  the loop is restructured to render `(button, mtime-line)` pairs.
+1. **Phase 6 cohesion-smoke + close-out doc**
+   (`reviews/phase-6-finish-cohesion-smoke.md`) — mirror of
+   `reviews/phase-5-finish-cohesion-smoke.md`. AppTest probes (Export
+   page populated + empty + click-regenerate + post-regenerate); six
+   cohesion dimensions audited (status labels, empty-state copy,
+   date format, toast/error wording, NaN coercion, widget-key
+   prefixes); tier-review carry-over triage across
+   `phase-6-tier1-review.md` … `phase-6-tier5-review.md`.
 
-### Architecture rules (non-negotiable)
-- Same as T4 — `pages/4_Export.py` imports `database`, `config`,
-  `exports`, `streamlit`, `datetime`, `pathlib`. **NEVER** imports
-  `pages/` modules.
-- Widget keys: `export_download_<filename>` per the
-  Coordination-protocol-pinned page prefix.
+   Carry-overs to triage:
+   - **No carry-overs from T1, T2, T3.** Each tier-review doc's
+     "Carry-overs" section either resolved its findings inline or
+     noted them as kept-by-design (e.g. T2 N+1 interviews lookup,
+     T3 `notes` column omission).
+   - **T4** flagged `st.markdown` vs `st.write` cohesion as a Phase
+     7 polish candidate (Finding #3). Track only.
+   - **T5** flagged the wireframe-deviation stacked layout as
+     kept-by-design (Finding #1). No follow-up needed.
+   - **C2** (TRACKER_PROFILE) + **C3** ("All" filter sentinel +
+     `_REMINDER_TONES`) still open from prior phases. Defer per
+     the Phase 5 T7 disposition.
+   - **Privacy amendment** (`exports/` `.gitignore`d, DESIGN §7
+     contract #2 amended) landed in `43b3f3c` 2026-05-04 — note in
+     the close-out as a structural change between v0.6.0 and v0.7.0.
 
-### Tests to write first (TDD red commit)
-- Extend the existing `tests/test_export_page.py`. Mirror the
-  three-class shape from T4.
-- New `TestExportPageDownloadButtons` class:
-  - `test_three_download_buttons_render` — three widgets with
-    keys `export_download_OPPORTUNITIES.md`,
-    `export_download_PROGRESS.md`,
-    `export_download_RECOMMENDERS.md` exist with labels matching
-    the wireframe (`⬇ OPPORTUNITIES.md` etc.).
-  - `test_download_button_disabled_when_file_absent` — fresh DB,
-    no files in `EXPORTS_DIR`; each download button has
-    `disabled=True`. AppTest exposes button disabled-state via
-    `at.download_button(key=...).disabled`.
-  - `test_download_button_enabled_when_file_present` — pre-populate
-    a file; the corresponding download button has `disabled=False`.
-  - `test_download_data_matches_file_bytes` — pre-populate a file
-    with known content; the button's `data` value matches the file
-    bytes. AppTest exposes the download button's data via
-    `.data` or similar — verify against
-    `streamlit.testing.v1` API at implementation time.
-  - `test_download_filename_attribute` — the button's `file_name`
-    attribute matches the locked export filename (so the user's
-    saved file lands as `OPPORTUNITIES.md`, not the page's
-    internal slug).
-  - `test_download_section_header_rendered` — the wireframe-pinned
-    "── Download ───" header (or whatever shape lands per the
-    above) appears in the rendered page above the buttons.
-  - `test_regenerate_then_download_buttons_enable` — cohesion test:
-    fresh DB → buttons disabled → click regenerate → re-rendered
-    buttons enabled. Catches a bug where the disabled state is
-    cached across the rerun.
+2. **CHANGELOG.md split** — `[Unreleased]` → `[v0.7.0]` at the
+   boundary commit (the T6 close-out commit itself), mirroring the
+   Phase 5 v0.6.0 split precedent (commit `6f936d7`). Empty
+   `[Unreleased]` accumulates Phase 7 work.
 
-### Architecture rules (non-negotiable — DESIGN §2 + §7)
-- `pages/4_Export.py` extends the existing file (created in T4);
-  do not rewrite the page-shell / regenerate-button / mtimes
-  sections.
-- Imports already in place from T4 (`from pathlib import Path`,
-  `import streamlit as st`, `import exports`); add only what's
-  new.
+3. **Tag** — `git tag -a v0.7.0 -m "Phase 6 — Exports (markdown
+   generators + Export page)"` with annotation listing the headline
+   T1-T6 deliverables. Push.
 
-### Pre-PR gates (GUIDELINES §11 + standing isolation gate + standing CI-mirror check)
-Standing checklist below in "Pre-commit checklist" + the CI-mirror
-check from "Session bootstrap" — both apply to every PR.
+4. **TASKS.md / AGENTS.md final flip** — T6 ✅; main HEAD line
+   bumped; Immediate-task replaced with **Phase 7 T1** (Urgency
+   colors on positions table per `TASKS.md` "Up next" → Phase 7).
 
-### Branch + cadence
-- Branch name: `feature/phase-6-tier5-DownloadButtons`.
-- One PR for the test + feat commits; orchestrator handles the
-  chore rollup post-merge.
+5. **Recently-done entry** — one bullet for the v0.7.0 tag close-out.
+
+### Pre-tag gates (GUIDELINES §11 + standing isolation + CI-mirror)
+All six gates green at HEAD before tagging:
+```bash
+ruff check .
+pytest tests/ -q
+pytest -W error::DeprecationWarning tests/ -q
+grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
+  | grep -v '^\([^:]*\):[0-9]*:\s*#'
+git status --porcelain exports/
+mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
+```
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test: commit  → add failing tests to tests/test_export_page.py
-                   (download buttons not implemented yet → RED)
-2. feat: commit  → extend pages/4_Export.py with download buttons (GREEN)
+1. (T6 is doc-only, orchestrator-owned — no implementer test:/feat:
+   commits. Implementer agents who reach this block should stop and
+   ping the orchestrator. The next implementer task is Phase 7 T1.)
 3. chore: commit → orchestrator handles TASKS.md/CHANGELOG/review doc
                    (YOU do not touch these)
 ```
@@ -366,7 +326,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-6-tier5-DownloadButtons` |
+| Open PR | You — branch name: `feature/phase-7-tier1-UrgencyColors` (Phase 7 T1, after the orchestrator ships T6 close-out) |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

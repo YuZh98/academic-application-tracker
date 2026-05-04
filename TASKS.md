@@ -484,6 +484,16 @@ project's history to land with `mergeStateStatus: CLEAN` (rather
 than `BLOCKED`); admin-bypass merge used anyway for procedure
 consistency. Merged via PR #35 (`3235f60`).
 
+Branch (T5): on `feature/phase-6-tier5-DownloadButtons`; pre-merge
+review at [`reviews/phase-6-tier5-review.md`](reviews/phase-6-tier5-review.md);
+suite 827 → 834 green under both pytest gates. Three design calls
+flagged by implementer (stacked vs side-by-side layout — pragmatic
+test-compatibility choice; `st.divider()` + `st.subheader("Download")`
+vs literal Unicode dashes — the dashes don't render as a horizontal
+rule; source-grep tests for `data` + `file_name` args because
+AppTest 1.56's DownloadButton proto doesn't expose either field).
+All defensible. Merged via PR #36 (`73a04c4`).
+
 - [x] **T1** `write_opportunities()` generator — fills the existing
       `exports.py` stub with the first markdown export per DESIGN §7.
       Reads `database.get_all_positions()`, sorts `deadline_date ASC
@@ -664,7 +674,36 @@ consistency. Merged via PR #35 (`3235f60`).
       to land with `mergeStateStatus: CLEAN` rather than `BLOCKED` —
       orchestrator-merged via standard admin-bypass for consistency
       with the `c284c20` procedure.
-- [ ] **T5** Export page — `st.download_button` per file
+- [x] **T5** Export page — `st.download_button` per file — extends
+      `pages/4_Export.py` (T4) with three `st.download_button`
+      widgets keyed `export_download_<filename>` (one per locked
+      filename in wireframe order: `OPPORTUNITIES.md`, `PROGRESS.md`,
+      `RECOMMENDERS.md`) plus the wireframe-pinned "── Download ───"
+      section header rendered as `st.divider()` +
+      `st.subheader("Download")` (the Streamlit-idiomatic equivalent
+      of the ASCII rule — Unicode dashes don't render as a horizontal
+      rule in markdown). Each button's data arg: `Path.read_bytes()`
+      when the file exists, `b""` + `disabled=True` when absent (the
+      empty bytes are placeholder semantics; the disabled state
+      blocks the click). A single `_file_present = _path.exists()`
+      boolean now drives both the new download-button disabled
+      state AND the existing T4 mtime-line branch — single
+      filesystem call per file, no race between the two checks.
+      Stacked layout (button above mtime line) rather than the
+      wireframe's side-by-side `st.columns` rendering — the column
+      layout would have moved the bold filename onto the button
+      label and broken T4's substring assertions in
+      `TestExportPageMtimesPanel`. 7 new tests in
+      `TestExportPageDownloadButtons` plus two helper functions
+      (`_download_buttons` wrapping `at.get('download_button')`,
+      `_download_button` looking up by widget key via
+      `proto.id.endswith(...)`); two source-grep tests pin the
+      `data=read_bytes()` and `file_name=` contracts because AppTest
+      1.56's DownloadButton proto stores both behind a mock media
+      URL and doesn't expose them on the element tree. The integration
+      test `test_download_button_enabled_when_file_present` is the
+      belt-and-suspenders pin against the source-grep layer. Suite
+      827 → 834 under both pytest gates.
 - [ ] **T6** Phase 6 review + PR + tag `v0.7.0`
 
 ### Phase 7 — Polish
@@ -714,6 +753,17 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #36 merged** (`73a04c4`): Phase 6 T5 shipped —
+  three `st.download_button` widgets + `st.divider()` +
+  `st.subheader("Download")` section header on `pages/4_Export.py`.
+  Each button's data arg: `Path.read_bytes()` when present,
+  `b""` + `disabled=True` when absent. Stacked layout (button above
+  mtime line) preserves T4's substring assertions; single
+  `_file_present` boolean drives both download-disabled state AND
+  T4 mtime branch. 7 new tests in `TestExportPageDownloadButtons`
+  + two helper functions. Suite 827 → 834 under both pytest gates.
+  Pre-merge review at [`reviews/phase-6-tier5-review.md`](reviews/phase-6-tier5-review.md).
+  **Phase 6 generator-and-page group complete; T6 close-out next.**
 - 2026-05-04 — **PR #35 merged** (`3235f60`): Phase 6 T4 shipped —
   `pages/4_Export.py` page shell + manual regenerate button +
   per-file mtimes panel. Regenerate button wraps
@@ -916,4 +966,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 6 T4 merged via PR #35; main HEAD `3235f60`; suite 827 / 1 xfailed; Phase 6 T5 — Export page download buttons + "── Download ───" section header next)_
+_Updated: 2026-05-04 (Phase 6 T5 merged via PR #36; main HEAD `73a04c4`; suite 834 / 1 xfailed; Phase 6 T6 — close-out cohesion-smoke + tag `v0.7.0` next, orchestrator-owned)_
