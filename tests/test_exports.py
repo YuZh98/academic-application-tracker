@@ -17,10 +17,29 @@ from tests.conftest import make_position
 
 @pytest.fixture
 def isolated_exports_dir(tmp_path, monkeypatch):
-    """Redirect EXPORTS_DIR to a temp path so smoke tests never touch the
-    real project exports/ directory. Each test gets its own clean subtree."""
+    """Redirect EXPORTS_DIR + DB_PATH to a `tmp_path` subtree, then init
+    a fresh DB. Tests using this fixture get full isolation from both
+    the project's real ``exports/`` directory AND its real ``postdoc.db``.
+
+    Why the DB leg of isolation matters (added 2026-05-04 post-mortem on
+    PRs #32 / #33 / #34 — see AGENTS.md "CI-mirror local check"):
+    post-Phase 6 the writers ``write_opportunities`` / ``write_progress``
+    / ``write_recommenders`` all read the DB. Without ``DB_PATH``
+    monkeypatching here, a smoke test calling a writer falls through
+    to the project's real ``postdoc.db`` locally (passes silently
+    against the developer's real data) and raises
+    ``sqlite3.OperationalError: no such table: positions`` on CI
+    runners (which have no ``postdoc.db``). Pinning the DB monkeypatch
+    + ``init_db()`` inside this fixture closes the gap once for every
+    consumer rather than per-test.
+
+    Mirror of the conftest ``db`` fixture from Phase 6 T2 conftest lift,
+    minus the yield value — this fixture returns the exports-dir path
+    so consumers can read rendered output."""
     d = tmp_path / "exports"
     monkeypatch.setattr(exports, "EXPORTS_DIR", d)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.db")
+    database.init_db()
     return d
 
 
