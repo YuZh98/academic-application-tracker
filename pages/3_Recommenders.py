@@ -43,6 +43,9 @@ import streamlit as st
 
 import config
 import database
+# Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
+# bare name so existing per-page references remain unchanged.
+from config import EM_DASH
 
 # DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
 # with wide layout. Must precede any other st.* call.
@@ -58,9 +61,6 @@ st.title("Recommenders")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-EM_DASH = "—"
 
 
 def _safe_str(v: Any) -> str:
@@ -135,13 +135,13 @@ def _format_confirmed(v: Any) -> str:
 # DESIGN §8.4 + AGENTS §T6 pin two affordances per Pending-Alerts card:
 #   - A `Compose reminder email` link button opening a `mailto:` URL with
 #     the locked subject + body copy below.
-#   - An `LLM prompts ({len(_REMINDER_TONES)} tones)` expander holding one
-#     `st.code(prompt, language="text")` per tone.
+#   - An `LLM prompts ({len(config.REMINDER_TONES)} tones)` expander holding
+#     one `st.code(prompt, language="text")` per tone.
 # The tone vocabulary is locked at (gentle, urgent) per DESIGN §8.4; the
-# expander label computes its count from `len(_REMINDER_TONES)` so a
+# expander label computes its count from `len(config.REMINDER_TONES)` so a
 # future tone addition flows through to the UI without a separate edit.
-
-_REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
+# Phase 7 cleanup CL2 lifted the tuple to config.REMINDER_TONES so a
+# future "formal" tone is a config-only edit.
 
 
 def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
@@ -221,7 +221,7 @@ def _build_llm_prompt(
 #   - {institute}: {position_name} (asked {N}d ago, due {Mon D})
 #   - ...
 #   [Compose reminder email]               ← T6-A mailto link button
-#   ▸ LLM prompts (N tones)                 ← T6-B expander, N = len(_REMINDER_TONES)
+#   ▸ LLM prompts (N tones)                 ← T6-B expander, N = len(config.REMINDER_TONES)
 
 st.subheader("Pending Alerts")
 _pending_recs = database.get_pending_recommenders()
@@ -279,7 +279,7 @@ else:
             # ── T6-B: LLM prompts expander ──────────────────────────────
             # One st.code(prompt, language="text") per locked tone. The
             # expander label computes its tone count from
-            # _REMINDER_TONES so a future tone addition flows through to
+            # config.REMINDER_TONES so a future tone addition flows through to
             # the UI label automatically. days-since-asked is the MAX
             # across the card's positions (the longest wait) — the
             # prompt is one block per tone, not per position, so a
@@ -289,10 +289,10 @@ else:
                 None if (_rel is None or pd.isna(_rel)) else str(_rel)
             )
             with st.expander(
-                f"LLM prompts ({len(_REMINDER_TONES)} tones)",
+                f"LLM prompts ({len(config.REMINDER_TONES)} tones)",
                 expanded=False,
             ):
-                for _tone in _REMINDER_TONES:
+                for _tone in config.REMINDER_TONES:
                     _prompt = _build_llm_prompt(
                         tone=_tone,
                         recommender_name=str(_name),
@@ -414,28 +414,29 @@ if _add_submitted:
 # by name so the dropdown carries each person at most once even when they
 # owe letters for several positions.
 
-_FILTER_ALL = "All"
+# Phase 7 cleanup CL2: the "All" sentinel lives on `config.FILTER_ALL`
+# (single source of truth across all three pages).
 
 _recs_df = database.get_all_recommenders()
 
 # Position filter options: derive from the positions table so a position
 # without recommenders still appears (matches the add-form selectbox's
 # coverage). Sentinel first.
-_position_filter_options = [_FILTER_ALL] + list(_position_label_to_id.keys())
+_position_filter_options = [config.FILTER_ALL] + list(_position_label_to_id.keys())
 
 # Recommender filter options: distinct recommender_names ordered by the
 # upstream `r.recommender_name ASC` from get_all_recommenders. Drop NULLs
 # (rare — a recommender without a name is degenerate but possible while
 # the user is still filling things in).
 if _recs_df.empty:
-    _recommender_filter_options = [_FILTER_ALL]
+    _recommender_filter_options = [config.FILTER_ALL]
 else:
     _seen: list[str] = []
     for _n in _recs_df["recommender_name"]:
         _ns = _safe_str(_n)
         if _ns and _ns not in _seen:
             _seen.append(_ns)
-    _recommender_filter_options = [_FILTER_ALL] + _seen
+    _recommender_filter_options = [config.FILTER_ALL] + _seen
 
 _filter_col1, _filter_col2 = st.columns(2)
 with _filter_col1:
@@ -468,14 +469,14 @@ with _filter_col2:
 # `pd.DataFrame` so downstream `.reset_index` / `.apply` / `.iloc` /
 # `.empty` access stays typed.
 _filtered_df: pd.DataFrame = _recs_df.copy()
-if _pos_filter != _FILTER_ALL:
+if _pos_filter != config.FILTER_ALL:
     _target_pos_id = _position_label_to_id.get(_pos_filter)
     if _target_pos_id is not None:
         _filtered_df = cast(
             pd.DataFrame,
             _filtered_df[_filtered_df["position_id"] == _target_pos_id],
         )
-if _rec_filter != _FILTER_ALL:
+if _rec_filter != config.FILTER_ALL:
     _filtered_df = cast(
         pd.DataFrame,
         _filtered_df[_filtered_df["recommender_name"] == _rec_filter],

@@ -16,13 +16,12 @@ import streamlit as st
 import config
 import database
 
-# Em-dash placeholder for missing / unparseable cells. Mirror of the same
-# constant in app.py, pages/2_Applications.py, exports.py — pages and
-# layers cannot share helpers (DESIGN §2), so the literal is duplicated
-# rather than imported. Drift is caught at the test level (the urgency
-# tests + applications tests + exports tests all assert against the
-# same em-dash glyph U+2014).
-EM_DASH = "—"
+# Phase 7 cleanup CL2: EM_DASH no longer needs to be re-exported from
+# this module — _deadline_urgency now delegates the em-dash branch to
+# `config.urgency_glyph(None)`, so no in-file site reads `EM_DASH`
+# directly anymore. The constant lives on config.EM_DASH for the
+# rest of the project.
+
 
 
 def _safe_str(v: Any) -> str:
@@ -150,39 +149,29 @@ def _confirm_delete_dialog() -> None:
 def _deadline_urgency(date_str: Any) -> str:
     """Return the at-a-glance urgency glyph for a position's deadline.
 
-    Phase 7 T1 contract:
-        days_to_deadline ≤ DEADLINE_URGENT_DAYS → '🔴'
-        ≤ DEADLINE_ALERT_DAYS (but past urgent)  → '🟡'
-        beyond DEADLINE_ALERT_DAYS               → ''  (no urgency signal)
-        NULL / empty / NaN / unparseable date    → '—' (em-dash placeholder)
-
-    Mirrors the dashboard's ``database.py::_urgency_glyph`` banding
-    (DESIGN §2 layer rule prevents importing it directly into a page —
-    helpers stay duplicated rather than crossing the layer boundary).
-
-    Thresholds come from config so changing DEADLINE_URGENT_DAYS /
-    DEADLINE_ALERT_DAYS in one place updates both the page and the
-    dashboard.
+    Phase 7 T1 contract — delegates the days-→-glyph banding to
+    ``config.urgency_glyph`` (lifted in CL2). This wrapper owns the
+    page-layer-specific concern: parse ``date_str`` (a possibly-NULL
+    DataFrame TEXT cell, possibly NaN) into ``int days_away``, then
+    pass through. ``None`` flows through to ``config.urgency_glyph``,
+    which returns the em-dash placeholder.
 
     NaN handling: pandas DataFrames surface NULL TEXT cells as
     ``float('nan')`` once any other row in the column has a value.
     ``not date_str`` doesn't catch NaN (NaN is truthy), so the
     explicit ``math.isnan`` branch + the ``date.fromisoformat``
     try/except together cover all three NULL-shaped inputs (None,
-    NaN, empty string) plus malformed strings."""
+    NaN, empty string) plus malformed strings — every "no usable
+    date" path collapses to ``days_away=None`` and the em-dash."""
     if date_str is None or date_str == "":
-        return EM_DASH
+        return config.urgency_glyph(None)
     if isinstance(date_str, float) and math.isnan(date_str):
-        return EM_DASH
+        return config.urgency_glyph(None)
     try:
         days = (datetime.date.fromisoformat(str(date_str)) - datetime.date.today()).days
     except (ValueError, TypeError):
-        return EM_DASH
-    if days <= config.DEADLINE_URGENT_DAYS:
-        return "🔴"
-    if days <= config.DEADLINE_ALERT_DAYS:
-        return "🟡"
-    return ""
+        return config.urgency_glyph(None)
+    return config.urgency_glyph(days)
 
 database.init_db()
 
@@ -292,14 +281,14 @@ with col_status:
     # (every value of v is already a str — STATUS_VALUES + "All" sentinel).
     status_filter = st.selectbox(
         "Status",
-        ["All"] + config.STATUS_VALUES,
+        [config.FILTER_ALL] + config.STATUS_VALUES,
         index=0,
         format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
         key="filter_status",
     )
 with col_priority:
     priority_filter = st.selectbox(
-        "Priority", ["All"] + config.PRIORITY_VALUES, index=0, key="filter_priority"
+        "Priority", [config.FILTER_ALL] + config.PRIORITY_VALUES, index=0, key="filter_priority"
     )
 with col_field:
     field_filter = st.text_input(
@@ -317,11 +306,11 @@ df = database.get_all_positions()
 # runtime no-op since boolean indexing always returns a DataFrame
 # in practice; the cast just pins the type for the next step.
 df_filtered: pd.DataFrame = df
-if status_filter != "All":
+if status_filter != config.FILTER_ALL:
     df_filtered = cast(
         pd.DataFrame, df_filtered[df_filtered["status"] == status_filter]
     )
-if priority_filter != "All":
+if priority_filter != config.FILTER_ALL:
     df_filtered = cast(
         pd.DataFrame, df_filtered[df_filtered["priority"] == priority_filter]
     )

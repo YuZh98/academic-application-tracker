@@ -1198,12 +1198,9 @@ def _days_left_label(days_away: int) -> str:
     return f"in {days_away} days"
 
 
-def _urgency_glyph(days_away: int) -> str:
-    if days_away <= config.DEADLINE_URGENT_DAYS:
-        return "🔴"
-    if days_away <= config.DEADLINE_ALERT_DAYS:
-        return "🟡"
-    return ""
+# Phase 7 cleanup CL2: the urgency-banding helper lives on
+# config.urgency_glyph now — the two call sites below pass int days_away
+# directly via Series.apply, no thin wrapper needed.
 
 
 def _label_for(institute: Any, position_name: str) -> str:
@@ -1258,7 +1255,7 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
                 ),
                 "kind": "Deadline for application",
                 "status": deadlines["status"],
-                "urgency": days_away_series.apply(_urgency_glyph),
+                "urgency": days_away_series.apply(config.urgency_glyph),
             }
         )
 
@@ -1291,7 +1288,7 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
                 ),
                 "kind": merged["sequence"].apply(lambda n: f"Interview {n}"),
                 "status": merged["status"],
-                "urgency": days_away_series.apply(_urgency_glyph),
+                "urgency": days_away_series.apply(config.urgency_glyph),
             }
         )
 

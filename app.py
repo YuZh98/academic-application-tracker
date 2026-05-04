@@ -37,8 +37,6 @@ database.init_db()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-NEXT_INTERVIEW_EMPTY = "—"  # Locked decision U3: grid-consistent empty-state glyph.
-
 
 def _next_interview_display(upcoming: pd.DataFrame) -> str:
     """Format the Next-Interview KPI value from get_upcoming_interviews().
@@ -48,7 +46,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
         interviews.
       - The paired institute belongs to whichever position owns that date.
       - Render as '{Mon D} · {institute}' (short month + day, no year).
-      - Empty / no upcoming date → NEXT_INTERVIEW_EMPTY ('—').
+      - Empty / no upcoming date → ``config.EM_DASH`` ('—').
 
     Sub-task 8 rewrote get_upcoming_interviews() to return row-per-
     interview from the normalized interviews sub-table (DESIGN §6.2 +
@@ -59,7 +57,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
     a future query tweak that drops or reorders the sort.
     """
     if upcoming.empty:
-        return NEXT_INTERVIEW_EMPTY
+        return config.EM_DASH
 
     today_iso = date.today().isoformat()
     best_iso: str | None = None
@@ -74,7 +72,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
             best_institute = None if pd.isna(inst) else str(inst)
 
     if best_iso is None:
-        return NEXT_INTERVIEW_EMPTY
+        return config.EM_DASH
 
     d = date.fromisoformat(best_iso)
     label = f"{d.strftime('%b')} {d.day}"
@@ -406,7 +404,7 @@ else:
 #       - {institute}: {position_name} (asked {N}d ago, due {Mon D})
 #       - ...
 #     Bare {position_name} when institute is empty (T4 Label precedent);
-#     'due —' (em dash) for NULL deadline (mirrors NEXT_INTERVIEW_EMPTY).
+#     'due —' (em dash) for NULL deadline (mirrors `config.EM_DASH`).
 #
 # The Compose-reminder-email button + LLM-prompts expander (DESIGN §8.4 D-C)
 # live on the Recommenders PAGE (Phase 5 T6), NOT here — T5 only renders the
@@ -431,11 +429,11 @@ else:
 
     def _format_due(deadline_iso: str | None) -> str:
         """Due-date in 'Mon D' form (T4 DateColumn precedent — no year,
-        since alerts surface near-future deadlines). Em-dash for NULL,
-        mirroring NEXT_INTERVIEW_EMPTY. pd.isna catches both None and
-        NaN-from-pandas (dev-notes gotcha #13)."""
+        since alerts surface near-future deadlines). ``config.EM_DASH``
+        for NULL — pd.isna catches both None and NaN-from-pandas
+        (dev-notes gotcha #13)."""
         if deadline_iso is None or pd.isna(deadline_iso) or deadline_iso == "":
-            return "—"
+            return config.EM_DASH
         d = date.fromisoformat(deadline_iso)
         return f"{d.strftime('%b')} {d.day}"
 
