@@ -32,6 +32,37 @@ baseline or `git status exports/` doesn't match what's recorded under
 with the repo and the orchestrator needs to hear about it before you
 proceed.
 
+### CI-mirror local check (before opening / re-pushing a PR)
+
+The developer's `postdoc.db` (real user DB, ~50 KB at project root)
+is a fall-through target for any test that uses
+`database.get_*` without monkeypatching `database.DB_PATH`. CI
+runners have no `postdoc.db`, so a missing-DB-init regression
+surfaces ONLY on CI — locally it passes silently against your real
+data.
+
+Run the suite with `postdoc.db` moved aside before pushing the PR:
+
+```bash
+mv postdoc.db postdoc.db.bak
+pytest tests/ -q
+mv postdoc.db.bak postdoc.db
+```
+
+If pytest fails in this CI-mirror env but passes in your normal
+local env, you have a fixture gap — a test is reading the real DB
+unintentionally. Fix it by adding the conftest `db` fixture parameter
+(or `db_and_exports` for export-content tests) so the suite is
+self-contained. **Do not push a PR that passes locally but fails
+this CI-mirror check** — main will go red, the orchestrator catches
+it on PR review, and the fix lands as an urgent commit on top of an
+in-flight tier.
+
+This rule was added 2026-05-04 after PRs #32–#34 hit the same gap
+on three smoke tests in `tests/test_exports.py` — the orchestrator's
+post-mortem is in `ORCHESTRATOR_HANDOFF.md` "CI must be green before
+admin-bypass".
+
 ### First action
 
 Pre-announce in one sentence what you are about to do, then read in

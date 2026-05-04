@@ -106,7 +106,46 @@ Ruleset 15887463 ("main protection") requires a passing `Tests + Lint (3.14)` CI
 
 **Merge command:** `gh pr merge <N> --squash --admin` (or `--merge` / `--rebase` per the user's preference for that PR). PRs #28 and #29 both landed this way; this is the documented pattern, not a workaround.
 
-`mergeStateStatus: BLOCKED` with `mergeable: true` and CI green is the EXPECTED state — that's not a code problem, that's the bypass-required signal.
+`mergeStateStatus: BLOCKED` with `mergeable: true` and CI **green** is the EXPECTED state — that's not a code problem, that's the bypass-required signal.
+
+### CI must be green before admin-bypass — do NOT merge while IN_PROGRESS
+
+The bypass pattern above ONLY applies when the `Tests + Lint (3.14)` check has `conclusion: "SUCCESS"`. **`IN_PROGRESS` / `QUEUED` / `null` is NOT acceptable.** Admin-bypass merges through whatever CI state currently exists; bypassing an `IN_PROGRESS` check just discards the verification entirely.
+
+**This was learned the hard way 2026-05-04** — PRs #32 and #33 were admin-bypassed while `Tests + Lint (3.14)` was `IN_PROGRESS`. Both eventually completed `FAILURE` (three smoke tests in `tests/test_exports.py` fell through to the developer's local `postdoc.db` because they never had a DB-init fixture; CI runners have no such DB so the writers raised `sqlite3.OperationalError`). Main shipped red for several hours across two tier merges before PR #34's CI surfaced the same failure and the orchestrator caught it.
+
+**Procedure before every admin-bypass merge:**
+
+```bash
+# Wait for CI to finish if it's still running.
+gh pr checks <N> --watch     # blocks until conclusion lands
+
+# Verify CI is green BEFORE merging.
+gh pr view <N> --json statusCheckRollup --jq '.statusCheckRollup[] | "\(.name): \(.conclusion)"'
+# Required output: "Tests + Lint (3.14): SUCCESS"
+
+# Only then admin-bypass merge.
+gh pr merge <N> --squash --admin
+```
+
+If CI is `FAILURE`, **do not merge** — read the failure log
+(`gh run view <run-id> --log-failed`), diagnose, and either hand the
+fix back to the implementer (their PR branch) or surface to the user
+if it crosses the orchestrator/implementer role boundary.
+
+### Local CI-like verification (catch missing-DB regressions before push)
+
+Tests that don't take the lifted `db` conftest fixture (which monkeypatches both `database.DB_PATH` and `exports.EXPORTS_DIR`) silently fall through to the developer's real `postdoc.db` if the file exists at the project root. CI runners have no `postdoc.db`, so any "this test never init'd a DB" gap surfaces only on CI.
+
+Implementer pre-PR routine — already standing in `AGENTS.md` "Session bootstrap" — should include the CI-mirror check:
+
+```bash
+mv postdoc.db postdoc.db.bak
+pytest tests/ -q
+mv postdoc.db.bak postdoc.db
+```
+
+The orchestrator can also run this locally before reviewing if there's any doubt. The `mv … && … && mv …` form is safer than `rm` because nothing destructive happens to the user's real DB.
 
 ## User profile (the human you're collaborating with)
 
