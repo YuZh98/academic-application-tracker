@@ -11,11 +11,11 @@ Per **Q5 Option A** from the 2026-04-27 v1 planning session, build
 Applications page first.
 
 Branch (T1): merged via PR #15 (`aebbb8b`); pre-merge review at
-[`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md);
+[`reviews/phase-5-tier1-review.md`](../../reviews/phase-5-tier1-review.md);
 suite 553 → 586 green under both pytest gates.
 
 Branch (T2): merged via PR #16 (`b9a2c82`); pre-merge review at
-[`reviews/phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md);
+[`reviews/phase-5-Tier2-review.md`](../../reviews/phase-5-Tier2-review.md);
 suite 586 → 638 green under both pytest gates.
 
 Branch (T3): T3-A + T3-B + T3 review (9 findings, 2 inline fixes) +
@@ -23,18 +23,18 @@ T3-rev (T3-rev-A column split + T3-rev-B per-row block refactor) +
 pre-merge review addendum (Findings #10–#13, 2 inline fixes) all on
 `feature/phase-5-tier3-InterviewManagementUI`; suite 638 → 683
 green under both pytest gates. Merged via PR #19 (`f4db64c`); pre-merge
-review at [`reviews/phase-5-Tier3-review.md`](reviews/phase-5-Tier3-review.md).
+review at [`reviews/phase-5-Tier3-review.md`](../../reviews/phase-5-Tier3-review.md).
 
 Branch (T4): on `feature/phase-5-tier4-RecommendersAlertPanel`; pre-merge
-review at [`reviews/phase-5-tier4-review.md`](reviews/phase-5-tier4-review.md);
+review at [`reviews/phase-5-tier4-review.md`](../../reviews/phase-5-tier4-review.md);
 suite 682 → 700 green under both pytest gates. Merged via PR #28 (`a491be3`).
 
 Branch (T5): on `feature/phase-5-tier5-RecommendersTableAddEdit`; pre-merge
-review at [`reviews/phase-5-tier5-review.md`](reviews/phase-5-tier5-review.md);
+review at [`reviews/phase-5-tier5-review.md`](../../reviews/phase-5-tier5-review.md);
 suite 700 → 756 green under both pytest gates. Merged via PR #29 (`2293ebd`).
 
 Branch (T6): on `feature/phase-5-tier6-RecommenderReminders`; pre-merge
-review at [`reviews/phase-5-tier6-review.md`](reviews/phase-5-tier6-review.md);
+review at [`reviews/phase-5-tier6-review.md`](../../reviews/phase-5-tier6-review.md);
 suite 756 → 777 green under both pytest gates. Merged via PR #31 (`6993ea9`).
 
 - [x] **T1** Applications page shell (`pages/2_Applications.py`) —
@@ -347,7 +347,7 @@ suite 756 → 777 green under both pytest gates. Merged via PR #31 (`6993ea9`).
       across `TestT6ComposeButton` (9) + `TestT6LLMPromptsExpander`
       (12); suite 756 → 777 under both pytest gates.
 - [x] **T7** Phase 5 review + PR + tag `v0.6.0` — close-out + cohesion
-      sweep at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md)
+      sweep at [`reviews/phase-5-finish-cohesion-smoke.md`](../../reviews/phase-5-finish-cohesion-smoke.md)
       (verbatim AppTest renders for `pages/2_Applications.py` +
       `pages/3_Recommenders.py` populated + empty + populated-with-row-
       selected; six cohesion dimensions audited; 3 🟡 polish + 3 ℹ️
@@ -388,7 +388,7 @@ DESIGN §8.1 panel rows + empty-state matrix were the contract.
       PR #13 (`c5a7c76`).
 - [x] **T6** Phase 4 finish — pre-merge close-out for the dashboard.
       Cohesion-smoke audit at
-      [`reviews/phase-4-finish-cohesion-smoke.md`](reviews/phase-4-finish-cohesion-smoke.md)
+      [`reviews/phase-4-finish-cohesion-smoke.md`](../../reviews/phase-4-finish-cohesion-smoke.md)
       (six cohesion dimensions, verbatim AppTest renders for
       populated + empty DB, zero 🔴/🟠) + 7-findings review
       (`01dc7b6`) — together satisfy the GUIDELINES §10 review
@@ -438,25 +438,25 @@ DESIGN §8.1 panel rows + empty-state matrix were the contract.
       a magic literal in `pages/1_Opportunities.py` and
       `pages/2_Applications.py`. Asymmetric with `STATUS_FILTER_ACTIVE`
       (in config). Project-wide refactor; not blocking. Logged as 🟡
-      finding 1 in [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md).
+      finding 1 in [`reviews/phase-5-tier1-review.md`](../../reviews/phase-5-tier1-review.md).
 - [ ] **C4** Split `CHANGELOG.md` `[Unreleased]` into a `[v0.5.0]`
       release section. Post-v0.4.0 work (v1.3 alignment + Phase 4
       T4/T5/T6 + this T1) accumulated under `[Unreleased]`; the
       `v0.5.0` tag now exists but no `[v0.5.0]` section sits between
       `[Unreleased]` and `[v0.4.0]`. Single housekeeping commit;
       logged as 🟢 finding 3 in
-      [`reviews/phase-5-tier1-review.md`](reviews/phase-5-tier1-review.md).
+      [`reviews/phase-5-tier1-review.md`](../../reviews/phase-5-tier1-review.md).
 
 ### Phase 6 — Exports
 
 Per **Q6 Option A**, plain markdown tables.
 
 Branch (T1): on `feature/phase-6-tier1-WriteOpportunities`; pre-merge
-review at [`reviews/phase-6-tier1-review.md`](reviews/phase-6-tier1-review.md);
+review at [`reviews/phase-6-tier1-review.md`](../../reviews/phase-6-tier1-review.md);
 suite 777 → 786 green under both pytest gates. Merged via PR #32 (`e9a8a4a`).
 
 Branch (T2): on `feature/phase-6-tier2-WriteProgress`; pre-merge
-review at [`reviews/phase-6-tier2-review.md`](reviews/phase-6-tier2-review.md);
+review at [`reviews/phase-6-tier2-review.md`](../../reviews/phase-6-tier2-review.md);
 suite 786 → 801 green under both pytest gates. Mandatory conftest
 fixture lift (`db_and_exports` → `tests/conftest.py::db`) closes T1's
 exposed pollution; T2 isolation gate (`git status --porcelain
@@ -464,7 +464,7 @@ exports/` empty post-pytest) now part of the standing pre-PR
 checklist. Merged via PR #33 (`911115a`).
 
 Branch (T3): on `feature/phase-6-tier3-WriteRecommenders`; pre-merge
-review at [`reviews/phase-6-tier3-review.md`](reviews/phase-6-tier3-review.md);
+review at [`reviews/phase-6-tier3-review.md`](../../reviews/phase-6-tier3-review.md);
 suite 801 → 815 green under both pytest gates. Three commits on
 branch (`test:` → `feat:` → `fix:`) — the `fix:` augmented
 `isolated_exports_dir` to also monkeypatch `DB_PATH` + run
@@ -478,14 +478,14 @@ admin-bypass; CI-mirror local check `mv postdoc.db postdoc.db.bak
 pre-PR checklist). Merged via PR #34 (`c11fde4`).
 
 Branch (T4): on `feature/phase-6-tier4-ExportPage`; pre-merge review
-at [`reviews/phase-6-tier4-review.md`](reviews/phase-6-tier4-review.md);
+at [`reviews/phase-6-tier4-review.md`](../../reviews/phase-6-tier4-review.md);
 suite 815 → 827 green under both pytest gates. First PR in the
 project's history to land with `mergeStateStatus: CLEAN` (rather
 than `BLOCKED`); admin-bypass merge used anyway for procedure
 consistency. Merged via PR #35 (`3235f60`).
 
 Branch (T5): on `feature/phase-6-tier5-DownloadButtons`; pre-merge
-review at [`reviews/phase-6-tier5-review.md`](reviews/phase-6-tier5-review.md);
+review at [`reviews/phase-6-tier5-review.md`](../../reviews/phase-6-tier5-review.md);
 suite 827 → 834 green under both pytest gates. Three design calls
 flagged by implementer (stacked vs side-by-side layout — pragmatic
 test-compatibility choice; `st.divider()` + `st.subheader("Download")`
@@ -705,7 +705,7 @@ All defensible. Merged via PR #36 (`73a04c4`).
       belt-and-suspenders pin against the source-grep layer. Suite
       827 → 834 under both pytest gates.
 - [x] **T6** Phase 6 review + PR + tag `v0.7.0` — close-out +
-      cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md)
+      cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](../../reviews/phase-6-finish-cohesion-smoke.md)
       (verbatim AppTest renders for `pages/4_Export.py` across four
       states: populated DB + no exports, populated + exports written,
       populated + post-click regenerate, empty DB + no exports; six
@@ -1029,9 +1029,9 @@ All defensible. Merged via PR #36 (`73a04c4`).
       with publish-scaffolding tier (`README.md` screenshots +
       Streamlit Cloud deploy verification + recorded demo GIF).
       Folder target renamed to `docs/ui/screenshots/v1.0.0/`.
-      Documented in [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md).
+      Documented in [`reviews/phase-7-finish-cohesion-smoke.md`](../../reviews/phase-7-finish-cohesion-smoke.md).
 - [x] **T6** Phase 7 close-out + tag `v0.8.0` — cohesion-smoke
-      doc at [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md);
+      doc at [`reviews/phase-7-finish-cohesion-smoke.md`](../../reviews/phase-7-finish-cohesion-smoke.md);
       CHANGELOG `[Unreleased]` → `[v0.8.0]` split; tag annotation
       lists T1-T4 + CL1-CL6 + the three structural changes
       (pyright fence, cohesion-pinning tests, `--delete-branch`
@@ -1143,7 +1143,7 @@ _(none)_
   Streamlit Cloud demo on the `v1.0-rc` branch).
 - 2026-05-05 — **`v0.8.0` tagged** (close-out commit + annotated
   tag): Phase 7 closed. T6 cohesion-smoke at
-  [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md);
+  [`reviews/phase-7-finish-cohesion-smoke.md`](../../reviews/phase-7-finish-cohesion-smoke.md);
   CHANGELOG `[Unreleased]` → `[v0.8.0]` split (boundary at the
   T6 close-out commit); tag annotation lists T1-T4 + CL1-CL6 +
   the three structural changes (pyright fence in CI · cohesion-
@@ -1189,7 +1189,7 @@ _(none)_
   all seven gates. Net −50 lines (mostly comment deletions).
   Three commits on branch (one per trim) for clean per-line
   `git blame`. Pre-merge review at
-  [`reviews/phase-7-CL5-review.md`](reviews/phase-7-CL5-review.md).
+  [`reviews/phase-7-CL5-review.md`](../../reviews/phase-7-CL5-review.md).
 - 2026-05-05 — **PR #44 merged** (`9a5eded`): Phase 7 cleanup CL4
   shipped — 4 batched UX fixes. (1) Save-toast wording branched
   on dirty diff in apps_detail_form + per-row interview save +
@@ -1203,7 +1203,7 @@ _(none)_
   `config.py` constants. Suite 875 → 879 under all seven gates.
   Pyright fence held (0/0). 3 🟡 doc-drift findings deferred to
   CL5 (closed in PR #45 above). Pre-merge review at
-  [`reviews/phase-7-CL4-review.md`](reviews/phase-7-CL4-review.md).
+  [`reviews/phase-7-CL4-review.md`](../../reviews/phase-7-CL4-review.md).
 - 2026-05-04 — **PR #43 merged** (`479aa15`): Phase 7 cleanup CL3
   shipped — 4 AppTest helpers extracted to `tests/helpers.py`
   (link_buttons + decode_mailto + download_buttons + download_button).
@@ -1211,14 +1211,14 @@ _(none)_
   preserved test method substring matches. New `tests/test_helpers.py`
   with 5 smoke tests. Pyright fence held (0/0). Suite 870 → 875
   under all seven gates. Pre-merge review at
-  [`reviews/phase-7-CL3-review.md`](reviews/phase-7-CL3-review.md).
+  [`reviews/phase-7-CL3-review.md`](../../reviews/phase-7-CL3-review.md).
 - 2026-05-04 — **PR #42 merged** (`bd76d29`): Phase 7 cleanup CL2
   shipped — 4 lifts to `config.py` (EM_DASH, urgency_glyph,
   FILTER_ALL, REMINDER_TONES) + drop of TRACKER_PROFILE block.
   Closes carry-overs **C2** + **C3** in one PR. Pyright fence
   held through the lift (0/0). Five commits on branch for clean
   per-line `git blame`. Suite 864 → 870 under all seven gates.
-  Pre-merge review at [`reviews/phase-7-CL2-review.md`](reviews/phase-7-CL2-review.md).
+  Pre-merge review at [`reviews/phase-7-CL2-review.md`](../../reviews/phase-7-CL2-review.md).
 - 2026-05-04 — **PR #41 merged** (`eac75c3`): Phase 7 cleanup CL1
   shipped — pyright type-check fence in CI + 45 drift errors → 0.
   `pyright==1.1.409` pinned, `[tool.pyright]` basic mode in
@@ -1230,7 +1230,7 @@ _(none)_
   Six commits on branch (1 chore + 5 file-scoped fixes for clean
   per-line `git blame`). First PR merged with
   `--delete-branch` flag (testing branch-cleanup-on-merge ritual).
-  Pre-merge review at [`reviews/phase-7-CL1-review.md`](reviews/phase-7-CL1-review.md).
+  Pre-merge review at [`reviews/phase-7-CL1-review.md`](../../reviews/phase-7-CL1-review.md).
 - 2026-05-04 — **PR #40 merged** (`952f0e9`): Phase 7 T4 shipped —
   confirm-dialog audit + position cascade-copy fix. New
   `TestConfirmDialogAudit` (11 tests across 3 destructive paths)
@@ -1242,7 +1242,7 @@ _(none)_
   passed because it asserted partial substrings; the cohesion
   test caught it via positive enumeration of the FK chain.
   Suite 853 → 864 under both pytest gates. Pre-merge review at
-  [`reviews/phase-7-tier4-review.md`](reviews/phase-7-tier4-review.md).
+  [`reviews/phase-7-tier4-review.md`](../../reviews/phase-7-tier4-review.md).
 - 2026-05-04 — **PR #39 merged** (`85968bb`): Phase 7 T3 shipped —
   verification-only `set_page_config` sweep across all 5 pages
   (`app.py` + 4 `pages/*.py`). New `tests/test_pages_cohesion.py`
@@ -1252,7 +1252,7 @@ _(none)_
   deliberately skips decorators (load-bearing — `@st.dialog`
   doesn't trip Streamlit's first-call gate). Suite 843 → 853 under
   both pytest gates. Pre-merge review at
-  [`reviews/phase-7-tier3-review.md`](reviews/phase-7-tier3-review.md).
+  [`reviews/phase-7-tier3-review.md`](../../reviews/phase-7-tier3-review.md).
 - 2026-05-04 — **PR #38 merged** (`e67cfed`): Phase 7 T2 shipped —
   free-text "Search positions" `text_input` prepended to the
   Opportunities filter row; `position_name` substring match
@@ -1262,7 +1262,7 @@ _(none)_
   row reweights `[2, 2, 3]` → `[3, 2, 2, 3]` with search widest.
   7 new tests; suite 836 → 843 under both pytest gates. CI procedure
   followed cleanly (third clean end-to-end run). Pre-merge review
-  at [`reviews/phase-7-tier2-review.md`](reviews/phase-7-tier2-review.md).
+  at [`reviews/phase-7-tier2-review.md`](../../reviews/phase-7-tier2-review.md).
 - 2026-05-04 — **PR #37 merged** (`e5316fd`): Phase 7 T1 shipped —
   `pages/1_Opportunities.py::_deadline_urgency` returns inline
   glyphs (`🔴` / `🟡` / `''` / `—`) instead of literal-string
@@ -1278,14 +1278,14 @@ _(none)_
   `gh pr checks 37 --watch` blocked until conclusion landed,
   conclusion verified SUCCESS via `gh pr view --json
   statusCheckRollup`, then admin-bypass merge. Pre-merge review at
-  [`reviews/phase-7-tier1-review.md`](reviews/phase-7-tier1-review.md).
+  [`reviews/phase-7-tier1-review.md`](../../reviews/phase-7-tier1-review.md).
 - 2026-05-04 — **`v0.7.0` tagged** on `main` closing Phase 6 — three
   markdown generators (`write_opportunities` / `write_progress` /
   `write_recommenders`) backing `OPPORTUNITIES.md` / `PROGRESS.md` /
   `RECOMMENDERS.md` plus the new `pages/4_Export.py` (manual
   regenerate + per-file mtimes + per-file download buttons).
   Cohesion-smoke at
-  [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md);
+  [`reviews/phase-6-finish-cohesion-smoke.md`](../../reviews/phase-6-finish-cohesion-smoke.md);
   CHANGELOG `[Unreleased]` → `[v0.7.0]` split at the boundary commit
   (mirror of `6f936d7` precedent for v0.6.0). Three durable
   structural changes shipped during the phase too: the conftest
@@ -1301,7 +1301,7 @@ _(none)_
   `_file_present` boolean drives both download-disabled state AND
   T4 mtime branch. 7 new tests in `TestExportPageDownloadButtons`
   + two helper functions. Suite 827 → 834 under both pytest gates.
-  Pre-merge review at [`reviews/phase-6-tier5-review.md`](reviews/phase-6-tier5-review.md).
+  Pre-merge review at [`reviews/phase-6-tier5-review.md`](../../reviews/phase-6-tier5-review.md).
   **Phase 6 generator-and-page group complete; T6 close-out next.**
 - 2026-05-04 — **PR #35 merged** (`3235f60`): Phase 6 T4 shipped —
   `pages/4_Export.py` page shell + manual regenerate button +
@@ -1316,7 +1316,7 @@ _(none)_
   deterministic epoch for exact-string assertions. Suite 815 → 827
   under both pytest gates. First project PR to land with
   `mergeStateStatus: CLEAN`. Pre-merge review at
-  [`reviews/phase-6-tier4-review.md`](reviews/phase-6-tier4-review.md).
+  [`reviews/phase-6-tier4-review.md`](../../reviews/phase-6-tier4-review.md).
 - 2026-05-04 — **PR #34 merged** (`c11fde4`): Phase 6 T3 shipped —
   `exports.write_recommenders()` filled with an 8-column markdown
   table writer to `exports/RECOMMENDERS.md`. Reuses
@@ -1332,7 +1332,7 @@ _(none)_
   && mv postdoc.db.bak postdoc.db`) in standing pre-PR checklist.
   14 new tests in `TestWriteRecommenders`; suite 801 → 815 under
   both pytest gates. Pre-merge review at
-  [`reviews/phase-6-tier3-review.md`](reviews/phase-6-tier3-review.md).
+  [`reviews/phase-6-tier3-review.md`](../../reviews/phase-6-tier3-review.md).
 - 2026-05-04 — **PR #33 merged** (`911115a`): Phase 6 T2 shipped —
   `exports.write_progress()` filled with an 8-column markdown table
   writer to `exports/PROGRESS.md` (positions × applications ×
@@ -1345,7 +1345,7 @@ _(none)_
   `EXPORTS_DIR`) closes T1's exposed test-isolation pollution; T2
   isolation gate added to standing pre-PR checklist. 15 new tests in
   `TestWriteProgress`; suite 786 → 801 under both pytest gates.
-  Pre-merge review at [`reviews/phase-6-tier2-review.md`](reviews/phase-6-tier2-review.md).
+  Pre-merge review at [`reviews/phase-6-tier2-review.md`](../../reviews/phase-6-tier2-review.md).
 - 2026-05-04 — **PR #32 merged** (`e9a8a4a`): Phase 6 T1 shipped —
   `exports.write_opportunities()` filled with an 8-column markdown
   table writer to `exports/OPPORTUNITIES.md`. Sort: `deadline_date
@@ -1356,11 +1356,11 @@ _(none)_
   UI surface; pinned by `test_status_renders_as_raw_bracketed_sentinel`).
   Idempotent (DESIGN §7 contract #2). 9 new tests in
   `TestWriteOpportunities`; suite 777 → 786 under both pytest gates.
-  Pre-merge review at [`reviews/phase-6-tier1-review.md`](reviews/phase-6-tier1-review.md).
+  Pre-merge review at [`reviews/phase-6-tier1-review.md`](../../reviews/phase-6-tier1-review.md).
 - 2026-05-04 — **`v0.6.0` tagged** on `main` closing Phase 5 — two
   pages complete (Applications + Recommenders) across six tiers
   (T1–T6); close-out cohesion-smoke at
-  [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md);
+  [`reviews/phase-5-finish-cohesion-smoke.md`](../../reviews/phase-5-finish-cohesion-smoke.md);
   CHANGELOG `[Unreleased]` → `[v0.6.0]` split at the boundary commit
   (mirror of `db383e3` precedent); suite at 777 / 1 xfailed under
   both pytest gates.
@@ -1373,20 +1373,20 @@ _(none)_
   (`_build_compose_mailto`, `_build_llm_prompt`); existing T4
   `_bullets`-building loop extended by one line for `days_ago`
   collection. Suite 756 → 777 under both pytest gates. Pre-merge
-  review at [`reviews/phase-5-tier6-review.md`](reviews/phase-5-tier6-review.md).
+  review at [`reviews/phase-5-tier6-review.md`](../../reviews/phase-5-tier6-review.md).
 - 2026-05-03 — **PR #29 merged** (`2293ebd`): Phase 5 T5 (T5-A + T5-B
   + T5-C) shipped — All-Recommenders table + filters + Add form +
   inline edit card + dialog-gated Delete on `pages/3_Recommenders.py`
   with the `RELATIONSHIP_TYPES` → `RELATIONSHIP_VALUES` cohesion
   rename. Suite 700 → 756 under both pytest gates. Pre-merge review
-  at [`reviews/phase-5-tier5-review.md`](reviews/phase-5-tier5-review.md).
+  at [`reviews/phase-5-tier5-review.md`](../../reviews/phase-5-tier5-review.md).
 - 2026-05-03 — **PR #28 merged** (`a491be3`): Phase 5 T4 shipped —
   `pages/3_Recommenders.py` page shell (`set_page_config`, title,
   `database.init_db()`) + Pending Alerts panel (`get_pending_recommenders()`
   grouped by `recommender_name`, one `st.container(border=True)` per
   person with relationship in header, em-dash on NULL deadlines).
   Suite 682 → 700 under both pytest gates. Pre-merge review at
-  [`reviews/phase-5-tier4-review.md`](reviews/phase-5-tier4-review.md).
+  [`reviews/phase-5-tier4-review.md`](../../reviews/phase-5-tier4-review.md).
 - 2026-05-01 — **Phase 5 T3-rev (T3-rev-A + T3-rev-B) shipped on
   branch** `feature/phase-5-tier3-InterviewManagementUI` —
   truth-file alignment for the Applications page. T3-rev-A: split
@@ -1460,7 +1460,7 @@ _(none)_
   shipped — editable Application detail card behind row selection +
   cascade-promotion toast surfacing. Suite 586 → 638 under both pytest
   gates. Detailed forensic record in commit messages + the
-  [`phase-5-Tier2-review.md`](reviews/phase-5-Tier2-review.md) review.
+  [`phase-5-Tier2-review.md`](../../reviews/phase-5-Tier2-review.md) review.
 - 2026-04-30 — **Phase 5 T1 Applications page shell complete** on
   branch `feature/phase-5-tier1-ApplicationsPageShell`. Three
   sub-tasks shipped via TDD three-commit cadence per sub-task
@@ -1501,7 +1501,7 @@ v1 plan-locking commit, PRs #8/#9/#10, and the v0.2.0/v0.3.0/v0.4.0
 tag entries — are archived in `CHANGELOG.md` under their respective
 version blocks._
 
-For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
+For earlier completions see [`CHANGELOG.md`](../../CHANGELOG.md).
 
 ---
 

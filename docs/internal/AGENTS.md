@@ -1,4 +1,4 @@
-# Agent Handoff — Postdoc Application Tracker
+# Agent Handoff — Academic Application Tracker
 
 > **How to use this document:** Read it top-to-bottom before touching any
 > file. It replaces the need to read every spec doc on first contact.
@@ -198,7 +198,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T4 — Recommenders page shell + Pending Alerts panel | ✅ PR #28 | `pages/3_Recommenders.py` created |
 | T5 — Recommenders table + add form + inline edit | ✅ PR #29 | All-Recommenders + filters + Add form + inline edit + dialog Delete |
 | T6 — Reminder helpers (mailto + LLM prompts) | ✅ PR #31 | Compose mailto link button + LLM prompts (2 tones) expander per Pending Alerts card |
-| T7 — Phase 5 close-out + tag `v0.6.0` | ✅ | Cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md); CHANGELOG `[v0.6.0]` split |
+| T7 — Phase 5 close-out + tag `v0.6.0` | ✅ | Cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](../../reviews/phase-5-finish-cohesion-smoke.md); CHANGELOG `[v0.6.0]` split |
 
 ### Phase 6 — Exports (markdown generators) ✅ closed at `v0.7.0`
 
@@ -209,7 +209,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T3 — `write_recommenders()` generator | ✅ PR #34 | `exports/RECOMMENDERS.md` — 8-column contract; new local `_format_confirmed` (`—`/`No`/`Yes`); Reminder cell reuses `_format_confirmation`; `notes` deliberately omitted; smoke-test `fix:` commit augmented `isolated_exports_dir` to also monkeypatch DB_PATH (closed CI-red regression that had been latent since T1) |
 | T4 — Export page (manual regenerate button + file mtimes) | ✅ PR #35 | `pages/4_Export.py` shell + regenerate button (try/except `write_all`, success toast, friendly `st.error`) + per-file mtimes panel (`st.markdown` lines, `Path.exists()` check + `os.utime`-deterministic test) |
 | T5 — Export page (`st.download_button` per file) | ✅ PR #36 | three `st.download_button` widgets (one per locked filename) + `st.divider()` + `st.subheader("Download")` section header; `disabled=True` + `data=b""` when file absent, `data=Path.read_bytes()` when present; stacked layout above existing T4 mtime line |
-| T6 — Phase 6 close-out + tag `v0.7.0` | ✅ | Cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md); CHANGELOG `[v0.7.0]` split |
+| T6 — Phase 6 close-out + tag `v0.7.0` | ✅ | Cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](../../reviews/phase-6-finish-cohesion-smoke.md); CHANGELOG `[v0.7.0]` split |
 
 ### Phase 7 — Polish ✅ closed at `v0.8.0`
 
@@ -220,8 +220,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T3 — `set_page_config` sweep on remaining pages | ✅ PR #39 | New `tests/test_pages_cohesion.py::TestSetPageConfigSweep` (10 parametrized tests) pins locked-kwargs source-grep + first-Streamlit-statement AST walk; audit found all 5 pages already conform — verification-only PR (no production code touched) |
 | T4 — Confirm-dialog audit | ✅ PR #40 | New `TestConfirmDialogAudit` (11 tests across 3 destructive paths); audit surfaced + fixed real bug (position-delete dialog warning was missing "interview" from FK cascade enumeration) |
 | **Cleanup + polish sub-tier** (CL1–CL6) | ✅ closed | Inserted between T4 and T5 — Pyright CI fence, `config.py` lifts, test-helper extraction, batched UX polish, code-area doc-drift fix, orchestrator process + retroactive doc trim + pre-tag drift trim. See sub-table below. |
-| T5 — Responsive layout check (1024/1280/1440/1680) | ⏭️ deferred to v1.0-rc | No Chrome DevTools MCP available; bundles naturally with publish-scaffolding tier (`README.md` screenshots + deploy verification). Documented in [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md). |
-| T6 — Phase 7 close-out + tag `v0.8.0` | ✅ | Cohesion-smoke at [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md); CHANGELOG `[v0.8.0]` split |
+| T5 — Responsive layout check (1024/1280/1440/1680) | ⏭️ deferred to v1.0-rc | No Chrome DevTools MCP available; bundles naturally with publish-scaffolding tier (`README.md` screenshots + deploy verification). Documented in [`reviews/phase-7-finish-cohesion-smoke.md`](../../reviews/phase-7-finish-cohesion-smoke.md). |
+| T6 — Phase 7 close-out + tag `v0.8.0` | ✅ | Cohesion-smoke at [`reviews/phase-7-finish-cohesion-smoke.md`](../../reviews/phase-7-finish-cohesion-smoke.md); CHANGELOG `[v0.8.0]` split |
 
 ### Phase 7 cleanup + polish sub-tier (between T4 and T5)
 
