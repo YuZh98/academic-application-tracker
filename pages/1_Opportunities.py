@@ -347,11 +347,16 @@ if df.empty:
     # the stale sentinel would skip the pre-seed.
     st.session_state.pop("selected_position_id", None)
     st.session_state.pop("_edit_form_sid", None)
-    st.info("No positions yet — use Quick Add above to get started.")
+    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
+    # wording edit is a one-line change in config.py tracked via git
+    # blame, not a five-page hunt-and-replace. Tests assert against
+    # the constant by name (config.EMPTY_NO_POSITIONS / …), so a copy
+    # edit flows through to assertions without test churn.
+    st.info(config.EMPTY_NO_POSITIONS)
 elif df_filtered.empty:
     st.session_state.pop("selected_position_id", None)   # T4-A: same reason
     st.session_state.pop("_edit_form_sid", None)         # F4: same pairing
-    st.info("No positions match the current filters.")
+    st.info(config.EMPTY_FILTERED_POSITIONS)
 else:
     st.caption(f"{len(df_filtered)} position(s) tracked.")
 

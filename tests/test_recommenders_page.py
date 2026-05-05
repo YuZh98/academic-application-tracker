@@ -151,7 +151,10 @@ class TestPendingAlertsPanel:
     """
 
     SUBHEADER = "Pending Alerts"
-    EMPTY_COPY = "No pending recommenders."
+    # Phase 7 CL4 Fix 4: pin against config.EMPTY_PENDING_RECOMMENDERS
+    # by name so a future wording edit in config.py flows through here
+    # automatically — no test churn on copy updates.
+    EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDERS
     BORDER_SOURCE = "st.container(border=True)"
     WARN_GLYPH = "⚠"
 

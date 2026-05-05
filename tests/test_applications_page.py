@@ -302,7 +302,10 @@ class TestApplicationsPageTable:
         "Confirmation", "Response", "Result",
     ]
 
-    EMPTY_COPY = "No applications match the current filter."
+    # Phase 7 CL4 Fix 4: pin against config.EMPTY_FILTERED_APPLICATIONS
+    # by name so a future wording edit in config.py flows through here
+    # automatically — no test churn on copy updates.
+    EMPTY_COPY = config.EMPTY_FILTERED_APPLICATIONS
 
     def test_table_renders_with_seven_display_columns(self, db):
         """The page must surface the seven wireframe columns in this

@@ -2389,7 +2389,10 @@ class TestT5RecommenderAlerts:
     """
 
     SUBHEADER = "Recommender Alerts"
-    EMPTY_COPY = "No pending recommender follow-ups."
+    # Phase 7 CL4 Fix 4: pin against config.EMPTY_PENDING_RECOMMENDER_FOLLOWUPS
+    # by name so a future wording edit in config.py flows through here
+    # automatically — no test churn on copy updates.
+    EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDER_FOLLOWUPS
     BORDER_SOURCE = "st.container(border=True)"
     WARN_GLYPH = "⚠"
 

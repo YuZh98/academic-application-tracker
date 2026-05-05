@@ -334,7 +334,9 @@ else:
     df_filtered = cast(pd.DataFrame, df[df["status"] == selected_filter])
 
 if df_filtered.empty:
-    st.info("No applications match the current filter.")
+    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
+    # wording edit is a one-line change tracked via git blame.
+    st.info(config.EMPTY_FILTERED_APPLICATIONS)
     # Asymmetry vs. Opportunities §8.2: do NOT pop
     # applications_selected_position_id here. The detail card below
     # resolves against the unfiltered `df`, so an in-progress edit

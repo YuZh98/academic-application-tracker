@@ -421,7 +421,9 @@ else:
 st.subheader("Recommender Alerts")
 _pending_recs = database.get_pending_recommenders()
 if _pending_recs.empty:
-    st.info("No pending recommender follow-ups.")
+    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
+    # wording edit is a one-line change tracked via git blame.
+    st.info(config.EMPTY_PENDING_RECOMMENDER_FOLLOWUPS)
 else:
     _today = date.today()
 

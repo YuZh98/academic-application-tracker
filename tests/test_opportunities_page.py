@@ -541,14 +541,21 @@ class TestFilterBarBehaviour:
         )
 
     def test_filter_by_status_no_match_shows_info(self, db):
-        """When the status filter matches no rows, a specific info message must appear."""
+        """When the status filter matches no rows, the locked
+        ``config.EMPTY_FILTERED_POSITIONS`` info message must appear.
+        Phase 7 CL4 Fix 4 lifted the verbatim string to config so a
+        future copy edit is a one-line change in config.py — this
+        assertion goes through the constant by name so it tracks the
+        edit automatically."""
         database.add_position({"position_name": "Open One"})  # [SAVED] by default
         at = _run_page()
         at.selectbox(key="filter_status").select("[APPLIED]")
         at.run()
         assert not at.exception
-        assert any("No positions match" in el.value for el in at.info), (
-            f"Expected 'No positions match' info; got: {[el.value for el in at.info]}"
+        info_values = [el.value for el in at.info]
+        assert config.EMPTY_FILTERED_POSITIONS in info_values, (
+            f"Expected {config.EMPTY_FILTERED_POSITIONS!r} info; got: "
+            f"{info_values!r}"
         )
 
     def test_filter_by_priority_narrows_results(self, db):
@@ -633,14 +640,20 @@ class TestFilterBarBehaviour:
         )
 
     def test_db_empty_with_filter_shows_original_empty_message(self, db):
-        """When the DB has no rows at all, the 'No positions yet' message must appear
-        even if a filter is active — not the 'No positions match' filter message."""
+        """When the DB has no rows at all, the locked
+        ``config.EMPTY_NO_POSITIONS`` message must appear even if a
+        filter is active — not the ``EMPTY_FILTERED_POSITIONS`` filter
+        message. Phase 7 CL4 Fix 4 lifted both strings to config so a
+        future copy edit lands in one place; this assertion goes
+        through the constants by name."""
         at = _run_page()
         at.selectbox(key="filter_status").select(config.STATUS_VALUES[0])
         at.run()
         assert not at.exception
-        assert any("No positions yet" in el.value for el in at.info), (
-            f"Expected 'No positions yet' when DB is empty; got: {[el.value for el in at.info]}"
+        info_values = [el.value for el in at.info]
+        assert config.EMPTY_NO_POSITIONS in info_values, (
+            f"Expected {config.EMPTY_NO_POSITIONS!r} when DB is empty; "
+            f"got: {info_values!r}"
         )
 
     def test_filter_by_field_with_special_characters(self, db):
@@ -740,18 +753,22 @@ class TestPositionSearchBehaviour:
         )
 
     def test_search_no_match_renders_empty_state(self, db):
-        """When the search narrows to zero rows, the existing 'No positions
-        match the current filters.' info message fires (same branch used
-        by status / priority / field filters when they reach zero)."""
+        """When the search narrows to zero rows, the locked
+        ``config.EMPTY_FILTERED_POSITIONS`` info fires (same branch
+        used by status / priority / field filters when they reach
+        zero). Phase 7 CL4 Fix 4 lifted the string to config — this
+        assertion goes through the constant by name so a copy edit
+        flows through automatically."""
         database.add_position({"position_name": "Postdoc Stanford"})
         database.add_position({"position_name": "Faculty MIT"})
         at = _run_page()
         at.text_input(key="filter_search").input("nonexistent-position")
         at.run()
         assert not at.exception
-        assert any("No positions match" in el.value for el in at.info), (
-            f"Expected 'No positions match' info when search yields zero "
-            f"rows; got: {[el.value for el in at.info]}"
+        info_values = [el.value for el in at.info]
+        assert config.EMPTY_FILTERED_POSITIONS in info_values, (
+            f"Expected {config.EMPTY_FILTERED_POSITIONS!r} info when "
+            f"search yields zero rows; got: {info_values!r}"
         )
 
     def test_search_special_chars_no_regex_interpretation(self, db):
