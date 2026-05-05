@@ -1,6 +1,15 @@
 # Generated: 2026-04-15 | python3 -m pip freeze | Python 3.14.0 | macOS arm64
 # Compatible with Python >=3.11 (declared in pyproject.toml [project]).
 # To regenerate: source .venv/bin/activate && pip freeze > requirements.txt
+#
+# Direct deps (everything else is a transitive dep required by one of these
+# or their dependents — verified 2026-05-05 via `pip show` reverse-dep
+# audit; zero orphans found):
+#   streamlit==1.57.0  — UI framework (the entire app surface)
+#   pandas==3.0.2      — data tables (st.dataframe + DB→table reads)
+#   plotly==6.7.0      — Application Funnel chart on the dashboard
+# Dev-only direct deps live in requirements-dev.txt (pytest, ruff,
+# pre-commit, pyright).
 altair==6.1.0
 attrs==26.1.0
 blinker==1.9.0

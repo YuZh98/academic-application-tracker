@@ -1054,9 +1054,16 @@ All defensible. Merged via PR #36 (`73a04c4`).
       question it answers, install/run, screenshot, link to DESIGN.md
       _(PR #46, screenshot deferred — see P4b)_
 - [x] **P2** `LICENSE` (MIT, per DESIGN §4) _(PR #46)_
-- [~] **P3** `requirements.txt` audit + freeze (`pip freeze`, prune
-      unused deps) _(PR #46 declared `requires-python>=3.11` floor + lowered
-      ruff/pyright targets; transitive-dep prune still pending — low-impact follow-up)_
+- [x] **P3** `requirements.txt` audit + freeze (`pip freeze`, prune
+      unused deps) — reverse-dep audit (`pip show` per package, 2026-05-05)
+      confirmed zero orphans across the 35-dep closure: 3 direct (streamlit,
+      pandas, plotly) + 32 transitive, every transitive carries a real
+      `Required-by:` chain. Header comment updated to document the direct-dep
+      contract for future audits. Re-freeze deferred — local `pip` is
+      currently broken by a homebrew Python 3.14 / system `expat` symbol
+      mismatch (unrelated to project; surfaces as
+      `_XML_SetAllocTrackerActivationThreshold` ImportError); CI runs on a
+      clean GitHub Actions venv so the pinned versions stay verified there.
 - [ ] **P4a** Live demo: deploy to Streamlit Cloud (note: SQLite
       ephemeral storage on Cloud — verify behavior or arrange
       persistence)
@@ -1076,6 +1083,7 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-05 — **P5 cross-doc link verification + P3 dep audit shipped on `main`** (`8ab7d3d` + `5809e68` + this rollup). P5 closed: PR #46's `docs/internal/` reorg moved AGENTS.md / TASKS.md / ORCHESTRATOR_HANDOFF.md to a subdirectory but the implementer's grep verification ("Path-stable: cross-references use logical names, not relative-path links") missed the markdown links inside those files themselves — 25 unique `(reviews/...)` + `(CHANGELOG.md)` links resolved to `docs/internal/reviews/...` + `docs/internal/CHANGELOG.md` from the new location (neither exists). Fix prefixed all 25 with `../../`; sweep also caught two H1 title rebrands (`Postdoc Application Tracker` → `Academic Application Tracker`) and one stale repo URL in ORCHESTRATOR_HANDOFF.md (`hugs_application_tracker` → `academic-application-tracker` — forward-looking project description, not forensic). User-confirmed CHANGELOG.md framing line rebrand followed (`5809e68`). Reviews/* in-prose references to the moved files left untouched as forensic record. P3 closed: reverse-dep audit (`pip show` per package) confirmed zero orphans across the 35-dep closure (3 direct + 32 transitive); re-freeze deferred per local `pip` being broken by an unrelated homebrew Python 3.14 / system `expat` mismatch (CI-side venv stays clean).
 - 2026-05-05 — **`v0.9.0` tagged** (close-out commit + annotated tag):
   v1.0-rc schema cleanup + publish-readiness scaffolding shipped.
   CHANGELOG `[Unreleased]` → `[v0.9.0]` split (boundary covers both
@@ -1505,4 +1513,4 @@ For earlier completions see [`CHANGELOG.md`](../../CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-05 (v1.0-rc schema cleanup + publish-readiness shipped at `v0.9.0`; main HEAD post-rollup; suite 883 / 1 xfailed; pyright 0/0; remaining v1.0-rc deliverables before `v1.0.0`: P3 dep prune · P4a Streamlit Cloud deploy · P4b walkthrough GIF · P5 cross-doc link verify · P6 v1.0.0 PR + tag · Phase 7 T5 responsive layout check)_
+_Updated: 2026-05-05 (v1.0-rc schema cleanup + publish-readiness shipped at `v0.9.0`; P3 + P5 closed post-rollup; suite 883 / 1 xfailed; pyright 0/0; remaining v1.0-rc deliverables before `v1.0.0`: P4a Streamlit Cloud deploy · P4b walkthrough GIF · P6 v1.0.0 PR + tag · Phase 7 T5 responsive layout check — all user-driven)_
