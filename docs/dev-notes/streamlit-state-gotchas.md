@@ -301,9 +301,9 @@ NaN-from-NULL columns. `pd.isna` is the load-bearing guard anywhere a
 DataFrame cell feeds into session_state or string formatting.
 
 ```python
-# Example from app.py::_next_interview_display (post v1.3 Sub-task 8,
-# which normalized the flat interview1_date / interview2_date columns
-# into the interviews sub-table — single scheduled_date per row).
+# Example from app.py::_next_interview_display: each row carries a
+# single scheduled_date from the interviews sub-table; the pd.isna
+# guard catches NaN-from-NULL before the string comparison.
 for _, row in upcoming.iterrows():
     v = row["scheduled_date"]
     if pd.isna(v) or v == "" or v < today_iso:
@@ -328,11 +328,9 @@ or `@st.dialog`, where the explicit rerun IS required: form-submission
 and dialog Confirm events do not trigger a script rerun automatically,
 so the handler must call `st.rerun()` explicitly to refresh the UI
 after a write. Example sites: every Save handler in
-`pages/1_Opportunities.py`'s `st.form` blocks, the
-`_confirm_delete_dialog` handler.
-
-(Pre-v1.3 the canonical example was the dashboard's 🔄 Refresh button
-on `app.py`; that button was removed in Sub-task 12 per DESIGN D13.)
+`pages/1_Opportunities.py`'s `st.form` blocks, and every
+`_confirm_*_delete_dialog` handler across the project's destructive
+paths (position / interview / recommender deletes).
 
 ---
 
