@@ -1405,4 +1405,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-05 (Phase 7 cleanup CL6 closed direct on main as `04fa7a3` + `bc1017e`; main HEAD `bc1017e`; suite 879 / 1 xfailed; pyright 0/0; CL1-CL6 sub-tier closed in full; T5 — responsive layout, user-driven — is the next functional task)_
+_Updated: 2026-05-05 (Phase 7 cleanup CL6 closed direct on main as `04fa7a3` + `bc1017e` + tracker rollup `a9406eb`; main HEAD `a9406eb`; suite 879 / 1 xfailed; pyright 0/0; CL1-CL6 sub-tier closed in full; T5 — responsive layout, user-driven — is the next functional task)_
