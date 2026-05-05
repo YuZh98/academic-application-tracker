@@ -92,19 +92,20 @@ right after the T5 merge and before the post-merge ritual fully completed.
 
 ## Recurring post-merge ritual (do this after every merged PR)
 
-1. `git fetch && git checkout main && git pull --ff-only origin main` — sync.
-2. **Update AGENTS.md** "Current state" table (mark just-merged tier ✅ with PR number; bump `main` HEAD line) and "Immediate task" block (replace with the next tier's spec, expanded from the one-liner in DESIGN.md or the relevant doc).
-3. **Update TASKS.md** — flip the just-merged sub-task's checkboxes; if all sub-tasks of a tier are done, mark the tier complete.
-4. **Append to CHANGELOG.md** under `[Unreleased]` — one line per non-trivial change. `GUIDELINES.md §14` has the rules.
-5. **Write or update `reviews/phase-N-tierM-review.md`** if the review-doc pattern continues for this tier.
-6. **Commit** as `chore(phase-N-TM): tracker rollup post-PR #NN` (or similar). This is the third leg of the TDD triplet.
-7. Push to main.
+1. **Merge with `--delete-branch`** — `gh pr merge <N> --squash --admin --delete-branch`. The flag auto-deletes the feature branch on origin (and `git fetch origin --prune` cleans the local tracking ref on the next sync). Codified 2026-05-05 after 5 consecutive proven uses across CL1-CL5 (PRs #41-#45). Without the flag, stale feature branches accumulate on origin and require a periodic batch-cleanup chore (the project's Phase 6 / Phase 7 split saw 9 branches need manual deletion at one point).
+2. `git fetch && git checkout main && git pull --ff-only origin main` — sync.
+3. **Update AGENTS.md** "Current state" table (mark just-merged tier ✅ with PR number; bump `main` HEAD line) and "Immediate task" block (replace with the next tier's spec, expanded from the one-liner in DESIGN.md or the relevant doc).
+4. **Update TASKS.md** — flip the just-merged sub-task's checkboxes; if all sub-tasks of a tier are done, mark the tier complete.
+5. **Append to CHANGELOG.md** under `[Unreleased]` — one line per non-trivial change. `GUIDELINES.md §14` has the rules.
+6. **Write or update `reviews/phase-N-tierM-review.md`** if the review-doc pattern continues for this tier.
+7. **Commit** as `chore(phase-N-TM): tracker rollup post-PR #NN` (or similar). This is the third leg of the TDD triplet.
+8. Push to main.
 
 ## Branch-protection note (you'll need this every PR)
 
 Ruleset 15887463 ("main protection") requires a passing `Tests + Lint (3.14)` CI check AND has a `pull_request` rule with `required_approving_review_count: 0` BUT `require_last_push_approval: true`. Net effect: self-authored PRs by `YuZh98` cannot be merged through the normal flow because the user can't self-approve. The repo owner has admin bypass.
 
-**Merge command:** `gh pr merge <N> --squash --admin` (or `--merge` / `--rebase` per the user's preference for that PR). PRs #28 and #29 both landed this way; this is the documented pattern, not a workaround.
+**Merge command:** `gh pr merge <N> --squash --admin --delete-branch` (or `--merge` / `--rebase` per the user's preference for that PR). The `--delete-branch` flag is standing per the post-merge ritual (codified 2026-05-05 after CL1-CL5 proved the pattern). PRs #28 and #29 landed without `--delete-branch` (predates the standing rule); this is the documented pattern for new merges, not a workaround.
 
 `mergeStateStatus: BLOCKED` with `mergeable: true` and CI **green** is the EXPECTED state — that's not a code problem, that's the bypass-required signal.
 
@@ -124,8 +125,9 @@ gh pr checks <N> --watch     # blocks until conclusion lands
 gh pr view <N> --json statusCheckRollup --jq '.statusCheckRollup[] | "\(.name): \(.conclusion)"'
 # Required output: "Tests + Lint (3.14): SUCCESS"
 
-# Only then admin-bypass merge.
-gh pr merge <N> --squash --admin
+# Only then admin-bypass merge (with --delete-branch per the
+# standing post-merge ritual — codified 2026-05-05 after CL1-CL5).
+gh pr merge <N> --squash --admin --delete-branch
 ```
 
 If CI is `FAILURE`, **do not merge** — read the failure log
