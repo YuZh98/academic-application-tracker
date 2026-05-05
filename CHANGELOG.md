@@ -17,6 +17,20 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Removed
+- **Breaking (auto-migrated):** drop legacy `applications.confirmation_email` TEXT column — column has been NULL-only since v1.3 Sub-task 10 split it into `(confirmation_received, confirmation_date)` pair per DESIGN §6.2 + D19. Closes the long-running split migration's "leave old col NULL until rebuild" step (c). Migration runs automatically on next `init_db()` call after pulling this commit; idempotent on post-drop DBs.
+
+  **Migration:** the relevant block in `database.init_db()` runs after the v1.3 split UPDATEs land legacy values into the new pair, so no data loss is possible:
+  ```sql
+  -- Idempotent gate: only fires if legacy column still present.
+  -- Pre-v1.0-rc DBs hit this; post-v1.0-rc DBs short-circuit.
+  ALTER TABLE applications DROP COLUMN confirmation_email;
+  ```
+  Uses SQLite 3.35+ `ALTER TABLE DROP COLUMN` (column carries no PK / UNIQUE / INDEX / FK-ref / CHECK / generated constraint, so the one-line drop replaces the CREATE-COPY-DROP-RENAME rebuild that older SQLite required). **Rollback:** `ALTER TABLE applications ADD COLUMN confirmation_email TEXT` recreates the column NULL-everywhere; no callers read it.
+
+### Changed
+- DESIGN §6.3 "Remove a col" row: add two-shape guidance — `ALTER TABLE DROP COLUMN` (SQLite 3.35+, when constraint-eligible) preferred over CREATE-COPY-DROP-RENAME rebuild; rebuild form still required when the dropped column carries PK / UNIQUE / INDEX / FK-ref / CHECK / generated constraints, and the rebuild needs `PRAGMA foreign_keys=OFF` outside the transaction when other tables FK into the rebuilt one (cascade-delete fires on DROP TABLE with FK enforcement on).
+
 ### Added
 - Add `README.md` at repo root — public-facing front door (hero · features · quick-start · engineering-practices block · project structure · docs index · status · license · acknowledgments). Frames the project for both end-users (clone + run) and code-curious reviewers (the engineering-practices section names the 879-test suite, pyright fence, ruff, deprecation-strict gate, cohesion-pinning tests, atomic-commit cadence, spec-first design). PR #46 (`3915536`).
 - Add `LICENSE` (MIT) at repo root per DESIGN §4. Without it, the GitHub default is "all rights reserved" and visitors legally can't fork or use the code. PR #46 (`3915536`).

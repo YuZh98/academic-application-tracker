@@ -109,22 +109,20 @@ def init_db() -> None:
             )
         """)
 
-        # confirmation_email is the pre-v1.3 dual-purpose TEXT column
-        # (stored either 'Y' for flag semantics or a date string for
-        # date semantics). Sub-task 10 split it into the (received, date)
-        # pair per DESIGN §6.2 + D19 / D20; the physical column stays in
-        # place per DESIGN §6.3 step (c) "leave old columns NULL until a
-        # rebuild drops them" and is scheduled for drop in v1.0-rc.
-        # No caller writes to it post-split; the one-shot UPDATE migration
-        # below translates the two legitimate legacy shapes into the new
-        # columns on the first init_db() after upgrade. Same retention
-        # pattern as interview1_date / interview2_date from Sub-task 8.
+        # The pre-v1.3 `confirmation_email` TEXT column (dual-purpose:
+        # stored either 'Y' for flag semantics or a date string for date
+        # semantics) was split by Sub-task 10 into the (received, date)
+        # pair and physically dropped by the v1.0-rc migration further
+        # below. Pre-v1.3 DBs still carry the column on the live schema
+        # until init_db() runs; the value-extraction UPDATEs in the
+        # split migration block run before the v1.0-rc DROP COLUMN, so
+        # legacy data lands in the new pair before the source goes away.
+        # Fresh DBs build the post-drop shape directly via this DDL.
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS applications (
                 position_id           INTEGER PRIMARY KEY,
                 applied_date          TEXT,
                 all_recs_submitted    TEXT,
-                confirmation_email    TEXT,
                 confirmation_received INTEGER DEFAULT 0,
                 confirmation_date     TEXT,
                 response_date         TEXT,
@@ -347,6 +345,31 @@ def init_db() -> None:
                 "SET confirmation_email = NULL "
                 "WHERE confirmation_email IS NOT NULL"
             )
+
+        # Migration (v1.0-rc, DESIGN §6.3 "Remove a col"): physically drop
+        # the legacy `applications.confirmation_email` TEXT column. The
+        # column has been NULL-only since the v1.3 Sub-task 10 split
+        # migration above (no caller writes to it; values were extracted
+        # into the (received, date) pair and the source NULL-cleared).
+        # This drop is the final step of that long-running split.
+        #
+        # SQLite 3.35+ supports ALTER TABLE DROP COLUMN for columns with
+        # no PRIMARY KEY / UNIQUE / INDEX / FOREIGN KEY-ref / CHECK / GEN
+        # constraints — confirmation_email satisfies all five, so the
+        # one-line DROP COLUMN replaces the CREATE-COPY-DROP-RENAME
+        # rebuild that older SQLite required (and that DESIGN §6.3's
+        # "Remove a col" row originally specced). The rebuild form
+        # remains the right tool when the dropped column carries any of
+        # those constraints; the DROP COLUMN shortcut is correct here.
+        #
+        # Idempotence: the PRAGMA gate below short-circuits when the
+        # column is already absent, so a re-run after migration is a
+        # strict no-op.
+        applications_cols_post_split = {
+            row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
+        }
+        if "confirmation_email" in applications_cols_post_split:
+            conn.execute("ALTER TABLE applications DROP COLUMN confirmation_email")
 
         # Migration (v1.3 Sub-task 11, DESIGN §6.2 + §6.3 + D19 + D20):
         # rebuild the recommenders table to translate the pre-v1.3

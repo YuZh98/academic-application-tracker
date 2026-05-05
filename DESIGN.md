@@ -410,7 +410,7 @@ CREATE INDEX IF NOT EXISTS idx_interviews_application ON interviews(application_
 | Rename `RESULT_DEFAULT` | One-shot `UPDATE applications SET result = '<new>' WHERE result = '<old>'`. |
 | Split dual-purpose col | (a) `ALTER TABLE ... ADD COLUMN` for new cols; (b) one-shot `UPDATE` translating old col values into new cols; (c) leave old col NULL until follow-up release rebuilds table to drop it. |
 | Normalize flat cols into sub-table | (a) `CREATE TABLE` new sub-table; (b) `INSERT INTO` copying old cols; (c) leave old cols NULL until rebuild drops them; (d) update app code to read from sub-table. |
-| Remove a col | SQLite needs table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM <t>; DROP TABLE <t>; ALTER TABLE new RENAME TO <t>`. Breaking change — document in CHANGELOG. |
+| Remove a col | SQLite 3.35+: `ALTER TABLE <t> DROP COLUMN <c>` (one-line, atomic) when the column carries no PK / UNIQUE / INDEX / FK-reference / CHECK / generated-column constraint. Otherwise table rebuild: `CREATE TABLE new AS SELECT <kept cols> FROM <t>; DROP TABLE <t>; ALTER TABLE new RENAME TO <t>` — and the rebuild form needs `PRAGMA foreign_keys=OFF` outside the transaction when other tables FK into the rebuilt one (cascade-delete fires on `DROP TABLE` with FK enforcement on). Breaking change either way — document in CHANGELOG with the exact migration SQL. |
 
 **Migration discipline:** every schema or vocab change lands w/ `Migration:` note in `CHANGELOG.md` under release that introduces it, giving exact `UPDATE` or rebuild SQL. User upgrading between releases never has to guess which migration to run.
 
