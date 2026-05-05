@@ -100,7 +100,7 @@ commit on main.
 ### PR conventions
 
 - **PR title format:** `<type>(<scope>): <short description ≤72 chars>`
-  — e.g. `feat(phase-7-CL4): Phase 7 polish batched (4 UX fixes)`.
+  — e.g. `chore(phase-7-CL5): trim CL4 doc-drift carry-overs`.
 - **PR body:** `## Summary` bullets per deliverable + `## Test plan`
   checklist (mirror of recent merged PRs: #32, #33).
 - If you made a non-obvious design call (cell shape, sort key,
@@ -233,7 +233,8 @@ User-driven decision (2026-05-04): postpone T5 (responsive layout, user-driven) 
 | **CL2** — `config.py` lifts ✅ PR #42 | 4 lifts (EM_DASH + urgency_glyph + FILTER_ALL + REMINDER_TONES) + 1 drop (TRACKER_PROFILE block + 4 tests). Carry-overs C2 + C3 closed. Pyright fence held (0/0 post-lift). | Implementer | done |
 | **CL3** — `tests/helpers.py` extraction ✅ PR #43 | 4 helpers lifted (link_buttons + decode_mailto + download_buttons + download_button); leading-underscore dropped on lift; paren-anchored rename strategy preserved test method substring matches. | Implementer | done |
 | **CL4** — Phase 7 polish batched ✅ PR #44 | Four UX fixes shipped in one PR (4 commits): (1) save-toast wording branched on dirty diff in apps_detail_form + per-row interview save + recs_edit_form (apps_detail_form gained dirty-diff infrastructure — no-op skips DB write AND R1/R3 cascade, pinned by spy test); (2) `_build_compose_mailto` subject branches on `n_positions` (N=1 → singular; N≥2 → plural); DESIGN §8.4 line 631 amended; (3) `app.py` empty-DB hero `st.write` → `st.markdown` (lone outlier in cross-page convention); (4) 5 empty-state strings lifted to per-surface `config.py` constants. Suite 875 → 879 under all seven gates (4 new tests). Pyright fence held (0/0). Branch auto-deleted on merge. Three 🟡 doc-drift findings (history-as-guidance leak in DESIGN.md line 631 + `_build_compose_mailto` docstring + repeated "Phase 7 CL4 Fix N:" comments) deferred to CL5. | Implementer | done |
-| **CL5** — Doc drift + branch-cleanup process amendment | Retroactive trim of older review docs (Phase 5 + Phase 6 tier reviews still have `Kept by design` rows in Findings tables); CHANGELOG older blocks; CL4 doc-drift carry-overs (DESIGN §8.4 line 631 trim + `_build_compose_mailto` docstring trim + "Phase 7 CL4 Fix N:" comment cleanup); add `--delete-branch` to ORCHESTRATOR_HANDOFF.md "Recurring post-merge ritual". | Orchestrator | CL1-4 done |
+| **CL5** — CL4 doc-drift carry-overs (code-area) | DESIGN §8.4 line 631 trim + `pages/3_Recommenders.py::_build_compose_mailto` docstring trim + ~17 `# Phase 7 CL4 Fix N:` comment cleanups across 5 source files + 5 test files. Keep forward-looking invariants (e.g. cascade-safety note on apps_detail_form save handler); drop change-log noise. History-as-guidance anti-pattern per the user's standing rule (codified `e4732f7` + `289f7dd` + `d937c28`). | Implementer | CL1-4 done |
+| **CL6** — Process + retroactive doc drift | Two orchestrator-only items: (a) add `gh pr merge --delete-branch` to `ORCHESTRATOR_HANDOFF.md` "Recurring post-merge ritual" (4 consecutive proven uses CL1-CL4); (b) retroactive trim of older Phase 5 + Phase 6 tier reviews still carrying `Kept by design` rows in Findings tables (per GUIDELINES §10 those belong in Q&A) + older `[v0.6.0]`/`[v0.5.0]`/etc. CHANGELOG blocks with long-form descriptive entries (per §14.4 should be one-line imperatives). | Orchestrator | CL5 done |
 
 ### What's after Phase 7
 v1.0-rc schema cleanup, then publish scaffolding (README, LICENSE,
@@ -241,15 +242,119 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — _none queued for implementer_
+## Immediate task — Phase 7 cleanup CL5 (CL4 doc-drift carry-overs)
 
-CL4 shipped via PR #44 (`9a5eded`). CL5 is **orchestrator-only**
-(doc-drift retroactive trim + ritual amendment) and runs next on
-main without a feature branch. T5 (responsive layout check) is the
-next implementer-eligible task; it is user-driven (manual
-measurement at 4 widths + screenshot capture) and resumes after
-CL5 closes — wait for the orchestrator to refresh this block with
-a T5 spec before starting.
+**Spec:** This doc's "Phase 7 cleanup + polish sub-tier" table
+(CL5 row) · `reviews/phase-7-CL4-review.md` Findings (3 🟡 items
+deferred to CL5) · user's standing rule against history-as-guidance
+prose in forward-looking specs (codified across `e4732f7`,
+`289f7dd`, `d937c28`).
+
+CL5 trims change-log narration that leaked into spec docs +
+docstrings + inline comments during CL4. Pure cleanup — no new
+behaviour. Existing 879 tests are the contract gate; suite must
+stay at 879 / 1 xfailed post-CL5.
+
+### CL5 — three trims
+
+#### Trim 1 — `DESIGN.md` line 631
+
+**Current shape:** Forward-looking pluralization rule followed by a
+back-reference clause: *"Phase 7 CL4 Fix 2 amended this line: the
+previously-locked verbatim plural-only form read 'letters for 1
+postdoc applications' at N=1, which is grammatically awkward."*
+
+**Fix:** Drop the back-reference clause. Forward-looking rule (the
+part before "Phase 7 CL4 Fix 2 amended this line:") stays as-is.
+DESIGN.md is forward-looking spec; rationale lives in commit
+messages + the CL4 review doc, not in the spec itself.
+
+#### Trim 2 — `pages/3_Recommenders.py::_build_compose_mailto` docstring
+
+**Current shape (around line 154):** Docstring contains a sentence
+prefixed *"Subject pluralization (Phase 7 CL4 Fix 2): the singular
+form is …"* — back-reference narration to the CL4 amendment.
+
+**Fix:** Trim to the forward-looking pluralization rule. Docstrings
+should state what the code does, not what changed in PR #44.
+
+#### Trim 3 — `# Phase 7 CL4 Fix N:` inline comments (sweep)
+
+**Sites** (verify exact lines at edit time via
+`grep -rn "Phase 7 CL4 Fix" app.py config.py pages/ tests/`):
+
+- `app.py` lines 116, 424
+- `pages/1_Opportunities.py:350`
+- `pages/2_Applications.py` lines 337, 799, 976
+- `pages/3_Recommenders.py` lines 154, 241, 794
+- `tests/test_app_page.py:2392`
+- `tests/test_applications_page.py` lines 305, 1336, 1368, 2281
+- `tests/test_opportunities_page.py` lines 546, 646, 759
+- `tests/test_recommenders_page.py` lines 154, 1208, 1497
+
+**Rule (CL4 review Finding #3 verbatim):** keep the cascade-safety
+note + drop the change-log noise.
+
+- **Keep** comments that document a forward-looking invariant a
+  future reader needs to know — e.g. the
+  `pages/2_Applications.py:799` cascade-safety note explaining
+  why `apps_detail_form`'s no-op short-circuit is safe (skipping
+  the R1/R3 cascade is correct because there's no transition to
+  fire when nothing changed). Strip the `Phase 7 CL4 Fix 1:`
+  prefix; keep the rationale.
+- **Drop** comments that narrate "this was changed in CL4" with no
+  forward-looking content — e.g. the verbatim
+  `# Phase 7 CL4 Fix 4: empty-state copy lifted to config so a
+  future wording edit is a one-line change tracked via git blame.`
+  repeated at 5 sites. The "lifted to config" framing rots once
+  the rollup commit lands; `git blame` already tells the future
+  reader where the constant came from.
+- **Test docstrings** with `Phase 7 CL4 Fix N:` prefix should drop
+  the prefix; the contract-pinning prose stays intact. Tests pin
+  contracts forward; CL4 attribution is git-history info.
+
+### Architecture rules (non-negotiable)
+- No code changes — pure comment/docstring/spec text edits.
+- Existing test contracts keep passing exactly. The 879-test
+  suite + pyright + isolation gate + CI-mirror are the behavioural
+  pin.
+
+### Tests to write first (TDD red commit)
+None — CL5 is doc cleanup, no new contracts to pin.
+
+Verification is **negative**: post-CL5,
+`grep -rn "Phase 7 CL4 Fix" app.py config.py pages/ tests/`
+should return either zero matches (full sweep) or only
+forward-looking-invariant comments with the `Phase 7 CL4 Fix N:`
+prefix stripped + rationale text retained. Final count depends on
+the implementer's judgment per comment.
+
+### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror + pyright fence)
+```bash
+ruff check .
+pyright .                                       # CL1 fence — must stay 0/0
+pytest tests/ -q                                # 879 pre-CL5, expect 879 post-CL5
+pytest -W error::DeprecationWarning tests/ -q
+grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
+  | grep -v '^\([^:]*\):[0-9]*:\s*#'
+git status --porcelain exports/
+mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
+```
+
+### Branch + cadence
+- Branch name: `feature/phase-7-cleanup-CL5-DocDriftTrim`.
+- One commit suggested (whole-tree sweep) OR three commits (one per
+  trim) for clean per-line `git blame` if the implementer prefers.
+  CL2's per-lift commit split is the recent precedent for "split
+  into commits per logical change"; CL3's two-commit shape is the
+  precedent for "single refactor, optional smoke tests on top".
+  Either is fine; flag the shape in the PR description.
+
+### After CL5 closes
+Orchestrator picks up **CL6** (process amendment + retroactive
+review/CHANGELOG drift trim — orchestrator-only, runs direct on
+main without a feature branch) before T5 (responsive layout check,
+user-driven, manual capture).
 
 ---
 
