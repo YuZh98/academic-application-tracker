@@ -30,6 +30,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import exports
+from tests.helpers import download_button, download_buttons
 
 PAGE = "pages/4_Export.py"
 
@@ -401,33 +402,10 @@ class TestExportPageMtimesPanel:
 
 
 # ── Phase 6 T5: Download buttons ─────────────────────────────────────────────
-
-
-def _download_buttons(at: AppTest) -> list:
-    """All download buttons on the page, as UnknownElement instances.
-    AppTest 1.56 has no typed `at.download_button` accessor — they
-    surface via `at.get('download_button')` whose `.proto` carries
-    the DownloadButton protobuf with `.label`, `.disabled`, `.url`,
-    `.id` fields.
-
-    Note: the bytes content (`data` arg) and file_name arg are NOT on
-    the proto — they're stored behind a mock media URL. Tests that
-    pin those two contracts use source-grep on `pages/4_Export.py`
-    instead of element-tree assertions."""
-    return list(at.get("download_button"))
-
-
-def _download_button(at: AppTest, filename: str):
-    """Look up the download button for a given filename by its
-    locked widget key. Returns the UnknownElement (raises StopIteration
-    via next() if missing)."""
-    target_key = f"export_download_{filename}"
-    matching = [b for b in _download_buttons(at) if b.proto.id.endswith(target_key)]
-    assert matching, (
-        f"Expected a download button with key {target_key!r}; "
-        f"got button ids: {[b.proto.id for b in _download_buttons(at)]!r}"
-    )
-    return matching[0]
+#
+# `download_buttons` + `download_button` helpers live in tests/helpers.py
+# (lifted in Phase 7 cleanup CL3 — same pattern as tests/test_recommenders_
+# page.py's `link_buttons` / `decode_mailto` lift). Imported above.
 
 
 class TestExportPageDownloadButtons:
@@ -458,13 +436,13 @@ class TestExportPageDownloadButtons:
         """Three widgets rendered in wireframe order with the locked
         keys + labels."""
         at = _run_page()
-        buttons = _download_buttons(at)
+        buttons = download_buttons(at)
         assert len(buttons) == len(EXPORT_FILENAMES), (
             f"Expected {len(EXPORT_FILENAMES)} download buttons "
             f"(one per file); got {len(buttons)}"
         )
         for filename in EXPORT_FILENAMES:
-            btn = _download_button(at, filename)
+            btn = download_button(at, filename)
             expected_label = f"⬇ {filename}"
             assert btn.proto.label == expected_label, (
                 f"Expected label {expected_label!r} on the {filename!r} "
@@ -485,7 +463,7 @@ class TestExportPageDownloadButtons:
                 )
         at = _run_page()
         for filename in EXPORT_FILENAMES:
-            btn = _download_button(at, filename)
+            btn = download_button(at, filename)
             assert btn.proto.disabled, (
                 f"{filename!r} download button must be disabled when "
                 f"the file is absent; got disabled={btn.proto.disabled}"
@@ -501,7 +479,7 @@ class TestExportPageDownloadButtons:
             )
         at = _run_page()
         for filename in EXPORT_FILENAMES:
-            btn = _download_button(at, filename)
+            btn = download_button(at, filename)
             assert not btn.proto.disabled, (
                 f"{filename!r} download button must be enabled when "
                 f"the file exists; got disabled={btn.proto.disabled}"
@@ -582,7 +560,7 @@ class TestExportPageDownloadButtons:
         at = _run_page()
         # Pre-state: all three buttons disabled.
         for filename in EXPORT_FILENAMES:
-            btn = _download_button(at, filename)
+            btn = download_button(at, filename)
             assert btn.proto.disabled, (
                 f"precondition: {filename!r} button must be disabled pre-click"
             )
@@ -595,7 +573,7 @@ class TestExportPageDownloadButtons:
             assert (db_and_exports / filename).exists(), (
                 f"After regenerate, {filename!r} must exist on disk"
             )
-            btn = _download_button(at, filename)
+            btn = download_button(at, filename)
             assert not btn.proto.disabled, (
                 f"After regenerate, {filename!r} download button must "
                 f"be enabled; got disabled={btn.proto.disabled}"
