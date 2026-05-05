@@ -1329,6 +1329,70 @@ class TestApplicationsDetailCardSave:
         # And the sentinel still matches the row (set by the re-seed).
         assert _ss_or_none(at, EDIT_FORM_SID_KEY) == pid
 
+    def test_save_with_no_changes_fires_no_changes_toast(self, db):
+        """Phase 7 CL4 Fix 1: clicking Save when the form has no dirty
+        diff against the persisted row fires
+        ``st.toast("No changes to save.")`` instead of the misleading
+        ``Saved "<name>"`` toast that used to fire on every click. The
+        ``Saved`` toast must NOT appear in this branch — that signal
+        is reserved for actual writes."""
+        pid = database.add_position(make_position(
+            {"position_name": "NoOpPos"}
+        ))
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Click Save without touching any widget — the form is at its
+        # canonical pre-seeded state, so the dirty diff is empty.
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        assert any("No changes to save." in v for v in toast_values), (
+            f"No-op Save must fire st.toast(\"No changes to save.\"); "
+            f"got toasts={toast_values!r}."
+        )
+        assert not any("Saved" in v for v in toast_values), (
+            f"No-op Save must NOT fire the Saved toast (it is dishonest "
+            f"when nothing changed); got toasts={toast_values!r}."
+        )
+
+    def test_save_with_no_changes_skips_upsert(self, db, monkeypatch):
+        """Phase 7 CL4 Fix 1: a no-op Save must skip the
+        ``database.upsert_application`` call entirely — the empty
+        dirty diff means there is nothing to write and no transition
+        for R1/R3 to fire against. Pins the implementation contract
+        that the page (not just the database layer) elides the call,
+        so the cascade-promotion toast cannot accidentally fire on a
+        no-op (e.g. an idempotent self-write of an existing
+        STATUS_OFFER row)."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+
+        calls: list[tuple[int, dict]] = []
+        original = database.upsert_application
+
+        def _spy(position_id, fields, **kwargs):
+            calls.append((position_id, dict(fields)))
+            return original(position_id, fields, **kwargs)
+        monkeypatch.setattr(database, "upsert_application", _spy)
+
+        at = _run_page()
+        _select_row(at, 0)
+        _keep_selection(at, 0)
+        at.button(key=DETAIL_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        assert calls == [], (
+            f"No-op Save must make zero upsert_application calls; "
+            f"got {calls!r}."
+        )
+
     def test_save_db_failure_shows_error_no_toast(self, db, monkeypatch):
         """`upsert_application` raises → page surfaces `st.error(...)`,
         does NOT fire the Saved toast, and does NOT pop the sentinel
@@ -2208,6 +2272,41 @@ class TestApplicationsInterviewSave:
         assert target_2["notes"] == "row2-old", (
             f"Row 2's DB cell must NOT be touched by row 1's Save; "
             f"got notes={target_2['notes']!r}."
+        )
+
+    def test_clean_row_save_fires_no_changes_toast(self, db):
+        """Phase 7 CL4 Fix 1: clicking a row's Save with no widget
+        changes fires ``st.toast("No changes to save.")`` instead of
+        the misleading ``Saved interview {seq}.`` toast. The dirty
+        diff is computed inline (it already gated the DB write); only
+        the toast wording was previously dishonest about the no-op."""
+        pid = database.add_position(make_position())
+        database.update_position(pid, {"status": config.STATUS_APPLIED})
+        iid = database.add_interview(pid, {
+            "scheduled_date": "2026-05-03",
+            "format":         "Video",
+            "notes":          "stays",
+        })["id"]
+
+        at = _run_page()
+        _select_row(at, 0)
+
+        _keep_selection(at, 0)
+        at.button(key=_w_interview_save(iid)).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toast_values = [el.value for el in at.toast]
+        assert any("No changes to save." in v for v in toast_values), (
+            f"Clean per-row Save must fire st.toast(\"No changes to "
+            f"save.\"); got toasts={toast_values!r}."
+        )
+        assert not any(
+            "Saved interview" in v for v in toast_values
+        ), (
+            f"Clean per-row Save must NOT fire the per-row Saved "
+            f"toast (dishonest when nothing changed); got "
+            f"toasts={toast_values!r}."
         )
 
     def test_save_toast_includes_sequence_number(self, db):

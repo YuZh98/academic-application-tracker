@@ -1201,6 +1201,34 @@ class TestRecommenderEditFormSave:
         # documents the scope of the seeded row.
         assert pid > 0
 
+    def test_save_with_no_changes_fires_no_changes_toast(self, db):
+        """Phase 7 CL4 Fix 1: clicking Save when the form has no dirty
+        diff against the persisted recommender row fires
+        ``st.toast("No changes to save.")`` instead of the misleading
+        ``Saved "<name>"`` toast that used to fire on every click.
+        The DB layer already gated `update_recommender` on `_dirty`;
+        only the toast wording was previously dishonest."""
+        pid = _seed_position(name="Alpha")
+        _seed_recommender(pid, recommender_name="Dr. Smith")
+        at = _run_page()
+        _select_row(at, 0)
+
+        # Click Save without touching any widget.
+        _keep_selection(at, 0)
+        at.button(key=EDIT_SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception, f"Save raised: {at.exception!r}"
+        toasts = [el.value for el in at.toast]
+        assert any("No changes to save." in v for v in toasts), (
+            f"No-op Save must fire st.toast(\"No changes to save.\"); "
+            f"got toasts={toasts!r}"
+        )
+        assert not any("Saved" in v for v in toasts), (
+            f"No-op Save must NOT fire the Saved toast (dishonest when "
+            f"nothing changed); got toasts={toasts!r}"
+        )
+
     def test_save_db_failure_shows_error_no_toast(self, db, monkeypatch):
         pid = _seed_position(name="Alpha")
         _seed_recommender(pid, recommender_name="Dr. Smith")

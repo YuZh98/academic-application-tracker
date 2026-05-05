@@ -778,9 +778,16 @@ if "recs_selected_id" in st.session_state:
                     _dirty["notes"] = _w_notes
 
                 try:
+                    # Phase 7 CL4 Fix 1: branch toast wording on the
+                    # dirty diff so a no-op Save reads "No changes to
+                    # save." rather than the mis-claiming `Saved ...`
+                    # toast that used to fire even when no widget
+                    # changed.
                     if _dirty:
                         database.update_recommender(_rec_id, _dirty)
-                    st.toast(f'Saved "{_rec_name}".')
+                        st.toast(f'Saved "{_rec_name}".')
+                    else:
+                        st.toast("No changes to save.")
                     # Pop the sentinel so the post-Save rerun re-seeds
                     # widgets from the just-persisted DB values; the
                     # skip flag preserves selection across the dataframe-
