@@ -186,7 +186,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 ## Current state (updated after each merged PR)
 
 **Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 cleanup CL3 merged (PR #43); test suite at 875 passed + 1 xfailed; pyright fence holds (0/0); `tests/helpers.py` shared
+**`main` HEAD:** Phase 7 cleanup CL4 merged (PR #44, `9a5eded`); test suite at 879 passed + 1 xfailed; pyright fence holds (0/0); save-toast wording branched on dirty diff; mailto subject pluralizes at N=1; empty-state copy lifted to `config.py`
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -232,8 +232,8 @@ User-driven decision (2026-05-04): postpone T5 (responsive layout, user-driven) 
 | **CL1** — Pyright in CI ✅ PR #41 | Pyright fence + 45 errors → 0 across 5 files. `pyright==1.1.409` pinned, `[tool.pyright]` basic mode in `pyproject.toml`, new CI step + checklist rows. | Implementer | done |
 | **CL2** — `config.py` lifts ✅ PR #42 | 4 lifts (EM_DASH + urgency_glyph + FILTER_ALL + REMINDER_TONES) + 1 drop (TRACKER_PROFILE block + 4 tests). Carry-overs C2 + C3 closed. Pyright fence held (0/0 post-lift). | Implementer | done |
 | **CL3** — `tests/helpers.py` extraction ✅ PR #43 | 4 helpers lifted (link_buttons + decode_mailto + download_buttons + download_button); leading-underscore dropped on lift; paren-anchored rename strategy preserved test method substring matches. | Implementer | done |
-| **CL4** — Phase 7 polish batched | 4 small UX fixes: Save-toast-when-no-dirty wording, subject-pluralization on N=1, `st.markdown` vs `st.write` cohesion, empty-state copy centralization. One PR with 4 commits. | Implementer | CL2 (touches EM_DASH + empty-state sites) |
-| **CL5** — Doc drift + branch-cleanup process amendment | Retroactive trim of older review docs (Phase 5 + Phase 6 tier reviews still have `Kept by design` rows in Findings tables); CHANGELOG older blocks; add `--delete-branch` to ORCHESTRATOR_HANDOFF.md "Recurring post-merge ritual". | Orchestrator | CL1-4 done |
+| **CL4** — Phase 7 polish batched ✅ PR #44 | Four UX fixes shipped in one PR (4 commits): (1) save-toast wording branched on dirty diff in apps_detail_form + per-row interview save + recs_edit_form (apps_detail_form gained dirty-diff infrastructure — no-op skips DB write AND R1/R3 cascade, pinned by spy test); (2) `_build_compose_mailto` subject branches on `n_positions` (N=1 → singular; N≥2 → plural); DESIGN §8.4 line 631 amended; (3) `app.py` empty-DB hero `st.write` → `st.markdown` (lone outlier in cross-page convention); (4) 5 empty-state strings lifted to per-surface `config.py` constants. Suite 875 → 879 under all seven gates (4 new tests). Pyright fence held (0/0). Branch auto-deleted on merge. Three 🟡 doc-drift findings (history-as-guidance leak in DESIGN.md line 631 + `_build_compose_mailto` docstring + repeated "Phase 7 CL4 Fix N:" comments) deferred to CL5. | Implementer | done |
+| **CL5** — Doc drift + branch-cleanup process amendment | Retroactive trim of older review docs (Phase 5 + Phase 6 tier reviews still have `Kept by design` rows in Findings tables); CHANGELOG older blocks; CL4 doc-drift carry-overs (DESIGN §8.4 line 631 trim + `_build_compose_mailto` docstring trim + "Phase 7 CL4 Fix N:" comment cleanup); add `--delete-branch` to ORCHESTRATOR_HANDOFF.md "Recurring post-merge ritual". | Orchestrator | CL1-4 done |
 
 ### What's after Phase 7
 v1.0-rc schema cleanup, then publish scaffolding (README, LICENSE,
@@ -241,175 +241,30 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — Phase 7 cleanup CL4 (Phase 7 polish batched)
+## Immediate task — _none queued for implementer_
 
-**Spec:** This doc's "Phase 7 cleanup + polish sub-tier" table
-(between T4 and T5). Four UX polish items previously deferred to
-Phase 7 close-out:
-
-- **Save-toast wording when `_dirty` is empty** —
-  `reviews/phase-5-tier5-review.md` Finding #2.
-- **Subject pluralization on N=1** —
-  `reviews/phase-5-tier6-review.md` Finding #2 (`letters for 1
-  postdoc applications` reads awkwardly).
-- **`st.markdown` vs `st.write` cohesion sweep** —
-  `reviews/phase-6-tier4-review.md` Finding #3.
-- **Empty-state copy centralization** —
-  `reviews/phase-7-tier2-review.md` carry-over (Q5 in that
-  review).
-
-Batched into one PR with 4 commits (one per fix) for clean per-line
-`git blame` attribution — same shape as CL2's per-lift commit
-split.
-
-### CL4 — Phase 7 polish (4 fixes)
-
-#### Fix 1 — Save-toast wording on no-op edits
-
-**Sites:** `pages/2_Applications.py` (apps_detail_form save handler
-+ per-row apps_interview_{id}_save handlers) ·
-`pages/3_Recommenders.py` (recs_edit_form save handler) ·
-`pages/1_Opportunities.py` (apps_detail_form-equivalents — verify).
-
-**Current behaviour:** Save handler fires `st.toast(f'Saved
-"<name>".')` even when the dirty-diff is empty (no DB write
-occurred). Reads as "I saved your changes" when nothing actually
-changed.
-
-**Fix options** (implementer picks; flag in PR description):
-- (a) **Suppress toast on no-op** — `if _dirty: <write> +
-  st.toast(...)` else: nothing. Cleanest from a "the toast fires
-  iff something changed" stance.
-- (b) **Branch toast wording** — `if _dirty: st.toast(f'Saved
-  "<name>".')` else: `st.toast("No changes to save.")`. Keeps the
-  user-feedback signal but is honest about the no-op outcome.
-
-**Recommend (b)** for cohesion — Streamlit's mental model is "every
-button click produces an outcome signal". Silent no-op (a) reads
-as "did the click register?". Either is defensible.
-
-**Tests:** Update existing dirty-diff tests in
-`tests/test_applications_page.py` + `tests/test_recommenders_page.py`
-to pin the new no-op-toast wording. Add a new test per page if
-none currently exercises the empty-dirty-diff path.
-
-#### Fix 2 — Subject pluralization on N=1
-
-**Sites:** `pages/3_Recommenders.py::_build_compose_mailto` (subject
-template) · `tests/test_recommenders_page.py::TestT6ComposeButton`
-(verbatim subject assertion).
-
-**Current behaviour:** Subject is `f"Following up: letters for
-{n_positions} postdoc applications"` for any N. At N=1 reads
-"letters for 1 postdoc applications" — grammatically awkward.
-
-**Fix:** Branch on N:
-- N=1 → `"Following up: letter for 1 postdoc application"`
-  (singular both nouns)
-- N>1 → `"Following up: letters for {n} postdoc applications"`
-  (plural both nouns — current shape)
-
-**DESIGN amendment:** `DESIGN.md §8.4` line 631 currently locks the
-verbatim multi-position string. Amend that line to read
-"subject template follows English pluralization rules — N=1 uses
-singular `letter` and `application`; N≥2 uses plural". Update test
-assertion to branch accordingly.
-
-#### Fix 3 — `st.markdown` vs `st.write` cohesion
-
-**Sites:** Survey across `app.py` + `pages/*.py` for both calls.
-Phase 6 T4 review noted Export page chose `st.markdown` for
-intro + mtime lines while other pages use `st.write` for the same
-shape (prose with `**bold**` formatting).
-
-**Fix:** Pick one convention + harmonize. Recommended convention
-(implementer can redirect):
-- Use **`st.markdown`** for prose containing markdown formatting
-  (`**bold**`, `_italic_`, links).
-- Use **`st.write`** only for ambiguous-type renders (DataFrame,
-  dict, plain string with no formatting).
-- Pure prose with no formatting: either works; pick `st.markdown`
-  for consistency with the formatting case.
-
-**Survey first**, harmonize second. Don't blanket-replace —
-read each call site to decide if the prose has formatting that
-makes `st.markdown` the honest call.
-
-**Tests:** Existing `at.markdown[i].value` lookups will continue
-to work since `st.write(str)` routes to `st.markdown` internally
-(verified in Phase 6 T4 review). No test changes likely needed;
-verify post-edit.
-
-#### Fix 4 — Empty-state copy centralization
-
-**Sites:** `pages/1_Opportunities.py:354`
-("No positions match the current filters.") ·
-`pages/1_Opportunities.py:350`
-("No positions yet — use Quick Add above to get started.") ·
-`pages/2_Applications.py:337`
-("No applications match the current filter.") ·
-`pages/3_Recommenders.py:230` ("No pending recommenders.") ·
-`app.py:415` ("No pending recommender follow-ups.").
-
-**Fix:** Two paths possible:
-- (a) **Per-page constant per surface** — add e.g.
-  `EMPTY_FILTERED_POSITIONS`, `EMPTY_FILTERED_APPLICATIONS` to
-  `config.py`. Each surface has its own constant. Tightest
-  binding; one-line edit per copy update.
-- (b) **Single template constant** —
-  `EMPTY_FILTERED_TEMPLATE = "No {noun} match the current
-  filter(s)."` with per-page interpolation. Less coupling but
-  loses the singular/plural ("filter" vs "filters") nuance the
-  current copy has.
-
-**Recommend (a)** — gives the tightest pin (every empty-state
-test asserts against the constant by name); naming the surface
-in the constant makes consumer code self-documenting. The
-"yet — use Quick Add above" / "No pending" forms are
-surface-specific anyway and don't fit a template.
-
-**Tests:** Update existing empty-state tests in each per-page
-test file to assert against the new constants by name. Phase 7 T2
-review carry-over Q5 framed this as "would tighten the search
-test coverage along with existing filter tests".
-
-### Pre-PR gates (GUIDELINES §11 + standing isolation gate + CI-mirror + pyright fence)
-```bash
-ruff check .
-pyright .                                       # CL1 fence — must stay 0/0
-pytest tests/ -q                                # 875 pre-CL4
-pytest -W error::DeprecationWarning tests/ -q
-grep -rn '\[SAVED\]\|\[APPLIED\]\|\[INTERVIEW\]' app.py pages/ \
-  | grep -v '^\([^:]*\):[0-9]*:\s*#'
-git status --porcelain exports/
-mv postdoc.db postdoc.db.bak && pytest tests/ -q && mv postdoc.db.bak postdoc.db
-```
-
-### Branch + cadence
-- Branch name: `feature/phase-7-cleanup-CL4-PolishBatched`.
-- Four commits suggested (one per fix), plus the test commits
-  woven in per fix:
-    Fix 1: test (red — new wording assertions) + feat
-    Fix 2: test (red — branched assertion) + feat + DESIGN amend
-    Fix 3: refactor only (sweep + harmonize)
-    Fix 4: test (red — assert against new constants) + refactor
-  Implementer may collapse some commits if a fix surface is
-  trivial (e.g. Fix 3 if it's a one-liner change). Flag the
-  outcome shape in the PR description.
+CL4 shipped via PR #44 (`9a5eded`). CL5 is **orchestrator-only**
+(doc-drift retroactive trim + ritual amendment) and runs next on
+main without a feature branch. T5 (responsive layout check) is the
+next implementer-eligible task; it is user-driven (manual
+measurement at 4 widths + screenshot capture) and resumes after
+CL5 closes — wait for the orchestrator to refresh this block with
+a T5 spec before starting.
 
 ---
 
 ## TDD cadence (mandatory — GUIDELINES §11)
 
 ```
-1. test/feat per fix → CL4 batches 4 UX polish items; one commit
-                       per fix (with its own test/feat shape) for
-                       clean per-line `git blame`. See "Branch +
-                       cadence" inside the Immediate task block for
-                       the per-fix commit shape.
-2. chore: rollup     → orchestrator handles TASKS.md/CHANGELOG/review
-                       doc (YOU do not touch these)
+1. test → red (failing assertions for new behaviour)
+2. feat → green (implementation; suite passes)
+3. chore: rollup → orchestrator handles TASKS.md/CHANGELOG/review
+                   doc (YOU do not touch these)
 ```
+
+Multi-fix tiers may bundle several `test`+`feat` pairs into one PR
+with one commit per fix for clean per-line `git blame` — CL4's
+4-fix shape is the recent precedent.
 
 **Commit message format:**
 ```
@@ -442,7 +297,7 @@ git status --porcelain exports/                 # must be empty post-pytest
 | Action | Who does it |
 |--------|-------------|
 | Write code, write tests | You (this agent) |
-| Open PR | You — branch name: `feature/phase-7-cleanup-CL4-PolishBatched` |
+| Open PR | You — branch name comes from the "Immediate task" block |
 | Review + merge PR | Orchestrator (Claude in Zed) |
 | Update TASKS.md, CHANGELOG.md, reviews/ | Orchestrator only |
 | Push directly to `main` | Nobody — PRs only |

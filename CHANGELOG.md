@@ -18,6 +18,7 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
+- Add 5 per-surface empty-state copy constants on `config.py` (`EMPTY_FILTERED_POSITIONS`, `EMPTY_NO_POSITIONS`, `EMPTY_FILTERED_APPLICATIONS`, `EMPTY_PENDING_RECOMMENDERS`, `EMPTY_PENDING_RECOMMENDER_FOLLOWUPS`); 5 hardcoded `st.info(...)` strings updated to consume the constants; per-page tests assert against the constants by name. PR #44 (`9a5eded`) · [review](reviews/phase-7-CL4-review.md)
 - Add shared `tests/helpers.py` with 4 AppTest helpers (`link_buttons`, `decode_mailto`, `download_buttons`, `download_button`); paren-anchored rename strategy preserved test method substring matches. PR #43 (`479aa15`) · [review](reviews/phase-7-CL3-review.md)
 - Add `config.urgency_glyph(days_away: int | None) -> str` function (lifted from `database.py::_urgency_glyph` + `pages/1_Opportunities.py::_deadline_urgency`); `EM_DASH`, `FILTER_ALL`, `REMINDER_TONES` constants on `config.py` (lifted from 5 / 3 / 1 duplicate sites respectively). Closes carry-overs C2 + C3. PR #42 (`bd76d29`) · [review](reviews/phase-7-CL2-review.md)
 - Add pyright type-check fence to CI (basic mode, pythonVersion 3.14, `pyright==1.1.409` pinned); `pyright .` row added to standing pre-commit checklists. PR #41 (`eac75c3`) · [review](reviews/phase-7-CL1-review.md)
@@ -27,6 +28,9 @@ manual steps to run against a pre-existing database.
 - Add 🔴/🟡 urgency glyphs to Opportunities deadline column; `_deadline_urgency` now returns inline glyphs (was: `'urgent'`/`'alert'` literal flags) with new `—` state for NULL deadlines. PR #37 (`e5316fd`) · [review](reviews/phase-7-tier1-review.md)
 
 ### Changed
+- Branch save-toast wording on dirty diff in `pages/2_Applications.py` apps_detail_form (now computes per-field dirty diff against persisted `app_row`; was previously unconditional `upsert_application`) + per-row `apps_interview_{id}_form` + `pages/3_Recommenders.py` recs_edit_form: no-op clicks fire `st.toast("No changes to save.")` instead of misleading `Saved "<name>"`. apps_detail_form no-op skips DB write AND R1/R3 cascade (pinned by spy test). PR #44 (`9a5eded`) · [review](reviews/phase-7-CL4-review.md)
+- Branch `_build_compose_mailto` subject on `n_positions`: N=1 → singular `letter for 1 postdoc application`; N≥2 → plural `letters for {n} postdoc applications` (unchanged). DESIGN §8.4 line 631 amended in same commit. PR #44 (`9a5eded`)
+- Harmonize `app.py` empty-DB hero copy from `st.write` to `st.markdown` — sole outlier in cross-page convention (markdown for prose, write for ambiguous-type renders). Behaviour identical (`st.write(str)` routes to `st.markdown` internally). PR #44 (`9a5eded`)
 - Trim recent CHANGELOG entries to GUIDELINES §14.4 one-line shape; add bottom link references; restructure phase-6-tier5 + phase-7-tier1 review docs to move `Kept by design` rows from Findings table to Q&A per §10. ([drift audit])
 
 ### Removed

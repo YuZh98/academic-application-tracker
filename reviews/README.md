@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-05 | Phase 7 cleanup CL4 — Phase 7 polish batched (4 UX fixes) | `feature/phase-7-cleanup-CL4-PolishBatched` | Approve with carry-overs (3 🟡 doc-drift findings deferred to CL5) | [phase-7-CL4-review.md](phase-7-CL4-review.md) |
 | 2026-05-04 | Phase 7 cleanup CL3 — `tests/helpers.py` extraction | `feature/phase-7-cleanup-CL3-TestHelpers` | Approve | [phase-7-CL3-review.md](phase-7-CL3-review.md) |
 | 2026-05-04 | Phase 7 cleanup CL2 — `config.py` lifts (4 + drop TRACKER_PROFILE) | `feature/phase-7-cleanup-CL2-ConfigLifts` | Approve | [phase-7-CL2-review.md](phase-7-CL2-review.md) |
 | 2026-05-04 | Phase 7 cleanup CL1 — pyright type-check fence + 45-error drift cleanup | `feature/phase-7-cleanup-CL1-PyrightCI` | Approve | [phase-7-CL1-review.md](phase-7-CL1-review.md) |

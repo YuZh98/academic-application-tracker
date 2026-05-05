@@ -912,10 +912,88 @@ All defensible. Merged via PR #36 (`73a04c4`).
       commits on branch (refactor + smoke tests). Branch
       auto-deleted on merge via `--delete-branch`. Merged via
       PR #43 (`479aa15`).
-- [ ] **CL4** Phase 7 polish batched (next)
-- [ ] **CL4** Phase 7 polish batched (4 UX fixes)
+- [x] **CL4** Phase 7 polish batched (4 UX fixes) — four UX
+      polish items shipped in one PR with four commits (one per
+      fix) for clean per-line `git blame`. **Fix 1
+      (`feat(phase-7-CL4)`):** save-toast wording branched on
+      dirty diff across three save handlers — `apps_detail_form`
+      (gained per-field dirty diff vs. persisted `app_row`; was
+      previously an unconditional `upsert_application` with full
+      8-field payload + `Saved` toast), per-row
+      `apps_interview_{id}_form` (dirty diff already gated the
+      DB write — only the toast wording was previously
+      dishonest), `recs_edit_form` (same shape — `_dirty` already
+      gated). No-op clicks now fire
+      `st.toast("No changes to save.")` instead of the misleading
+      `Saved "<name>".` Cascade safety: the `apps_detail_form`
+      no-op short-circuit skips both the DB write AND the R1/R3
+      cascade — there's no transition to fire against — pinned by
+      `test_save_with_no_changes_skips_upsert` (spy on
+      `database.upsert_application`). `pages/1_Opportunities.py`
+      save handlers (overview / requirements / materials / notes)
+      deliberately out of CL4 scope: they don't currently compute
+      a dirty diff (always rewrite full payload), and adding the
+      infrastructure to four more save paths would balloon CL4's
+      "small UX fixes" mandate. Logged as follow-up. **Fix 2
+      (`feat(phase-7-CL4)` + DESIGN amend):**
+      `_build_compose_mailto` subject branches on `n_positions` —
+      N=1 → `"Following up: letter for 1 postdoc application"`
+      (singular both nouns); N≥2 → `"Following up: letters for
+      {n} postdoc applications"` (unchanged plural shape).
+      `DESIGN.md §8.4` line 631 amended in the same commit so
+      spec and implementation stay in lockstep. Test
+      `test_subject_uses_locked_string_with_position_count`
+      updated to assert the new singular form; multi-position pin
+      `test_subject_position_count_matches_card` unchanged. **Fix
+      3 (`refactor(phase-7-CL4)`):** `app.py` empty-DB hero copy
+      `st.write` → `st.markdown` — single outlier in a codebase
+      that otherwise standardizes on `st.markdown` for prose
+      (Pending Alerts cards on `app.py` + `pages/3_Recommenders.py`,
+      Interviews subheader + per-row interview headings on
+      `pages/2_Applications.py`, intro + per-file mtime lines on
+      `pages/4_Export.py`). Convention picked per AGENTS.md spec:
+      `st.markdown` for prose (with or without formatting),
+      `st.write` for ambiguous-type renders (DataFrame, dict).
+      Behaviour identical (`st.write(str)` routes to `st.markdown`
+      internally — `at.markdown[i].value` lookups continue to
+      work). Cohesion-only refactor; no test changes needed.
+      **Fix 4 (`refactor(phase-7-CL4)`):** five `st.info(...)`
+      empty-state strings lifted to per-surface constants in
+      `config.py` — `EMPTY_FILTERED_POSITIONS`,
+      `EMPTY_NO_POSITIONS` (Opportunities); `EMPTY_FILTERED_APPLICATIONS`
+      (Applications); `EMPTY_PENDING_RECOMMENDERS` (Recommenders);
+      `EMPTY_PENDING_RECOMMENDER_FOLLOWUPS` (dashboard). Per-surface
+      naming (option a per spec) chosen over single-template
+      (option b) because the wording is intentionally
+      surface-specific: "filters" plural for Opportunities matches
+      its multi-filter bar, "filter" singular for Applications
+      matches its single-filter bar; "recommenders" on the page
+      vs. "recommender follow-ups" on the dashboard distinguishes
+      page-level vs. alert-panel framing. Tests in
+      `test_opportunities_page.py`, `test_applications_page.py`,
+      `test_recommenders_page.py`, `test_app_page.py` updated to
+      assert against the constants by name (mirror of CL2's
+      `EM_DASH` / `FILTER_ALL` test-update pattern) so a future
+      copy edit lands once in `config.py` and flows through to
+      assertions automatically. **Pyright fence held through all
+      four fixes** — `pyright .` returns 0/0 post-CL4. Suite 875 →
+      879 (+4 new tests, all in Fix 1 — three no-op-toast pins +
+      one no-op-skips-upsert spy) under all seven gates. Three
+      🟡 doc-drift findings surfaced in pre-merge review and
+      deferred to **CL5** for the trim sweep: history-as-guidance
+      anti-pattern in `DESIGN.md` line 631 (back-references
+      "previously-locked verbatim plural-only form" + "Phase 7
+      CL4 Fix 2 amended this line"), same anti-pattern in the
+      `_build_compose_mailto` docstring, and noisy "Phase 7 CL4
+      Fix N: ..." comment blocks repeated across consumer sites.
+      Branch auto-deleted on merge via `--delete-branch`. Merged
+      via PR #44 (`9a5eded`).
 - [ ] **CL5** Doc drift retroactive trim + branch-cleanup ritual
-      amendment (orchestrator)
+      amendment (orchestrator) — adds CL4 carry-overs (DESIGN §8.4
+      line 631 trim + `_build_compose_mailto` docstring trim +
+      "Phase 7 CL4 Fix N:" comment cleanup) to the existing scope
+      (Phase 5 + Phase 6 review docs `Kept by design` row trim;
+      CHANGELOG older blocks; ritual `--delete-branch` codification)
 
 - [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
       widths; capture screenshots to `docs/ui/screenshots/v0.8.0/`
