@@ -151,8 +151,7 @@ The orchestrator can also run this locally before reviewing if there's any doubt
 
 ## User profile (the human you're collaborating with)
 
-- **Yu Zheng** — PhD candidate on OPT, repo owner, sole user of the app.
-- Working email: `seanzhengyu1@gmail.com` (Claude Code session); GitHub: `YuZh98`.
+- **Yu Zheng** — PhD candidate, repo owner, sole user of the app. GitHub: `YuZh98`.
 - **Standing prompting preferences** (reinforced across many sessions):
   - **Pre-announce actions.** Before doing anything non-trivial, state in one sentence what you're about to do and why.
   - **Didactic over terse.** When explaining a decision (architecture choice, why a test fails, what a Streamlit gotcha is), give the *reasoning*, not just the conclusion. The user is using this project to learn software engineering practices — explanations are part of the value.
