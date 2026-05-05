@@ -831,7 +831,7 @@ All defensible. Merged via PR #36 (`73a04c4`).
       `_find_function` / `_ancestors` round out the toolkit. Suite
       853 → 864 under both pytest gates. Merged via PR #40
       (`952f0e9`).
-**Cleanup + polish sub-tier (between T4 and T5; CL1-CL6 closed in full 2026-05-05; T5 resumes user-driven):**
+**Cleanup + polish sub-tier (between T4 and T5; CL1-CL6 closed in full 2026-05-05; T5 deferred to v1.0-rc):**
 
 - [x] **CL1** Pyright/mypy in CI fence + drift cleanup —
       `pyright==1.1.409` pinned in `requirements-dev.txt`,
@@ -1023,10 +1023,19 @@ All defensible. Merged via PR #36 (`73a04c4`).
       pattern (pre-§14.4 entries explicitly preserved as
       forensic record; content untouched).
 
-- [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
-      widths; capture screenshots to `docs/ui/screenshots/v0.8.0/`
-      (user-driven; resumes after CL6 close)
-- [ ] **T6** Phase 7 review + PR + tag `v0.8.0`
+- [⏭️] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
+      widths — **deferred to v1.0-rc.** No Chrome DevTools MCP
+      available in the current environment; bundles naturally
+      with publish-scaffolding tier (`README.md` screenshots +
+      Streamlit Cloud deploy verification + recorded demo GIF).
+      Folder target renamed to `docs/ui/screenshots/v1.0.0/`.
+      Documented in [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md).
+- [x] **T6** Phase 7 close-out + tag `v0.8.0` — cohesion-smoke
+      doc at [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md);
+      CHANGELOG `[Unreleased]` → `[v0.8.0]` split; tag annotation
+      lists T1-T4 + CL1-CL6 + the three structural changes
+      (pyright fence, cohesion-pinning tests, `--delete-branch`
+      codification). Suite 879 + 1 xfailed. Pyright 0/0.
 
 ### v1.0-rc — schema cleanup
 
@@ -1062,6 +1071,27 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-05 — **`v0.8.0` tagged** (close-out commit + annotated
+  tag): Phase 7 closed. T6 cohesion-smoke at
+  [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md);
+  CHANGELOG `[Unreleased]` → `[v0.8.0]` split (boundary at the
+  T6 close-out commit); tag annotation lists T1-T4 + CL1-CL6 +
+  the three structural changes (pyright fence in CI · cohesion-
+  pinning tests in `tests/test_pages_cohesion.py` · `gh pr merge
+  --delete-branch` codified in post-merge ritual). T5 (responsive
+  layout) explicitly deferred to v1.0-rc (no Chrome DevTools MCP
+  available; bundles with publish scaffolding). All seven pre-tag
+  gates green at HEAD. Phase 7 spans 24 commits across 9 PRs +
+  3 orchestrator-direct commits, suite 834 → 879 (+45 tests),
+  pyright fence held 0/0 across 4 consecutive refactor PRs.
+- 2026-05-05 — **CL6c closed** (`079564b`): pre-tag drift trim.
+  Pre-`v0.8.0` comprehensive audit (8 parallel Explore agents)
+  surfaced 5 minor nits — DESIGN history-as-guidance × 2 (line
+  355 DDL comment "Replaces the earlier flat ..." + line 470
+  contract #2 amendment preamble), GUIDELINES line 399 pre-commit
+  checklist parenthetical, TASKS footer HEAD hash one commit
+  stale, CHANGELOG bare `[drift audit]` placard. All 5 fixed in
+  single commit. All seven gates green.
 - 2026-05-05 — **CL6 closed** (`04fa7a3` + `bc1017e`): Phase 7
   cleanup CL6 shipped as two split commits direct on main
   (orchestrator-only, no PR). CL6a (`04fa7a3`) codified
@@ -1405,4 +1435,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-05 (Phase 7 cleanup CL6 closed direct on main as `04fa7a3` + `bc1017e` + tracker rollup `a9406eb`; main HEAD `a9406eb`; suite 879 / 1 xfailed; pyright 0/0; CL1-CL6 sub-tier closed in full; T5 — responsive layout, user-driven — is the next functional task)_
+_Updated: 2026-05-05 (Phase 7 closed at `v0.8.0`; suite 879 / 1 xfailed; pyright 0/0; T1-T4 + CL1-CL6 + T6 all ✅; T5 deferred to v1.0-rc with publish scaffolding; v1.0-rc — schema cleanup + publish — is the next milestone)_
