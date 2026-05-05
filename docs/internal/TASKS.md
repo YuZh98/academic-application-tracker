@@ -1039,11 +1039,14 @@ All defensible. Merged via PR #36 (`73a04c4`).
 
 ### v1.0-rc — schema cleanup
 
-- [ ] Physical drop of `applications.confirmation_email` per DESIGN §6.3
-      "Pending column drops" — single-commit table rebuild via
-      CREATE-COPY-DROP-RENAME inside one transaction; idempotent via
-      `PRAGMA table_info(applications)` check on `confirmation_email`
-      presence.
+- [x] Physical drop of `applications.confirmation_email` per DESIGN §6.3
+      "Remove a col" — `ALTER TABLE applications DROP COLUMN
+      confirmation_email` (SQLite 3.35+, replaces the originally-spec'd
+      CREATE-COPY-DROP-RENAME rebuild because the column carries no
+      PK / UNIQUE / INDEX / FK-ref / CHECK / generated constraint).
+      Idempotent via `PRAGMA table_info(applications)` gate. DESIGN §6.3
+      amended with two-shape guidance in the same PR. Merged via PR #47
+      (`bf73bdd`); suite 879 → 883 under all seven gates; tagged `v0.9.0`.
 
 ### Publish scaffolding (per Q7 Option C — both live + recorded GIF)
 
@@ -1073,6 +1076,39 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-05 — **`v0.9.0` tagged** (close-out commit + annotated tag):
+  v1.0-rc schema cleanup + publish-readiness scaffolding shipped.
+  CHANGELOG `[Unreleased]` → `[v0.9.0]` split (boundary covers both
+  PR #46 publish-readiness + PR #47 schema cleanup); CHANGELOG
+  version-link table + Links section repo URLs bumped
+  `hugs_application_tracker` → `academic-application-tracker`
+  (post-`gh repo rename` cleanup; old URLs auto-redirect forever but
+  canonical form is the new name). Tag annotation lists the two PR
+  scopes + the migration shape + the path-to-v1.0.0 (P3 / P4a / P4b /
+  P5 / P6 / Phase 7 T5 still pending). All seven pre-tag gates green
+  at HEAD: ruff · pyright 0/0 · pytest 883+1xf · `-W
+  error::DeprecationWarning` · status-literal grep · `git status
+  --porcelain exports/` · CI-mirror.
+- 2026-05-05 — **PR #47 merged** (`bf73bdd`, admin-bypass + `--delete-branch`):
+  v1.0-rc schema cleanup landed. Branch
+  `feature/v1-rc-schema-cleanup-confirmation-email` carried 4 commits
+  (`test:` → `feat:` → `chore:` → `review:`) implementing the
+  long-running v1.3 Sub-task 10 split migration's final step:
+  `applications.confirmation_email` TEXT column physically dropped via
+  SQLite 3.35+ `ALTER TABLE ... DROP COLUMN` (idempotent via PRAGMA
+  table_info gate; data-safe — column NULL-only since v1.3). DESIGN
+  §6.3 "Remove a col" amended in same PR with two-shape guidance
+  (DROP COLUMN preferred when constraint-eligible; CREATE-COPY-DROP-
+  RENAME rebuild fallback when not — and the rebuild needs `PRAGMA
+  foreign_keys=OFF` outside the transaction when other tables FK in).
+  Test class `TestV1RcConfirmationEmailDrop` pins 5 properties
+  (column drop · data preservation · PK preservation · idempotency ·
+  E2E pre-v1.3 → split → drop in one `init_db()`); 1 obsolete NULL-
+  clear test + 1 obsolete in-row assertion dropped (rebuild
+  supersedes them). Pre-merge audit surfaced one 🟡 finding (stale
+  "rebuild" naming in test class + comments), fixed inline in `4f3e70d`
+  before merge. Suite 879 → 883 under all seven gates; pyright fence
+  held 0/0.
 - 2026-05-05 — **PR #46 merged** (`3915536`): publish-readiness
   must-haves landed as a single 7-commit PR ahead of the public
   flip. Drove the resume-use launch sequence: privacy redact
@@ -1469,4 +1505,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-05 (Phase 7 closed at `v0.8.0`; suite 879 / 1 xfailed; pyright 0/0; T1-T4 + CL1-CL6 + T6 all ✅; T5 deferred to v1.0-rc with publish scaffolding; v1.0-rc — schema cleanup + publish — is the next milestone)_
+_Updated: 2026-05-05 (v1.0-rc schema cleanup + publish-readiness shipped at `v0.9.0`; main HEAD post-rollup; suite 883 / 1 xfailed; pyright 0/0; remaining v1.0-rc deliverables before `v1.0.0`: P3 dep prune · P4a Streamlit Cloud deploy · P4b walkthrough GIF · P5 cross-doc link verify · P6 v1.0.0 PR + tag · Phase 7 T5 responsive layout check)_

@@ -15,30 +15,31 @@ job tracker without rewriting existing code.
 
 ## Current Status
 
-**Last shipped tag:** `v0.8.0` (Phase 7 — Polish + 6-CL cleanup sub-tier,
-2026-05-05). Phase 7 closes with this tag; UX polish across all four pages
-(urgency glyphs · search bar · `set_page_config` cohesion sweep · confirm-
-dialog audit) plus a six-changelist cleanup sub-tier (CL1 pyright fence ·
-CL2 `config.py` lifts · CL3 `tests/helpers.py` extraction · CL4 batched UX
-fixes · CL5 doc-drift sweep · CL6 process amendment + retroactive doc trim).
-Suite at 879 passed + 1 xfailed; pyright fence holds 0/0.
+**Last shipped tag:** `v0.9.0` (v1.0-rc schema cleanup + publish-readiness
+scaffolding, 2026-05-05). Schema cleanup (PR #47) physically dropped the
+legacy `applications.confirmation_email` column via SQLite 3.35+
+`ALTER TABLE DROP COLUMN`, closing the v1.3 Sub-task 10 split migration.
+Publish-readiness (PR #46) added MIT `LICENSE` + public-facing
+`README.md` + repo rename to `academic-application-tracker` + doc-tier
+reorg moving dev-process artifacts to `docs/internal/` + Python
+`>=3.11` floor declaration. Suite at 883 passed + 1 xfailed; pyright
+fence holds 0/0.
 
-See [`CHANGELOG.md`](CHANGELOG.md) for full version history; see
-[`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md)
-for the v0.8.0 close-out doc.
+See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** v1.0-rc (schema cleanup + publish scaffolding). Three
-parallel work tracks:
+**In flight:** the rest of v1.0-rc / v1.0.0:
 
-1. **Schema cleanup** — physical drop of `applications.confirmation_email`
-   per DESIGN §6.3 (column has been NULL-only since v1.3 Sub-task 10).
-2. **Publish scaffolding** — `README.md` + `LICENSE` + repo rename shipped
-   via PR #46; remaining: screenshots, architecture diagram, demo seed
-   script, Streamlit Cloud deploy or recorded GIF, doc-drift sweep on
-   `streamlit-state-gotchas.md` #13 + #14, CI matrix expansion to
-   3.11/3.12/3.13/3.14 (declared floor is 3.11 per `pyproject.toml`).
-3. **T5 from Phase 7** — responsive layout check at 1024 / 1280 / 1440 /
-   1680 widths; bundles with screenshots above.
+1. **P4a Live demo** — Streamlit Cloud deploy (verify SQLite ephemeral-
+   storage behavior or arrange persistence). User-driven.
+2. **P4b Walkthrough GIF** — recorded short walkthrough committed to
+   `docs/`. Bundles with **Phase 7 T5** (responsive layout at 1024 /
+   1280 / 1440 / 1680 widths — screenshots to
+   `docs/ui/screenshots/v1.0.0/`).
+3. **P3 dep prune + P5 cross-doc verify** — implementer-eligible
+   polish; low-impact. (Gotchas #13 / #14 doc-drift already closed
+   on `f4c39f7`.)
+4. **P6** — `v1.0.0` PR + tag + GitHub release notes once P4a or P4b
+   lands.
 
 ---
 
@@ -54,8 +55,9 @@ v1.0 ships when **all four** are true:
 3. ⏳ **Working demo path** — either a live [Streamlit
    Cloud](https://streamlit.io/cloud) instance or a recorded walkthrough
    GIF in `docs/`.
-4. ⏳ **Schema cleanup** — physical drop of legacy `confirmation_email`
-   column per DESIGN §6.3 closes the v1.3 split migration loop.
+4. ✅ **Schema cleanup** — physical drop of legacy `confirmation_email`
+   column per DESIGN §6.3 (PR #47, `v0.9.0`) closed the v1.3 split
+   migration loop.
 
 ### Nice-to-have (not binding)
 - ✅ Pre-commit (ruff) + GitHub Actions CI green on main
@@ -77,8 +79,8 @@ v1.0 ships when **all four** are true:
 | 5 | Applications + Recommenders pages | ✅ shipped @ `v0.6.0` |
 | 6 | Full exports + Export page | ✅ shipped @ `v0.7.0` |
 | 7 | Polish (urgency colors, search, confirm dialogs, cleanup sub-tier) | ✅ shipped @ `v0.8.0` |
-| v1.0-rc | Schema cleanup + publish scaffolding + T5 responsive | ⏳ in flight |
-| v1.0 | Tag + GitHub release + Streamlit Cloud demo | ⏳ pending |
+| v1.0-rc | Schema cleanup + publish-readiness scaffolding | ✅ shipped @ `v0.9.0` |
+| v1.0 | Demo path (Cloud deploy or walkthrough GIF) + T5 responsive + tag + GitHub release | ⏳ in flight |
 
 Per-tier detail lives in `CHANGELOG.md` version blocks (forensic record from
 when each tier shipped) and in `reviews/<phase>-finish-cohesion-smoke.md`
