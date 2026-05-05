@@ -2668,22 +2668,25 @@ class TestConfirmationSplitMigration:
         assert row_second["confirmation_date"] == row_first["confirmation_date"]
 
 
-# ── v1.0-rc applications rebuild: drop legacy confirmation_email column ───────
-# DESIGN §6.3 "Remove a col" requires CREATE-COPY-DROP-RENAME because SQLite
-# lacks ALTER TABLE DROP COLUMN for arbitrary column positions on tables with
-# triggers / FKs. Pre-v1.0-rc DBs carry the legacy `confirmation_email TEXT`
-# column NULL-cleared by the v1.3 Sub-task 10 split migration; post-rebuild
-# DBs drop it entirely. The rebuild is idempotent via PRAGMA table_info check
-# and runs inside the existing _connect transaction so partial failure rolls
-# back cleanly.
+# ── v1.0-rc applications drop: drop legacy confirmation_email column ─────────
+# DESIGN §6.3 "Remove a col" prefers `ALTER TABLE ... DROP COLUMN` (SQLite
+# 3.35+) when the dropped column carries no PK / UNIQUE / INDEX / FK-ref /
+# CHECK / generated-column constraint — `confirmation_email` satisfies all
+# five, so the one-line DROP COLUMN replaces the CREATE-COPY-DROP-RENAME
+# rebuild that older SQLite required. Pre-v1.0-rc DBs carry the legacy
+# `confirmation_email TEXT` column NULL-cleared by the v1.3 Sub-task 10 split
+# migration; post-drop DBs drop it entirely. The drop is idempotent via
+# PRAGMA table_info check and runs inside the existing _connect transaction
+# so partial failure rolls back cleanly.
 
 
-class TestV1RcConfirmationEmailRebuild:
+class TestV1RcConfirmationEmailDrop:
     """v1.0-rc / DESIGN §6.3 "Remove a col" — physically drop the legacy
-    `applications.confirmation_email` TEXT column via CREATE-COPY-DROP-RENAME.
-    The column has been NULL-only since v1.3 Sub-task 10 (no caller writes to
-    it; the split UPDATE NULL-clears it after value extraction). The rebuild
-    is the final step of the long-running split migration."""
+    `applications.confirmation_email` TEXT column via `ALTER TABLE ... DROP
+    COLUMN` (SQLite 3.35+). The column has been NULL-only since v1.3
+    Sub-task 10 (no caller writes to it; the split UPDATE NULL-clears it
+    after value extraction). The drop is the final step of the long-running
+    split migration."""
 
     def _seed_post_split_applications(
         self,
