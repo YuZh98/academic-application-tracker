@@ -52,8 +52,8 @@ class TestT1AppShell:
         """Dashboard must render without exception against an empty DB."""
         at = _run_page()
         titles = [el.value for el in at.title]
-        assert "Postdoc Tracker" in titles, (
-            f"Expected page title 'Postdoc Tracker', got: {titles}"
+        assert "Academic Application Tracker" in titles, (
+            f"Expected page title 'Academic Application Tracker', got: {titles}"
         )
 
     def test_page_has_four_kpi_columns(self, db):
@@ -84,8 +84,8 @@ class TestT1AppShell:
         assert "st.set_page_config(" in src, (
             "app.py must call st.set_page_config(...) per DESIGN §8.0."
         )
-        assert 'page_title="Postdoc Tracker"' in src, (
-            "set_page_config must bind page_title=\"Postdoc Tracker\"."
+        assert 'page_title="Academic Application Tracker"' in src, (
+            "set_page_config must bind page_title=\"Academic Application Tracker\"."
         )
         assert 'page_icon="📋"' in src, (
             "set_page_config must bind page_icon=\"📋\" per DESIGN §8.0."

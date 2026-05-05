@@ -52,7 +52,7 @@ from config import EM_DASH
 # switch; layout="wide" is required because the app is data-heavy
 # (filter bar + multi-column applications table + future detail card).
 st.set_page_config(
-    page_title="Postdoc Tracker",
+    page_title="Academic Application Tracker",
     page_icon="📋",
     layout="wide",
 )

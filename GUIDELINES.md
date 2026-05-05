@@ -442,7 +442,7 @@ DESIGN §8.x for each page's panel/widget contract.
 
 1. **Filename**: `pages/N_Title.py` where `N` is the next sort-order
    integer.
-2. **First Streamlit call**: `st.set_page_config(page_title="Postdoc Tracker", page_icon="📋", layout="wide")`
+2. **First Streamlit call**: `st.set_page_config(page_title="Academic Application Tracker", page_icon="📋", layout="wide")`
    — DESIGN §8.0 + D14. Must precede every other `st.*` call; Streamlit
    raises otherwise.
 3. **Schema bootstrap**: `database.init_db()` — idempotent; ensures

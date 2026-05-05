@@ -181,7 +181,7 @@ database.init_db()
 # in line. Must be the first Streamlit call on the page (after this point any
 # other st.* fires page-setup).
 st.set_page_config(
-    page_title="Postdoc Tracker",
+    page_title="Academic Application Tracker",
     page_icon="📋",
     layout="wide",
 )

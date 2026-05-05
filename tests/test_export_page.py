@@ -102,9 +102,9 @@ class TestExportPageShell:
             f"{PAGE} must pass layout='wide' to set_page_config per "
             f"DESIGN §8.0 / D14."
         )
-        assert 'page_title="Postdoc Tracker"' in src, (
+        assert 'page_title="Academic Application Tracker"' in src, (
             'Mirror of every other page: set_page_config must bind '
-            'page_title="Postdoc Tracker".'
+            'page_title="Academic Application Tracker".'
         )
         assert 'page_icon="📋"' in src, (
             'Mirror of every other page: set_page_config must bind '

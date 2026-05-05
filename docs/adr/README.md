@@ -1,7 +1,7 @@
 # Architectural Decision Records
 
 This folder holds **Architectural Decision Records** (ADRs) — one file per decision —
-documenting *why* the Postdoc Tracker is built the way it is.
+documenting *why* the Academic Application Tracker is built the way it is.
 
 ---
 

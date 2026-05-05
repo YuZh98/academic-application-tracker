@@ -27,7 +27,7 @@ import database
 # horizontal room; the default centered layout cramps them at ~750px.
 # Must precede any other `st.*` call — Streamlit raises otherwise.
 st.set_page_config(
-    page_title="Postdoc Tracker",
+    page_title="Academic Application Tracker",
     page_icon="📋",
     layout="wide",
 )
@@ -86,7 +86,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 # on any widget interaction; for a single-user local app a manual refresh
 # is cognitive noise for the common case. (The pre-v1.3 C3-locked Refresh
 # button was removed in Sub-task 12 alongside the DESIGN §8.0 alignment.)
-st.title("Postdoc Tracker")
+st.title("Academic Application Tracker")
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
@@ -112,7 +112,7 @@ next_interview = _next_interview_display(database.get_upcoming_interviews())
 # `test_terminal_only_db_still_shows_hero`) needs updating.
 if tracked == 0 and applied == 0 and interview == 0:
     with st.container(border=True):
-        st.subheader("Welcome to your Postdoc Tracker")
+        st.subheader("Welcome to your Academic Application Tracker")
         st.markdown(
             "You haven't added any positions yet. "
             "Start by logging one — even rough notes — "

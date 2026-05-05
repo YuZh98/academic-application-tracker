@@ -21,7 +21,7 @@ from typing import Iterator
 import pytest
 
 
-# All five pages on the Postdoc Tracker. Order matches the sidebar.
+# All five pages on the Academic Application Tracker. Order matches the sidebar.
 # Add new pages here; the parametrize decorators pick them up
 # automatically.
 PAGE_FILES = [
@@ -163,7 +163,7 @@ class TestSetPageConfigSweep:
       .. code-block:: python
 
          st.set_page_config(
-             page_title="Postdoc Tracker",
+             page_title="Academic Application Tracker",
              page_icon="📋",
              layout="wide",
          )
@@ -190,8 +190,8 @@ class TestSetPageConfigSweep:
         assert "st.set_page_config(" in src, (
             f"{page} must call st.set_page_config(...) per DESIGN §8.0."
         )
-        assert 'page_title="Postdoc Tracker"' in src, (
-            f"{page} must bind page_title=\"Postdoc Tracker\" "
+        assert 'page_title="Academic Application Tracker"' in src, (
+            f"{page} must bind page_title=\"Academic Application Tracker\" "
             f"(locked across every page per DESIGN §8.0 / D14)."
         )
         assert 'page_icon="📋"' in src, (

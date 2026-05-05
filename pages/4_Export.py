@@ -30,7 +30,7 @@ import exports
 # DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
 # with wide layout. Must precede any other st.* call.
 st.set_page_config(
-    page_title="Postdoc Tracker",
+    page_title="Academic Application Tracker",
     page_icon="📋",
     layout="wide",
 )

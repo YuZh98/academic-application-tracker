@@ -2,8 +2,16 @@
 # the project is a Streamlit app, not a published package; install via
 # requirements.txt + venv per GUIDELINES §1.
 
+[project]
+# Python floor declared so pip warns users on too-old interpreters; the
+# project itself is not a published package (no [build-system] block) —
+# install path is `pip install -r requirements.txt` per GUIDELINES §1.
+# Floor is 3.11 because that's the lowest version pandas 3.0 + numpy 2.4
+# (pinned in requirements.txt) support; the dev environment uses 3.14.
+requires-python = ">=3.11"
+
 [tool.ruff]
-target-version = "py314"
+target-version = "py311"
 line-length = 100
 extend-exclude = [
     "docs",       # contains screenshot seed snippets, not source
@@ -34,7 +42,7 @@ indent-style = "space"
 # point ("basic" mode) — strict would require widespread additional
 # annotations and is out of scope here. Re-runs of pyright against this
 # config must stay clean for every subsequent PR (CI gate).
-pythonVersion = "3.14"
+pythonVersion = "3.11"
 typeCheckingMode = "basic"
 # Scope to project source + tests. Top-level files like requirements.txt,
 # pyproject.toml itself, and CI configs aren't Python so don't need
