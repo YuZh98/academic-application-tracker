@@ -253,9 +253,9 @@ scaffolding (PR #46 — README + LICENSE + repo rename + docs reorg).
 
 - **P4a** Live demo: deploy to Streamlit Cloud (note: SQLite ephemeral storage caveat — verify behavior or arrange persistence). User-driven.
 - **P4b** Recorded GIF / short walkthrough committed to `docs/`. User-driven (manual capture); bundles naturally with **Phase 7 T5** (responsive layout check at 1024 / 1280 / 1440 / 1680 widths — screenshots to `docs/ui/screenshots/v1.0.0/`).
-- **P3** `requirements.txt` transitive-dep prune (`pip freeze` → drop unused). Implementer-eligible; low-impact.
-- **P5** Cross-doc link verification across spec docs + dev-notes (gotchas #13 / #14 already closed on `f4c39f7`). Implementer-eligible.
 - **P6** `v1.0.0` PR + tag + GitHub release notes. Orchestrator + user.
+
+(P3 dep audit + P5 cross-doc link verify closed 2026-05-05.)
 
 Wait for the orchestrator to refresh this block with a specific
 sub-tier spec before starting implementer work.

@@ -35,11 +35,10 @@ See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
    `docs/`. Bundles with **Phase 7 T5** (responsive layout at 1024 /
    1280 / 1440 / 1680 widths — screenshots to
    `docs/ui/screenshots/v1.0.0/`).
-3. **P3 dep prune + P5 cross-doc verify** — implementer-eligible
-   polish; low-impact. (Gotchas #13 / #14 doc-drift already closed
-   on `f4c39f7`.)
-4. **P6** — `v1.0.0` PR + tag + GitHub release notes once P4a or P4b
+3. **P6** — `v1.0.0` PR + tag + GitHub release notes once P4a or P4b
    lands.
+
+(P3 dep audit + P5 cross-doc link verify closed 2026-05-05.)
 
 ---
 
