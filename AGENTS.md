@@ -185,8 +185,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 
 ## Current state (updated after each merged PR)
 
-**Latest tag:** `v0.7.0` (Phase 6 complete — Exports + Export page)
-**`main` HEAD:** Phase 7 cleanup CL6 closed (`bc1017e`); test suite at 879 passed + 1 xfailed; pyright fence holds (0/0); `--delete-branch` codified in post-merge ritual + older review-doc Findings tables + older CHANGELOG version blocks aligned to §14.4 / §10 conventions
+**Latest tag:** `v0.8.0` (Phase 7 complete — Polish + 6-CL cleanup sub-tier)
+**`main` HEAD:** Phase 7 closed at `v0.8.0`; test suite at 879 passed + 1 xfailed; pyright fence holds (0/0); next milestone is v1.0-rc (schema cleanup + publish scaffolding)
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -211,7 +211,7 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T5 — Export page (`st.download_button` per file) | ✅ PR #36 | three `st.download_button` widgets (one per locked filename) + `st.divider()` + `st.subheader("Download")` section header; `disabled=True` + `data=b""` when file absent, `data=Path.read_bytes()` when present; stacked layout above existing T4 mtime line |
 | T6 — Phase 6 close-out + tag `v0.7.0` | ✅ | Cohesion-smoke at [`reviews/phase-6-finish-cohesion-smoke.md`](reviews/phase-6-finish-cohesion-smoke.md); CHANGELOG `[v0.7.0]` split |
 
-### Phase 7 — Polish
+### Phase 7 — Polish ✅ closed at `v0.8.0`
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -219,9 +219,9 @@ pages/*.py  ← imports database, config; NEVER imports exports
 | T2 — Position search bar on Opportunities | ✅ PR #38 | `filter_search` text_input prepended to filter row; `position_name` substring (case-insensitive, regex=False, NaN-safe); AND-combined with status/priority/field |
 | T3 — `set_page_config` sweep on remaining pages | ✅ PR #39 | New `tests/test_pages_cohesion.py::TestSetPageConfigSweep` (10 parametrized tests) pins locked-kwargs source-grep + first-Streamlit-statement AST walk; audit found all 5 pages already conform — verification-only PR (no production code touched) |
 | T4 — Confirm-dialog audit | ✅ PR #40 | New `TestConfirmDialogAudit` (11 tests across 3 destructive paths); audit surfaced + fixed real bug (position-delete dialog warning was missing "interview" from FK cascade enumeration) |
-| **Cleanup + polish sub-tier** (CL1–CL6) | ✅ closed | Inserted between T4 and T5 — Pyright CI fence, `config.py` lifts, test-helper extraction, batched UX polish, code-area doc-drift fix, orchestrator process + retroactive doc trim. See sub-table below. |
-| T5 — Responsive layout check (1024/1280/1440/1680) | 🔲 next (user-driven) | resumes after CL6 close — manual capture at 1024 / 1280 / 1440 / 1680 widths |
-| T6 — Phase 7 close-out + tag `v0.8.0` | 🔲 | after T5 |
+| **Cleanup + polish sub-tier** (CL1–CL6) | ✅ closed | Inserted between T4 and T5 — Pyright CI fence, `config.py` lifts, test-helper extraction, batched UX polish, code-area doc-drift fix, orchestrator process + retroactive doc trim + pre-tag drift trim. See sub-table below. |
+| T5 — Responsive layout check (1024/1280/1440/1680) | ⏭️ deferred to v1.0-rc | No Chrome DevTools MCP available; bundles naturally with publish-scaffolding tier (`README.md` screenshots + deploy verification). Documented in [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md). |
+| T6 — Phase 7 close-out + tag `v0.8.0` | ✅ | Cohesion-smoke at [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md); CHANGELOG `[v0.8.0]` split |
 
 ### Phase 7 cleanup + polish sub-tier (between T4 and T5)
 
@@ -234,7 +234,7 @@ User-driven decision (2026-05-04): postpone T5 (responsive layout, user-driven) 
 | **CL3** — `tests/helpers.py` extraction ✅ PR #43 | 4 helpers lifted (link_buttons + decode_mailto + download_buttons + download_button); leading-underscore dropped on lift; paren-anchored rename strategy preserved test method substring matches. | Implementer | done |
 | **CL4** — Phase 7 polish batched ✅ PR #44 | Four UX fixes shipped in one PR (4 commits): (1) save-toast wording branched on dirty diff in apps_detail_form + per-row interview save + recs_edit_form (apps_detail_form gained dirty-diff infrastructure — no-op skips DB write AND R1/R3 cascade, pinned by spy test); (2) `_build_compose_mailto` subject branches on `n_positions` (N=1 → singular; N≥2 → plural); DESIGN §8.4 line 631 amended; (3) `app.py` empty-DB hero `st.write` → `st.markdown` (lone outlier in cross-page convention); (4) 5 empty-state strings lifted to per-surface `config.py` constants. Suite 875 → 879 under all seven gates (4 new tests). Pyright fence held (0/0). Branch auto-deleted on merge. Three 🟡 doc-drift findings (history-as-guidance leak in DESIGN.md line 631 + `_build_compose_mailto` docstring + repeated "Phase 7 CL4 Fix N:" comments) deferred to CL5. | Implementer | done |
 | **CL5** — CL4 doc-drift carry-overs (code-area) ✅ PR #45 | 3 trims shipped (DESIGN line 631 back-ref clause drop + `_build_compose_mailto` docstring rewrite to forward-looking rule + ~17-site sweep across 4 source + 4 test files + config.py section header). Full-sweep outcome — `grep -rn "Phase 7 CL4 Fix"` returns 0 matches. Forward-looking invariants kept (cascade-safety note + dirty-diff design rationale + "pin against constant by name"); change-log noise dropped. Pyright fence held (0/0). | Implementer | done |
-| **CL6** — Process + retroactive doc drift ✅ `04fa7a3` + `bc1017e` | Shipped as two split commits on main (no PR — orchestrator-only). CL6a (`04fa7a3`): `--delete-branch` codified in `ORCHESTRATOR_HANDOFF.md` "Recurring post-merge ritual" (5 consecutive proven uses CL1-CL5). CL6b (`bc1017e`): Phase 6 T2/T3/T4 review docs — Findings tables stripped of `Kept by design` rows per `GUIDELINES §10` (T2: 4→1, T3: 4→2, T4: 4→2) with kept-by-design coverage routed to existing Q&A entries (T4 added Q7 covering wireframe-pinned `── Download ───` section-header omission); CHANGELOG `[v0.4.0]` / `[v0.3.0]` / `[v0.2.0]` / `[v0.1.0]` gained forensic-preservation framing paragraphs matching the existing `[v0.7.0]` / `[v0.6.0]` / `[v0.5.0]` pattern (pre-§14.4 entries explicitly preserved as forensic record; content untouched). | Orchestrator | done |
+| **CL6** — Process + retroactive doc drift ✅ `04fa7a3` + `bc1017e` + `079564b` | Shipped as three split commits on main (no PR — orchestrator-only). CL6a (`04fa7a3`): `--delete-branch` codified in `ORCHESTRATOR_HANDOFF.md` "Recurring post-merge ritual" (5 consecutive proven uses CL1-CL5). CL6b (`bc1017e`): Phase 6 T2/T3/T4 review docs — Findings tables stripped of `Kept by design` rows per `GUIDELINES §10` (T2: 4→1, T3: 4→2, T4: 4→2) with kept-by-design coverage routed to existing Q&A entries (T4 added Q7 covering wireframe-pinned `── Download ───` section-header omission); CHANGELOG `[v0.4.0]` / `[v0.3.0]` / `[v0.2.0]` / `[v0.1.0]` gained forensic-preservation framing paragraphs matching the existing `[v0.7.0]` / `[v0.6.0]` / `[v0.5.0]` pattern (pre-§14.4 entries explicitly preserved as forensic record; content untouched). CL6c (`079564b`): pre-tag comprehensive audit surfaced 5 nits (DESIGN history-as-guidance × 2, GUIDELINES checklist parenthetical, TASKS footer hash stale, CHANGELOG bare placard) — all fixed in single commit. | Orchestrator | done |
 
 ### What's after Phase 7
 v1.0-rc schema cleanup, then publish scaffolding (README, LICENSE,
@@ -242,16 +242,22 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — _none queued for implementer (T5 is user-driven)_
+## Immediate task — _none queued for implementer (Phase 7 closed at `v0.8.0`; v1.0-rc next)_
 
-CL1-CL6 closed. Phase 7 cleanup sub-tier shipped in full. **T5
-(responsive layout check) is the next functional task and is
-user-driven** — manual capture at 1024 / 1280 / 1440 / 1680
-widths with screenshots committed to
-`docs/ui/screenshots/v0.8.0/`. The user runs T5 directly; the
-orchestrator only documents the result and rolls up the tracker.
-Wait for the orchestrator to refresh this block with a T5 spec
-(or a T6 close-out spec) before starting.
+Phase 7 closed at `v0.8.0` (2026-05-05). T5 (responsive layout)
+deferred to v1.0-rc — no Chrome DevTools MCP available; bundles
+naturally with publish-scaffolding tier (`README.md` screenshots,
+deploy verification, recorded demo). Cohesion-smoke + tag-prep
+detail in [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md).
+
+**v1.0-rc deliverables** (per `TASKS.md` "Up next"):
+
+- **Schema cleanup** — physical drop of `applications.confirmation_email` per DESIGN §6.3 "Pending column drops" (single-commit table rebuild via CREATE-COPY-DROP-RENAME inside one transaction; idempotent via `PRAGMA table_info` check).
+- **Publish scaffolding** — `README.md`, `LICENSE`, `requirements.txt` audit, Streamlit Cloud deploy or recorded GIF, doc-drift sweep (`gotcha #14` Refresh-button mention + `gotcha #13` interview1_date/interview2_date drift).
+- **T5 from Phase 7** — responsive layout check at 1024 / 1280 / 1440 / 1680 widths; screenshots to `docs/ui/screenshots/v1.0.0/` (folder rename — was scoped to `v0.8.0/`).
+
+Wait for the orchestrator to refresh this block with a v1.0-rc
+sub-tier spec before starting.
 
 ---
 

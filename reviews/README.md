@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-05 | Phase 7 finish — cohesion smoke + close-out (T6 — `v0.8.0` tag) | _(direct-to-main; orchestrator close-out doc)_ | Approve `v0.8.0` tag | [phase-7-finish-cohesion-smoke.md](phase-7-finish-cohesion-smoke.md) |
 | 2026-05-05 | Phase 7 cleanup CL5 — CL4 doc-drift carry-overs (3 trims) | `feature/phase-7-cleanup-CL5-DocDriftTrim` | Approve | [phase-7-CL5-review.md](phase-7-CL5-review.md) |
 | 2026-05-05 | Phase 7 cleanup CL4 — Phase 7 polish batched (4 UX fixes) | `feature/phase-7-cleanup-CL4-PolishBatched` | Approve with carry-overs (3 🟡 doc-drift findings deferred to CL5) | [phase-7-CL4-review.md](phase-7-CL4-review.md) |
 | 2026-05-04 | Phase 7 cleanup CL3 — `tests/helpers.py` extraction | `feature/phase-7-cleanup-CL3-TestHelpers` | Approve | [phase-7-CL3-review.md](phase-7-CL3-review.md) |

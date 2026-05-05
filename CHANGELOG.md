@@ -17,6 +17,12 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+_(empty)_
+
+## [v0.8.0] — 2026-05-05 — Phase 7: Polish (UX micro-fixes + 6-CL cleanup sub-tier)
+
+_v0.8.0 closes Phase 7 — UX polish across the four existing pages (T1 urgency glyphs · T2 position search bar · T3 `set_page_config` cohesion sweep · T4 confirm-dialog audit + position cascade-copy fix) plus a six-changelist cleanup sub-tier (CL1 pyright fence in CI · CL2 `config.py` lifts closing C2 + C3 · CL3 `tests/helpers.py` extraction · CL4 four batched UX fixes · CL5 CL4 doc-drift sweep · CL6 process amendment + retroactive doc trim). Four pre-merge tier reviews + six pre-merge changelist reviews + the close-out cohesion-smoke at [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md) verified every architectural choice. Three durable structural changes shipped during Phase 7: the pyright fence in CI (held 0/0 across 4 consecutive refactor PRs, catching new drift at PR boundary rather than letting it accumulate), `tests/test_pages_cohesion.py` (two pinning suites — `TestSetPageConfigSweep` + `TestConfirmDialogAudit` — that assert cross-page structural invariants the per-page tests miss), and `gh pr merge --delete-branch` codified in the orchestrator post-merge ritual. T5 (responsive layout check) deferred to v1.0-rc — no Chrome DevTools MCP available; bundles naturally with publish scaffolding. Suite climbed 834 → 879 (+45 tests, 1 xfail unchanged) across the phase. No schema migration required._
+
 ### Added
 - Add 5 per-surface empty-state copy constants on `config.py` (`EMPTY_FILTERED_POSITIONS`, `EMPTY_NO_POSITIONS`, `EMPTY_FILTERED_APPLICATIONS`, `EMPTY_PENDING_RECOMMENDERS`, `EMPTY_PENDING_RECOMMENDER_FOLLOWUPS`); 5 hardcoded `st.info(...)` strings updated to consume the constants; per-page tests assert against the constants by name. PR #44 (`9a5eded`) · [review](reviews/phase-7-CL4-review.md)
 - Add shared `tests/helpers.py` with 4 AppTest helpers (`link_buttons`, `decode_mailto`, `download_buttons`, `download_button`); paren-anchored rename strategy preserved test method substring matches. PR #43 (`479aa15`) · [review](reviews/phase-7-CL3-review.md)
@@ -2648,7 +2654,8 @@ _v0.1.0 closes Phase 3 — `pages/1_Opportunities.py` lands across five tiers (Q
 
 ## Version links
 
-[Unreleased]: https://github.com/YuZh98/hugs_application_tracker/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/YuZh98/hugs_application_tracker/compare/v0.8.0...HEAD
+[v0.8.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.8.0
 [v0.7.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.7.0
 [v0.6.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.6.0
 [v0.5.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.5.0
