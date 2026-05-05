@@ -18,6 +18,7 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
+- Add shared `tests/helpers.py` with 4 AppTest helpers (`link_buttons`, `decode_mailto`, `download_buttons`, `download_button`); paren-anchored rename strategy preserved test method substring matches. PR #43 (`479aa15`) · [review](reviews/phase-7-CL3-review.md)
 - Add `config.urgency_glyph(days_away: int | None) -> str` function (lifted from `database.py::_urgency_glyph` + `pages/1_Opportunities.py::_deadline_urgency`); `EM_DASH`, `FILTER_ALL`, `REMINDER_TONES` constants on `config.py` (lifted from 5 / 3 / 1 duplicate sites respectively). Closes carry-overs C2 + C3. PR #42 (`bd76d29`) · [review](reviews/phase-7-CL2-review.md)
 - Add pyright type-check fence to CI (basic mode, pythonVersion 3.14, `pyright==1.1.409` pinned); `pyright .` row added to standing pre-commit checklists. PR #41 (`eac75c3`) · [review](reviews/phase-7-CL1-review.md)
 - Add `TestConfirmDialogAudit` to `tests/test_pages_cohesion.py` — 11 tests across 3 destructive paths pinning dialog title shape, irreversibility cue, cascade-effect copy enumeration, dialog-gating of every `database.delete_*` caller, and failure-preserves-pending-sentinel. PR #40 (`952f0e9`) · [review](reviews/phase-7-tier4-review.md)

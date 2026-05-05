@@ -19,6 +19,7 @@ follow.
 
 | Date | Scope | Branch | Verdict | Link |
 |---|---|---|---|---|
+| 2026-05-04 | Phase 7 cleanup CL3 — `tests/helpers.py` extraction | `feature/phase-7-cleanup-CL3-TestHelpers` | Approve | [phase-7-CL3-review.md](phase-7-CL3-review.md) |
 | 2026-05-04 | Phase 7 cleanup CL2 — `config.py` lifts (4 + drop TRACKER_PROFILE) | `feature/phase-7-cleanup-CL2-ConfigLifts` | Approve | [phase-7-CL2-review.md](phase-7-CL2-review.md) |
 | 2026-05-04 | Phase 7 cleanup CL1 — pyright type-check fence + 45-error drift cleanup | `feature/phase-7-cleanup-CL1-PyrightCI` | Approve | [phase-7-CL1-review.md](phase-7-CL1-review.md) |
 | 2026-05-04 | Phase 7 T4 — Confirm-dialog audit + position cascade-copy fix | `feature/phase-7-tier4-ConfirmDialogAudit` | Approve | [phase-7-tier4-review.md](phase-7-tier4-review.md) |

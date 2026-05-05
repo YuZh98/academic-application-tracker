@@ -885,7 +885,34 @@ All defensible. Merged via PR #36 (`73a04c4`).
       commits, one per lift/drop) for clean per-line `git blame`
       attribution. Branch auto-deleted on merge via
       `--delete-branch`. Merged via PR #42 (`bd76d29`).
-- [ ] **CL3** `tests/helpers.py` extraction (next)
+- [x] **CL3** `tests/helpers.py` extraction — 4 AppTest helpers
+      lifted verbatim from per-page test files into shared
+      `tests/helpers.py` module: `link_buttons` + `decode_mailto`
+      (was page-local in `test_recommenders_page.py`),
+      `download_buttons` + `download_button` (was page-local in
+      `test_export_page.py`). Leading-underscore dropped on lift
+      (helpers go from page-test-private to test-module-public).
+      **Paren-anchored rename strategy** (`_helper(` → `helper(`)
+      preserved test method substring matches like
+      `test_three_download_buttons_render` (which contains
+      `download_buttons` as a substring of the test method name) —
+      a naive substring rename would have corrupted the test
+      method name into a mangled form, breaking pytest collection.
+      Worth recording as precedent for future rename-on-lift
+      refactors. New `tests/test_helpers.py` with 5 smoke tests:
+      import-compat (callable check on all 4 names) +
+      `decode_mailto` round-trip + URL-decoding + missing-fields
+      defaulting + non-`mailto:` scheme rejection. The three
+      AppTest-dependent helpers (`link_buttons`,
+      `download_buttons`, `download_button`) get only the
+      import-compat smoke check — their behavioural coverage is
+      the 114 existing tests in the consumer files. **Pyright
+      fence held through the lift** — 0/0 post-CL3, confirming no
+      type drift. Suite 870 → 875 under all seven gates. Two
+      commits on branch (refactor + smoke tests). Branch
+      auto-deleted on merge via `--delete-branch`. Merged via
+      PR #43 (`479aa15`).
+- [ ] **CL4** Phase 7 polish batched (next)
 - [ ] **CL4** Phase 7 polish batched (4 UX fixes)
 - [ ] **CL5** Doc drift retroactive trim + branch-cleanup ritual
       amendment (orchestrator)
@@ -929,6 +956,14 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-04 — **PR #43 merged** (`479aa15`): Phase 7 cleanup CL3
+  shipped — 4 AppTest helpers extracted to `tests/helpers.py`
+  (link_buttons + decode_mailto + download_buttons + download_button).
+  Paren-anchored rename strategy (`_helper(` → `helper(`)
+  preserved test method substring matches. New `tests/test_helpers.py`
+  with 5 smoke tests. Pyright fence held (0/0). Suite 870 → 875
+  under all seven gates. Pre-merge review at
+  [`reviews/phase-7-CL3-review.md`](reviews/phase-7-CL3-review.md).
 - 2026-05-04 — **PR #42 merged** (`bd76d29`): Phase 7 cleanup CL2
   shipped — 4 lifts to `config.py` (EM_DASH, urgency_glyph,
   FILTER_ALL, REMINDER_TONES) + drop of TRACKER_PROFILE block.
@@ -1222,4 +1257,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 cleanup CL2 merged via PR #42; main HEAD `bd76d29`; suite 870 / 1 xfailed; carry-overs C2 + C3 closed; Phase 7 cleanup CL3 — `tests/helpers.py` extraction next; T5 postponed until CL5 closes)_
+_Updated: 2026-05-04 (Phase 7 cleanup CL3 merged via PR #43; main HEAD `479aa15`; suite 875 / 1 xfailed; `tests/helpers.py` shared; Phase 7 cleanup CL4 — Phase 7 polish batched next; T5 postponed until CL5 closes)_
