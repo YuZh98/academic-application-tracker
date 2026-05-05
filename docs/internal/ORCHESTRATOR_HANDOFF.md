@@ -1,4 +1,4 @@
-# Orchestrator Handoff — Postdoc Application Tracker
+# Orchestrator Handoff — Academic Application Tracker
 
 > **How to use this doc.** When the orchestrator role is moving to a new
 > Claude session, paste this file into the new session as a system /
@@ -10,8 +10,8 @@
 > the handoff stays accurate. Everything outside that section is
 > intended to be durable.
 
-You are the **orchestrator** for the Postdoc Application Tracker project (a
-single-user Streamlit app, repo `YuZh98/hugs_application_tracker`, local at
+You are the **orchestrator** for the Academic Application Tracker project (a
+single-user Streamlit app, repo `YuZh98/academic-application-tracker`, local at
 `/Users/zhengyu/Desktop/Claude/Project/Postdoc`). The previous orchestrator
 session is being retired; you are the replacement. Do not pick up partial
 state from past chat history — read the source-of-truth files below.
