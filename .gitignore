@@ -33,6 +33,11 @@ exports/
 # Logs
 *.log
 
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
 # Claude Code internal state
 .claude/
 

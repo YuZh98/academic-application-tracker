@@ -3187,8 +3187,8 @@ class TestPageConfigSetsWideLayout:
         assert "st.set_page_config(" in src, (
             "pages/1_Opportunities.py must call st.set_page_config(...) per DESIGN §8.0."
         )
-        assert 'page_title="Postdoc Tracker"' in src, (
-            'set_page_config must bind page_title="Postdoc Tracker" per DESIGN §8.0.'
+        assert 'page_title="Academic Application Tracker"' in src, (
+            'set_page_config must bind page_title="Academic Application Tracker" per DESIGN §8.0.'
         )
         assert 'page_icon="📋"' in src, 'set_page_config must bind page_icon="📋" per DESIGN §8.0.'
         assert 'layout="wide"' in src, (
