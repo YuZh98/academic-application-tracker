@@ -1047,11 +1047,13 @@ All defensible. Merged via PR #36 (`73a04c4`).
 
 ### Publish scaffolding (per Q7 Option C — both live + recorded GIF)
 
-- [ ] **P1** `README.md` at repo root — what it is, the one daily
+- [x] **P1** `README.md` at repo root — what it is, the one daily
       question it answers, install/run, screenshot, link to DESIGN.md
-- [ ] **P2** `LICENSE` (MIT, per DESIGN §4)
-- [ ] **P3** `requirements.txt` audit + freeze (`pip freeze`, prune
-      unused deps)
+      _(PR #46, screenshot deferred — see P4b)_
+- [x] **P2** `LICENSE` (MIT, per DESIGN §4) _(PR #46)_
+- [~] **P3** `requirements.txt` audit + freeze (`pip freeze`, prune
+      unused deps) _(PR #46 declared `requires-python>=3.11` floor + lowered
+      ruff/pyright targets; transitive-dep prune still pending — low-impact follow-up)_
 - [ ] **P4a** Live demo: deploy to Streamlit Cloud (note: SQLite
       ephemeral storage on Cloud — verify behavior or arrange
       persistence)
@@ -1071,6 +1073,38 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-05 — **PR #46 merged** (`3915536`): publish-readiness
+  must-haves landed as a single 7-commit PR ahead of the public
+  flip. Drove the resume-use launch sequence: privacy redact
+  (drop personal email + visa detail from
+  `docs/internal/ORCHESTRATOR_HANDOFF.md`); doc-tier reorg moving
+  `AGENTS.md` / `ORCHESTRATOR_HANDOFF.md` / `TASKS.md` to
+  `docs/internal/` (DESIGN/GUIDELINES/CHANGELOG/roadmap stay at
+  root as public-readable engineering signal); Python floor
+  `>=3.11` declared in `pyproject.toml [project]` + ruff/pyright
+  targets lowered to match; MIT `LICENSE` added; public-facing
+  `README.md` written (engineering-practices section is the
+  resume-signal carrier — names the 879-test suite, pyright
+  fence, ruff, deprecation-strict gate, cohesion tests,
+  atomic-commit cadence, spec-first design); root cleanup
+  (delete `dashboard.html` + `.coverage`, gitignore `.coverage*`/
+  `htmlcov/`); seed-template archive (move `OPPORTUNITIES.md`/
+  `PROGRESS.md`/`RECOMMENDERS.md` to `docs/seed-templates/` with
+  brief directory README — kept as design-history artifacts per
+  user request); rebrand `Postdoc Tracker` →
+  `Academic Application Tracker` across 18 files (atomic — every
+  user-visible string + spec pin + test assertion flips in one
+  commit). Suite stays 879 + 1 xfailed under all seven gates.
+  Post-merge admin: `gh repo rename hugs_application_tracker →
+  academic-application-tracker` (auto-redirects old URL forever);
+  `gh repo edit` set description + 8 topics (`streamlit`,
+  `python`, `sqlite`, `job-tracker`, `application-tracker`,
+  `phd`, `postdoc`, `academic`); local clone remote URL bumped
+  to new name. Public-flip itself NOT yet executed — paused on
+  user confirmation per "one-way door" rule. Versioning
+  decoupled from public flip per user direction (resume-use
+  launch can land at v0.x; v1.0.0 follows the schema cleanup +
+  Streamlit Cloud demo on the `v1.0-rc` branch).
 - 2026-05-05 — **`v0.8.0` tagged** (close-out commit + annotated
   tag): Phase 7 closed. T6 cohesion-smoke at
   [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md);
