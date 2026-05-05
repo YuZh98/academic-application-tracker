@@ -2480,6 +2480,8 @@ when that release ships.
 
 ## [v0.4.0] — 2026-04-22 — Phase 4 Tier 3: Materials Readiness
 
+_v0.4.0 ships Phase 4 T3 — the Materials Readiness panel on the Dashboard right half-column. Detailed entries below preserve the original forensic record from when this tier shipped — they pre-date the §14.4 short-bullet discipline introduced on `docs/guidelineupdate`._
+
 ### Added
 - Dashboard right half-column panel: two `st.progress` bars
   (`"Ready to submit: N"` / `"Still missing: M"`, values = count /
@@ -2503,6 +2505,8 @@ when that release ships.
 
 ## [v0.3.0] — 2026-04-22 — Phase 4 Tier 2: Application Funnel
 
+_v0.3.0 ships Phase 4 T2 — the Plotly horizontal-bar Application Funnel on the Dashboard left half-column with sparse-dict fill + empty-state branch + locked layout. Detailed entries below preserve the original forensic record from when this tier shipped — they pre-date the §14.4 short-bullet discipline introduced on `docs/guidelineupdate`._
+
 ### Added
 - Plotly horizontal bar funnel from `count_by_status()`, one bar per
   `config.STATUS_VALUES` entry; marker colors from `config.STATUS_COLORS`;
@@ -2525,6 +2529,8 @@ when that release ships.
 ---
 
 ## [v0.2.0] — 2026-04-21 — Phase 4 Tier 1: Dashboard Shell + KPIs
+
+_v0.2.0 ships Phase 4 T1 — `app.py` Dashboard shell with the title bar, 🔄 Refresh button, 4-KPI grid, and empty-DB hero CTA. Detailed entries below preserve the original forensic record from when this tier shipped — they pre-date the §14.4 short-bullet discipline introduced on `docs/guidelineupdate`._
 
 ### Added
 - `app.py` title "Postdoc Tracker" + top-bar 🔄 Refresh button
@@ -2555,6 +2561,8 @@ when that release ships.
 ---
 
 ## [v0.1.0] — 2026-04-20 — Phase 3: Opportunities Page
+
+_v0.1.0 closes Phase 3 — `pages/1_Opportunities.py` lands across five tiers (Quick-Add expander · filter bar · positions table · 4-tab Edit panel · Overview Delete via `@st.dialog`) with the `_safe_str` NaN-pre-seed guard, `_edit_form_sid` widget-value-trap defeat, and the `_skip_table_reset` post-save selection-survival pattern. Detailed entries below preserve the original forensic record from when each tier shipped — they pre-date the §14.4 short-bullet discipline introduced on `docs/guidelineupdate`._
 
 ### Added
 - `pages/1_Opportunities.py` with Tiers 1–5:
