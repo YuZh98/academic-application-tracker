@@ -234,8 +234,6 @@ st.subheader("Pending Alerts")
 _pending_recs = database.get_pending_recommenders()
 
 if _pending_recs.empty:
-    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
-    # wording edit is a one-line change tracked via git blame.
     st.info(config.EMPTY_PENDING_RECOMMENDERS)
 else:
     _today = date.today()
@@ -787,11 +785,6 @@ if "recs_selected_id" in st.session_state:
                     _dirty["notes"] = _w_notes
 
                 try:
-                    # Phase 7 CL4 Fix 1: branch toast wording on the
-                    # dirty diff so a no-op Save reads "No changes to
-                    # save." rather than the mis-claiming `Saved ...`
-                    # toast that used to fire even when no widget
-                    # changed.
                     if _dirty:
                         database.update_recommender(_rec_id, _dirty)
                         st.toast(f'Saved "{_rec_name}".')

@@ -418,7 +418,7 @@ assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
 )
 
 
-# ── Empty-state copy (Phase 7 CL4 lift) ───────────────────────────────────────
+# ── Empty-state copy ──────────────────────────────────────────────────────────
 # Locked copy for the five `st.info(...)` empty-state messages surfaced
 # across the app — one constant per surface (per-surface naming, not a
 # single template, because the wording is intentionally surface-specific:
@@ -427,11 +427,9 @@ assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
 # Recommenders page vs. "recommender follow-ups" on the dashboard
 # distinguishes the page-level vs. alert-panel framing).
 #
-# Lifted to config in Phase 7 cleanup CL4 so a future copy edit is a
-# one-line change tracked in `git blame` against this constant rather
-# than a five-page hunt-and-replace. Tests assert against the constant
-# by name, so a future copy update flows through to assertions
-# automatically — no test churn.
+# Tests assert against these constants by name (not via substring
+# matches on the verbatim string), so a copy edit flows through to
+# assertions without test churn.
 EMPTY_FILTERED_POSITIONS:               str = "No positions match the current filters."
 EMPTY_NO_POSITIONS:                     str = "No positions yet — use Quick Add above to get started."
 EMPTY_FILTERED_APPLICATIONS:            str = "No applications match the current filter."
