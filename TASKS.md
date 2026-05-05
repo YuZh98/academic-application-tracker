@@ -988,12 +988,35 @@ All defensible. Merged via PR #36 (`73a04c4`).
       Fix N: ..." comment blocks repeated across consumer sites.
       Branch auto-deleted on merge via `--delete-branch`. Merged
       via PR #44 (`9a5eded`).
-- [ ] **CL5** Doc drift retroactive trim + branch-cleanup ritual
-      amendment (orchestrator) — adds CL4 carry-overs (DESIGN §8.4
-      line 631 trim + `_build_compose_mailto` docstring trim +
-      "Phase 7 CL4 Fix N:" comment cleanup) to the existing scope
-      (Phase 5 + Phase 6 review docs `Kept by design` row trim;
-      CHANGELOG older blocks; ritual `--delete-branch` codification)
+- [x] **CL5** CL4 doc-drift carry-overs (code-area) — three
+      trims shipped (DESIGN §8.4 line 631 back-reference clause
+      drop + `pages/3_Recommenders.py::_build_compose_mailto`
+      docstring rewrite to forward-looking rule + ~17-site sweep
+      across 4 source + 4 test files + `config.py` section
+      header). Full-sweep outcome — `grep -rn "Phase 7 CL4 Fix"`
+      returns 0 matches post-CL5. Forward-looking invariants kept
+      (cascade-safety note on apps_detail_form save handler +
+      dirty-diff design rationale + "pin against constant by
+      name" reasoning); change-log noise dropped (5 verbatim
+      "lifted to config" comments + 2 toast-wording-branch
+      blocks + config.py section-header CL4 attribution). Test
+      docstrings dropped `Phase 7 CL4 Fix N:` prefix; contract-
+      pinning prose stays. Net 0 test count change (879 → 879);
+      net −50 lines (−97 / +47, mostly comment deletions).
+      **Pyright fence held** through the doc-trim (0/0 post-CL5)
+      — fourth consecutive refactor PR confirming CL1's value.
+      Three commits on branch (one per trim) for clean per-line
+      `git blame`. Branch auto-deleted on merge via
+      `--delete-branch`. Merged via PR #45 (`9dd87d3`).
+- [ ] **CL6** Process amendment + retroactive doc drift
+      (orchestrator-only, runs direct on main) — (a) codify
+      `gh pr merge --delete-branch` in `ORCHESTRATOR_HANDOFF.md`
+      "Recurring post-merge ritual" (5 consecutive proven uses
+      CL1-CL5); (b) retroactive trim of older Phase 5 + Phase 6
+      tier reviews still carrying `Kept by design` rows in
+      Findings tables (per GUIDELINES §10 those belong in Q&A) +
+      older `[v0.6.0]`/`[v0.5.0]`/etc. CHANGELOG blocks (long-
+      form descriptive entries → §14.4 short-form imperatives).
 
 - [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
       widths; capture screenshots to `docs/ui/screenshots/v0.8.0/`
@@ -1034,6 +1057,30 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-05 — **PR #45 merged** (`9dd87d3`): Phase 7 cleanup CL5
+  shipped — 3 trims closing the CL4 doc-drift carry-overs. Full
+  sweep — `grep -rn "Phase 7 CL4 Fix"` returns 0 matches post-CL5.
+  Forward-looking invariants kept; change-log noise dropped.
+  Pyright fence held (0/0; 4th consecutive refactor PR
+  confirming CL1's value). Suite stable at 879 / 1 xfailed under
+  all seven gates. Net −50 lines (mostly comment deletions).
+  Three commits on branch (one per trim) for clean per-line
+  `git blame`. Pre-merge review at
+  [`reviews/phase-7-CL5-review.md`](reviews/phase-7-CL5-review.md).
+- 2026-05-05 — **PR #44 merged** (`9a5eded`): Phase 7 cleanup CL4
+  shipped — 4 batched UX fixes. (1) Save-toast wording branched
+  on dirty diff in apps_detail_form + per-row interview save +
+  recs_edit_form (apps_detail_form gained dirty-diff
+  infrastructure — no-op skips DB write AND R1/R3 cascade,
+  pinned by spy test). (2) `_build_compose_mailto` subject
+  branches on `n_positions` (N=1 → singular; N≥2 → plural);
+  DESIGN §8.4 line 631 amended. (3) `app.py` empty-DB hero
+  `st.write` → `st.markdown` (lone outlier in cross-page
+  convention). (4) 5 empty-state strings lifted to per-surface
+  `config.py` constants. Suite 875 → 879 under all seven gates.
+  Pyright fence held (0/0). 3 🟡 doc-drift findings deferred to
+  CL5 (closed in PR #45 above). Pre-merge review at
+  [`reviews/phase-7-CL4-review.md`](reviews/phase-7-CL4-review.md).
 - 2026-05-04 — **PR #43 merged** (`479aa15`): Phase 7 cleanup CL3
   shipped — 4 AppTest helpers extracted to `tests/helpers.py`
   (link_buttons + decode_mailto + download_buttons + download_button).
@@ -1335,4 +1382,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-04 (Phase 7 cleanup CL3 merged via PR #43; main HEAD `479aa15`; suite 875 / 1 xfailed; `tests/helpers.py` shared; Phase 7 cleanup CL4 — Phase 7 polish batched next; T5 postponed until CL5 closes)_
+_Updated: 2026-05-05 (Phase 7 cleanup CL5 merged via PR #45; main HEAD `9dd87d3`; suite 879 / 1 xfailed; pyright 0/0; CL4 doc-drift carry-overs closed; CL6 — orchestrator process amendment + retroactive doc drift — runs next direct on main; T5 resumes after CL6 closes)_

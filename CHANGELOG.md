@@ -32,6 +32,7 @@ manual steps to run against a pre-existing database.
 - Branch `_build_compose_mailto` subject on `n_positions`: N=1 → singular `letter for 1 postdoc application`; N≥2 → plural `letters for {n} postdoc applications` (unchanged). DESIGN §8.4 line 631 amended in same commit. PR #44 (`9a5eded`)
 - Harmonize `app.py` empty-DB hero copy from `st.write` to `st.markdown` — sole outlier in cross-page convention (markdown for prose, write for ambiguous-type renders). Behaviour identical (`st.write(str)` routes to `st.markdown` internally). PR #44 (`9a5eded`)
 - Trim recent CHANGELOG entries to GUIDELINES §14.4 one-line shape; add bottom link references; restructure phase-6-tier5 + phase-7-tier1 review docs to move `Kept by design` rows from Findings table to Q&A per §10. ([drift audit])
+- Close 3 CL4 doc-drift carry-overs: drop DESIGN §8.4 line 631 back-reference clause; rewrite `_build_compose_mailto` docstring as forward-looking pluralization rule; sweep ~17 `# Phase 7 CL4 Fix N:` inline comments across 4 source + 4 test files + `config.py` section header (full-sweep — 0 matches post-CL5). Forward-looking invariants kept; change-log noise dropped. PR #45 (`9dd87d3`) · [review](reviews/phase-7-CL5-review.md)
 
 ### Removed
 - Drop unused `TRACKER_PROFILE` + `VALID_PROFILES` block + import-time assertion + 4 `TestTrackerProfile` tests from `config.py` / `tests/test_config.py` (carry-over C2 — never read by any module since v1.1 doc refactor). PR #42 (`bd76d29`)
