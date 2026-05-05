@@ -971,13 +971,9 @@ class TestUpsertApplication:
         assert app["applied_date"] == "2026-04-10"  # still set
 
     def test_writes_confirmation_received_and_date_roundtrip(self, db):
-        """Sub-task 10 / DESIGN §6.2 + D19: upsert_application accepts the
-        new `confirmation_received` flag and `confirmation_date` columns
-        and they round-trip via get_application(). The legacy
-        confirmation_email TEXT column is physically retained until the
-        v1.0-rc rebuild drops it (DESIGN §6.3 "leave until a rebuild"),
-        but no caller — including this test — writes to it; new writes
-        land exclusively in the split pair."""
+        """DESIGN §6.2 + D19: upsert_application accepts the
+        `confirmation_received` flag and `confirmation_date` columns
+        and they round-trip via get_application()."""
         pos_id = database.add_position(make_position())
 
         # Flag-only: receipt acknowledged but no date recorded.
@@ -997,13 +993,6 @@ class TestUpsertApplication:
         app = database.get_application(pos_id)
         assert app["confirmation_received"] == 1
         assert app["confirmation_date"] == "2026-04-12"
-
-        # Legacy column stays NULL — no caller (incl. this one) writes to it.
-        assert app["confirmation_email"] is None, (
-            "upsert_application must not populate the legacy "
-            "confirmation_email column; it is scheduled for physical "
-            f"drop in v1.0-rc. Got {app['confirmation_email']!r}"
-        )
 
 
 # ── upsert_application cascade R1 + R3 ────────────────────────────────────────
@@ -2678,41 +2667,240 @@ class TestConfirmationSplitMigration:
         assert row_second["confirmation_received"] == row_first["confirmation_received"]
         assert row_second["confirmation_date"] == row_first["confirmation_date"]
 
-    def test_migration_null_clears_legacy_confirmation_email_column(
+
+# ── v1.0-rc applications rebuild: drop legacy confirmation_email column ───────
+# DESIGN §6.3 "Remove a col" requires CREATE-COPY-DROP-RENAME because SQLite
+# lacks ALTER TABLE DROP COLUMN for arbitrary column positions on tables with
+# triggers / FKs. Pre-v1.0-rc DBs carry the legacy `confirmation_email TEXT`
+# column NULL-cleared by the v1.3 Sub-task 10 split migration; post-rebuild
+# DBs drop it entirely. The rebuild is idempotent via PRAGMA table_info check
+# and runs inside the existing _connect transaction so partial failure rolls
+# back cleanly.
+
+
+class TestV1RcConfirmationEmailRebuild:
+    """v1.0-rc / DESIGN §6.3 "Remove a col" — physically drop the legacy
+    `applications.confirmation_email` TEXT column via CREATE-COPY-DROP-RENAME.
+    The column has been NULL-only since v1.3 Sub-task 10 (no caller writes to
+    it; the split UPDATE NULL-clears it after value extraction). The rebuild
+    is the final step of the long-running split migration."""
+
+    def _seed_post_split_applications(
         self,
         tmp_path,
         monkeypatch,
+        applied_date="2026-03-01",
+        confirmation_received=1,
+        confirmation_date="2026-03-05",
+        result="Pending",
     ):
-        """DESIGN §6.3 step (c): "leave the old column NULL until a
-        follow-up release rebuilds the table to drop it." After the
-        split UPDATEs land the legacy date-shaped value into the
-        (received, date) pair, the source column itself must be NULL —
-        parallels the interview1/2_date NULL-clear in the Sub-task 8
-        migration. Without this, the legacy column carries stale
-        post-split data that no caller reads but that violates the
-        literal DESIGN spec and risks accidental future reads of
-        post-split ghost values.
-        """
-        self._seed_pre_v1_3_applications(
-            tmp_path, monkeypatch, confirmation_email_value="2026-01-15"
+        """Build a post-split, pre-rebuild DB: applications table carries
+        confirmation_email TEXT (NULL-cleared) AND the post-split (received,
+        date) pair populated. Mirrors the realistic state of any DB upgraded
+        from v1.2 to v1.3 — split migration ran on first init_db() after
+        upgrade, leaving confirmation_email = NULL on every row.
+
+        Caller runs database.init_db() and inspects whether the rebuild
+        dropped confirmation_email + preserved the surviving columns'
+        values."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "post_split.db")
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT
+                )
+            """)
+            # Post-split applications shape: confirmation_email TEXT exists
+            # but is NULL on every row (cleared by Sub-task 10 step c). The
+            # (received, date) pair holds the live data. Other columns
+            # included so the rebuild can prove it preserves them.
+            conn.execute("""
+                CREATE TABLE applications (
+                    position_id           INTEGER PRIMARY KEY,
+                    applied_date          TEXT,
+                    all_recs_submitted    TEXT,
+                    confirmation_email    TEXT,
+                    confirmation_received INTEGER DEFAULT 0,
+                    confirmation_date     TEXT,
+                    response_date         TEXT,
+                    response_type         TEXT,
+                    interview1_date       TEXT,
+                    interview2_date       TEXT,
+                    result_notify_date    TEXT,
+                    result                TEXT DEFAULT 'Pending',
+                    notes                 TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute(
+                "INSERT INTO positions (position_name) VALUES ('PostSplitPosition')"
+            )
+            conn.execute(
+                "INSERT INTO applications "
+                "(position_id, applied_date, confirmation_email, "
+                " confirmation_received, confirmation_date, result) "
+                "VALUES (1, ?, NULL, ?, ?, ?)",
+                (applied_date, confirmation_received, confirmation_date, result),
+            )
+
+    def test_rebuild_drops_confirmation_email_column(self, tmp_path, monkeypatch):
+        """After init_db(), PRAGMA table_info(applications) must not list
+        confirmation_email — the rebuild physically dropped it. This is
+        the load-bearing assertion: the column is gone, not just NULL."""
+        self._seed_post_split_applications(tmp_path, monkeypatch)
+        database.init_db()
+        with database._connect() as conn:
+            cols = {row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()}
+        assert "confirmation_email" not in cols, (
+            "v1.0-rc rebuild must drop applications.confirmation_email — "
+            f"it remains in the table after init_db(). Column list: {sorted(cols)!r}"
+        )
+
+    def test_rebuild_preserves_surviving_column_data(self, tmp_path, monkeypatch):
+        """The rebuild copies every surviving column's data via
+        INSERT INTO new SELECT ... FROM old. Pre-rebuild values for
+        applied_date, confirmation_received, confirmation_date, result must
+        round-trip to the post-rebuild table unchanged."""
+        self._seed_post_split_applications(
+            tmp_path,
+            monkeypatch,
+            applied_date="2026-03-01",
+            confirmation_received=1,
+            confirmation_date="2026-03-05",
+            result="Pending",
         )
         database.init_db()
         with database._connect() as conn:
             row = conn.execute(
-                "SELECT confirmation_email, confirmation_received, "
-                "       confirmation_date "
+                "SELECT applied_date, confirmation_received, "
+                "       confirmation_date, result "
                 "FROM applications WHERE position_id = 1"
             ).fetchone()
-        # Sanity-pin the new columns first — the NULL-clear must not
-        # accidentally undo the translation done by the prior UPDATEs.
+        assert row["applied_date"] == "2026-03-01"
         assert row["confirmation_received"] == 1
-        assert row["confirmation_date"] == "2026-01-15"
-        # The DESIGN §6.3 step (c) NULL-clear:
-        assert row["confirmation_email"] is None, (
-            "Legacy confirmation_email must be NULL-cleared after the "
-            "split migration completes (DESIGN §6.3 step (c)). "
-            f"Got {row['confirmation_email']!r}"
+        assert row["confirmation_date"] == "2026-03-05"
+        assert row["result"] == "Pending"
+
+    def test_rebuild_preserves_position_id_primary_key(self, tmp_path, monkeypatch):
+        """position_id is the applications PK + FK target for interviews
+        (interviews.application_id REFERENCES applications.position_id).
+        The rebuild must preserve PK values intact so interview rows
+        keep referencing the same applications rows post-rebuild."""
+        self._seed_post_split_applications(tmp_path, monkeypatch)
+        database.init_db()
+        with database._connect() as conn:
+            row = conn.execute(
+                "SELECT position_id FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert row is not None
+        assert row["position_id"] == 1
+
+    def test_rebuild_is_idempotent_on_post_rebuild_db(self, tmp_path, monkeypatch):
+        """Migrate-once gate: first init_db() runs the rebuild and drops
+        confirmation_email; second init_db() finds the column absent
+        (PRAGMA table_info check) and skips the rebuild. The post-rebuild
+        row state must be identical after the second call."""
+        self._seed_post_split_applications(tmp_path, monkeypatch)
+        database.init_db()
+        with database._connect() as conn:
+            cols_first = {
+                r["name"]
+                for r in conn.execute("PRAGMA table_info(applications)").fetchall()
+            }
+            row_first = conn.execute(
+                "SELECT applied_date, confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert "confirmation_email" not in cols_first
+
+        database.init_db()  # second call must be a no-op for the rebuild
+
+        with database._connect() as conn:
+            cols_second = {
+                r["name"]
+                for r in conn.execute("PRAGMA table_info(applications)").fetchall()
+            }
+            row_second = conn.execute(
+                "SELECT applied_date, confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert cols_second == cols_first, (
+            "Second init_db() must not change the column set — rebuild "
+            f"is not idempotent. First: {sorted(cols_first)!r}; "
+            f"second: {sorted(cols_second)!r}"
         )
+        assert row_second["applied_date"] == row_first["applied_date"]
+        assert row_second["confirmation_received"] == row_first["confirmation_received"]
+        assert row_second["confirmation_date"] == row_first["confirmation_date"]
+
+    def test_rebuild_runs_after_pre_v1_3_split_in_one_init_db(
+        self, tmp_path, monkeypatch
+    ):
+        """End-to-end: a genuine pre-v1.3 DB (carries confirmation_email
+        with a date-shaped value, no confirmation_received / _date) goes
+        through BOTH the split migration AND the v1.0-rc rebuild in a
+        single init_db() invocation. The split runs first (adds the new
+        cols + translates the legacy value + NULL-clears the source); the
+        rebuild runs after (drops the legacy col entirely). Final state:
+        no confirmation_email column, confirmation_received=1,
+        confirmation_date='2026-01-15'."""
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "pre_v1_3.db")
+        monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
+        with database._connect() as conn:
+            conn.execute("""
+                CREATE TABLE positions (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status        TEXT NOT NULL DEFAULT '[SAVED]',
+                    priority      TEXT,
+                    created_at    TEXT DEFAULT (date('now')),
+                    position_name TEXT NOT NULL,
+                    deadline_date TEXT
+                )
+            """)
+            # Pre-v1.3 shape: confirmation_email + interview1/2_date present;
+            # confirmation_received / confirmation_date / interviews sub-table
+            # all absent. init_db() runs every applicable migration on the
+            # first call.
+            conn.execute("""
+                CREATE TABLE applications (
+                    position_id        INTEGER PRIMARY KEY,
+                    applied_date       TEXT,
+                    confirmation_email TEXT,
+                    interview1_date    TEXT,
+                    interview2_date    TEXT,
+                    FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("INSERT INTO positions (position_name) VALUES ('PreV13')")
+            conn.execute(
+                "INSERT INTO applications (position_id, confirmation_email) "
+                "VALUES (1, '2026-01-15')"
+            )
+        database.init_db()
+        with database._connect() as conn:
+            cols = {
+                r["name"]
+                for r in conn.execute("PRAGMA table_info(applications)").fetchall()
+            }
+            row = conn.execute(
+                "SELECT confirmation_received, confirmation_date "
+                "FROM applications WHERE position_id = 1"
+            ).fetchone()
+        assert "confirmation_email" not in cols, (
+            "End-to-end: confirmation_email must be dropped after pre-v1.3 "
+            f"split + v1.0-rc rebuild run in one init_db(). Cols: {sorted(cols)!r}"
+        )
+        assert row["confirmation_received"] == 1, (
+            "Split migration ran before rebuild: legacy date string must "
+            "translate to confirmation_received=1 + confirmation_date set"
+        )
+        assert row["confirmation_date"] == "2026-01-15"
 
 
 # ── recommenders rebuild: confirmed TEXT→INTEGER + reminder_sent split ────────
