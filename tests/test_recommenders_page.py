@@ -1491,13 +1491,16 @@ class TestT6ComposeButton:
         )
 
     def test_subject_uses_locked_string_with_position_count(self, db):
-        """``N`` in the subject equals the recommender's owed-position
-        count. Single position → ``N=1``."""
+        """Phase 7 CL4 Fix 2: at N=1 the subject uses singular ``letter``
+        and singular ``application`` per DESIGN §8.4 (line 631 was
+        amended to follow English pluralization rules — the previous
+        plural-only form read "letters for 1 postdoc applications" at
+        N=1, which is grammatically awkward)."""
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
         compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         decoded = decode_mailto(compose[0].proto.url)
-        expected = "Following up: letters for 1 postdoc applications"
+        expected = "Following up: letter for 1 postdoc application"
         assert decoded["subject"] == expected, (
             f"Subject must be {expected!r}; got {decoded['subject']!r}"
         )
