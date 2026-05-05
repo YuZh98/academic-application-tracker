@@ -17,7 +17,23 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
-_(empty)_
+### Added
+- Add `README.md` at repo root — public-facing front door (hero · features · quick-start · engineering-practices block · project structure · docs index · status · license · acknowledgments). Frames the project for both end-users (clone + run) and code-curious reviewers (the engineering-practices section names the 879-test suite, pyright fence, ruff, deprecation-strict gate, cohesion-pinning tests, atomic-commit cadence, spec-first design). PR #46 (`3915536`).
+- Add `LICENSE` (MIT) at repo root per DESIGN §4. Without it, the GitHub default is "all rights reserved" and visitors legally can't fork or use the code. PR #46 (`3915536`).
+- Add `[project] requires-python = ">=3.11"` to `pyproject.toml` so `pip` warns users on too-old interpreters; floor matches the lowest Python version the pinned `pandas 3.0` + `numpy 2.4` wheels support. PR #46 (`3915536`).
+- Add `docs/seed-templates/` directory with brief `README.md` explaining the role — three pre-app hand-maintained markdown templates archived there as design-history artifacts for future schema revisions. PR #46 (`3915536`).
+
+### Changed
+- Rebrand `Postdoc Tracker` → `Academic Application Tracker` across 18 files (5 `page_title=` bindings + `app.py` `st.title` + empty-DB hero subheader + DESIGN/GUIDELINES §8.0 pins + wireframes ASCII art + ADR/dev-setup prose + README hero + clone URL + 5 test files' assertions). Broadens the framing to cover the multi-stage application flow shared by postdoc / PhD / faculty / fellowship apps — the codebase already serves this audience. History preserved verbatim in `CHANGELOG.md` / `reviews/` / `docs/internal/` / `docs/seed-templates/`. PR #46 (`3915536`).
+- Move `AGENTS.md`, `ORCHESTRATOR_HANDOFF.md`, `TASKS.md` to `docs/internal/`. Pre-public-flip readability — these are dev-process artifacts that overwhelm a casual visitor at root. `DESIGN.md`, `GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md` stay at root (public-readable). Path-stable: cross-references use logical names, not relative-path links (verified by grep). PR #46 (`3915536`).
+- Lower `[tool.ruff] target-version` and `[tool.pyright] pythonVersion` from `"3.14"` to `"3.11"` matching the declared Python floor. Suite + ruff + pyright stay 0/0. PR #46 (`3915536`).
+
+### Removed
+- Drop `dashboard.html` (87KB legacy HTML prototype, unreferenced) and `.coverage` (binary pytest-cov artifact that should never have been tracked); add `.coverage*` + `htmlcov/` patterns to `.gitignore` to prevent re-tracking. PR #46 (`3915536`).
+- Redact personal email + OPT visa-status detail from `docs/internal/ORCHESTRATOR_HANDOFF.md` user profile; name + GitHub handle stay (already public via commit author + repo URL). PR #46 (`3915536`).
+
+### Process
+- Repo renamed `hugs_application_tracker` → `academic-application-tracker` via `gh repo rename`. GitHub auto-redirects the old URL forever. Description + 8 topics (`streamlit`, `python`, `sqlite`, `job-tracker`, `application-tracker`, `phd`, `postdoc`, `academic`) set via `gh repo edit` for discoverability.
 
 ## [v0.8.0] — 2026-05-05 — Phase 7: Polish (UX micro-fixes + 6-CL cleanup sub-tier)
 
