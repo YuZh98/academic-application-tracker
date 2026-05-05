@@ -151,9 +151,9 @@ class TestPendingAlertsPanel:
     """
 
     SUBHEADER = "Pending Alerts"
-    # Phase 7 CL4 Fix 4: pin against config.EMPTY_PENDING_RECOMMENDERS
-    # by name so a future wording edit in config.py flows through here
-    # automatically — no test churn on copy updates.
+    # Pin against the constant by name so a future wording edit in
+    # config.py flows through here automatically — no test churn on
+    # copy updates.
     EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDERS
     BORDER_SOURCE = "st.container(border=True)"
     WARN_GLYPH = "⚠"
@@ -1205,12 +1205,11 @@ class TestRecommenderEditFormSave:
         assert pid > 0
 
     def test_save_with_no_changes_fires_no_changes_toast(self, db):
-        """Phase 7 CL4 Fix 1: clicking Save when the form has no dirty
-        diff against the persisted recommender row fires
-        ``st.toast("No changes to save.")`` instead of the misleading
-        ``Saved "<name>"`` toast that used to fire on every click.
-        The DB layer already gated `update_recommender` on `_dirty`;
-        only the toast wording was previously dishonest."""
+        """Clicking Save when the form has no dirty diff against the
+        persisted recommender row fires
+        ``st.toast("No changes to save.")`` — the
+        ``Saved "<name>"`` toast is reserved for branches with a
+        non-empty dirty diff (signal honesty)."""
         pid = _seed_position(name="Alpha")
         _seed_recommender(pid, recommender_name="Dr. Smith")
         at = _run_page()
@@ -1494,11 +1493,9 @@ class TestT6ComposeButton:
         )
 
     def test_subject_uses_locked_string_with_position_count(self, db):
-        """Phase 7 CL4 Fix 2: at N=1 the subject uses singular ``letter``
-        and singular ``application`` per DESIGN §8.4 (line 631 was
-        amended to follow English pluralization rules — the previous
-        plural-only form read "letters for 1 postdoc applications" at
-        N=1, which is grammatically awkward)."""
+        """At N=1 the subject uses singular ``letter`` and singular
+        ``application`` per DESIGN §8.4 — the spec follows English
+        pluralization rules across the N=1 / N≥2 split."""
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
         compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]

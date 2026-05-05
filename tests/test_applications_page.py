@@ -302,9 +302,9 @@ class TestApplicationsPageTable:
         "Confirmation", "Response", "Result",
     ]
 
-    # Phase 7 CL4 Fix 4: pin against config.EMPTY_FILTERED_APPLICATIONS
-    # by name so a future wording edit in config.py flows through here
-    # automatically — no test churn on copy updates.
+    # Pin against the constant by name so a future wording edit in
+    # config.py flows through here automatically — no test churn on
+    # copy updates.
     EMPTY_COPY = config.EMPTY_FILTERED_APPLICATIONS
 
     def test_table_renders_with_seven_display_columns(self, db):
@@ -1333,12 +1333,10 @@ class TestApplicationsDetailCardSave:
         assert _ss_or_none(at, EDIT_FORM_SID_KEY) == pid
 
     def test_save_with_no_changes_fires_no_changes_toast(self, db):
-        """Phase 7 CL4 Fix 1: clicking Save when the form has no dirty
-        diff against the persisted row fires
-        ``st.toast("No changes to save.")`` instead of the misleading
-        ``Saved "<name>"`` toast that used to fire on every click. The
-        ``Saved`` toast must NOT appear in this branch — that signal
-        is reserved for actual writes."""
+        """Clicking Save when the form has no dirty diff against the
+        persisted row fires ``st.toast("No changes to save.")`` —
+        the ``Saved "<name>"`` toast must NOT appear in this branch
+        (that signal is reserved for actual writes)."""
         pid = database.add_position(make_position(
             {"position_name": "NoOpPos"}
         ))
@@ -1365,14 +1363,13 @@ class TestApplicationsDetailCardSave:
         )
 
     def test_save_with_no_changes_skips_upsert(self, db, monkeypatch):
-        """Phase 7 CL4 Fix 1: a no-op Save must skip the
-        ``database.upsert_application`` call entirely — the empty
-        dirty diff means there is nothing to write and no transition
-        for R1/R3 to fire against. Pins the implementation contract
-        that the page (not just the database layer) elides the call,
-        so the cascade-promotion toast cannot accidentally fire on a
-        no-op (e.g. an idempotent self-write of an existing
-        STATUS_OFFER row)."""
+        """A no-op Save must skip the ``database.upsert_application``
+        call entirely — the empty dirty diff means there is nothing
+        to write and no transition for R1/R3 to fire against. Pins
+        the implementation contract that the page (not just the
+        database layer) elides the call, so the cascade-promotion
+        toast cannot accidentally fire on a no-op (e.g. an idempotent
+        self-write of an existing STATUS_OFFER row)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
@@ -2278,11 +2275,10 @@ class TestApplicationsInterviewSave:
         )
 
     def test_clean_row_save_fires_no_changes_toast(self, db):
-        """Phase 7 CL4 Fix 1: clicking a row's Save with no widget
-        changes fires ``st.toast("No changes to save.")`` instead of
-        the misleading ``Saved interview {seq}.`` toast. The dirty
-        diff is computed inline (it already gated the DB write); only
-        the toast wording was previously dishonest about the no-op."""
+        """Clicking a row's Save with no widget changes fires
+        ``st.toast("No changes to save.")`` — the per-row
+        ``Saved interview {seq}.`` toast is reserved for branches
+        with a non-empty dirty diff."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         iid = database.add_interview(pid, {
