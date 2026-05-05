@@ -17,6 +17,10 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+## [v0.9.0] — 2026-05-05 — v1.0-rc: schema cleanup + publish-readiness scaffolding
+
+_v0.9.0 ships the v1.0-rc work that clears the path to `v1.0.0`. The long-running v1.3 Sub-task 10 split migration finally lands its physical drop step (PR #47 — `applications.confirmation_email` TEXT column physically removed via SQLite 3.35+ `ALTER TABLE DROP COLUMN`; idempotent via `PRAGMA table_info` gate; data-safe — column NULL-only since v1.3). Publish-readiness scaffolding lands ahead of the public flip (PR #46 — MIT `LICENSE`, public-facing `README.md` with engineering-practices block, repo rename `hugs_application_tracker` → `academic-application-tracker`, doc-tier reorg moving dev-process artifacts to `docs/internal/`, `[project] requires-python>=3.11` floor declared, brand `Postdoc Tracker` → `Academic Application Tracker` across 18 files). DESIGN §6.3 "Remove a col" row also gained two-shape guidance (DROP COLUMN preferred when constraint-eligible; rebuild fallback when not). Suite climbs 879 → 883 (+4 net = +5 new − 1 deleted; 1 xfail unchanged); pyright stays 0/0. Schema migration auto-runs on next `init_db()` after pull. Remaining v1.0-rc deliverables before `v1.0.0`: P4a Streamlit Cloud deploy or P4b recorded walkthrough GIF, Phase 7 T5 responsive layout check (deferred — bundles with screenshots), P3 transitive-dep prune, P5 cross-doc link verification, P6 `v1.0.0` PR + tag + GitHub release._
+
 ### Removed
 - **Breaking (auto-migrated):** drop legacy `applications.confirmation_email` TEXT column — column has been NULL-only since v1.3 Sub-task 10 split it into `(confirmation_received, confirmation_date)` pair per DESIGN §6.2 + D19. Closes the long-running split migration's "leave old col NULL until rebuild" step (c). Migration runs automatically on next `init_db()` call after pulling this commit; idempotent on post-drop DBs.
 
@@ -2684,18 +2688,19 @@ _v0.1.0 closes Phase 3 — `pages/1_Opportunities.py` lands across five tiers (Q
 
 ## Version links
 
-[Unreleased]: https://github.com/YuZh98/hugs_application_tracker/compare/v0.8.0...HEAD
-[v0.8.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.8.0
-[v0.7.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.7.0
-[v0.6.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.6.0
-[v0.5.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.5.0
-[v0.4.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.4.0
-[v0.3.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.3.0
-[v0.2.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.2.0
-[v0.1.0]: https://github.com/YuZh98/hugs_application_tracker/releases/tag/v0.1.0
+[Unreleased]: https://github.com/YuZh98/academic-application-tracker/compare/v0.9.0...HEAD
+[v0.9.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.9.0
+[v0.8.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.8.0
+[v0.7.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.7.0
+[v0.6.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.6.0
+[v0.5.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.5.0
+[v0.4.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.4.0
+[v0.3.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.3.0
+[v0.2.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.2.0
+[v0.1.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.1.0
 
 ## Links
 
-- [Git tags](https://github.com/YuZh98/hugs_application_tracker/tags) — one per released version
-- [Pull requests](https://github.com/YuZh98/hugs_application_tracker/pulls) — full history of merged work
+- [Git tags](https://github.com/YuZh98/academic-application-tracker/tags) — one per released version
+- [Pull requests](https://github.com/YuZh98/academic-application-tracker/pulls) — full history of merged work
 - [Roadmap](roadmap.md) — what's coming next

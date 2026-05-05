@@ -185,8 +185,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 
 ## Current state (updated after each merged PR)
 
-**Latest tag:** `v0.8.0` (Phase 7 complete — Polish + 6-CL cleanup sub-tier)
-**`main` HEAD:** Phase 7 closed at `v0.8.0`; test suite at 879 passed + 1 xfailed; pyright fence holds (0/0); next milestone is v1.0-rc (schema cleanup + publish scaffolding)
+**Latest tag:** `v0.9.0` (v1.0-rc schema cleanup + publish-readiness scaffolding)
+**`main` HEAD:** v0.9.0 shipped via PR #46 (publish-readiness) + PR #47 (drop legacy `applications.confirmation_email` column); test suite at 883 passed + 1 xfailed; pyright fence holds (0/0); next milestone is `v1.0.0` (remaining: P4a Streamlit Cloud deploy or P4b walkthrough GIF · Phase 7 T5 responsive layout · P3 dep prune · P5 cross-doc link verify · P6 v1.0.0 tag)
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
@@ -242,22 +242,23 @@ Streamlit Cloud deploy). Full list in `TASKS.md` §"Up next".
 
 ---
 
-## Immediate task — _none queued for implementer (Phase 7 closed at `v0.8.0`; v1.0-rc next)_
+## Immediate task — _none queued for implementer (v0.9.0 just shipped; remaining v1.0-rc work is mostly orchestrator + user-driven)_
 
-Phase 7 closed at `v0.8.0` (2026-05-05). T5 (responsive layout)
-deferred to v1.0-rc — no Chrome DevTools MCP available; bundles
-naturally with publish-scaffolding tier (`README.md` screenshots,
-deploy verification, recorded demo). Cohesion-smoke + tag-prep
-detail in [`reviews/phase-7-finish-cohesion-smoke.md`](reviews/phase-7-finish-cohesion-smoke.md).
+v0.9.0 shipped 2026-05-05 closing two of the three v1.0-rc tracks:
+schema cleanup (PR #47 — `applications.confirmation_email` dropped via
+SQLite 3.35+ `ALTER TABLE DROP COLUMN`) and publish-readiness
+scaffolding (PR #46 — README + LICENSE + repo rename + docs reorg).
 
-**v1.0-rc deliverables** (per `TASKS.md` "Up next"):
+**Remaining `v1.0.0` deliverables** (per `TASKS.md` "Up next"):
 
-- **Schema cleanup** — physical drop of `applications.confirmation_email` per DESIGN §6.3 "Pending column drops" (single-commit table rebuild via CREATE-COPY-DROP-RENAME inside one transaction; idempotent via `PRAGMA table_info` check).
-- **Publish scaffolding** — `README.md`, `LICENSE`, `requirements.txt` audit, Streamlit Cloud deploy or recorded GIF, doc-drift sweep (`gotcha #14` Refresh-button mention + `gotcha #13` interview1_date/interview2_date drift).
-- **T5 from Phase 7** — responsive layout check at 1024 / 1280 / 1440 / 1680 widths; screenshots to `docs/ui/screenshots/v1.0.0/` (folder rename — was scoped to `v0.8.0/`).
+- **P4a** Live demo: deploy to Streamlit Cloud (note: SQLite ephemeral storage caveat — verify behavior or arrange persistence). User-driven.
+- **P4b** Recorded GIF / short walkthrough committed to `docs/`. User-driven (manual capture); bundles naturally with **Phase 7 T5** (responsive layout check at 1024 / 1280 / 1440 / 1680 widths — screenshots to `docs/ui/screenshots/v1.0.0/`).
+- **P3** `requirements.txt` transitive-dep prune (`pip freeze` → drop unused). Implementer-eligible; low-impact.
+- **P5** Cross-doc link verification across spec docs + dev-notes (gotchas #13 / #14 already closed on `f4c39f7`). Implementer-eligible.
+- **P6** `v1.0.0` PR + tag + GitHub release notes. Orchestrator + user.
 
-Wait for the orchestrator to refresh this block with a v1.0-rc
-sub-tier spec before starting.
+Wait for the orchestrator to refresh this block with a specific
+sub-tier spec before starting implementer work.
 
 ---
 
