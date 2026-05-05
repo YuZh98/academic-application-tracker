@@ -1,14 +1,18 @@
-# Postdoc Application Tracker
+# Academic Application Tracker
 
-A local, single-user Streamlit app that answers one daily question for
-a job applicant: **"What do I do today?"** Tracks positions,
-applications, interviews, and recommendation letters across
-institutions with automated deadline alerts and markdown exports as
-portable backups.
+A local, single-user Streamlit app that answers one daily question
+for an academic applicant: **"What do I do today?"** Tracks
+positions, applications, interviews, and recommendation letters
+across institutions with automated deadline alerts and markdown
+exports as portable backups. Designed for the multi-stage
+recommender-letter-driven application flows shared by **postdoc,
+PhD, faculty, and fellowship** applications — anywhere you're
+juggling deadlines, materials readiness, and follow-ups across many
+institutions in parallel.
 
-Built as a personal tool while job-hunting — and as a portfolio piece
-demonstrating disciplined software engineering on a non-trivial
-codebase.
+Built as a personal tool while job-hunting — and as a portfolio
+piece demonstrating disciplined software engineering on a
+non-trivial codebase.
 
 ---
 
@@ -42,8 +46,8 @@ codebase.
 ## Quick start
 
 ```bash
-git clone https://github.com/YuZh98/hugs_application_tracker.git
-cd hugs_application_tracker
+git clone https://github.com/YuZh98/academic-application-tracker.git
+cd academic-application-tracker
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

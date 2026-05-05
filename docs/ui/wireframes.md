@@ -19,7 +19,7 @@ Page source: `app.py`. See
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║  Postdoc Tracker                                               ║
+║  Academic Application Tracker                                  ║
 ╠══════════════╦══════════════╦══════════════╦═══════════════════╣
 ║  12          ║  4           ║  2           ║  May 3 · MIT      ║
 ║  Tracked ⓘ  ║  Applied     ║  Interview   ║  Next Interview   ║

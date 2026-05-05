@@ -176,8 +176,8 @@ class TestPageConfigSetsWideLayout:
         assert "st.set_page_config(" in src, (
             f"{PAGE} must call st.set_page_config(...) per DESIGN §8.0."
         )
-        assert 'page_title="Postdoc Tracker"' in src, (
-            'set_page_config must bind page_title="Postdoc Tracker" '
+        assert 'page_title="Academic Application Tracker"' in src, (
+            'set_page_config must bind page_title="Academic Application Tracker" '
             'per DESIGN §8.0.'
         )
         assert 'page_icon="📋"' in src, (

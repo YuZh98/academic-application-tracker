@@ -1,8 +1,8 @@
 # Dev Setup
 
-_Install + run commands for first-time clone or re-setup of the Postdoc Tracker._
+_Install + run commands for first-time clone or re-setup of the Academic Application Tracker._
 
-Local install and run commands for the Postdoc Tracker. For **why**
+Local install and run commands for the Academic Application Tracker. For **why**
 each component was chosen, see
 [DESIGN §3 Technology Stack](../../DESIGN.md#3-technology-stack).
 For **version pins** and environment conventions, see

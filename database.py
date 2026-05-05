@@ -1,5 +1,5 @@
 # database.py
-# All SQLite reads and writes for the postdoc tracker.
+# All SQLite reads and writes for the academic application tracker.
 #
 # Import rules:
 #   - May import: config, sqlite3, pandas, stdlib

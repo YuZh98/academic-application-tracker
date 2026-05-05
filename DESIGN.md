@@ -1,4 +1,4 @@
-# System Design: Postdoc Application Tracker
+# System Design: Academic Application Tracker
 **Version:** 1.4 | **Last updated:** 2026-04-30 | **Status:** v1 target design (authoritative)
 
 ---
@@ -478,7 +478,7 @@ These conventions apply to every page.
 
 #### Page configuration
 
-Every page calls `st.set_page_config(page_title="Postdoc Tracker", page_icon="📋", layout="wide")` as first executable statement. `layout="wide"` essential: app data-heavy. `set_page_config` runs at top of `app.py` and every `pages/*.py` — re-executed on every page switch.
+Every page calls `st.set_page_config(page_title="Academic Application Tracker", page_icon="📋", layout="wide")` as first executable statement. `layout="wide"` essential: app data-heavy. `set_page_config` runs at top of `app.py` and every `pages/*.py` — re-executed on every page switch.
 
 #### Widget-key prefix conventions
 
