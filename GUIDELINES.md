@@ -396,7 +396,7 @@ publishable release; `v1.x.y` post-v1.
 via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 
 - [ ] `ruff check .` clean
-- [ ] `pyright .` clean (Phase 7 cleanup CL1 fence — `[tool.pyright]` config in `pyproject.toml`)
+- [ ] `pyright .` clean (`[tool.pyright]` config in `pyproject.toml`)
 - [ ] `pytest tests/ -q` passes
 - [ ] `pytest -W error::DeprecationWarning tests/ -q` passes
 - [ ] §6 status-literal grep clean (code-only):

@@ -352,8 +352,7 @@ CREATE TABLE IF NOT EXISTS applications (
 -- ── Table 3: interviews ────────────────────────────────────────
 -- One row per interview slot. An application can have arbitrarily many
 -- interviews (phone screen, committee, chalk talk, dean meeting, ...).
--- Replaces the earlier flat interview1_date / interview2_date columns
--- on the applications table (see D18).
+-- Linked to applications via FK (CASCADE on delete). See D18.
 CREATE TABLE IF NOT EXISTS interviews (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     application_id  INTEGER NOT NULL,
@@ -467,7 +466,7 @@ Storage decisions affecting this schema recorded in [§10 Key Architectural Deci
 
 1. **Log-and-continue on failure.** Errors inside `write_all` logged but never propagate past boundary. DB write that triggered export already succeeded, user should see "Saved" — not traceback. Export page surfaces file mtimes so stale backups become visible.
 
-2. **Stable markdown format.** Output format is deterministic and idempotent — same DB state produces byte-identical output across calls. Output-format changes documented in CHANGELOG alongside any generator change. (Originally framed as "committed into version control"; amended 2026-05-04 — `exports/` is `.gitignore`d because the rendered files contain personal job-search data and the public repo is the wrong home for it. The user's local `exports/` directory is the durable surface; the regenerate button on `pages/4_Export.py` + the auto-write hook in every `database.py` writer keep it fresh.)
+2. **Stable markdown format.** Output format is deterministic and idempotent — same DB state produces byte-identical output across calls. Output-format changes documented in CHANGELOG alongside any generator change. `exports/` is `.gitignore`d because the rendered files contain personal job-search data and the public repo is the wrong home for it. The user's local `exports/` directory is the durable surface; the regenerate button on `pages/4_Export.py` + the auto-write hook in every `database.py` writer keep it fresh.
 
 ---
 
