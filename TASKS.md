@@ -831,7 +831,7 @@ All defensible. Merged via PR #36 (`73a04c4`).
       `_find_function` / `_ancestors` round out the toolkit. Suite
       853 → 864 under both pytest gates. Merged via PR #40
       (`952f0e9`).
-**Cleanup + polish sub-tier (between T4 and T5; postponed T5 until CL5 closes per 2026-05-04 user-driven decision):**
+**Cleanup + polish sub-tier (between T4 and T5; CL1-CL6 closed in full 2026-05-05; T5 resumes user-driven):**
 
 - [x] **CL1** Pyright/mypy in CI fence + drift cleanup —
       `pyright==1.1.409` pinned in `requirements-dev.txt`,
@@ -1008,19 +1008,24 @@ All defensible. Merged via PR #36 (`73a04c4`).
       Three commits on branch (one per trim) for clean per-line
       `git blame`. Branch auto-deleted on merge via
       `--delete-branch`. Merged via PR #45 (`9dd87d3`).
-- [ ] **CL6** Process amendment + retroactive doc drift
-      (orchestrator-only, runs direct on main) — (a) codify
+- [x] **CL6** Process amendment + retroactive doc drift
+      (orchestrator-only, ran direct on main as two split commits
+      `04fa7a3` + `bc1017e`). CL6a codified
       `gh pr merge --delete-branch` in `ORCHESTRATOR_HANDOFF.md`
       "Recurring post-merge ritual" (5 consecutive proven uses
-      CL1-CL5); (b) retroactive trim of older Phase 5 + Phase 6
-      tier reviews still carrying `Kept by design` rows in
-      Findings tables (per GUIDELINES §10 those belong in Q&A) +
-      older `[v0.6.0]`/`[v0.5.0]`/etc. CHANGELOG blocks (long-
-      form descriptive entries → §14.4 short-form imperatives).
+      CL1-CL5). CL6b stripped `Kept by design` rows from Phase 6
+      T2/T3/T4 review-doc Findings tables (per GUIDELINES §10
+      those belong in Q&A; T2: 4→1, T3: 4→2, T4: 4→2; T4 added
+      Q7 covering `── Download ───` section-header omission) +
+      added forensic-preservation framing paragraphs to
+      CHANGELOG `[v0.4.0]` / `[v0.3.0]` / `[v0.2.0]` / `[v0.1.0]`
+      matching the existing `[v0.7.0]` / `[v0.6.0]` / `[v0.5.0]`
+      pattern (pre-§14.4 entries explicitly preserved as
+      forensic record; content untouched).
 
 - [ ] **T5** Responsive layout check at 1024 / 1280 / 1440 / 1680
       widths; capture screenshots to `docs/ui/screenshots/v0.8.0/`
-      (postponed until CL5 closes)
+      (user-driven; resumes after CL6 close)
 - [ ] **T6** Phase 7 review + PR + tag `v0.8.0`
 
 ### v1.0-rc — schema cleanup
@@ -1057,6 +1062,24 @@ _(none)_
 
 ## Recently done
 
+- 2026-05-05 — **CL6 closed** (`04fa7a3` + `bc1017e`): Phase 7
+  cleanup CL6 shipped as two split commits direct on main
+  (orchestrator-only, no PR). CL6a (`04fa7a3`) codified
+  `gh pr merge --delete-branch` in `ORCHESTRATOR_HANDOFF.md`
+  "Recurring post-merge ritual" — 5 consecutive proven uses
+  CL1-CL5 (PRs #41 / #42 / #43 / #44 / #45). CL6b (`bc1017e`)
+  retroactive doc-drift trim: Phase 6 T2/T3/T4 review-doc
+  Findings tables stripped of `Kept by design` rows per
+  `GUIDELINES §10` (T2: 4→1, T3: 4→2, T4: 4→2) with kept-by-
+  design coverage routed to existing Q&A entries; T4 gained Q7
+  covering wireframe-pinned `── Download ───` section-header
+  omission rationale (header ships with T5 download buttons).
+  CHANGELOG `[v0.4.0]` / `[v0.3.0]` / `[v0.2.0]` / `[v0.1.0]`
+  gained forensic-preservation framing paragraphs matching the
+  existing `[v0.7.0]` / `[v0.6.0]` / `[v0.5.0]` pattern (pre-
+  §14.4 entries preserved as forensic record; content
+  untouched). All seven gates green at HEAD. Phase 7 cleanup
+  sub-tier (CL1-CL6) closed in full.
 - 2026-05-05 — **PR #45 merged** (`9dd87d3`): Phase 7 cleanup CL5
   shipped — 3 trims closing the CL4 doc-drift carry-overs. Full
   sweep — `grep -rn "Phase 7 CL4 Fix"` returns 0 matches post-CL5.
@@ -1382,4 +1405,4 @@ For earlier completions see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-_Updated: 2026-05-05 (Phase 7 cleanup CL5 merged via PR #45; main HEAD `9dd87d3`; suite 879 / 1 xfailed; pyright 0/0; CL4 doc-drift carry-overs closed; CL6 — orchestrator process amendment + retroactive doc drift — runs next direct on main; T5 resumes after CL6 closes)_
+_Updated: 2026-05-05 (Phase 7 cleanup CL6 closed direct on main as `04fa7a3` + `bc1017e`; main HEAD `bc1017e`; suite 879 / 1 xfailed; pyright 0/0; CL1-CL6 sub-tier closed in full; T5 — responsive layout, user-driven — is the next functional task)_
