@@ -334,7 +334,9 @@ else:
     df_filtered = cast(pd.DataFrame, df[df["status"] == selected_filter])
 
 if df_filtered.empty:
-    st.info("No applications match the current filter.")
+    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
+    # wording edit is a one-line change tracked via git blame.
+    st.info(config.EMPTY_FILTERED_APPLICATIONS)
     # Asymmetry vs. Opportunities §8.2: do NOT pop
     # applications_selected_position_id here. The detail card below
     # resolves against the unfiltered `df`, so an in-progress edit
@@ -788,31 +790,88 @@ if "applications_selected_position_id" in st.session_state:
             )
 
         if detail_submitted:
-            # Build the upsert payload. Date inputs return either
-            # `datetime.date` or None; isoformat() handles only the
-            # former, so guard with a truthiness check.
-            #
-            # The dict always carries 8 keys (every editable widget
-            # contributes one) — the empty-fields early-return path
-            # in `database.upsert_application` is unreachable from
-            # this page. Future maintainers extending the form should
-            # preserve that property so `result["status_changed"]`
-            # below stays meaningful.
+            # Build the dirty diff against the persisted application row
+            # so a no-op Save (user clicked Save with nothing changed)
+            # short-circuits with an honest "No changes to save." toast
+            # instead of mis-claiming a write happened. Per-field
+            # comparison normalizes widget shape ↔ DB shape (date ↔ ISO
+            # string, bool ↔ 0/1 INTEGER) so the diff doesn't
+            # false-positive on cosmetic differences. Phase 7 CL4 Fix 1
+            # — was previously an unconditional `upsert_application` +
+            # Saved toast on every click (T2-A original).
             applied_d   = st.session_state["apps_applied_date"]
             conf_d      = st.session_state["apps_confirmation_date"]
             resp_d      = st.session_state["apps_response_date"]
             result_n_d  = st.session_state["apps_result_notify_date"]
-            fields: dict[str, Any] = {
-                "applied_date":          applied_d.isoformat() if applied_d else None,
-                "confirmation_received": int(st.session_state["apps_confirmation_received"]),
-                "confirmation_date":     conf_d.isoformat() if conf_d else None,
-                "response_type":         st.session_state["apps_response_type"],
-                "response_date":         resp_d.isoformat() if resp_d else None,
-                "result":                st.session_state["apps_result"],
-                "result_notify_date":    result_n_d.isoformat() if result_n_d else None,
-                "notes":                 st.session_state["apps_notes"],
-            }
+            _w_applied_iso = applied_d.isoformat() if applied_d else None
+            _w_conf_received = int(
+                st.session_state["apps_confirmation_received"]
+            )
+            _w_conf_iso = conf_d.isoformat() if conf_d else None
+            _w_response_type = st.session_state["apps_response_type"]
+            _w_response_iso = resp_d.isoformat() if resp_d else None
+            _w_result = st.session_state["apps_result"]
+            _w_result_notify_iso = (
+                result_n_d.isoformat() if result_n_d else None
+            )
+            _w_notes = st.session_state["apps_notes"]
+
+            _db_applied_iso = _safe_str(app_row.get("applied_date")) or None
+            _db_conf_received = int(app_row.get("confirmation_received") or 0)
+            _db_conf_iso = (
+                _safe_str(app_row.get("confirmation_date")) or None
+            )
+            _db_response_type_raw = app_row.get("response_type")
+            _db_response_type = (
+                _db_response_type_raw
+                if _db_response_type_raw in config.RESPONSE_TYPES
+                else None
+            )
+            _db_response_iso = _safe_str(app_row.get("response_date")) or None
+            _db_result_raw = app_row.get("result")
+            _db_result = (
+                _db_result_raw
+                if _db_result_raw in config.RESULT_VALUES
+                else config.RESULT_DEFAULT
+            )
+            _db_result_notify_iso = (
+                _safe_str(app_row.get("result_notify_date")) or None
+            )
+            _db_notes = _safe_str(app_row.get("notes"))
+
+            fields: dict[str, Any] = {}
+            if _w_applied_iso != _db_applied_iso:
+                fields["applied_date"] = _w_applied_iso
+            if _w_conf_received != _db_conf_received:
+                fields["confirmation_received"] = _w_conf_received
+            if _w_conf_iso != _db_conf_iso:
+                fields["confirmation_date"] = _w_conf_iso
+            if _w_response_type != _db_response_type:
+                fields["response_type"] = _w_response_type
+            if _w_response_iso != _db_response_iso:
+                fields["response_date"] = _w_response_iso
+            if _w_result != _db_result:
+                fields["result"] = _w_result
+            if _w_result_notify_iso != _db_result_notify_iso:
+                fields["result_notify_date"] = _w_result_notify_iso
+            if _w_notes != _db_notes:
+                fields["notes"] = _w_notes
+
             try:
+                if not fields:
+                    # No-op: nothing changed. Skip the DB write (and the
+                    # R1/R3 cascade — there's no transition to fire
+                    # against) and surface an honest no-op toast. Still
+                    # set the skip-flag + pop the form-id sentinel so
+                    # the post-toast rerun preserves selection (the
+                    # detail card stays open) and re-seeds from DB
+                    # (idempotent — fresh values will match in-flight).
+                    st.session_state["_applications_skip_table_reset"] = True
+                    st.session_state.pop(
+                        "_applications_edit_form_sid", None,
+                    )
+                    st.toast("No changes to save.")
+                    st.rerun()
                 # propagate_status=True fires R1 + R3 cascades inside
                 # the same transaction; the returned indicator drives
                 # the cascade-promotion toast surfaced below.
@@ -913,11 +972,19 @@ if "applications_selected_position_id" in st.session_state:
                     _dirty["format"] = _w_format
                 if _w_notes != _db_notes:
                     _dirty["notes"] = _w_notes
+
+                # Phase 7 CL4 Fix 1: branch toast wording on the dirty
+                # diff so a no-op Save (clicking Save with nothing
+                # changed) reads as "No changes to save." rather than
+                # mis-claiming a write happened. The DB call is gated
+                # on `_dirty` already; only the toast wording was
+                # previously dishonest.
+                st.session_state["_applications_skip_table_reset"] = True
                 if _dirty:
                     database.update_interview(_iid, _dirty)
-
-                st.session_state["_applications_skip_table_reset"] = True
-                st.toast(f"Saved interview {_seq}.")
+                    st.toast(f"Saved interview {_seq}.")
+                else:
+                    st.toast("No changes to save.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Could not save interview {_seq}: {e}")

@@ -145,12 +145,23 @@ def _format_confirmed(v: Any) -> str:
 
 
 def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
-    """Build the verbatim DESIGN §8.4 mailto URL for the Compose button
-    (T6-A). The subject interpolates the position count; the body
-    interpolates the recommender's name. No `to:` field — the
-    recommenders schema doesn't store emails today, so the OS-level
-    mail client prompts the user for the recipient."""
-    subject = f"Following up: letters for {n_positions} postdoc applications"
+    """Build the DESIGN §8.4 mailto URL for the Compose button (T6-A).
+    The subject interpolates the position count; the body interpolates
+    the recommender's name. No `to:` field — the recommenders schema
+    doesn't store emails today, so the OS-level mail client prompts
+    the user for the recipient.
+
+    Subject pluralization (Phase 7 CL4 Fix 2): the singular form is
+    used when N=1 ("letter for 1 postdoc application") and the plural
+    form when N≥2 ("letters for N postdoc applications"). DESIGN §8.4
+    line 631 amends the previously-locked "letters for N postdoc
+    applications" wording to follow English pluralization rules — the
+    earlier verbatim form read "letters for 1 postdoc applications"
+    at N=1, which is grammatically awkward."""
+    if n_positions == 1:
+        subject = "Following up: letter for 1 postdoc application"
+    else:
+        subject = f"Following up: letters for {n_positions} postdoc applications"
     body = (
         f"Hi {recommender_name}, just a quick check-in on the letters of "
         f"recommendation you offered. Thank you so much!"
@@ -227,7 +238,9 @@ st.subheader("Pending Alerts")
 _pending_recs = database.get_pending_recommenders()
 
 if _pending_recs.empty:
-    st.info("No pending recommenders.")
+    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
+    # wording edit is a one-line change tracked via git blame.
+    st.info(config.EMPTY_PENDING_RECOMMENDERS)
 else:
     _today = date.today()
 
@@ -778,9 +791,16 @@ if "recs_selected_id" in st.session_state:
                     _dirty["notes"] = _w_notes
 
                 try:
+                    # Phase 7 CL4 Fix 1: branch toast wording on the
+                    # dirty diff so a no-op Save reads "No changes to
+                    # save." rather than the mis-claiming `Saved ...`
+                    # toast that used to fire even when no widget
+                    # changed.
                     if _dirty:
                         database.update_recommender(_rec_id, _dirty)
-                    st.toast(f'Saved "{_rec_name}".')
+                        st.toast(f'Saved "{_rec_name}".')
+                    else:
+                        st.toast("No changes to save.")
                     # Pop the sentinel so the post-Save rerun re-seeds
                     # widgets from the just-persisted DB values; the
                     # skip flag preserves selection across the dataframe-
