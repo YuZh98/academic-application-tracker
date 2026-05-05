@@ -151,13 +151,9 @@ def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
     doesn't store emails today, so the OS-level mail client prompts
     the user for the recipient.
 
-    Subject pluralization (Phase 7 CL4 Fix 2): the singular form is
-    used when N=1 ("letter for 1 postdoc application") and the plural
-    form when N≥2 ("letters for N postdoc applications"). DESIGN §8.4
-    line 631 amends the previously-locked "letters for N postdoc
-    applications" wording to follow English pluralization rules — the
-    earlier verbatim form read "letters for 1 postdoc applications"
-    at N=1, which is grammatically awkward."""
+    Subject follows English pluralization rules (DESIGN §8.4): at
+    ``N=1`` reads "letter for 1 postdoc application" (singular both
+    nouns); at ``N≥2`` reads "letters for N postdoc applications"."""
     if n_positions == 1:
         subject = "Following up: letter for 1 postdoc application"
     else:
@@ -238,8 +234,6 @@ st.subheader("Pending Alerts")
 _pending_recs = database.get_pending_recommenders()
 
 if _pending_recs.empty:
-    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
-    # wording edit is a one-line change tracked via git blame.
     st.info(config.EMPTY_PENDING_RECOMMENDERS)
 else:
     _today = date.today()
@@ -791,11 +785,6 @@ if "recs_selected_id" in st.session_state:
                     _dirty["notes"] = _w_notes
 
                 try:
-                    # Phase 7 CL4 Fix 1: branch toast wording on the
-                    # dirty diff so a no-op Save reads "No changes to
-                    # save." rather than the mis-claiming `Saved ...`
-                    # toast that used to fire even when no widget
-                    # changed.
                     if _dirty:
                         database.update_recommender(_rec_id, _dirty)
                         st.toast(f'Saved "{_rec_name}".')

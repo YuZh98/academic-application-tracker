@@ -334,8 +334,6 @@ else:
     df_filtered = cast(pd.DataFrame, df[df["status"] == selected_filter])
 
 if df_filtered.empty:
-    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
-    # wording edit is a one-line change tracked via git blame.
     st.info(config.EMPTY_FILTERED_APPLICATIONS)
     # Asymmetry vs. Opportunities §8.2: do NOT pop
     # applications_selected_position_id here. The detail card below
@@ -796,9 +794,7 @@ if "applications_selected_position_id" in st.session_state:
             # instead of mis-claiming a write happened. Per-field
             # comparison normalizes widget shape ↔ DB shape (date ↔ ISO
             # string, bool ↔ 0/1 INTEGER) so the diff doesn't
-            # false-positive on cosmetic differences. Phase 7 CL4 Fix 1
-            # — was previously an unconditional `upsert_application` +
-            # Saved toast on every click (T2-A original).
+            # false-positive on cosmetic differences.
             applied_d   = st.session_state["apps_applied_date"]
             conf_d      = st.session_state["apps_confirmation_date"]
             resp_d      = st.session_state["apps_response_date"]
@@ -973,12 +969,6 @@ if "applications_selected_position_id" in st.session_state:
                 if _w_notes != _db_notes:
                     _dirty["notes"] = _w_notes
 
-                # Phase 7 CL4 Fix 1: branch toast wording on the dirty
-                # diff so a no-op Save (clicking Save with nothing
-                # changed) reads as "No changes to save." rather than
-                # mis-claiming a write happened. The DB call is gated
-                # on `_dirty` already; only the toast wording was
-                # previously dishonest.
                 st.session_state["_applications_skip_table_reset"] = True
                 if _dirty:
                     database.update_interview(_iid, _dirty)

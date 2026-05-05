@@ -543,10 +543,8 @@ class TestFilterBarBehaviour:
     def test_filter_by_status_no_match_shows_info(self, db):
         """When the status filter matches no rows, the locked
         ``config.EMPTY_FILTERED_POSITIONS`` info message must appear.
-        Phase 7 CL4 Fix 4 lifted the verbatim string to config so a
-        future copy edit is a one-line change in config.py — this
-        assertion goes through the constant by name so it tracks the
-        edit automatically."""
+        Asserts through the constant by name so a future copy edit
+        in config.py flows through automatically."""
         database.add_position({"position_name": "Open One"})  # [SAVED] by default
         at = _run_page()
         at.selectbox(key="filter_status").select("[APPLIED]")
@@ -643,9 +641,8 @@ class TestFilterBarBehaviour:
         """When the DB has no rows at all, the locked
         ``config.EMPTY_NO_POSITIONS`` message must appear even if a
         filter is active — not the ``EMPTY_FILTERED_POSITIONS`` filter
-        message. Phase 7 CL4 Fix 4 lifted both strings to config so a
-        future copy edit lands in one place; this assertion goes
-        through the constants by name."""
+        message. Asserts through the constants by name so a future
+        copy edit lands once in config.py and propagates."""
         at = _run_page()
         at.selectbox(key="filter_status").select(config.STATUS_VALUES[0])
         at.run()
@@ -756,9 +753,8 @@ class TestPositionSearchBehaviour:
         """When the search narrows to zero rows, the locked
         ``config.EMPTY_FILTERED_POSITIONS`` info fires (same branch
         used by status / priority / field filters when they reach
-        zero). Phase 7 CL4 Fix 4 lifted the string to config — this
-        assertion goes through the constant by name so a copy edit
-        flows through automatically."""
+        zero). Asserts through the constant by name so a future copy
+        edit in config.py propagates here without test churn."""
         database.add_position({"position_name": "Postdoc Stanford"})
         database.add_position({"position_name": "Faculty MIT"})
         at = _run_page()

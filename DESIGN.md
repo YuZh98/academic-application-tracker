@@ -628,7 +628,7 @@ Layout wireframe: [`docs/ui/wireframes.md#recommenders`](docs/ui/wireframes.md#r
 - **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); page groups by `recommender_name` so one recommender owing N letters appears as single card listing all N positions.
 - **Reminder helpers** (per recommender card): two affordances — quick mailto for simple case, LLM-prompt expander for users who want richer drafted email.
   - **Primary `Compose reminder email` button** opens `mailto:` URL w/ locked, professional copy:
-    - Subject: follows English pluralization rules — at `N=1` reads `Following up: letter for 1 postdoc application` (singular both nouns); at `N≥2` reads `Following up: letters for N postdoc applications` (where `N` = position count for that recommender). Phase 7 CL4 Fix 2 amended this line: the previously-locked verbatim plural-only form read "letters for 1 postdoc applications" at `N=1`, which is grammatically awkward.
+    - Subject: follows English pluralization rules — at `N=1` reads `Following up: letter for 1 postdoc application` (singular both nouns); at `N≥2` reads `Following up: letters for N postdoc applications` (where `N` = position count for that recommender).
     - Body: `Hi {recommender_name}, just a quick check-in on the letters of recommendation you offered. Thank you so much!`
 
     OS hands off to user's default mail client; no outbound email integration. No signature appended — mail client appends one.

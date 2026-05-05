@@ -113,15 +113,6 @@ next_interview = _next_interview_display(database.get_upcoming_interviews())
 if tracked == 0 and applied == 0 and interview == 0:
     with st.container(border=True):
         st.subheader("Welcome to your Postdoc Tracker")
-        # Phase 7 CL4 Fix 3: harmonize with the cross-page convention —
-        # st.markdown for prose, st.write only for ambiguous-type
-        # renders (DataFrame, dict). Every other prose call site on
-        # this page (Pending Alerts cards, Recommenders Pending Alerts
-        # cards, Export-page intro + per-file mtime lines) already
-        # uses st.markdown; this was the lone st.write outlier.
-        # Functionally identical (st.write(str) routes to st.markdown
-        # internally) — the swap is for cohesion with the surrounding
-        # codebase only.
         st.markdown(
             "You haven't added any positions yet. "
             "Start by logging one — even rough notes — "
@@ -421,8 +412,6 @@ else:
 st.subheader("Recommender Alerts")
 _pending_recs = database.get_pending_recommenders()
 if _pending_recs.empty:
-    # Phase 7 CL4 Fix 4: empty-state copy lifted to config so a future
-    # wording edit is a one-line change tracked via git blame.
     st.info(config.EMPTY_PENDING_RECOMMENDER_FOLLOWUPS)
 else:
     _today = date.today()
