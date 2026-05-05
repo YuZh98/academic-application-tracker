@@ -50,12 +50,11 @@ deliberate ("fine here — low position counts, single-user app").
 
 | # | File · Location | Issue | Severity | Status |
 |---|---|---|---|---|
-| 1 | `exports.py` `write_progress` column contract | `PROGRESS.md` carries 8 columns: Position · Institute · Status · Applied · Confirmation · Response · Result · Interviews. Notably, no `Deadline` column — the implementer's reasoning (PR description): "PROGRESS focuses on application progression, not the upstream window; OPPORTUNITIES.md (T1) owns Deadline". Defensible — the two exports answer different questions, and the join already covers the Status side which carries pipeline state. A reader who wants both "deadline window" and "application progression" cross-references the two files via the Position cell. | ℹ️ | Kept-by-design. Cite-able when T3 (`write_recommenders`) chooses its column set — the divergent-purpose framing is the precedent. |
-| 2 | `exports.py` `write_progress` interviews lookup | Per-row `database.get_interviews(position_id)` inside the iteration loop = N+1 queries against SQLite. Implementer documented as fine ("low position counts, single-user app"; richer joined query "premature optimization"). For a typical user with ≤50 active positions, the per-call overhead is microseconds. The N+1 surfaces only if the user ever has hundreds of positions; at that point a `database.py` joined-query reader is the right home, not inline aggregation in the writer. | ℹ️ | Kept-by-design. Note for any future Phase 6 / Phase 7 performance audit; not blocking T2. |
-| 3 | `tests/conftest.py::db` `local import exports as _exports` | Implementer's docstring rationale: "to avoid loading exports at conftest import time, in case a future test wants to monkeypatch the module before the fixture activates." Mildly over-defensive — `tests/conftest.py` already imports `database` at module level, and `database` can transitively load `exports` via deferred import paths. The local import doesn't *prevent* that, just keeps the conftest module's own namespace clean. The cost is essentially zero (one extra `import` line inside the fixture body). Net: harmless. | ℹ️ | Observation. Could lift to a module-top `import exports` if a future cleanup pass wants symmetry with the `database` import; not worth a change today. |
-| 4 | `tests/test_database.py` migration tests | Implementer added paired `EXPORTS_DIR` monkeypatches at five migration-test sites. Two sites (`TestInitDb` parametrize for `recommenders` rebuild path + `TestRecommendersRebuildMigration` seed) were T1's actual polluters; three (`pre_v1_3_*` ALTER paths) pair the isolation defensively even though they don't hit a writer. The defensive symmetry is the right call — a future test that adds a `database.py` writer call inside one of those parametrize bodies would silently re-pollute `exports/` if the paired monkeypatch wasn't already there. The "for symmetry" comment in each site documents the intent so future readers don't strip the line. | ℹ️ | Kept-by-design. |
+| 1 | `tests/conftest.py::db` `local import exports as _exports` | Implementer's docstring rationale: "to avoid loading exports at conftest import time, in case a future test wants to monkeypatch the module before the fixture activates." Mildly over-defensive — `tests/conftest.py` already imports `database` at module level, and `database` can transitively load `exports` via deferred import paths. The local import doesn't *prevent* that, just keeps the conftest module's own namespace clean. The cost is essentially zero (one extra `import` line inside the fixture body). Net: harmless. | ℹ️ | Observation |
 
-*No 🔴 / 🟠 / 🟡 findings.*
+*No 🔴 / 🟠 / 🟡 / 🟢 findings.*
+
+*Three additional kept-by-design choices (no Deadline column in `PROGRESS.md`, per-row N+1 interviews lookup, defensive `EXPORTS_DIR` monkeypatch symmetry across the five migration-test sites in `test_database.py`) are addressed in the Q&A section per `GUIDELINES §10` ("`Kept by design` observations belong in the Q&A section, not in the Findings table — they are not defects"). See Q1 (no-Deadline rationale), Q3 (5-site monkeypatch symmetry), Q7 (N+1 revisit signals).*
 
 ---
 
@@ -95,8 +94,8 @@ A. Three signals. (1) The user reports a noticeable Export-page button latency o
 
 ## Carry-overs
 
-- **Phase 6 / Phase 7 performance signal:** Per-row N+1 interviews lookup in `write_progress` (Finding #2). Track only if user-visible latency surfaces; not blocking.
-- **T3 column-contract precedent:** The "no Deadline column" choice in `PROGRESS.md` (Finding #1) sets the precedent that each export answers a different question with a non-overlapping column set. T3 (`write_recommenders`) should follow — its columns should be the recommender-progression set (Position · Recommender · Relationship · Asked · Confirmed · Submitted · Reminders) without re-stating the upstream Deadline.
+- **Phase 6 / Phase 7 performance signal:** Per-row N+1 interviews lookup in `write_progress` (kept-by-design per Q7). Track only if user-visible latency surfaces; not blocking.
+- **T3 column-contract precedent:** The "no Deadline column" choice in `PROGRESS.md` (kept-by-design per Q1) sets the precedent that each export answers a different question with a non-overlapping column set. T3 (`write_recommenders`) should follow — its columns should be the recommender-progression set (Position · Recommender · Relationship · Asked · Confirmed · Submitted · Reminders) without re-stating the upstream Deadline.
 
 ---
 

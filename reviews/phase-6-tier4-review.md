@@ -52,12 +52,12 @@ this signals the rule set has changed or it's PR-specific.
 
 | # | File · Location | Issue | Severity | Status |
 |---|---|---|---|---|
-| 1 | `pages/4_Export.py` mtimes panel | `Path.exists()` check is correct under DESIGN §7 contract #2 (idempotent writes by `exports.write_all`) but a classic TOCTOU race exists between `exists()` and `stat()` — file deleted by an external process between the two calls would raise `FileNotFoundError`. Implementer flagged this in the commit body: "race window irrelevant on a single-user local app." Defensible. The `try/except FileNotFoundError` alternative would be one line longer; the user is the only writer and `exports/` doesn't have external deletion paths in the daily workflow. | ℹ️ | Kept-by-design. Cite-able if Phase 7 / v1.0-rc revisits exception handling project-wide. |
-| 2 | `pages/4_Export.py` "── Download ───" wireframe section header | Implementer omitted the wireframe-pinned divider header (`── Download ───`) from T4 because it semantically scopes T5's download buttons; T4 has no downloads to label. Defensible — adding it now with no buttons under it would read as a stray section header. The PR description flags this for orchestrator sanity-check; the call is correct. | ℹ️ | Kept-by-design. T5 will add the header alongside the download buttons. |
-| 3 | `pages/4_Export.py` `st.markdown` (not `st.write`) for intro + mtime lines | Implementer chose `st.markdown` over `st.write` for the intro line and the per-file mtimes lines. PR description rationale: "explicit formatting, identical AppTest surface" — `st.write(str)` routes to `st.markdown` internally so the AppTest body lookup is identical, but the source reads as deliberate-prose-rendering rather than catch-all `st.write`. Cohesion with `app.py` / page intros varies (`st.write` is more common in `app.py`). Net: stylistic; doesn't matter at the AppTest level. | ℹ️ | Observation. If Phase 7 sweeps style, harmonize to one or the other across pages. |
-| 4 | `tests/test_export_page.py::TestExportPageMtimesPanel::test_mtimes_show_timestamps_when_files_present` | Uses `epoch = 1700000000` (deterministic) + `os.utime` to set file mtimes. The assertion converts via `datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")` which uses LOCAL time — so the rendered timestamp depends on the test runner's timezone. CI runners are typically UTC; the test's expected string is computed from `datetime.fromtimestamp` at test-time so it auto-matches the runner's timezone. Implementation is correct — the test isn't pinning a hard-coded "2023-11-14 22:13:20" but rather "whatever fromtimestamp returns for this epoch in the current TZ". Minor robustness note: a future change to switch to UTC display would need to update the test along with the page. | ℹ️ | Observation. Not a defect — the test and page use the same TZ-relative path. |
+| 1 | `pages/4_Export.py` `st.markdown` (not `st.write`) for intro + mtime lines | Implementer chose `st.markdown` over `st.write` for the intro line and the per-file mtimes lines. PR description rationale: "explicit formatting, identical AppTest surface" — `st.write(str)` routes to `st.markdown` internally so the AppTest body lookup is identical, but the source reads as deliberate-prose-rendering rather than catch-all `st.write`. Cohesion with `app.py` / page intros varies (`st.write` is more common in `app.py`). Net: stylistic; doesn't matter at the AppTest level. | ℹ️ | Observation. If Phase 7 sweeps style, harmonize to one or the other across pages. |
+| 2 | `tests/test_export_page.py::TestExportPageMtimesPanel::test_mtimes_show_timestamps_when_files_present` | Uses `epoch = 1700000000` (deterministic) + `os.utime` to set file mtimes. The assertion converts via `datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")` which uses LOCAL time — so the rendered timestamp depends on the test runner's timezone. CI runners are typically UTC; the test's expected string is computed from `datetime.fromtimestamp` at test-time so it auto-matches the runner's timezone. Implementation is correct — the test isn't pinning a hard-coded "2023-11-14 22:13:20" but rather "whatever fromtimestamp returns for this epoch in the current TZ". Minor robustness note: a future change to switch to UTC display would need to update the test along with the page. | ℹ️ | Observation. Not a defect — the test and page use the same TZ-relative path. |
 
-*No 🔴 / 🟠 / 🟡 findings.*
+*No 🔴 / 🟠 / 🟡 / 🟢 findings.*
+
+*Two additional kept-by-design choices (`Path.exists()` TOCTOU race on the mtimes panel, "── Download ───" wireframe section-header omission from T4) are addressed in the Q&A section per `GUIDELINES §10` ("`Kept by design` observations belong in the Q&A section, not in the Findings table — they are not defects"). See Q3 (TOCTOU race acceptability) and Q7 (section-header omission rationale).*
 
 ### Pre-existing condition surfaced (not T4-introduced)
 
@@ -105,13 +105,17 @@ A. Worth investigating but not blocking. The previous-orchestrator notes (`ORCHE
 
 A. No — it's pre-existing pollution. The three files (`OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`) at the project's `exports/` root carry mtimes from an earlier session and contain real user data. They're leftover from before the Phase 6 T2 conftest fixture lift took. Verification: clearing `rm -rf exports/` and re-running `pytest tests/ -q` yielded a clean `git status --porcelain exports/` (empty) — proof that T4's tests don't pollute. The standing isolation gate's intent is "did pytest write to `exports/`?" but its `?? exports/` output also fires for pre-existing untracked files unrelated to the current run. For T4 review: not a defect. For the project: the three untracked files at `exports/` should either be committed per DESIGN §7 contract #2 or `exports/` should be `.gitignore`d.
 
+**Q7. The DESIGN §8.5 wireframe pins a `── Download ───` section header above the per-file download buttons. T4 omits the section header entirely. Why?**
+
+A. Scope split, not omission. T4 ships only the page shell + regenerate button + mtimes panel; the download-button row + section header land together in T5 (`feature/phase-6-tier5-DownloadButtons`). The wireframe-pinned `── Download ───` separator only makes sense ABOVE the download buttons it labels — adding it in T4 would render a section header above an empty area, which reads worse than omitting it. The implementer's commit body explicitly defers the section header to T5 alongside the buttons it labels. Verified post-T5: T5's PR adds the section header in the same commit as the download buttons, matching the wireframe.
+
 ---
 
 ## Carry-overs
 
 - **User action — `exports/` directory state:** three untracked files at the project root sitting between "committed per DESIGN §7 contract #2" and ".gitignore'd". User picks one and the orchestrator follows up.
-- **Phase 7 polish candidate:** harmonize `st.markdown` vs `st.write` across pages (Finding #3). Phase 7 cohesion-sweep territory.
-- **TOCTOU on mtimes panel:** if future deployment shape changes (multi-writer / shared filesystem), revisit Finding #1's `try/except FileNotFoundError` alternative.
+- **Phase 7 polish candidate:** harmonize `st.markdown` vs `st.write` across pages (Finding #1). Phase 7 cohesion-sweep territory.
+- **TOCTOU on mtimes panel:** if future deployment shape changes (multi-writer / shared filesystem), revisit kept-by-design per Q3's `try/except FileNotFoundError` alternative.
 
 ---
 
