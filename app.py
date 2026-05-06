@@ -134,7 +134,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
       - Render as '{Mon D} · {institute}' (short month + day, no year).
       - Empty / no upcoming date → ``config.EM_DASH`` ('—').
 
-    Rows from the normalized interviews sub-table (DESIGN §6.2) carry
+    Rows from the normalized interviews sub-table carry
     future dates (the SQL filters on `scheduled_date >= today`)
     and are ordered ASC by scheduled_date. So iloc[0] would also be
     correct today; the explicit min-scan is kept for robustness against
