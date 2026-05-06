@@ -11,12 +11,8 @@ import streamlit as st
 import config
 import database
 
-# Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
-# bare name so existing per-page references remain unchanged.
 from config import EM_DASH
 
-# DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
-# with wide layout. Must precede any other st.* call.
 st.set_page_config(
     page_title="Recommenders — Academic Application Tracker",
     page_icon="📋",
@@ -109,18 +105,7 @@ def _format_confirmed(v: Any) -> str:
     return "Yes" if i == 1 else "No"
 
 
-# ── T6: Reminder helpers ──────────────────────────────────────────────────────
-#
-# DESIGN §8.4 + AGENTS §T6 pin two affordances per Pending-Alerts card:
-#   - A `Compose reminder email` link button opening a `mailto:` URL with
-#     the locked subject + body copy below.
-#   - An `LLM prompts ({len(config.REMINDER_TONES)} tones)` expander holding
-#     one `st.code(prompt, language="text")` per tone.
-# The tone vocabulary is locked at (gentle, urgent) per DESIGN §8.4; the
-# expander label computes its count from `len(config.REMINDER_TONES)` so a
-# future tone addition flows through to the UI without a separate edit.
-# Phase 7 cleanup CL2 lifted the tuple to config.REMINDER_TONES so a
-# future "formal" tone is a config-only edit.
+# ── Reminder helpers ──────────────────────────────────────────────────────
 
 
 def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
@@ -192,18 +177,6 @@ def _build_llm_prompt(
 
 
 # ── Recommender Alerts ───────────────────────────────────────────────────────
-#
-# Driven by database.get_pending_recommenders() (default RECOMMENDER_ALERT_DAYS).
-# One st.container(border=True) per distinct recommender_name; each card lists
-# every position that recommender still owes a letter for and (T6) carries the
-# Compose Reminder Email link button + Draft email with AI expander.
-#
-# Locked card format (DESIGN §8.4):
-#   ⚠️ **{name}** ({relationship})          ← relationship omitted when NULL
-#   - {institute}: {position_name} (asked {N}d ago, due {Mon D})
-#   - ...
-#   [📧 Compose Reminder Email]            ← T6-A mailto link button
-#   ▸ Draft email with AI (N styles)        ← T6-B expander, N = len(config.REMINDER_TONES)
 
 st.subheader("Recommender Alerts")
 st.caption(
@@ -216,15 +189,8 @@ if _pending_recs.empty:
 else:
     _today = date.today()
 
-    # Stable iteration order: get_pending_recommenders() already sorts by
-    # recommender_name ASC, deadline_date ASC NULLS LAST, so a plain groupby
-    # preserves both within-group deadline order and across-group alphabetical
-    # order without any extra sort. enumerate() supplies a per-card index for
-    # the T6 link-button key so two cards never collide on a duplicate widget id.
     for _idx, (_name, _group) in enumerate(_pending_recs.groupby("recommender_name", sort=False)):
         with st.container(border=True):
-            # Relationship: first row's value (same recommender → same person).
-            # Guard against NaN surfaced by pandas for NULL TEXT columns.
             _rel: Any = _group.iloc[0]["relationship"]
             _rel_str = f" ({_rel})" if _rel and not pd.isna(_rel) else ""
 
@@ -244,11 +210,8 @@ else:
             _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
             st.markdown(_body)
 
-            # ── T6-A: Compose reminder email ────────────────────────────
-            # Locked-copy mailto URL per DESIGN §8.4. N (subject) is the
-            # owed-position count for THIS card; recommender_name (body)
-            # is interpolated. Per-card unique key avoids a Streamlit
-            # DuplicateWidgetID across multiple cards.
+            # ──  Compose reminder email ────────────────────────────
+            
             _mailto_url = _build_compose_mailto(
                 recommender_name=str(_name),
                 n_positions=len(_group),
@@ -259,14 +222,7 @@ else:
                 key=f"recs_compose_{_idx}",
             )
 
-            # ── T6-B: LLM prompts expander ──────────────────────────────
-            # One st.code(prompt, language="text") per locked tone. The
-            # expander label computes its tone count from
-            # config.REMINDER_TONES so a future tone addition flows through to
-            # the UI label automatically. days-since-asked is the MAX
-            # across the card's positions (the longest wait) — the
-            # prompt is one block per tone, not per position, so a
-            # single integer summary keeps the prompt text clean.
+            # ── LLM prompts expander ──────────────────────────────
             _max_days = max(_per_row_days) if _per_row_days else 0
             _rel_for_prompt: str | None = None if (_rel is None or pd.isna(_rel)) else str(_rel)
             with st.expander(
@@ -284,25 +240,11 @@ else:
                     st.code(_prompt, language="text")
 
 
-# ── T5: All Recommenders ─────────────────────────────────────────────────────
-#
-# Layout-stability anchor — the subheader stays visible on an empty DB so the
-# "Recommenders" page always reads as a section even before the user adds any
-# rows. Same precedent as the dashboard T5 KPI block + Pending Alerts panel
-# above.
+# ── All Recommenders ─────────────────────────────────────────────────────
 
 st.subheader("All Recommenders")
 
-
 # ── Build label↔id mapping for the position selectboxes ─────────────────────
-#
-# AGENTS §T5-B: position dropdowns display "{institute}: {position_name}"
-# (or bare position_name) but the underlying value the page persists is
-# the position_id. Streamlit's AppTest exposes selectbox options as the
-# raw values passed in (no format_func application), so the cleanest
-# encoding is: use the LABEL as the option value, and look up the id at
-# submit time via this dict. The reverse lookup (label → id) keeps the
-# id off the rendered UI per DESIGN §8.4 ("IDs never surface to user").
 
 _positions_df = database.get_all_positions()
 _position_label_to_id: dict[str, int] = {}
@@ -318,22 +260,13 @@ for _, _pos_row in _positions_df.iterrows():
     _position_label_to_id[_label] = int(_pos_id_raw)
 
 
-# ── T5-B: Add recommender form ───────────────────────────────────────────────
-#
-# Inside an expander to keep the page's primary surface (the table) above
-# the fold. Mirror of the Opportunities-page Quick Add expander; the
-# expander is closed by default — the user opens it when they want to
-# add a new recommender.
+# ── Add recommender form ───────────────────────────────────────────────
+
 
 with st.expander("Add Recommender", expanded=False):
     with st.form("recs_add_form"):
         _add_col1, _add_col2 = st.columns(2)
         with _add_col1:
-            # Position selectbox: options are LABELS; the page maps back
-            # to the position_id via _position_label_to_id at submit time.
-            # Empty options list when the user has no positions yet —
-            # st.selectbox tolerates an empty list; the submit handler
-            # rejects the no-position case before reaching add_recommender.
             st.selectbox(
                 "Position",
                 options=list(_position_label_to_id.keys()),
@@ -353,8 +286,6 @@ with st.expander("Add Recommender", expanded=False):
             )
         _add_submitted = st.form_submit_button("+ Add Recommender", key="recs_add_submit")
 
-# T5-B submit handler — outside the form so st.error / st.toast render in
-# the page body (the quick-add precedent on the Opportunities page).
 if _add_submitted:
     _name_raw = (st.session_state.get("recs_add_name") or "").strip()
     _pos_label = st.session_state.get("recs_add_position")
@@ -362,12 +293,8 @@ if _add_submitted:
     _asked = st.session_state.get("recs_add_asked_date")
 
     if not _name_raw:
-        # Mirror Opportunities §8.2 quick-add F3: whitespace-only is
-        # treated as empty. No DB write, no toast.
         st.error("Recommender Name is required.")
     elif _pos_label not in _position_label_to_id:
-        # Defensive: empty positions table or stale label. Surface a
-        # friendly error rather than letting the lookup raise KeyError.
         st.error("Pick a position before adding a recommender.")
     else:
         _pos_id = _position_label_to_id[_pos_label]
@@ -376,8 +303,6 @@ if _add_submitted:
             "relationship": _rel_pick,
             "asked_date": _asked.isoformat() if _asked else None,
         }
-        # GUIDELINES §8: friendly error on failure, no re-raise — the
-        # caller never sees the traceback the handler exists to hide.
         try:
             database.add_recommender(_pos_id, _fields)
             st.toast(f'Added "{_name_raw}".')
@@ -386,27 +311,13 @@ if _add_submitted:
             st.error(f"Could not add recommender: {e}")
 
 
-# ── T5-A: Filter bar ─────────────────────────────────────────────────────────
-#
-# Two selectboxes — by position and by recommender name. Both default to
-# the "All" sentinel (no filter applied). The recommender filter dedupes
-# by name so the dropdown carries each person at most once even when they
-# owe letters for several positions.
-
-# Phase 7 cleanup CL2: the "All" sentinel lives on `config.FILTER_ALL`
-# (single source of truth across all three pages).
+# ── Filter bar ─────────────────────────────────────────────────────────
 
 _recs_df = database.get_all_recommenders()
 
-# Position filter options: derive from the positions table so a position
-# without recommenders still appears (matches the add-form selectbox's
-# coverage). Sentinel first.
+
 _position_filter_options = [config.FILTER_ALL] + list(_position_label_to_id.keys())
 
-# Recommender filter options: distinct recommender_names ordered by the
-# upstream `r.recommender_name ASC` from get_all_recommenders. Drop NULLs
-# (rare — a recommender without a name is degenerate but possible while
-# the user is still filling things in).
 if _recs_df.empty:
     _recommender_filter_options = [config.FILTER_ALL]
 else:
@@ -434,19 +345,7 @@ with _filter_col2:
     )
 
 
-# ── T5-A: Table render ──────────────────────────────────────────────────────
-#
-# Apply filters, then project the joined recommenders × positions frame
-# into the six-column display contract pinned by tests:
-#   Position · Recommender · Relationship · Asked · Confirmed · Submitted
-# `recs_table` is the dataframe key — selectable via on_select='rerun'
-# / selection_mode='single-row'. The selection-resolution block below
-# captures `recs_selected_id` for the inline edit card.
-
-# CL1 type-clean: boolean indexing widens df to Series | DataFrame
-# per pandas-stubs, so cast each filter step's RHS back to
-# `pd.DataFrame` so downstream `.reset_index` / `.apply` / `.iloc` /
-# `.empty` access stays typed.
+# ── Table render ──────────────────────────────────────────────────────
 _filtered_df: pd.DataFrame = _recs_df.copy()
 if _pos_filter != config.FILTER_ALL:
     _target_pos_id = _position_label_to_id.get(_pos_filter)
@@ -464,9 +363,6 @@ if _rec_filter != config.FILTER_ALL:
 _filtered_df = _filtered_df.reset_index(drop=True)
 
 if _filtered_df.empty:
-    # Render a six-column empty frame so the column contract pinned by
-    # `test_table_renders_with_six_display_columns` holds even on an
-    # empty DB / heavily-filtered view.
     _display_df = pd.DataFrame(
         columns=[
             "Position",
@@ -537,20 +433,8 @@ _event = st.dataframe(
 )
 
 
-# ── T5-C: Selection resolution ─────────────────────────────────────────────
-#
-# Map the selected positional row back to its recommender id. Mirror of
-# the Opportunities / Applications selection-resolution structure, with
-# the same `_recs_skip_table_reset` one-shot for post-Save / post-Confirm
-# reruns where AppTest's dataframe event resets across the rerun
-# . Switching rows clears any stale `_recs_delete_target_*`
-# pair so a previously-opened-but-X-dismissed dialog can't re-fire as a
-# phantom on a sibling row (Opportunities review fix #2 precedent).
+# ── Selection resolution ─────────────────────────────────────────────
 
-# CL1 type-clean: streamlit-stubs declares DataframeState as
-# TypedDict so attribute access trips pyright; runtime exposes a
-# wrapper supporting both subscript and attribute. Mirror the form
-# used on pages/1_Opportunities.py + pages/2_Applications.py.
 _selected_rows = list(_event.selection.rows) if _event is not None else []  # type: ignore[attr-defined]
 if _selected_rows and 0 <= _selected_rows[0] < len(_filtered_df):
     _new_rec_id = int(_filtered_df.iloc[_selected_rows[0]]["id"])
@@ -563,19 +447,13 @@ elif (
     st.session_state.pop("_recs_skip_table_reset", False)
     or "_recs_delete_target_id" in st.session_state
 ):
-    # One-shot consumed: the Save / Cancel handlers set this flag before
-    # st.rerun() so selection survives the rerun. The dialog-pending
-    # branch keeps the selection so the dialog stays reachable.
     pass
 else:
-    # Empty selection on a real (non-empty) table → user clicked away.
     st.session_state.pop("recs_selected_id", None)
     st.session_state.pop("_recs_edit_form_sid", None)
 
 
-# ── T5-C: Delete confirm dialog (defined before use so the click handler
-# can call it directly — same shape as the Opportunities-page
-# `_confirm_delete_dialog`).
+# ── Delete confirm dialog 
 @st.dialog("Delete this recommender?")
 def _confirm_delete_recommender_dialog() -> None:
     """Modal confirm dialog for irreversible recommender deletion. The
@@ -630,18 +508,10 @@ def _confirm_delete_recommender_dialog() -> None:
             st.rerun()
 
 
-# ── T5-C: Inline edit card ──────────────────────────────────────────────────
-#
-# Renders only when a recommender row is selected. Wrapped in
-# `st.container(border=True)` per DESIGN §8.0 visual-grouping convention.
-# Pre-seed widgets via the `_recs_edit_form_sid` sentinel (same widget-
-# value-trap pattern as Opportunities / Applications).
+# ── Inline edit card ──────────────────────────────────────────────────
 
 if "recs_selected_id" in st.session_state:
     _rec_id = int(st.session_state["recs_selected_id"])
-    # Look up the selected row in the UNFILTERED frame so a filter
-    # narrowing that excludes the row doesn't dismiss an in-progress
-    # edit (Opportunities/Applications precedent).
     _selected_match = _recs_df[_recs_df["id"] == _rec_id]
     if not _selected_match.empty:
         _rec_row = _selected_match.iloc[0]
@@ -651,12 +521,7 @@ if "recs_selected_id" in st.session_state:
             st.markdown(f"**Editing: {_rec_name or EM_DASH}**")
 
             # ── Pre-seed widget state ───────────────────────────────────
-            #
-            # Two-phase apply :
-            #   (a) Row CHANGE → force-overwrite every key.
-            #   (b) Same row, key missing → restore from canonical.
-            #   (c) Same row, key present → leave it alone (preserves
-            #       in-flight form draft / AppTest set_value semantics).
+    
             _sid_changed = st.session_state.get("_recs_edit_form_sid") != _rec_id
 
             _raw_confirmed = _rec_row["confirmed"]
@@ -728,14 +593,8 @@ if "recs_selected_id" in st.session_state:
                     key="recs_edit_submit",
                 )
 
-            # ── Save handler — outside the form so st.error/toast render
-            # in the page body, not nested inside the form.
+            
             if _edit_submitted:
-                # Build the dirty diff against the persisted DB row so
-                # Save writes ONLY changed fields. Untouched widgets
-                # don't appear in the payload — load-bearing for the
-                # AGENTS §T5-C "dirty_fields_only" contract and pinned
-                # by `test_save_writes_only_dirty_fields`.
                 _w_asked = st.session_state.get("recs_edit_asked_date")
                 _w_confirmed = st.session_state.get("recs_edit_confirmed")
                 _w_submitted = st.session_state.get("recs_edit_submitted_date")
@@ -774,21 +633,12 @@ if "recs_selected_id" in st.session_state:
                         st.toast(f'Saved "{_rec_name}".')
                     else:
                         st.toast("No changes to save.")
-                    # Pop the sentinel so the post-Save rerun re-seeds
-                    # widgets from the just-persisted DB values; the
-                    # skip flag preserves selection across the dataframe-
-                    # event-reset rerun .
                     st.session_state.pop("_recs_edit_form_sid", None)
                     st.session_state["_recs_skip_table_reset"] = True
                     st.rerun()
                 except Exception as e:
                     st.error(f"Could not save: {e}")
 
-            # ── Delete button — OUTSIDE the form (Streamlit 1.56 forbids
-            # st.button inside st.form). Click stashes target sentinels
-            # and opens the dialog; the elif re-opens it on subsequent
-            # reruns while the sentinels remain set, which is what makes
-            # Confirm/Cancel reachable through AppTest's script-run model.
             if st.button("Delete", type="primary", key="recs_edit_delete"):
                 st.session_state["_recs_delete_target_id"] = _rec_id
                 st.session_state["_recs_delete_target_name"] = _rec_name
@@ -796,8 +646,5 @@ if "recs_selected_id" in st.session_state:
             elif st.session_state.get("_recs_delete_target_id") == _rec_id:
                 _confirm_delete_recommender_dialog()
     else:
-        # The selected row vanished from the unfiltered df (deleted
-        # elsewhere, DB wiped). Pop both sentinels so later reruns don't
-        # keep referencing a missing row.
         st.session_state.pop("recs_selected_id", None)
         st.session_state.pop("_recs_edit_form_sid", None)

@@ -56,22 +56,13 @@ def init_db() -> None:
     Note: f-strings are used for column names only. All column names come from
     config constants, never from user input, so this is safe."""
 
-    # Build req/done column definitions from config.
-    # req_* DEFAULT 'No' matches config.REQUIREMENT_VALUES[-1] (full-word
-    # form). The one-shot UPDATE migration below translates any lingering
-    # short-code ('Y'/'N') rows in place.
+  
     req_done_cols = ""
     for req_col, done_col, _ in config.REQUIREMENT_DOCS:
         req_done_cols += f",\n    {req_col:<30} TEXT    DEFAULT 'No'"
         req_done_cols += f",\n    {done_col:<30} INTEGER DEFAULT 0"
 
-    # DESIGN §6.2: DDL DEFAULTs are config-driven. The two DEFAULT
-    # clauses below interpolate config.STATUS_VALUES[0] and
-    # config.RESULT_DEFAULT into the CREATE TABLE strings, so renaming
-    # either constant is a config-only edit — no DDL change, only the
-    # one-shot UPDATE migration spelled out in §6.3 (and implemented
-    # below). The interpolated values come exclusively from config
-    # (never user input), so the f-string path is safe.
+   
     status_default = config.STATUS_VALUES[0]
     result_default = config.RESULT_DEFAULT
 
@@ -106,14 +97,7 @@ def init_db() -> None:
             )
         """)
 
-        # The `confirmation_email` TEXT column (dual-purpose: stored
-        # either 'Y' for flag semantics or a date string for date
-        # semantics) was split into the (received, date) pair and
-        # physically dropped by the DROP COLUMN migration further below.
-        # The value-extraction UPDATEs in the split migration block run
-        # before the DROP COLUMN, so legacy data lands in the new pair
-        # before the source goes away. Fresh DBs build the post-drop
-        # shape directly via this DDL.
+       
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS applications (
                 position_id           INTEGER PRIMARY KEY,
@@ -132,12 +116,7 @@ def init_db() -> None:
             )
         """)
 
-        # Migrate-once gate for the interviews sub-table.
-        # Sample sqlite_master BEFORE the CREATE TABLE IF NOT EXISTS so
-        # we can tell whether this is a first-create-and-migrate run or
-        # a subsequent idempotent re-run. Computed here (before the
-        # CREATE) so the same boolean gates the one-shot data copy
-        # further below.
+        
         interviews_existed_pre_create = (
             conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'interviews'"
@@ -159,13 +138,7 @@ def init_db() -> None:
             )
         """)
 
-        # DESIGN §6.2: confirmed is tri-state INTEGER
-        # (0 = not confirmed, 1 = confirmed, NULL = pending response —
-        # no DEFAULT, so fresh rows start in the honest pending state);
-        # reminder_sent is INTEGER DEFAULT 0 paired with
-        # reminder_sent_date TEXT (ISO) per the (flag, date) split.
-        # The migration below translates any legacy TEXT columns via
-        # CREATE-COPY-DROP-RENAME.
+       
         conn.execute("""
             CREATE TABLE IF NOT EXISTS recommenders (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,49 +172,18 @@ def init_db() -> None:
             if done_col not in existing_cols:
                 conn.execute(f"ALTER TABLE positions ADD COLUMN {done_col} INTEGER DEFAULT 0")
 
-        # Migration (DESIGN §6.2 + D25): positions rows without
-        # updated_at pick up
-        # the column here, then existing rows are backfilled with
-        # datetime('now'). SQLite rejects non-constant expression
-        # DEFAULTs on ALTER TABLE ADD COLUMN against a non-empty table
-        # ('Cannot add a column with non-constant default'), so the
-        # ALTER uses a NULL default and the UPDATE fills the stamp —
-        # the CREATE TABLE DDL above keeps the full DEFAULT semantics
-        # for fresh DBs.
-        # Idempotent: a re-run sees updated_at already in existing_cols
-        # and skips both statements.
+     
         if "updated_at" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN updated_at TEXT")
             conn.execute(
                 "UPDATE positions SET updated_at = datetime('now') WHERE updated_at IS NULL"
             )
 
-        # Migration (DESIGN §6.2 + §6.3):
-        # pick up work_auth_note as a plain TEXT column
-        # with no DEFAULT — existing rows legitimately carry NULL
-        # because this field was not always collected. Paired with the
-        # categorical `work_auth` column (already plain TEXT),
-        # work_auth_note holds the freetext nuance (e.g.
-        # "green card required") while `work_auth` stays filter-
-        # friendly. Idempotent via the existing_cols guard.
+       
         if "work_auth_note" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN work_auth_note TEXT")
 
-        # Migration (DESIGN §6.3 normalize-flat-columns-into-sub-table):
-        # move the flat interview1_date / interview2_date columns into
-        # the `interviews` sub-table so a position can carry arbitrarily
-        # many interviews. This block runs EXACTLY ONCE per DB — the
-        # `interviews_existed_pre_create` guard above samples
-        # sqlite_master BEFORE the CREATE TABLE IF NOT EXISTS, so the
-        # first init_db() after upgrade hits this branch and subsequent
-        # calls skip it entirely (no INSERT OR IGNORE needed; no
-        # re-clearing of legacy columns). This is the "migrate-once
-        # gate" pattern (migrate-once).
-        #
-        # Step (a) from DESIGN §6.3: the CREATE TABLE happened above.
-        # Steps (b) + (c) live here: copy old columns → sub-table, then
-        # NULL-clear the source so nothing reads legacy data by accident
-        # and a future rebuild can drop the columns cleanly.
+       
         if not interviews_existed_pre_create:
             conn.execute(
                 "INSERT INTO interviews (application_id, sequence, scheduled_date) "
@@ -260,31 +202,7 @@ def init_db() -> None:
                 "   OR interview2_date IS NOT NULL"
             )
 
-        # Migration (DESIGN §6.2 + §6.3):
-        # split the dual-purpose `applications.confirmation_email`
-        # TEXT column into a (flag, date) pair.
-        #
-        # Shape of the legacy column values:
-        #   'Y'           -> flag-only; a confirmation was received but
-        #                    no date was recorded
-        #   'YYYY-MM-DD'  -> date-present; a confirmation was received
-        #                    on this specific date
-        #   NULL / '' /    -> no confirmation data; leave the new columns
-        #   anything else    at their DEFAULTs (received=0, date=NULL)
-        #
-        # Implementation follows DESIGN §6.3's "Split a dual-purpose
-        # column" recipe:
-        #   (a) ALTER TABLE ADD COLUMN for the two new columns — each
-        #       guarded by PRAGMA table_info so a rerun on an already-
-        #       migrated DB is a strict no-op.
-        #   (b) One-shot UPDATE translating the two legitimate legacy
-        #       shapes into the new columns — gated by the pre-ALTER
-        #       absence of the new columns (migrate-once gate pattern).
-        #   (c) The legacy `confirmation_email` column stays NULL until
-        #       the DROP COLUMN migration below removes it. No caller
-        #       writes to it post-split; the column is dead weight but
-        #       preserved so this migration need not touch
-        #       upsert_application or any other writer.
+  
         applications_cols = {
             row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
         }
@@ -299,16 +217,7 @@ def init_db() -> None:
         if "confirmation_date" not in applications_cols:
             conn.execute("ALTER TABLE applications ADD COLUMN confirmation_date TEXT")
         if confirmation_split_needed:
-            # Date-shaped legacy values: set both new columns. SQLite
-            # GLOB uses shell-style character classes;
-            # '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' matches
-            # exactly the 10-character ISO date shape and nothing else
-            # (so 'not-a-date' / 'Y' / '' / NULL all fall through).
-            # Runs before the flag-only UPDATE; the two WHERE clauses
-            # are disjoint (a date-shaped value is not 'Y') so order
-            # is not strictly load-bearing, but running the
-            # specific-shape match first keeps the translation
-            # deterministic.
+            
             conn.execute(
                 "UPDATE applications "
                 "SET confirmation_received = 1, "
@@ -316,121 +225,24 @@ def init_db() -> None:
                 "WHERE confirmation_email GLOB "
                 "  '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
             )
-            # Flag-only legacy values: set received=1, leave date NULL.
             conn.execute(
                 "UPDATE applications SET confirmation_received = 1 WHERE confirmation_email = 'Y'"
             )
-            # NULL-clear the legacy column per DESIGN §6.3 step (c)
-            # ("leave the old column NULL until a follow-up release
-            # rebuilds the table to drop it") — parallels the
-            # interview1_date / interview2_date NULL-clear in the
-            # interviews migration above. Runs LAST so the two
-            # value-extracting UPDATEs above still see the original
-            # confirmation_email contents; clearing first would leave
-            # nothing to translate. Idempotent by virtue of the outer
-            # `confirmation_split_needed` gate — on a re-run after
-            # migration, both new columns are already present, the
-            # gate is False, and this whole block is skipped.
+            
             conn.execute(
                 "UPDATE applications "
                 "SET confirmation_email = NULL "
                 "WHERE confirmation_email IS NOT NULL"
             )
 
-        # Migration (DESIGN §6.3 "Remove a col"): physically drop
-        # the legacy `applications.confirmation_email` TEXT column. The
-        # column has been NULL-only since the split migration above
-        # (no caller writes to it; values were extracted
-        # into the (received, date) pair and the source NULL-cleared).
-        # This drop is the final step of that long-running split.
-        #
-        # SQLite 3.35+ supports ALTER TABLE DROP COLUMN for columns with
-        # no PRIMARY KEY / UNIQUE / INDEX / FOREIGN KEY-ref / CHECK / GEN
-        # constraints — confirmation_email satisfies all five, so the
-        # one-line DROP COLUMN replaces the CREATE-COPY-DROP-RENAME
-        # rebuild that older SQLite required (and that DESIGN §6.3's
-        # "Remove a col" row originally specced). The rebuild form
-        # remains the right tool when the dropped column carries any of
-        # those constraints; the DROP COLUMN shortcut is correct here.
-        #
-        # Idempotence: the PRAGMA gate below short-circuits when the
-        # column is already absent, so a re-run after migration is a
-        # strict no-op.
+    
         applications_cols_post_split = {
             row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
         }
         if "confirmation_email" in applications_cols_post_split:
             conn.execute("ALTER TABLE applications DROP COLUMN confirmation_email")
 
-        # Migration (DESIGN §6.2 + §6.3):
-        # rebuild the recommenders table to translate legacy
-        # TEXT columns into the DESIGN-spec INTEGER / INTEGER-DEFAULT-0
-        # / TEXT shape. SQLite lacks in-place column-type change, so the
-        # recipe per SQLite docs §7 is CREATE-new → INSERT-COPY → DROP-
-        # old → RENAME-new. All four steps run inside the same
-        # `_connect()` transaction (a single commit at the outer `with`
-        # exit, rollback-on-exception via the context manager's except
-        # branch), so a mid-rebuild failure cannot leave the DB with
-        # a half-migrated table.
-        #
-        # Idempotence gate: inspect `PRAGMA table_info(recommenders)`
-        # and read the declared type of the `confirmed` column. When
-        # it's still TEXT, run the rebuild; when it's
-        # already INTEGER, the rebuild has landed and this block
-        # short-circuits. The CREATE TABLE IF NOT EXISTS above always
-        # runs with the new-schema DDL — on a fresh DB it builds the
-        # target shape directly and the guard below evaluates False
-        # (confirmed's type is already INTEGER) so the rebuild skips.
-        #
-        # CASE translation rules:
-        #
-        #   confirmed     'Y'           -> 1
-        #                 'N'           -> 0
-        #                 anything else -> NULL  (pending-response
-        #                                         tri-state; cautious —
-        #                                         'maybe' / stray freetext
-        #                                         become NULL rather than
-        #                                         a guessed integer)
-        #
-        #   reminder_sent 'Y'           -> reminder_sent=1,
-        #                                  reminder_sent_date=NULL
-        #                 'YYYY-MM-DD'  -> reminder_sent=0,
-        #                                  reminder_sent_date=<value>
-        #                                  (matched via SQLite GLOB
-        #                                  '????-??-??' — any 10-char
-        #                                  '??-??' shape; a looser
-        #                                  match than the digit-class
-        #                                  pattern used for legacy
-        #                                  reminder_sent, which
-        #                                  realistically held only
-        #                                  dates or 'Y'/NULL)
-        #                 anything else -> reminder_sent=0,
-        #                                  reminder_sent_date=NULL
-        #
-        # Note: the date-shape -> flag=0 mapping above is the
-        # *conservative* choice and intentionally diverges from
-        # the confirmation_email split (where date-shape
-        # -> received=1). See DESIGN §6.3 "Flag/date split divergence
-        # — confirmation_email vs reminder_sent" for the rationale —
-        # short version: legacy reminder_sent saw both date-only
-        # and 'Y'-only legacy use without a clear "date implies sent"
-        # rule, so the user re-saves to flip the flag if intended.
-        #
-        # All other columns (id, position_id, recommender_name,
-        # relationship, asked_date, submitted_date, notes) copy
-        # through verbatim; id values preserved so the
-        # sqlite_sequence AUTOINCREMENT counter stays coherent on the
-        # next add_recommender call (SQLite advances it past any
-        # explicitly-inserted id).
-        #
-        # FK safety: recommenders is a CHILD table (outbound FK to
-        # positions). No other table has a FK pointing INTO
-        # recommenders, so DROP TABLE is safe even with
-        # PRAGMA foreign_keys = ON (set by _connect()). The new
-        # table's DDL re-declares the FK + ON DELETE CASCADE, so the
-        # delete_position cascade chain survives the rebuild; the
-        # `test_migration_preserves_fk_cascade_on_delete_position`
-        # test exercises this end-to-end.
+        
         rec_cols_info = conn.execute("PRAGMA table_info(recommenders)").fetchall()
         confirmed_type = next(
             (row["type"] for row in rec_cols_info if row["name"] == "confirmed"),
@@ -482,13 +294,7 @@ def init_db() -> None:
             conn.execute("DROP TABLE recommenders")
             conn.execute("ALTER TABLE recommenders_new RENAME TO recommenders")
 
-        # Trigger (DESIGN §6.2): stamp updated_at on every row mutation
-        # so writers never have to remember.
-        # Loop prevention relies on SQLite's default recursive_triggers
-        # = OFF — the inner UPDATE would otherwise re-fire indefinitely.
-        # Created AFTER the ALTER above so the body's column reference
-        # resolves on migrated DBs too; and BEFORE the value-migration
-        # UPDATEs below so those writes are also stamped.
+        
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS positions_updated_at
                 AFTER UPDATE ON positions FOR EACH ROW
@@ -497,17 +303,7 @@ def init_db() -> None:
             END
         """)
 
-        # One-shot value migration (DESIGN §6.3): translate any short-code
-        # req_* values ('Y'/'N') to the full-word form ('Yes'/'No').
-        # Idempotent via the `WHERE {req_col} IN ('Y', 'N')` scope —
-        # the second init_db() on a migrated DB matches zero rows and the
-        # UPDATE is a strict no-op. An earlier unscoped CASE-ELSE form
-        # matched every row on every startup; SQLite fires AFTER UPDATE
-        # triggers for every matched row even when the value is unchanged,
-        # so that form silently advanced positions.updated_at on every call.
-        # Scoping the UPDATE to the legacy shape only is the clean fix.
-        # The f-string builds column identifiers only; `req_col` comes
-        # from config.REQUIREMENT_DOCS (never user input), so it is safe.
+     
         for req_col, _done_col, _ in config.REQUIREMENT_DOCS:
             conn.execute(
                 f"UPDATE positions SET {req_col} = "
@@ -518,14 +314,6 @@ def init_db() -> None:
                 f"WHERE {req_col} IN ('Y', 'N')"
             )
 
-        # One-shot value migration (DESIGN §5.1 + §6.3): rename any
-        # legacy pipeline-stage-0 status literal to config.STATUS_VALUES[0]
-        # and any legacy priority short code to 'Medium'. Both UPDATEs are
-        # idempotent via their WHERE guard — the second call finds no
-        # matching rows and is a no-op. Parameter-bound values are used
-        # so the legacy literals live only inside these two bindings.
-        # The legacy strings are assembled by concatenation so that
-        # source-tree greps for old vocabulary stay at zero hits.
         _legacy_saved = "[OPE" + "N]"  # assembled to avoid grep false positives
         _legacy_medium = "M" + "ed"    # assembled to avoid grep false positives
         conn.execute(
@@ -561,11 +349,6 @@ def add_position(fields: dict[str, Any]) -> int:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
     try:
         _exports.write_all()
     except Exception:
@@ -610,11 +393,7 @@ def update_position(position_id: int, fields: dict[str, Any]) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
+   
     try:
         _exports.write_all()
     except Exception:
@@ -631,11 +410,7 @@ def delete_position(position_id: int) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
+  
     try:
         _exports.write_all()
     except Exception:
@@ -695,9 +470,7 @@ def upsert_application(
     callers can unpack the return unconditionally.
 
     Calls exports.write_all() on success."""
-    # Empty-fields early return: no primary write, no cascade, but
-    # still hand the caller the indicator shape so they don't need a
-    # try/except around `.get("status_changed")`.
+
     if not fields:
         return {"status_changed": False, "new_status": None}
 
@@ -707,11 +480,6 @@ def upsert_application(
     vals = [position_id] + list(fields.values())
 
     with _connect() as conn:
-        # Pre-state reads — capture applied_date for R1's NULL→non-NULL
-        # transition test and status for the indicator diff. Missing
-        # applications row (shouldn't happen post-add_position) reads as
-        # None. The reads sit inside the same transaction as the writes
-        # below so the snapshot they see is consistent with the writes.
         cur = conn.execute(
             "SELECT applied_date FROM applications WHERE position_id = ?",
             (position_id,),
@@ -734,11 +502,6 @@ def upsert_application(
         )
 
         if propagate_status:
-            # R1: applied_date NULL→set on a STATUS_SAVED position.
-            # Scoped to the transition, not every touch of the column —
-            # so a later upsert that updates applied_date to a new
-            # value leaves status alone (position has already moved on
-            # in the pipeline via its prior R1).
             new_applied_date = fields.get("applied_date")
             if pre_applied_date is None and new_applied_date is not None:
                 conn.execute(
@@ -746,14 +509,7 @@ def upsert_application(
                     (config.STATUS_APPLIED, position_id, config.STATUS_SAVED),
                 )
 
-            # R3: incoming response_type == config.RESPONSE_TYPE_OFFER.
-            # Terminal guard in the WHERE clause blocks regression; the
-            # self-assignment that runs when pre status IS already
-            # STATUS_OFFER is harmless (pre == post, so status_changed
-            # reads False). Trigger string sourced from config so a
-            # future rename of the 'Offer' entry in RESPONSE_TYPES
-            # surfaces at import (invariant #9) rather than as a
-            # silent R3 no-op.
+          
             if fields.get("response_type") == config.RESPONSE_TYPE_OFFER:
                 terminal = tuple(config.TERMINAL_STATUSES)
                 placeholder_list = ", ".join("?" * len(terminal))
@@ -763,8 +519,6 @@ def upsert_application(
                     (config.STATUS_OFFER, position_id, *terminal),
                 )
 
-        # Post-state read for the indicator. Same connection →
-        # reads the just-updated row inside the still-open transaction.
         cur = conn.execute(
             "SELECT status FROM positions WHERE id = ?",
             (position_id,),
@@ -774,11 +528,6 @@ def upsert_application(
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
     try:
         _exports.write_all()
     except Exception:
@@ -815,12 +564,6 @@ def is_all_recs_submitted(position_id: int) -> bool:
 
 
 # ── Interviews ────────────────────────────────────────────────────────────────
-# DESIGN §6.2 + §7: the interviews sub-table replaces the flat
-# applications.interview1_date / interview2_date pair so a position can carry
-# arbitrarily many interviews. FK chain: interviews.application_id references
-# applications.position_id (which is itself the FK to positions.id), so
-# delete_position cascades transitively through applications → interviews.
-
 
 def add_interview(
     application_id: int,
@@ -854,13 +597,10 @@ def add_interview(
     the status update.
 
     Calls exports.write_all() on success."""
-    # Don't mutate the caller's dict — auto-sequence injection below
-    # would surprise a caller who reuses the same fields object.
+  
     fields = dict(fields)
 
     with _connect() as conn:
-        # Pre-state status for the indicator diff. Read inside the
-        # transaction for consistency with the post-state read below.
         cur = conn.execute(
             "SELECT status FROM positions WHERE id = ?",
             (application_id,),
@@ -887,17 +627,12 @@ def add_interview(
         new_id: int = cur.lastrowid or 0
 
         if propagate_status:
-            # R2: count-free per DESIGN §9.3. The status guard alone
-            # handles all edge cases — no need to SELECT COUNT(*) from
-            # interviews here. A back-edit to STATUS_APPLIED retaining
-            # existing interviews still promotes correctly on the next
-            # add_interview, which the count-based variant would miss.
             conn.execute(
                 "UPDATE positions SET status = ? WHERE id = ? AND status = ?",
                 (config.STATUS_INTERVIEW, application_id, config.STATUS_APPLIED),
             )
 
-        # Post-state read (same transaction, sees the R2 update).
+        
         cur = conn.execute(
             "SELECT status FROM positions WHERE id = ?",
             (application_id,),
@@ -907,11 +642,6 @@ def add_interview(
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
     try:
         _exports.write_all()
     except Exception:
@@ -982,11 +712,7 @@ def delete_interview(interview_id: int) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
+    
     try:
         _exports.write_all()
     except Exception:
@@ -1013,11 +739,7 @@ def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
+    
     try:
         _exports.write_all()
     except Exception:
@@ -1066,11 +788,6 @@ def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
     try:
         _exports.write_all()
     except Exception:
@@ -1086,11 +803,7 @@ def delete_recommender(rec_id: int) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    # DESIGN §7 database.py contract #1: log + swallow any
-    # exports failure so the DB write that already succeeded
-    # reports success to the caller. Markdown regeneration is
-    # best-effort; exports.write_all() additionally catches
-    # individual write_* failures internally per §9.5.
+    
     try:
         _exports.write_all()
     except Exception:
@@ -1196,19 +909,6 @@ def get_upcoming_interviews() -> pd.DataFrame:
 
 
 # ── get_upcoming: unified upcoming feed ─────────────────────────────────────
-# Powers the dashboard's Upcoming panel (DESIGN §8.1). Thin projection layer
-# over get_upcoming_deadlines + get_upcoming_interviews — no new SQL.
-#
-# Column contract (locked in DESIGN §8.1 "Upcoming-panel column contract"):
-#   date       — datetime.date object (chronological column-header sort)
-#   days_left  — 'today' / 'in 1 day' / 'in N days'
-#   label      — '{institute}: {position_name}' or bare position_name fallback
-#   kind       — 'Deadline for application' or f'Interview {sequence}'
-#   status     — raw bracketed sentinel (mapped to display labels by the UI layer)
-#   urgency    — '🔴' / '🟡' / ''
-#
-# `days_left` and `urgency` derive from the SAME `days_away` integer per row
-# so the two columns cannot drift — coherence is guaranteed by construction.
 
 _UPCOMING_COLUMNS: list[str] = [
     "date",
@@ -1228,15 +928,9 @@ def _days_left_label(days_away: int) -> str:
     return f"in {days_away} days"
 
 
-# urgency_glyph lives on config — the two call sites below pass int
-# days_away directly via Series.apply, no thin wrapper needed.
 
 
 def _label_for(institute: Any, position_name: str) -> str:
-    # institute is nullable; pandas may surface None / NaN / "" depending on
-    # round-trip. pd.isna catches None and NaN; the strip() check catches
-    # whitespace-only strings. Falling back to bare position_name when any
-    # of these holds avoids a "broken-looking" "<empty>: name" rendering.
     if pd.isna(institute) or str(institute).strip() == "":
         return position_name
     return f"{institute}: {position_name}"
@@ -1289,8 +983,6 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
         )
 
     # ── Interviews half ───────────────────────────────────────────────────
-    # Apply the days bound here (the helper itself doesn't bound) so the
-    # 'next N days' contract holds for both kinds.
     interviews = get_upcoming_interviews()
     if not interviews.empty:
         interviews = interviews[interviews["scheduled_date"] <= cutoff_iso]
@@ -1298,9 +990,6 @@ def get_upcoming(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
     if interviews.empty:
         interviews_proj = pd.DataFrame(columns=_UPCOMING_COLUMNS)
     else:
-        # status is not part of get_upcoming_interviews' contract — enrich
-        # via the positions table. Trim to id + status so the merge doesn't
-        # pollute the projection with stray fields.
         positions = get_all_positions()[["id", "status"]].rename(  # type: ignore[call-overload]
             columns={"id": "position_id"}
         )
@@ -1374,10 +1063,6 @@ def compute_materials_readiness() -> dict[str, int]:
     all_done = " AND ".join(
         f"({req} != 'Yes' OR {done} = 1)" for req, done, _ in config.REQUIREMENT_DOCS
     )
-    # Active-statuses are sourced from config aliases rather than hardcoded
-    # literals, so a future rename of stage values flows through automatically.
-    # The read happens at call time (not module load), which is what makes
-    # the sentinel test satisfiable.
     active_statuses = (
         config.STATUS_SAVED,
         config.STATUS_APPLIED,
