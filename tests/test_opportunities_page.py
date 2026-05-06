@@ -23,7 +23,7 @@ PAGE = "pages/1_Opportunities.py"
 # F2: use the explicit key passed to st.form_submit_button() rather than
 # relying on Streamlit's internal auto-generated "FormSubmitter:{form}-{label}"
 # format, which is undocumented and could change between library versions.
-SUBMIT_KEY = "qa_submit"
+SUBMIT_KEY = "qa_submit_0"
 
 # T4-A: key passed to st.dataframe() so tests can drive row selection by
 # injecting into session_state (AppTest exposes no click-a-row API).
@@ -105,32 +105,32 @@ class TestQuickAddFormStructure:
 
     def test_form_has_position_name_field(self, db):
         at = _run_page()
-        at.text_input(key="qa_position_name")  # raises KeyError if absent
+        at.text_input(key="qa_position_name_0")  # raises KeyError if absent
 
     def test_form_has_institute_field(self, db):
         at = _run_page()
-        at.text_input(key="qa_institute")
+        at.text_input(key="qa_institute_0")
 
     def test_form_has_field_field(self, db):
         at = _run_page()
-        at.text_input(key="qa_field")
+        at.text_input(key="qa_field_0")
 
     def test_form_has_deadline_field(self, db):
         at = _run_page()
-        at.date_input(key="qa_deadline_date")
+        at.date_input(key="qa_deadline_date_0")
 
     def test_form_has_priority_field(self, db):
         at = _run_page()
-        at.selectbox(key="qa_priority")
+        at.selectbox(key="qa_priority_0")
 
     def test_form_has_link_field(self, db):
         at = _run_page()
-        at.text_input(key="qa_link")
+        at.text_input(key="qa_link_0")
 
     def test_priority_options_match_config(self, db):
         """Priority selectbox options must exactly match config.PRIORITY_VALUES."""
         at = _run_page()
-        actual = list(at.selectbox(key="qa_priority").options)
+        actual = list(at.selectbox(key="qa_priority_0").options)
         assert actual == config.PRIORITY_VALUES, (
             f"Priority options mismatch.\n"
             f"  Expected: {config.PRIORITY_VALUES}\n"
@@ -166,7 +166,7 @@ class TestQuickAddFormBehaviour:
         monkeypatch.setattr(database, "add_position", _boom)
 
         at = _run_page()
-        at.text_input(key="qa_position_name").input("Stanford BioStats")
+        at.text_input(key="qa_position_name_0").input("Stanford BioStats")
         at.button(key=SUBMIT_KEY).click()
         at.run()
 
@@ -198,7 +198,7 @@ class TestQuickAddFormBehaviour:
         (test_save_whitespace_only_name_blocked) so the contract holds at
         both ends: a validation failure NEVER fires the success toast."""
         at = _run_page()
-        at.text_input(key="qa_position_name").input("   ")
+        at.text_input(key="qa_position_name_0").input("   ")
         at.button(key=SUBMIT_KEY).click()
         at.run()
         assert at.error, "Expected st.error for whitespace-only position_name"
@@ -213,7 +213,7 @@ class TestQuickAddFormBehaviour:
     def test_submit_with_position_name_only_adds_position(self, db):
         """Minimal valid submission (position_name only) must create one DB row."""
         at = _run_page()
-        at.text_input(key="qa_position_name").input("Stanford BioStats")
+        at.text_input(key="qa_position_name_0").input("Stanford BioStats")
         at.button(key=SUBMIT_KEY).click()
         at.run()
         assert not at.exception
@@ -224,12 +224,12 @@ class TestQuickAddFormBehaviour:
     def test_submit_with_all_fields_stores_correct_data(self, db):
         """All 6 QUICK_ADD_FIELDS must be persisted correctly."""
         at = _run_page()
-        at.text_input(key="qa_position_name").input("MIT CSAIL Postdoc")
-        at.text_input(key="qa_institute").input("MIT")
-        at.text_input(key="qa_field").input("Machine Learning")
-        at.date_input(key="qa_deadline_date").set_value(datetime.date(2026, 6, 1))
-        at.selectbox(key="qa_priority").select("High")
-        at.text_input(key="qa_link").input("https://mit.edu/csail")
+        at.text_input(key="qa_position_name_0").input("MIT CSAIL Postdoc")
+        at.text_input(key="qa_institute_0").input("MIT")
+        at.text_input(key="qa_field_0").input("Machine Learning")
+        at.date_input(key="qa_deadline_date_0").set_value(datetime.date(2026, 6, 1))
+        at.selectbox(key="qa_priority_0").select("High")
+        at.text_input(key="qa_link_0").input("https://mit.edu/csail")
         at.button(key=SUBMIT_KEY).click()
         at.run()
 
@@ -247,7 +247,7 @@ class TestQuickAddFormBehaviour:
     def test_submit_shows_success_message(self, db):
         """A st.success element must appear after a valid submission."""
         at = _run_page()
-        at.text_input(key="qa_position_name").input("Harvard Postdoc")
+        at.text_input(key="qa_position_name_0").input("Harvard Postdoc")
         at.button(key=SUBMIT_KEY).click()
         at.run()
         assert at.toast, "Expected st.toast after a valid quick-add submission"
@@ -255,7 +255,7 @@ class TestQuickAddFormBehaviour:
     def test_new_position_has_saved_status(self, db):
         """Positions added via quick-add must default to STATUS_VALUES[0] ('[SAVED]')."""
         at = _run_page()
-        at.text_input(key="qa_position_name").input("Yale Postdoc")
+        at.text_input(key="qa_position_name_0").input("Yale Postdoc")
         at.button(key=SUBMIT_KEY).click()
         at.run()
         df = database.get_all_positions()
@@ -268,7 +268,7 @@ class TestQuickAddFormBehaviour:
         for name in ("Position A", "Position B"):
             at = AppTest.from_file(PAGE)
             at.run()
-            at.text_input(key="qa_position_name").input(name)
+            at.text_input(key="qa_position_name_0").input(name)
             at.button(key=SUBMIT_KEY).click()
             at.run()
             assert not at.exception
@@ -281,28 +281,33 @@ class TestQuickAddFormBehaviour:
     def test_form_clears_after_successful_save(self, db):
         """After a successful save, all Quick Add fields reset to defaults so
         the user can immediately type the next position without manually
-        deleting the previous values."""
+        deleting the previous values.
+
+        Implementation: a nonce in widget keys (`qa_*_0` → `qa_*_1` …) forces
+        Streamlit to mount a fresh form on the next render, so widgets render
+        empty even when client-side DOM state would otherwise persist the
+        typed values across an in-place rerun."""
         at = _run_page()
-        at.text_input(key="qa_position_name").input("Stanford BioStats")
-        at.text_input(key="qa_institute").input("Stanford")
-        at.text_input(key="qa_field").input("Biostatistics")
-        at.date_input(key="qa_deadline_date").set_value(datetime.date(2026, 6, 1))
-        at.selectbox(key="qa_priority").select("High")
-        at.text_input(key="qa_link").input("https://stanford.edu/biostats")
+        at.text_input(key="qa_position_name_0").input("Stanford BioStats")
+        at.text_input(key="qa_institute_0").input("Stanford")
+        at.text_input(key="qa_field_0").input("Biostatistics")
+        at.date_input(key="qa_deadline_date_0").set_value(datetime.date(2026, 6, 1))
+        at.selectbox(key="qa_priority_0").select("High")
+        at.text_input(key="qa_link_0").input("https://stanford.edu/biostats")
         at.button(key=SUBMIT_KEY).click()
         at.run()
 
         assert not at.exception
-        # All text fields cleared
-        assert at.text_input(key="qa_position_name").value == "", (
-            f"qa_position_name should be empty, got {at.text_input(key='qa_position_name').value!r}"
+        assert at.session_state["_qa_nonce"] == 1, (
+            "Successful save must increment _qa_nonce so the form re-mounts."
         )
-        assert at.text_input(key="qa_institute").value == ""
-        assert at.text_input(key="qa_field").value == ""
-        assert at.text_input(key="qa_link").value == ""
-        # Date and priority back to defaults
-        assert at.date_input(key="qa_deadline_date").value is None
-        assert at.selectbox(key="qa_priority").value == config.PRIORITY_VALUES[0]
+        # New widgets carry the post-bump suffix and render empty / default.
+        assert at.text_input(key="qa_position_name_1").value == ""
+        assert at.text_input(key="qa_institute_1").value == ""
+        assert at.text_input(key="qa_field_1").value == ""
+        assert at.text_input(key="qa_link_1").value == ""
+        assert at.date_input(key="qa_deadline_date_1").value is None
+        assert at.selectbox(key="qa_priority_1").value == config.PRIORITY_VALUES[0]
 
     def test_form_keeps_input_after_failed_save(self, db, monkeypatch):
         """If the save fails (e.g. DB error or validation), Quick Add fields
@@ -314,14 +319,14 @@ class TestQuickAddFormBehaviour:
         monkeypatch.setattr(database, "add_position", _boom)
 
         at = _run_page()
-        at.text_input(key="qa_position_name").input("Stanford BioStats")
-        at.text_input(key="qa_institute").input("Stanford")
+        at.text_input(key="qa_position_name_0").input("Stanford BioStats")
+        at.text_input(key="qa_institute_0").input("Stanford")
         at.button(key=SUBMIT_KEY).click()
         at.run()
 
         # Save failed — fields should retain their values
-        assert at.text_input(key="qa_position_name").value == "Stanford BioStats"
-        assert at.text_input(key="qa_institute").value == "Stanford"
+        assert at.text_input(key="qa_position_name_0").value == "Stanford BioStats"
+        assert at.text_input(key="qa_institute_0").value == "Stanford"
 
 
 # ── Positions table ───────────────────────────────────────────────────────────
@@ -991,8 +996,8 @@ class TestRowSelection:
         _select_row(at, 0)
         assert "selected_position_id" in at.session_state  # precondition
         # Submit a quick-add for a new position via the real form.
-        at.text_input(key="qa_position_name").set_value("Beta")
-        at.button(key="qa_submit").click()
+        at.text_input(key="qa_position_name_0").set_value("Beta")
+        at.button(key="qa_submit_0").click()
         at.run()
         assert not at.exception, f"Quick-add raised after selection: {at.exception}"
         assert "selected_position_id" not in at.session_state, (

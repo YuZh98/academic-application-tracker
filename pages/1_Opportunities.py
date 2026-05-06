@@ -124,20 +124,25 @@ st.set_page_config(
 st.title("Opportunities")
 
 # ── Quick-add expander ────────────────────────────────────────────────
+# Nonce in widget keys forces a fresh widget mount after each successful
+# save: incrementing the nonce changes every key, so Streamlit treats the
+# next render as a brand-new form and the inputs render empty. Failure
+# paths leave the nonce unchanged, so the user's input is preserved.
+qa_nonce = st.session_state.get("_qa_nonce", 0)
 with st.expander("Quick Add", expanded=False):
-    with st.form(key="quick_add_form"):
+    with st.form(key=f"quick_add_form_{qa_nonce}"):
         col1, col2, col3 = st.columns(3)
         with col1:
-            position_name = st.text_input("Position Name *", key="qa_position_name")
-            deadline_date = st.date_input("Deadline", value=None, key="qa_deadline_date")
+            position_name = st.text_input("Position Name *", key=f"qa_position_name_{qa_nonce}")
+            deadline_date = st.date_input("Deadline", value=None, key=f"qa_deadline_date_{qa_nonce}")
         with col2:
-            institute = st.text_input("Institute", key="qa_institute")
-            priority = st.selectbox("Priority", config.PRIORITY_VALUES, key="qa_priority")
+            institute = st.text_input("Institute", key=f"qa_institute_{qa_nonce}")
+            priority = st.selectbox("Priority", config.PRIORITY_VALUES, key=f"qa_priority_{qa_nonce}")
         with col3:
-            field = st.text_input("Field", key="qa_field")
-            link = st.text_input("Link", key="qa_link", placeholder="https://…")
+            field = st.text_input("Field", key=f"qa_field_{qa_nonce}")
+            link = st.text_input("Link", key=f"qa_link_{qa_nonce}", placeholder="https://…")
 
-        submitted = st.form_submit_button("+ Add Position", key="qa_submit")
+        submitted = st.form_submit_button("+ Add Position", key=f"qa_submit_{qa_nonce}")
 
 
 if submitted:
@@ -164,17 +169,10 @@ if submitted:
             st.session_state.pop("positions_table", None)
             st.session_state.pop("selected_position_id", None)
             st.session_state.pop("_edit_form_sid", None)
-            # Clear Quick Add inputs so the user can immediately add another
-            # position without manually deleting the previous values.
-            for qa_key in (
-                "qa_position_name",
-                "qa_institute",
-                "qa_field",
-                "qa_deadline_date",
-                "qa_priority",
-                "qa_link",
-            ):
-                st.session_state.pop(qa_key, None)
+            # Bump the nonce so the form re-mounts with fresh, empty widgets
+            # on the next render — letting the user immediately type the next
+            # position without manually clearing each field.
+            st.session_state["_qa_nonce"] = qa_nonce + 1
             st.rerun()
         except Exception as e:
             st.error(f"Could not save position: {e}")
