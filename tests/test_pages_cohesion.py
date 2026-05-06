@@ -20,7 +20,6 @@ from typing import Iterator
 
 import pytest
 
-
 # All five pages on the Academic Application Tracker. Order matches the sidebar.
 # Add new pages here; the parametrize decorators pick them up
 # automatically.
@@ -183,29 +182,22 @@ class TestSetPageConfigSweep:
     """
 
     @pytest.mark.parametrize("page", PAGE_FILES)
-    def test_page_calls_set_page_config_with_locked_kwargs(
-        self, page: str
-    ) -> None:
+    def test_page_calls_set_page_config_with_locked_kwargs(self, page: str) -> None:
         src = pathlib.Path(page).read_text(encoding="utf-8")
         assert "st.set_page_config(" in src, (
             f"{page} must call st.set_page_config(...) per DESIGN §8.0."
         )
         assert 'page_title="Academic Application Tracker"' in src, (
-            f"{page} must bind page_title=\"Academic Application Tracker\" "
+            f'{page} must bind page_title="Academic Application Tracker" '
             f"(locked across every page per DESIGN §8.0 / D14)."
         )
         assert 'page_icon="📋"' in src, (
-            f"{page} must bind page_icon=\"📋\" "
-            f"(locked across every page per DESIGN §8.0 / D14)."
+            f'{page} must bind page_icon="📋" (locked across every page per DESIGN §8.0 / D14).'
         )
-        assert 'layout="wide"' in src, (
-            f"{page} must bind layout=\"wide\" per DESIGN §8.0 / D14."
-        )
+        assert 'layout="wide"' in src, f'{page} must bind layout="wide" per DESIGN §8.0 / D14.'
 
     @pytest.mark.parametrize("page", PAGE_FILES)
-    def test_set_page_config_is_first_streamlit_statement(
-        self, page: str
-    ) -> None:
+    def test_set_page_config_is_first_streamlit_statement(self, page: str) -> None:
         src = pathlib.Path(page).read_text(encoding="utf-8")
         first = _first_module_level_st_call(src)
         assert first is not None, (
@@ -261,12 +253,8 @@ class TestConfirmDialogAudit:
     end-to-end click flows.
     """
 
-    @pytest.mark.parametrize(
-        "path", DESTRUCTIVE_PATHS, ids=lambda p: p["page"]
-    )
-    def test_dialog_decorator_locked_shape(
-        self, path: dict
-    ) -> None:
+    @pytest.mark.parametrize("path", DESTRUCTIVE_PATHS, ids=lambda p: p["page"])
+    def test_dialog_decorator_locked_shape(self, path: dict) -> None:
         """Each destructive path's dialog function is decorated with
         the verbatim ``@st.dialog("Delete this <noun>?")`` line. The
         verbatim source-grep catches drift in either the decorator
@@ -276,16 +264,11 @@ class TestConfirmDialogAudit:
         src = pathlib.Path(path["page"]).read_text(encoding="utf-8")
         expected = f'@st.dialog("{path["title"]}")'
         assert expected in src, (
-            f"{path['page']} must wear {expected!r} on its dialog "
-            f"function per GUIDELINES §8."
+            f"{path['page']} must wear {expected!r} on its dialog function per GUIDELINES §8."
         )
 
-    @pytest.mark.parametrize(
-        "path", DESTRUCTIVE_PATHS, ids=lambda p: p["page"]
-    )
-    def test_dialog_body_says_cannot_be_undone(
-        self, path: dict
-    ) -> None:
+    @pytest.mark.parametrize("path", DESTRUCTIVE_PATHS, ids=lambda p: p["page"])
+    def test_dialog_body_says_cannot_be_undone(self, path: dict) -> None:
         """Every dialog body must contain the irreversibility cue
         "cannot be undone" — the universal minimum so the user
         understands the click is destructive. Cascading deletes get
@@ -310,9 +293,7 @@ class TestConfirmDialogAudit:
         [p for p in DESTRUCTIVE_PATHS if p["cascade_substrings"]],
         ids=lambda p: p["page"],
     )
-    def test_dialog_body_lists_cascade_effects(
-        self, path: dict
-    ) -> None:
+    def test_dialog_body_lists_cascade_effects(self, path: dict) -> None:
         """Cascading-delete dialogs must spell out each
         cascade-affected entity in the warning copy. The user
         clicking "Delete this position" needs to know they're also
@@ -332,9 +313,7 @@ class TestConfirmDialogAudit:
         fn = _find_function(tree, path["dialog_fn"])
         assert fn is not None
         body_src = (ast.get_source_segment(src, fn) or "").lower()
-        missing = [
-            s for s in path["cascade_substrings"] if s not in body_src
-        ]
+        missing = [s for s in path["cascade_substrings"] if s not in body_src]
         assert not missing, (
             f"{path['page']}::{path['dialog_fn']} body is missing "
             f"cascade-effect mention(s) of {missing}. Per spec the "
@@ -372,26 +351,19 @@ class TestConfirmDialogAudit:
                 ):
                     continue
                 inside_dialog = any(
-                    isinstance(anc, ast.FunctionDef)
-                    and _has_dialog_decorator(anc)
+                    isinstance(anc, ast.FunctionDef) and _has_dialog_decorator(anc)
                     for anc in _ancestors(node)
                 )
                 if not inside_dialog:
-                    violations.append(
-                        (page, node.lineno, node.func.attr)
-                    )
+                    violations.append((page, node.lineno, node.func.attr))
         assert not violations, (
             f"database.delete_* calls outside @st.dialog functions: "
             f"{violations}. Per GUIDELINES §8, every irreversible "
             f"action must be gated by a confirm dialog."
         )
 
-    @pytest.mark.parametrize(
-        "path", DESTRUCTIVE_PATHS, ids=lambda p: p["page"]
-    )
-    def test_dialog_failure_preserves_pending_sentinel(
-        self, path: dict
-    ) -> None:
+    @pytest.mark.parametrize("path", DESTRUCTIVE_PATHS, ids=lambda p: p["page"])
+    def test_dialog_failure_preserves_pending_sentinel(self, path: dict) -> None:
         """Failure path of every dialog must NOT pop the pending
         sentinel — so when ``database.delete_*`` raises, the user
         sees ``st.error`` and the dialog re-opens for retry on the
@@ -421,10 +393,7 @@ class TestConfirmDialogAudit:
                 and node.func.value.attr == "session_state"
             ):
                 continue
-            inside_except = any(
-                isinstance(anc, ast.ExceptHandler)
-                for anc in _ancestors(node)
-            )
+            inside_except = any(isinstance(anc, ast.ExceptHandler) for anc in _ancestors(node))
             assert not inside_except, (
                 f"{path['page']}::{path['dialog_fn']}: "
                 f"st.session_state.pop at line {node.lineno} sits "
@@ -432,3 +401,67 @@ class TestConfirmDialogAudit:
                 f"pending sentinel so the dialog re-opens for retry "
                 f"per GUIDELINES §8 + the dialog's own docstring."
             )
+
+
+class TestImportContractSweep:
+    """DESIGN §2 layer-rule enforcement.
+
+    Each test source-greps one architectural invariant that must hold
+    across all page files and database.py. These mirror the contract
+    stated in GUIDELINES §2 Module Import Contract.
+    """
+
+    PAGE_FILES = [
+        "app.py",
+        "pages/1_Opportunities.py",
+        "pages/2_Applications.py",
+        "pages/3_Recommenders.py",
+        "pages/4_Export.py",
+    ]
+
+    def test_database_never_imports_streamlit(self):
+        """database.py must never import streamlit at module top-level."""
+        src = pathlib.Path("database.py").read_text()
+        # Module-top imports only — deferred imports inside functions are allowed.
+        top_level = "\n".join(
+            line
+            for line in src.splitlines()
+            if not line.startswith(" ") and not line.startswith("\t")
+        )
+        assert "import streamlit" not in top_level, (
+            "database.py has a module-top 'import streamlit' — DESIGN §2 forbids this."
+        )
+
+    def test_pages_never_import_exports(self):
+        """pages/*.py and app.py must never directly import exports.py."""
+        for page in self.PAGE_FILES:
+            src = pathlib.Path(page).read_text()
+            top_level = "\n".join(
+                line
+                for line in src.splitlines()
+                if not line.startswith(" ") and not line.startswith("\t")
+            )
+            assert "import exports" not in top_level, (
+                f"{page} has a top-level 'import exports' — "
+                "DESIGN §2 forbids pages from importing exports directly."
+            )
+
+    def test_pages_no_raw_sql(self):
+        """pages/*.py and app.py must never contain raw SQL (.execute() calls or sqlite3 imports)."""
+        for page in self.PAGE_FILES:
+            src = pathlib.Path(page).read_text()
+            # Only scan non-comment lines so documentation comments that
+            # mention sqlite3 by name don't trip the rule.  We care about
+            # actual imports / usage, not incidental prose references.
+            for line in src.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue
+                assert "sqlite3" not in stripped, (
+                    f"{page}: found 'sqlite3' outside a comment — "
+                    "pages must use database.* helpers only."
+                )
+                # .execute( is a strong signal of raw SQL; exclude HTML/JS contexts
+                assert ".execute(" not in stripped, (
+                    f"{page}: found '.execute(' — raw SQL in page files is forbidden."
+                )

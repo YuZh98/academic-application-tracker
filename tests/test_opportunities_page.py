@@ -55,6 +55,22 @@ def _run_page() -> AppTest:
     return at
 
 
+def _force_set_position_field(db_path: "Any", position_name: str, field: str, value: str) -> None:
+    """Test escape hatch: set a position field to an arbitrary value.
+
+    Used when the public API validates inputs and cannot seed invalid
+    values needed for edge-case tests. Always called with a monkeypatched
+    DB_PATH (temp file) — never touches the real postdoc.db.
+    """
+    import sqlite3 as _sqlite3
+
+    with _sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            f"UPDATE positions SET {field} = ? WHERE position_name = ?",
+            (value, position_name),
+        )
+
+
 # ── Empty state ───────────────────────────────────────────────────────────────
 
 
@@ -383,8 +399,7 @@ class TestPositionsTable:
         df = cast(pd.DataFrame, at.dataframe[0].value)
         row = cast(pd.DataFrame, df[df["position_name"] == "No Deadline"])
         assert row["deadline_urgency"].iloc[0] == self.EM_DASH, (
-            f"Expected {self.EM_DASH!r} when no deadline, "
-            f"got {row['deadline_urgency'].iloc[0]!r}"
+            f"Expected {self.EM_DASH!r} when no deadline, got {row['deadline_urgency'].iloc[0]!r}"
         )
 
     def test_urgency_at_urgent_threshold_boundary(self, db):
@@ -552,8 +567,7 @@ class TestFilterBarBehaviour:
         assert not at.exception
         info_values = [el.value for el in at.info]
         assert config.EMPTY_FILTERED_POSITIONS in info_values, (
-            f"Expected {config.EMPTY_FILTERED_POSITIONS!r} info; got: "
-            f"{info_values!r}"
+            f"Expected {config.EMPTY_FILTERED_POSITIONS!r} info; got: {info_values!r}"
         )
 
     def test_filter_by_priority_narrows_results(self, db):
@@ -649,8 +663,7 @@ class TestFilterBarBehaviour:
         assert not at.exception
         info_values = [el.value for el in at.info]
         assert config.EMPTY_NO_POSITIONS in info_values, (
-            f"Expected {config.EMPTY_NO_POSITIONS!r} when DB is empty; "
-            f"got: {info_values!r}"
+            f"Expected {config.EMPTY_NO_POSITIONS!r} when DB is empty; got: {info_values!r}"
         )
 
     def test_filter_by_field_with_special_characters(self, db):
@@ -703,8 +716,7 @@ class TestPositionSearchStructure:
         at = _run_page()
         labels = [el.label for el in at.text_input]
         assert "Search positions" in labels, (
-            f"Expected 'Search positions' label on the search text_input, "
-            f"got: {labels}"
+            f"Expected 'Search positions' label on the search text_input, got: {labels}"
         )
 
 
@@ -722,8 +734,7 @@ class TestPositionSearchBehaviour:
         assert not at.exception
         assert len(at.caption) == 1
         assert "3 position(s)" in at.caption[0].value, (
-            f"Expected '3 position(s)' with empty search, "
-            f"got: {at.caption[0].value!r}"
+            f"Expected '3 position(s)' with empty search, got: {at.caption[0].value!r}"
         )
 
     def test_search_substring_filters_rows(self, db):
@@ -740,8 +751,7 @@ class TestPositionSearchBehaviour:
         assert not at.exception
         assert len(at.caption) == 1
         assert "1 position(s)" in at.caption[0].value, (
-            f"Expected '1 position(s)' after search='stanford', "
-            f"got: {at.caption[0].value!r}"
+            f"Expected '1 position(s)' after search='stanford', got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
         assert names == ["Postdoc Stanford"], (
@@ -780,18 +790,15 @@ class TestPositionSearchBehaviour:
         at.text_input(key="filter_search").input("++")
         at.run()
         assert not at.exception, (
-            f"Search with '++' raised an exception (regex=False missing?): "
-            f"{at.exception}"
+            f"Search with '++' raised an exception (regex=False missing?): {at.exception}"
         )
         assert len(at.caption) == 1
         assert "1 position(s)" in at.caption[0].value, (
-            f"Expected literal '++' to match 'C++ Postdoc'; got: "
-            f"{at.caption[0].value!r}"
+            f"Expected literal '++' to match 'C++ Postdoc'; got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
         assert names == ["C++ Postdoc"], (
-            f"search='++' (literal) must retain 'C++ Postdoc' only; "
-            f"got {names!r}"
+            f"search='++' (literal) must retain 'C++ Postdoc' only; got {names!r}"
         )
 
     def test_search_combines_with_status_filter(self, db):
@@ -804,15 +811,9 @@ class TestPositionSearchBehaviour:
         # All three position_names contain 'postdoc' (search hits all 3 alone);
         # statuses split [SAVED]/[SAVED]/[APPLIED] (status filter alone admits 2).
         # AND-combined ([SAVED] + 'stanford'): only "Stanford Postdoc" survives.
-        database.add_position(
-            {"position_name": "Stanford Postdoc"}
-        )  # [SAVED] default
-        database.add_position(
-            {"position_name": "MIT Postdoc"}
-        )  # [SAVED] default
-        database.add_position(
-            {"position_name": "Stanford Postdoc 2", "status": "[APPLIED]"}
-        )
+        database.add_position({"position_name": "Stanford Postdoc"})  # [SAVED] default
+        database.add_position({"position_name": "MIT Postdoc"})  # [SAVED] default
+        database.add_position({"position_name": "Stanford Postdoc 2", "status": "[APPLIED]"})
         at = _run_page()
         at.selectbox(key="filter_status").select("[SAVED]")
         at.text_input(key="filter_search").input("stanford")
@@ -1152,7 +1153,7 @@ class TestEditPanelShell:
 
 # ── Overview tab widgets (T4-C) ───────────────────────────────────────────────
 # The Overview tab holds editable widgets pre-filled from the selected row.
-# Widgets live inside st.form("edit_overview") so edits don't save on keystroke
+# Widgets live inside st.form("edit_overview_form") so edits don't save on keystroke
 # — T5 adds the real save action; a disabled submit button is the placeholder.
 #
 # Widget key contract (page ↔ tests): keep these prefixed with "edit_" so they
@@ -1508,13 +1509,7 @@ class TestRequirementsTabWidgets:
         database.add_position({"position_name": "Alpha"})  # req_* defaults → 'No'
         # Manually corrupt one req_* column to simulate an unknown value
         # (e.g. from a future migration or sqlite3 CLI edit).
-        import sqlite3
-
-        with sqlite3.connect(database.DB_PATH) as conn:
-            conn.execute(
-                "UPDATE positions SET req_cv = 'Maybe' WHERE position_name = ?",
-                ("Alpha",),
-            )
+        _force_set_position_field(database.DB_PATH, "Alpha", "req_cv", "Maybe")
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
@@ -2423,7 +2418,7 @@ class TestMaterialsSave:
         _select_row_and_tab(at, 0, "Materials")
 
         # Flip req_research_statement to 'Yes' live via session_state directly —
-        # the Requirements-tab radio is inside st.form("edit_requirements") so
+        # the Requirements-tab radio is inside st.form("edit_requirements_form") so
         # widget values there do not commit to session_state until that form
         # is submitted. Writing session_state is how T4-E's
         # test_toggling_requirement_hides_checkbox drives the same
@@ -2701,19 +2696,19 @@ class TestNotesSave:
 # Widget keys (public test contract — do not rename without updating
 # the constants here and the page):
 #   • Delete button (outside the Overview form): edit_delete
-#   • Confirm Delete button (inside dialog):     delete_confirm
-#   • Cancel button (inside dialog):             delete_cancel
+#   • Confirm Delete button (inside dialog):     edit_delete_confirm
+#   • Cancel button (inside dialog):             edit_delete_cancel
 
 DELETE_BUTTON_KEY = "edit_delete"
-DELETE_CONFIRM_KEY = "delete_confirm"
-DELETE_CANCEL_KEY = "delete_cancel"
+DELETE_CONFIRM_KEY = "edit_delete_confirm"
+DELETE_CANCEL_KEY = "edit_delete_cancel"
 
 
 class TestDeleteAction:
     def test_delete_button_renders_on_overview(self, db):
         """Delete button with key 'edit_delete' must be present on the
         Overview tab after a row is selected. Must live OUTSIDE
-        st.form('edit_overview') because st.form only permits
+        st.form('edit_overview_form') because st.form only permits
         st.form_submit_button inside (a plain st.button inside a form would
         raise at render).
 
