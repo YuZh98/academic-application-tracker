@@ -1997,13 +1997,13 @@ class TestT4UpcomingTimeline:
     DESIGN §8.1 (T4-0 + T4-0b lock-down): a single full-width section
     below the funnel/readiness `st.columns(2)` row. Layout is an
     `st.columns([3, 1])` pair carrying the dynamic subheader on the
-    left and a window-width selectbox on the right.
+    left and a window-width segmented control on the right.
 
     Locked panel contract:
       - Subheader 'Upcoming (next X days)' renders in BOTH empty and
         populated branches for page-height stability (T2/T3 precedent).
-      - Window selectbox (key=`upcoming_window`) offers
-        `config.UPCOMING_WINDOW_OPTIONS`; default = DEADLINE_ALERT_DAYS.
+      - Window segmented control (key=`upcoming_window`) offers
+        `config.UPCOMING_WINDOW_OPTIONS` as pill buttons; default = DEADLINE_ALERT_DAYS.
       - Empty branch: `st.info` with `EMPTY_COPY_DEFAULT` verbatim
         (interpolating the selected window).
       - Populated branch: `st.dataframe` with display headers
@@ -2019,8 +2019,8 @@ class TestT4UpcomingTimeline:
         (Date column carries datetime.date objects; the DateColumn
         format string is applied client-side and is invisible to AppTest,
         so the format string is pinned via a source grep — T1-E precedent).
-      - `at.selectbox(key=...).value` returns the option (not the index);
-        `at.selectbox(key=...).set_value(v).run()` triggers a rerun
+      - `at.segmented_control(key=...).value` returns the selected option;
+        `at.segmented_control(key=...).set_value(v).run()` triggers a rerun
         with the new value.
     """
 
@@ -2096,38 +2096,37 @@ class TestT4UpcomingTimeline:
             f"{[s.value for s in right.subheader]}"
         )
 
-    # ── Group B: window selectbox ─────────────────────────────────────────
+    # ── Group B: window segmented control ──────────────────────────────────
 
     def test_window_selector_default_is_deadline_alert_days(self, db):
-        """The selectbox lands at DEADLINE_ALERT_DAYS on first render —
+        """The segmented control lands at DEADLINE_ALERT_DAYS on first render —
         the dashboard's default 'how far ahead am I looking?' answer
         comes from a single config constant and stays in sync with the
-        urgency band."""
+        urgency band.
+
+        AppTest exposes st.segmented_control as at.button_group; the
+        raw Python value (int) is returned by .value, while .options
+        returns the format_func-rendered strings ('30d', '60d', '90d')."""
         at = _run_page()
-        sb = at.selectbox(key=self.WINDOW_KEY)
-        assert sb.value == config.DEADLINE_ALERT_DAYS, (
-            f"Selectbox default must equal DEADLINE_ALERT_DAYS="
-            f"{config.DEADLINE_ALERT_DAYS}. Got {sb.value!r}"
+        bg = at.button_group(key=self.WINDOW_KEY)
+        assert bg.value == config.DEADLINE_ALERT_DAYS, (
+            f"Segmented control default must equal DEADLINE_ALERT_DAYS="
+            f"{config.DEADLINE_ALERT_DAYS}. Got {bg.value!r}"
         )
 
     def test_window_selector_offers_config_window_options(self, db):
-        """Selectbox options come from config.UPCOMING_WINDOW_OPTIONS —
+        """Segmented control options come from config.UPCOMING_WINDOW_OPTIONS —
         no hardcoded list in app.py per GUIDELINES §6 (no hardcoded
         vocab). Pins the spec→config→page chain.
 
-        AppTest 1.56 quirk: `selectbox.options` returns the
-        protobuf-serialized form (strings) regardless of the original
-        Python type, while `selectbox.value` round-trips correctly
-        back to the original type. Compare against the stringified
-        config list, with the original list shown in the message for
-        debug clarity."""
+        AppTest returns formatted option strings ('30d', '60d', '90d')
+        via .options; raw values match config.UPCOMING_WINDOW_OPTIONS integers."""
         at = _run_page()
-        sb = at.selectbox(key=self.WINDOW_KEY)
-        expected_strs = [str(v) for v in config.UPCOMING_WINDOW_OPTIONS]
-        assert list(sb.options) == expected_strs, (
-            f"AppTest exposes selectbox options as strings; expected "
-            f"{expected_strs!r} (stringified config.UPCOMING_WINDOW_OPTIONS="
-            f"{config.UPCOMING_WINDOW_OPTIONS!r}). Got {list(sb.options)!r}"
+        bg = at.button_group(key=self.WINDOW_KEY)
+        expected_fmt = [f"{x}d" for x in config.UPCOMING_WINDOW_OPTIONS]
+        assert list(bg.options) == expected_fmt, (
+            f"Segmented control formatted options must be {expected_fmt!r}. "
+            f"Got {list(bg.options)!r}"
         )
 
     # ── Group C: empty / populated branches ───────────────────────────────
@@ -2333,13 +2332,13 @@ class TestT4UpcomingTimeline:
             f"Expected 'in 5 days' in Days Left column. Got: {days_left}"
         )
 
-    # ── Group E: selectbox interaction ────────────────────────────────────
+    # ── Group E: segmented control interaction ────────────────────────────────
 
     def test_changing_window_updates_subheader(self, db):
         """Selecting a wider window updates the dynamic subheader text.
         Pins that the subheader is f-string-driven, not hardcoded."""
         at = _run_page()
-        at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
+        at.button_group(key=self.WINDOW_KEY).set_value(60).run()
         expected_60 = "Upcoming (next 60 days)"
         assert any(s.value == expected_60 for s in at.subheader), (
             f"After selecting 60, expected subheader {expected_60!r}. "
@@ -2350,7 +2349,7 @@ class TestT4UpcomingTimeline:
         """The empty-state copy interpolates the selected window — when
         the user widens to 60 days, the empty info reflects that."""
         at = _run_page()
-        at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
+        at.button_group(key=self.WINDOW_KEY).set_value(60).run()
         expected_60 = "No deadlines or interviews in the next 60 days."
         assert any(i.value == expected_60 for i in at.info), (
             f"After selecting 60 on empty DB, expected info "
@@ -2375,7 +2374,7 @@ class TestT4UpcomingTimeline:
         assert len(at.dataframe) == 0, (
             "Default 30-day window must NOT surface the +50d position (it's outside the window)."
         )
-        at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
+        at.button_group(key=self.WINDOW_KEY).set_value(60).run()
         assert len(at.dataframe) == 1, (
             f"After widening to 60-day window, expected one dataframe. Got {len(at.dataframe)}."
         )
