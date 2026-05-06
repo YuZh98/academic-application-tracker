@@ -187,7 +187,7 @@ def _confirm_interview_delete_dialog() -> None:
       cascade — the `interviews` table is on the child side of the
       one FK in DESIGN §6.2). On success: pop both pending sentinels,
       set `_applications_skip_table_reset=True` so the dataframe-event-
-      reset rerun preserves the position selection (gotcha #11),
+      reset rerun preserves the position selection ,
       `st.toast(f"Deleted interview {seq}.")`, `st.rerun()` → dialog
       closes naturally on the next render (no pending sentinels).
     • Cancel → pop both pending sentinels, set
@@ -252,7 +252,7 @@ def _confirm_interview_delete_dialog() -> None:
                 None,
             )
             # _applications_skip_table_reset preserves the position
-            # selection across the cancel-driven rerun (gotcha #11):
+            # selection across the cancel-driven rerun :
             # the dataframe widget would otherwise reset its event
             # and the selection-resolution else-branch would pop
             # `applications_selected_position_id`.
@@ -301,7 +301,7 @@ selected_filter = st.selectbox(
 # page must NOT re-sort). Apply the filter, then project into the six
 # wireframe columns; render via st.dataframe.
 #
-# T2-A: the table is selectable (`on_select='rerun'`,
+#  the table is selectable (`on_select='rerun'`,
 # `selection_mode='single-row'`); the selection-resolution block below
 # captures `applications_selected_position_id` for the detail card.
 #
@@ -346,14 +346,8 @@ else:
     # df_filtered too, so iloc[selected_row] in the resolution block
     # below maps to the same row as event.selection.rows[0].
     df_filtered = df_filtered.reset_index(drop=True)
-    # T3-rev-A: split the previously-combined Position cell into TWO
-    # cells per DESIGN §8.3 column contract — Position carries the bare
-    # position_name, Institute carries the bare institute. Both go
-    # through `_safe_str_or_em` so a NULL/NaN cell renders as EM_DASH
-    # rather than crashing the widget protobuf (gotcha #1). The
-    # `_format_label` helper that combined them is still used by the
-    # detail-card header below; only the table render switched to bare
-    # cells.
+    # Position and Institute are bare cells (DESIGN §8.3); the
+    # `_format_label` helper is used by the detail-card header.
     display_df = pd.DataFrame(
         {
             "Position": df_filtered["position_name"].apply(_safe_str_or_em),
@@ -372,16 +366,10 @@ else:
         }
     ).reset_index(drop=True)
 
-    # T2-A / T3-rev-A: column_config locks per-column widths so the
-    # selectable table doesn't collapse to equal-width cells. Position
-    # keeps `width="large"` (bare position_name can still be long, e.g.
-    # "Senior Postdoctoral Researcher in Computational Biostatistics").
-    # Institute is `width="medium"` — institute names like "MIT" or
-    # "Stanford" fit easily, but full names like "Massachusetts
-    # Institute of Technology" don't fit in `small`. AppTest can't see
-    # column_config (gotcha #15 — the protobuf serializes the data,
-    # not the construction kwargs), so the contract is pinned via
-    # source-grep in TestApplicationsTableColumnConfig.
+    # column_config locks per-column widths (Position large, Institute
+    # medium). AppTest can't see column_config (the protobuf serializes
+    # data, not construction kwargs), so widths are pinned via source-grep
+    # in TestApplicationsTableColumnConfig.
     event = st.dataframe(
         display_df,
         width="stretch",
@@ -429,12 +417,10 @@ else:
         selection_mode="single-row",
     )
 
-    # T2-A: map the selected row index back to its DB position_id so
-    # the detail card below can render. Mirror of Opportunities §8.2
-    # selection-resolution structure; the elif branch consumes the
-    # `_applications_skip_table_reset` one-shot to preserve selection
-    # across the post-Save rerun (gotcha #11 — st.dataframe resets its
-    # selection event on data-change reruns).
+    # Map the selected row index back to its DB position_id so the
+    # detail card can render. The elif branch preserves selection
+    # across post-Save reruns (st.dataframe resets its selection event
+    # on data-change reruns).
     # CL1 type-clean: streamlit-stubs declares DataframeState as
     # TypedDict so attribute access trips pyright; runtime exposes a
     # wrapper supporting both subscript and attribute. Mirror the form
@@ -484,7 +470,7 @@ if "applications_selected_position_id" in st.session_state:
         # than widening the T1-A reader (its 10-col contract is pinned
         # by tests + DESIGN §8.3 + the merged review doc).
         app_row = database.get_application(sid)
-        # T3-A: read interviews for this position alongside the
+        #  read interviews for this position alongside the
         # application row. database.get_interviews orders by sequence
         # ASC (database.py contract); the page does not re-sort. Empty
         # frame is the natural state for a freshly-selected position
@@ -510,10 +496,7 @@ if "applications_selected_position_id" in st.session_state:
             st.markdown(f"All recommendation letters submitted: {_recs_label}")
 
             # ── Pre-seed widget state via the _applications_edit_form_sid
-            # sentinel. Two-phase apply (gotcha #2 — once
-            # session_state[key] is set, Streamlit ignores the widget's
-            # `value=` argument, so pre-seed must happen via direct
-            # session_state assignment):
+            # sentinel. Two-phase apply :
             #   (a) Row CHANGE → force-overwrite every key (fresh row's
             #       data replaces the previously-cached values).
             #   (b) Same row, key missing → restore from canonical.
@@ -668,7 +651,7 @@ if "applications_selected_position_id" in st.session_state:
                     continue
                 # Pre-seed every widget key for this fresh id. The
                 # _safe_str / _coerce_iso_to_date helpers cover NaN-
-                # from-NULL (gotcha #1); the format guard rejects any
+                # from-NULL ; the format guard rejects any
                 # legacy / out-of-vocab value so the selectbox only
                 # ever sees a member of [None, *INTERVIEW_FORMATS].
                 _fmt_str = _safe_str(_iv_row["format"])
@@ -889,7 +872,7 @@ if "applications_selected_position_id" in st.session_state:
                 st.session_state["_applications_skip_table_reset"] = True
                 st.session_state.pop("_applications_edit_form_sid", None)
                 st.toast(f'Saved "{r["position_name"]}".')
-                # T2-B: surface R1 / R3 pipeline promotions as a
+                #  surface R1 / R3 pipeline promotions as a
                 # second toast (Saved-then-Promoted, chronological).
                 # `result["new_status"]` is non-None whenever
                 # status_changed=True per the upsert_application

@@ -1,38 +1,5 @@
 # pages/3_Recommenders.py
-# Streamlit page — Recommenders tracker.
-#
-# Phase 5 T4: page shell + Pending Alerts panel (DESIGN §8.4).
-#   - set_page_config, st.title, database.init_db()
-#   - get_pending_recommenders() grouped by recommender_name;
-#     one st.container(border=True) per person.
-# Phase 5 T5: All Recommenders table + filters + add form + inline edit.
-#   - T5-A: read-only dataframe driven by database.get_all_recommenders;
-#           position + recommender filters; row selection captures
-#           recs_selected_id.
-#   - T5-B: st.form("recs_add_form") with position / name / relationship /
-#           asked-date widgets; database.add_recommender on submit.
-#   - T5-C: inline edit card under the table — st.form("recs_edit_form")
-#           with asked_date / confirmed / submitted_date / reminder_sent +
-#           reminder_sent_date / notes; Save writes only the dirty diff
-#           via database.update_recommender. Delete button outside the
-#           form opens an @st.dialog confirm gate; Confirm cascades via
-#           database.delete_recommender. Mirrors the Opportunities-page
-#           dialog re-open trick (gotcha #3) so AppTest's script-run
-#           model can reach the dialog body.
-# Phase 5 T6: Reminder helpers wired into each Pending Alerts card.
-#   - T6-A: st.link_button("Compose reminder email", url=mailto:?…) per card,
-#           subject + body locked verbatim per DESIGN §8.4 with N (subject)
-#           and recommender_name (body) interpolated. URL-quoted via
-#           urllib.parse.quote so the OS hands the formatted draft to the
-#           user's default mail client. No `to:` field — the recommenders
-#           schema doesn't store emails today.
-#   - T6-B: st.expander(f"LLM prompts ({len(TONES)} tones)", …) beneath the
-#           Compose button, holding one st.code(prompt, language="text")
-#           per tone (gentle / urgent). Each prompt embeds recommender
-#           name + relationship + every owed position (name / institute /
-#           deadline) + days-since-asked + tone + an instruction asking
-#           the LLM to return both subject and body.
-
+# Recommenders page — letter tracking, pending alerts, and reminder helpers.
 import math
 from datetime import date
 from typing import Any, cast
@@ -576,7 +543,7 @@ _event = st.dataframe(
 # the Opportunities / Applications selection-resolution structure, with
 # the same `_recs_skip_table_reset` one-shot for post-Save / post-Confirm
 # reruns where AppTest's dataframe event resets across the rerun
-# (gotcha #11). Switching rows clears any stale `_recs_delete_target_*`
+# . Switching rows clears any stale `_recs_delete_target_*`
 # pair so a previously-opened-but-X-dismissed dialog can't re-fire as a
 # phantom on a sibling row (Opportunities review fix #2 precedent).
 
@@ -616,7 +583,7 @@ def _confirm_delete_recommender_dialog() -> None:
     the edit card's Delete-button click; passing via session_state lets
     the outer page re-invoke the dialog on every rerun while the pending
     flag is set, which is what keeps Confirm/Cancel reachable through
-    AppTest's script-run model (gotcha #3)."""
+    AppTest's script-run model ."""
     rec_id_target: int | None = st.session_state.get("_recs_delete_target_id")
     rec_name_target: str = st.session_state.get("_recs_delete_target_name", "")
     st.warning(f'Delete **"{rec_name_target}"**? This **cannot be undone**.')
@@ -685,9 +652,7 @@ if "recs_selected_id" in st.session_state:
 
             # ── Pre-seed widget state ───────────────────────────────────
             #
-            # Two-phase apply (gotcha #2 — once session_state[key] is
-            # set, Streamlit ignores `value=`, so pre-seed must happen
-            # via direct session_state assignment):
+            # Two-phase apply :
             #   (a) Row CHANGE → force-overwrite every key.
             #   (b) Same row, key missing → restore from canonical.
             #   (c) Same row, key present → leave it alone (preserves
@@ -812,7 +777,7 @@ if "recs_selected_id" in st.session_state:
                     # Pop the sentinel so the post-Save rerun re-seeds
                     # widgets from the just-persisted DB values; the
                     # skip flag preserves selection across the dataframe-
-                    # event-reset rerun (gotcha #11).
+                    # event-reset rerun .
                     st.session_state.pop("_recs_edit_form_sid", None)
                     st.session_state["_recs_skip_table_reset"] = True
                     st.rerun()
