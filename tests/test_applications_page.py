@@ -176,8 +176,8 @@ class TestPageConfigSetsWideLayout:
         assert "st.set_page_config(" in src, (
             f"{PAGE} must call st.set_page_config(...) per DESIGN §8.0."
         )
-        assert 'page_title="Academic Application Tracker"' in src, (
-            'set_page_config must bind page_title="Academic Application Tracker" '
+        assert 'page_title="Applications — Academic Application Tracker"' in src, (
+            'set_page_config must bind page_title="Applications — Academic Application Tracker" '
             'per DESIGN §8.0.'
         )
         assert 'page_icon="📋"' in src, (
@@ -298,7 +298,7 @@ class TestApplicationsPageTable:
     EM_DASH = "—"
 
     DISPLAY_COLUMNS = [
-        "Position", "Institute", "Applied", "Recs",
+        "Position", "Institute", "Applied", "Letters",
         "Confirmation", "Response", "Result",
     ]
 
@@ -711,7 +711,8 @@ class TestApplicationsDetailCardRender:
     (mirroring the Opportunities edit-panel subheader from §8.2 and
     DESIGN §8.3's status-shows-STATUS_LABELS rule); the wireframe-
     suggested 'just the position name' is approximate — the status
-    suffix is required by §8.3. Inline 'All recs submitted: ✓ / —'
+    suffix is required by §8.3. Inline
+    'All recommendation letters submitted: ✓ Yes / ✗ No'
     surfaces `database.is_all_recs_submitted(pid)` (vacuous-true for
     zero recs)."""
 
@@ -801,15 +802,13 @@ class TestApplicationsDetailCardRender:
             [el.value for el in at.markdown]
             + [el.value for el in at.caption]
         )
-        assert "All recs submitted" in haystack, (
-            f"Expected 'All recs submitted: ...' line in card; "
+        assert "All recommendation letters submitted" in haystack, (
+            f"Expected 'All recommendation letters submitted: ...' line in card; "
             f"got md/caption={haystack!r}."
         )
-        # Glyph = ✓ when all submitted (or when there are no recs at
-        # all — vacuous truth, separate test below).
+        # Label = '✓ Yes' when all submitted.
         assert "✓" in haystack, (
-            f"All recommenders submitted ⇒ ✓ glyph; got "
-            f"md/caption={haystack!r}."
+            f"All recommenders submitted ⇒ ✓ in label; got md/caption={haystack!r}."
         )
 
     def test_recs_glyph_when_some_pending(self, db):
@@ -834,10 +833,12 @@ class TestApplicationsDetailCardRender:
             [el.value for el in at.markdown]
             + [el.value for el in at.caption]
         )
-        assert "All recs submitted" in haystack
-        assert "—" in haystack, (
-            f"Pending recommender ⇒ em-dash glyph; got "
-            f"md/caption={haystack!r}."
+        assert "All recommendation letters submitted" in haystack, (
+            f"Expected 'All recommendation letters submitted: ...' line; "
+            f"got md/caption={haystack!r}."
+        )
+        assert "✗" in haystack, (
+            f"Pending recommender ⇒ ✗ in label ('✗ No'); got md/caption={haystack!r}."
         )
 
     def test_recs_glyph_vacuous_true_for_zero_recs(self, db):
@@ -855,10 +856,12 @@ class TestApplicationsDetailCardRender:
             [el.value for el in at.markdown]
             + [el.value for el in at.caption]
         )
-        assert "All recs submitted" in haystack
+        assert "All recommendation letters submitted" in haystack, (
+            f"Expected 'All recommendation letters submitted: ...' line; "
+            f"got md/caption={haystack!r}."
+        )
         assert "✓" in haystack, (
-            f"Zero recommenders ⇒ vacuous-true ⇒ ✓ glyph; got "
-            f"md/caption={haystack!r}."
+            f"Zero recommenders ⇒ vacuous-true ⇒ ✓ in label; got md/caption={haystack!r}."
         )
 
 
@@ -1925,10 +1928,10 @@ class TestApplicationsInterviewListRender:
         INTERVIEW_FORMATS[0] (e.g. 'Phone') and silently dirty-write a
         format the user never chose. The page mirrors T2-A's
         response_type pattern: `options=[None, *INTERVIEW_FORMATS]`
-        with `format_func=lambda v: EM_DASH if v is None else v`.
+        with `format_func=lambda v: '— No format set' if v is None else v`.
         Per gotcha #15, AppTest exposes `.options` as protobuf-serialized
         strings — the leading `None` renders via the format_func as
-        the em-dash glyph."""
+        the readable '— No format set' label."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         iid = database.add_interview(pid, {})["id"]
@@ -1937,10 +1940,10 @@ class TestApplicationsInterviewListRender:
         _select_row(at, 0)
 
         sb = at.selectbox(key=_w_interview_format(iid))
-        expected_strs = [EM_DASH_GLYPH] + list(config.INTERVIEW_FORMATS)
+        expected_strs = ["— No format set"] + list(config.INTERVIEW_FORMATS)
         assert list(sb.options) == expected_strs, (
             f"format selectbox must offer [None, *INTERVIEW_FORMATS] "
-            f"with None rendered as em-dash via format_func; expected "
+            f"with None rendered as '— No format set' via format_func; expected "
             f"{expected_strs!r} (gotcha #15: protobuf-stringified), "
             f"got {list(sb.options)!r}."
         )
