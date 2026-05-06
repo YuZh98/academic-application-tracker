@@ -41,7 +41,11 @@ st.markdown(
     """
 <style>
 /* ── Typography ─────────────────────────────────────────────────── */
-html, body, [data-testid="stAppViewContainer"] *, [data-testid="stSidebar"] * {
+/* Set font on root elements only — no child wildcard (*). The system font
+   cascades naturally to text nodes. Avoiding * + !important on children
+   preserves Streamlit's Material Symbols Rounded font on icon elements
+   (sidebar collapse arrows, etc.) which use ligature rendering. */
+html, body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text',
                  'Segoe UI Variable', 'Segoe UI', Helvetica, Arial, sans-serif !important;
 }
@@ -463,11 +467,59 @@ with _right_col:
             "Materials readiness will appear once you've added positions with required documents."
         )
     else:
-        _total = max(_ready + _pending, 1)
-        _pos_word = "position" if _ready == 1 else "positions"
-        st.progress(_ready / _total, text=f"Ready to submit: {_ready} {_pos_word}")
-        _inc_word = "position" if _pending == 1 else "positions"
-        st.progress(_pending / _total, text=f"Incomplete: {_pending} {_inc_word}")
+        # Plotly horizontal bar chart — same visual language as Application
+        # Funnel (matching bar thickness, colors, layout, no toolbar).
+        # height=120 gives ~39px bars with bargap=0.35 for 2 rows, close
+        # to the funnel's ~37px bars for 4 rows at height=230.
+        _pos_word_r = "position" if _ready == 1 else "positions"
+        _pos_word_i = "position" if _pending == 1 else "positions"
+        _mat_fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=[_ready, _pending],
+                    y=["Ready to submit", "Incomplete"],
+                    orientation="h",
+                    marker_color=["#10B981", "#94A3B8"],
+                    marker_line_width=0,
+                    text=[
+                        f"{_ready} {_pos_word_r}",
+                        f"{_pending} {_pos_word_i}",
+                    ],
+                    textposition="outside",
+                    textfont=dict(size=13, color="#374151"),
+                )
+            ]
+        )
+        _mat_fig.update_yaxes(autorange="reversed")
+        _mat_fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=0, r=80, t=4, b=4),
+            font=dict(
+                family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                size=13,
+            ),
+            xaxis=dict(
+                gridcolor="#f0f2f6",
+                zeroline=False,
+                tickfont=dict(size=11, color="#94a3b8"),
+                dtick=1,
+                tick0=0,
+                tickmode="linear",
+                rangemode="tozero",
+            ),
+            yaxis=dict(
+                showgrid=False,
+                tickfont=dict(size=13, color="#374151"),
+            ),
+            height=120,
+            bargap=0.35,
+        )
+        st.plotly_chart(
+            _mat_fig,
+            key="materials_chart",
+            config={"displayModeBar": False},
+        )
         if st.button("→ Review in Opportunities", key="materials_readiness_cta"):
             st.switch_page("pages/1_Opportunities.py")
 
