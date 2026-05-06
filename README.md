@@ -2,50 +2,35 @@
 
 [![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A local, single-user Streamlit app that answers one daily question
-for an academic applicant: **"What do I do today?"** Tracks
-positions, applications, interviews, and recommendation letters
-across institutions with automated deadline alerts and markdown
-exports as portable backups. Designed for the multi-stage
-recommender-letter-driven application flows shared by **postdoc,
-PhD, faculty, and fellowship** applications — anywhere you're
-juggling deadlines, materials readiness, and follow-ups across many
-institutions in parallel.
-
 ![Dashboard — empty state on first run](docs/ui/screenshots/v0.11.0/dashboard-1280.png)
 
-Built as a personal tool while job-hunting — and as a portfolio
-piece demonstrating disciplined software engineering on a
-non-trivial codebase.
+A local Streamlit dashboard that answers one question every morning: **"What do I do today?"**
 
 ---
 
-## Features
+## What a spreadsheet can't do
 
-- **Dashboard** — at-a-glance KPI grid (Tracked / Applied /
-  Interview / Next Interview), application funnel chart, materials
-  readiness panel, upcoming deadlines list, and recommender alert
-  cards on the same screen.
-- **Opportunities page** — quick-add form, full edit panel
-  (Overview / Requirements / Materials / Notes tabs), filter bar
-  with status / priority / field / search, urgency-banded deadline
-  column.
-- **Applications page** — per-position application detail card with
-  applied date / confirmation / response / result, plus an inline
-  interview list with per-row save and FK-cascading delete.
-- **Recommenders page** — pending-letter alerts grouped by
-  recommender (with "compose reminder email" mailto and per-tone LLM
-  prompts to draft a follow-up), full all-recommenders table, inline
-  edit, and delete.
-- **Auto-export to markdown** — every database write also regenerates
-  `exports/OPPORTUNITIES.md`, `PROGRESS.md`, and `RECOMMENDERS.md`,
-  giving you a portable plain-text backup of your job-search state
-  that survives any future framework change.
-- **Pipeline cascades** — applying for the first time flips a
-  position from `[SAVED]` → `[APPLIED]`; recording an Offer response
-  flips it to `[OFFER]`; the first interview flips
-  `[APPLIED]` → `[INTERVIEW]`. Cascade rules are codified in DESIGN
-  §9.3 and unit-tested.
+**Surface urgency automatically.** The dashboard computes what's due, flags it red or yellow by proximity, and surfaces it every session — no manual sorting, no missed deadlines.
+
+**Track recommenders across positions.** One recommender writing letters for seven positions means seven independent asked / confirmed / submitted states. The Recommenders page flags everyone asked more than 7 days ago who hasn't submitted, groups alerts by recommender, and offers a one-click mailto to draft a follow-up.
+
+**Keep materials readiness co-located with status.** Each position carries its own checklist (CV, cover letter, research statement, teaching portfolio, …). The Materials Readiness panel shows how many active applications are ready to submit and how many are still missing something — without opening each position manually.
+
+---
+
+## Pages
+
+**Dashboard** — KPI grid (Tracked / Applied / Interview / Next Interview), application funnel, materials readiness panel, upcoming deadlines, recommender alerts. One screen; one daily answer.
+
+**Opportunities** — Quick-add a position in under 30 seconds. Full edit panel with four tabs (Overview / Requirements / Materials / Notes). Filter bar: status, priority, field, full-text search. Urgency-banded deadline column.
+
+**Applications** — Per-position card: applied date, confirmation, response, result, outcome. Inline multi-round interview log. Pipeline cascades automatically: save → applied → interview → offer.
+
+**Recommenders** — Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) table with inline edit and delete.
+
+**Export** — Manual regenerate + per-file download for `OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`. Every database write also auto-regenerates these — the `exports/` folder is always a fresh plaintext backup of your entire job-search state.
+
+---
 
 ## Quick start
 
@@ -58,46 +43,40 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open the URL Streamlit prints (default `http://localhost:8501`). The
-SQLite database is created on first run; the empty-state hero will
-walk you through adding your first position.
+Python ≥ 3.11. Open the URL Streamlit prints (default `http://localhost:8501`). The SQLite database is created on first run; the empty-state hero walks you through adding your first position.
 
-**Python:** ≥ 3.11 (declared in `pyproject.toml`).
-**Stack:** Python · Streamlit 1.57 · SQLite · pandas · Plotly.
-**Dev tooling:** pytest · ruff · pyright.
+**Stack:** Python · Streamlit 1.57 · SQLite · pandas · Plotly  
+**Dev tooling:** pytest · ruff · pyright
 
-## Engineering practices
+---
 
-This codebase is built like a small production system, not a
-personal script:
+<details>
+<summary>Engineering notes</summary>
 
-- **879 tests, 1 expected-fail.** Integration tests against the
-  Streamlit pages use the official `streamlit.testing.v1.AppTest`
-  harness; unit tests against the database + export layers run on a
-  per-test temp SQLite file via the `db` fixture in
-  [`tests/conftest.py`](tests/conftest.py).
-- **Pyright type-check fence in CI.** Strict-basic mode, zero errors
-  required for merge. Config in `[tool.pyright]`.
-- **Ruff lint clean.** Pyflakes + pycodestyle E/W enforced.
-- **Deprecation-strict pytest gate.** A second test pass with
-  `-W error::DeprecationWarning` catches Streamlit-API drift before
-  it bites users on a future upgrade.
-- **CI runs all four gates on every PR**
-  ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
-- **Architectural rules enforced.** `database.py` never imports
-  `streamlit` (framework-agnostic); `pages/*.py` never import
-  `exports.py` (one-way dependency); pages call `database.*`
-  helpers, never raw SQL. Cohesion-pinning tests in
-  [`tests/test_pages_cohesion.py`](tests/test_pages_cohesion.py)
-  fail CI if these rules drift.
-- **Atomic commits, descriptive messages.** Every PR is a
-  small focused tier with `test(...)` → `feat(...)` → `chore(...)`
-  rollup commit cadence (per `docs/internal/GUIDELINES.md` §11). Run
-  `git log --oneline` for the audit trail.
-- **Spec-first design.** [`DESIGN.md`](DESIGN.md) is the
-  authoritative spec for the schema, page contracts, cascade rules,
-  and exports format. Implementation tracks the spec; deviations get
-  amendments + commit references.
+Built like a small production system, not a personal script.
+
+**Architecture — four strict layers:**
+```
+config.py     constants, vocabularies, import-time invariants
+database.py   SQL only — never imports streamlit
+exports.py    markdown writers — called by database, never by pages
+pages/*.py    display only — no raw SQL, no direct exports import
+```
+Layer contracts are enforced by cohesion tests that fail CI if any rule drifts.
+
+**879 tests, 97% coverage.** Integration tests use the official `streamlit.testing.v1.AppTest` harness against real page files; unit tests run against per-test temp SQLite files via a `db` fixture. A second test pass with `-W error::DeprecationWarning` catches Streamlit-API drift before it surfaces on upgrades.
+
+**CI on every PR:** ruff lint · pyright strict-basic (zero errors required) · pytest (two passes) · status-literal grep (no hardcoded `[SAVED]` / `[APPLIED]` / `[INTERVIEW]` strings in page code — all vocabulary routed through `config.py`).
+
+**Config-driven schema.** Adding a new required document type (e.g. "Portfolio") = one tuple appended to `config.REQUIREMENT_DOCS`. `init_db()` adds the `req_*` / `done_*` columns automatically on next start. No other file changes needed.
+
+**Import-time invariants.** `config.py` asserts structural integrity at module load — every status has a color and a label, urgency thresholds are ordered, funnel buckets cover all statuses exactly once. Misconfiguration aborts startup with a clear traceback before any page renders.
+
+**Spec-first.** [`DESIGN.md`](DESIGN.md) is the authoritative spec for the schema, page contracts, cascade rules, and export format. Implementation tracks the spec; deviations land as spec amendments with commit references.
+
+</details>
+
+---
 
 ## Project structure
 
@@ -113,46 +92,33 @@ pages/
   4_Export.py          Manual export trigger + per-file download buttons
 tests/                 879-test suite (AppTest + unit + cohesion)
 docs/
-  internal/            Agent-handoff + sprint-tracker docs (dev process)
-  dev-notes/           Streamlit gotchas, dev setup, git workflow notes
-  ui/                  Wireframes
   adr/                 Architecture decision records
+  dev-notes/           Streamlit gotchas, dev setup, git workflow notes
+  ui/                  Wireframes + screenshots
 DESIGN.md              Authoritative spec
 GUIDELINES.md          Coding conventions
 CHANGELOG.md           Per-release narrative log
-LICENSE                MIT
 ```
+
+---
 
 ## Documentation
 
-- [`DESIGN.md`](DESIGN.md) — schema, page contracts, cascade rules,
-  exports format. Read first for "how does this work?"
-- [`GUIDELINES.md`](GUIDELINES.md) — coding conventions, TDD
-  cadence, doc tiering, content routing. Read first for "how is
-  this codebase organized?"
-- [`CHANGELOG.md`](CHANGELOG.md) — per-release development log.
-- [`docs/dev-notes/`](docs/dev-notes/) — Streamlit-specific gotchas,
-  dev environment setup, deeper git-workflow notes.
-- [`docs/internal/`](docs/internal/) — agent-handoff + sprint
-  tracker; the project was built collaboratively with an agent
-  pipeline ([orchestrator + implementer pattern](docs/internal/ORCHESTRATOR_HANDOFF.md))
-  using Claude Code.
+- [`DESIGN.md`](DESIGN.md) — schema, page contracts, cascade rules, export format. Start here for "how does this work?"
+- [`GUIDELINES.md`](GUIDELINES.md) — coding conventions, TDD cadence, doc tiering. Start here for "how is this codebase organized?"
+- [`CHANGELOG.md`](CHANGELOG.md) — per-release development log
+- [`docs/dev-notes/`](docs/dev-notes/) — Streamlit-specific gotchas, dev setup, git workflow depth
+
+---
 
 ## Status
 
-Currently at `v0.8.0` (Phase 7 closed). Roadmap toward `v1.0.0`:
-schema cleanup (drop one deprecated column),
-[responsive layout audit](docs/internal/TASKS.md),
-Streamlit Cloud demo deploy. The daily-usage flows are stable; the
-schema may evolve before `v1.0`.
+`v0.11.0`. Daily-usage flows stable. Schema may evolve before `v1.0`.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
 
 ## Acknowledgments
 
-Built with [Claude Code](https://claude.com/claude-code) using an
-orchestrator + implementer agent pipeline. Architectural decisions,
-review judgment, and merge calls remain the author's; the agent
-pipeline ships the code.
+Built with [Claude Code](https://claude.com/claude-code) using an orchestrator + implementer agent pipeline. Architectural decisions, review judgment, and merge calls remain the author's; the agent pipeline ships the code.
