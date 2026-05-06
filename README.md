@@ -71,7 +71,7 @@ walk you through adding your first position.
 This codebase is built like a small production system, not a
 personal script:
 
-- **879 tests, 1 expected-fail.** Integration tests against the
+- **883 tests, 1 expected-fail.** Integration tests against the
   Streamlit pages use the official `streamlit.testing.v1.AppTest`
   harness; unit tests against the database + export layers run on a
   per-test temp SQLite file via the `db` fixture in
@@ -111,7 +111,7 @@ pages/
   2_Applications.py    Application + interview tracking
   3_Recommenders.py    Recommender tracker + reminder helpers
   4_Export.py          Manual export trigger + per-file download buttons
-tests/                 879-test suite (AppTest + unit + cohesion)
+tests/                 883-test suite (AppTest + unit + cohesion)
 docs/
   internal/            Agent-handoff + sprint-tracker docs (dev process)
   dev-notes/           Streamlit gotchas, dev setup, git workflow notes
@@ -140,11 +140,9 @@ LICENSE                MIT
 
 ## Status
 
-Currently at `v0.8.0` (Phase 7 closed). Roadmap toward `v1.0.0`:
-schema cleanup (drop one deprecated column),
-[responsive layout audit](docs/internal/TASKS.md),
-Streamlit Cloud demo deploy. The daily-usage flows are stable; the
-schema may evolve before `v1.0`.
+Stable at `v0.10.0` — all planned phases complete. Daily-usage
+flows are stable; no schema changes planned. See
+[`roadmap.md`](roadmap.md) for the post-launch backlog.
 
 ## License
 
