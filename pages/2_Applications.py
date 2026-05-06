@@ -46,6 +46,7 @@ import database
 # in-file site reads it; ruff won't flag F401).
 from config import EM_DASH
 
+
 # DESIGN §8.0 — first executable Streamlit call on every page. Streamlit
 # raises if anything else runs before this. Re-executed on every page
 # switch; layout="wide" is required because the app is data-heavy
@@ -197,8 +198,12 @@ def _confirm_interview_delete_dialog() -> None:
       failure-preserves-state precedent — there is no DB rollback to
       undo, the user just gets to try again.
     """
-    iid: int | None = st.session_state.get("_apps_interview_delete_target_id")
-    seq: int | None = st.session_state.get("_apps_interview_delete_target_seq")
+    iid: int | None = st.session_state.get(
+        "_apps_interview_delete_target_id"
+    )
+    seq: int | None = st.session_state.get(
+        "_apps_interview_delete_target_seq"
+    )
     if iid is None:
         # Defensive: the post-loop guard already filters by
         # `pending_id in current_ids`, so this branch should be
@@ -387,7 +392,7 @@ else:
             "Institute":    st.column_config.TextColumn("Institute",    width="medium"),
             "Applied":      st.column_config.TextColumn("Applied",      width="small"),
             "Letters":      st.column_config.TextColumn("Letters",      width="small",
-                                help="✓ = all recommendation letters submitted"),
+                    help="✓ = all recommendation letters submitted"),
             "Confirmation": st.column_config.TextColumn("Confirmation", width="medium"),
             "Response":     st.column_config.TextColumn("Response",     width="small"),
             "Result":       st.column_config.TextColumn("Result",       width="small"),
@@ -550,9 +555,9 @@ if "applications_selected_position_id" in st.session_state:
                 resp_cols = st.columns(2)
                 with resp_cols[0]:
                     # Nullable selectbox: None is the explicit "no
-                    # response yet" option, rendered with a readable
-                    # label via format_func. Real RESPONSE_TYPES entries
-                    # render as themselves.
+                    # response yet" option, rendered as EM_DASH via
+                    # format_func. Real RESPONSE_TYPES entries render
+                    # as themselves.
                     st.selectbox(
                         "Response type",
                         options=[None, *config.RESPONSE_TYPES],
@@ -705,7 +710,7 @@ if "applications_selected_position_id" in st.session_state:
                         # Mirror of T2-A's response_type selectbox:
                         # leading None makes "no format chosen" a
                         # legal pre-seed value; format_func renders
-                        # None as a readable label.
+                        # None as the em-dash glyph.
                         st.selectbox(
                             "Format",
                             options=[None, *config.INTERVIEW_FORMATS],
