@@ -19,6 +19,12 @@ manual steps to run against a pre-existing database.
 
 _(empty)_
 
+## [v0.11.0] - 2026-05-06
+
+### Changed
+- Update dashboard screenshot to v0.11.0 across four widths (1024–1680 px) (#82)
+- Rewrite README with screenshot-first layout, problem-driven pitch, and engineering notes in collapsible section (#83)
+
 ## [v0.10.0] — 2026-05-06 — Public-launch polish + publish-readiness final layer
 
 _v0.10.0 is the final pre-public-flip release. No new features, no schema changes, no behaviour changes — every commit is dev-tooling, public-surface doc polish, or visual artefact. Bundles four worker-shipped PRs (CI matrix expansion to 3.11–3.14, `pytest-cov` setup with coverage at 97%, `SECURITY.md` vulnerability-reporting policy, README CI/Python/license badges) + two orchestrator-direct artefacts (Phase 7 T5 responsive-layout screenshots × 20 PNGs at 1024/1280/1440/1680 across all five pages; README hero embed + coverage badge). Closes the long-deferred Phase 7 T5 (unblocked by Chrome DevTools MCP availability). Three doc-drift carryover commits from `v0.9.0` close-out absorbed. `v0.10.0` is the project's public-launch release; no `v1.0.0` planned. Suite stable at 883 + 1 xfailed; pyright fence holds 0/0. Detailed entries below preserve the per-commit forensic record._
@@ -2709,7 +2715,8 @@ _v0.1.0 closes Phase 3 — `pages/1_Opportunities.py` lands across five tiers (Q
 
 ## Version links
 
-[Unreleased]: https://github.com/YuZh98/academic-application-tracker/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/YuZh98/academic-application-tracker/compare/v0.11.0...HEAD
+[v0.11.0]: https://github.com/YuZh98/academic-application-tracker/compare/v0.10.0...v0.11.0
 [v0.10.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.10.0
 [v0.9.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.9.0
 [v0.8.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.8.0
