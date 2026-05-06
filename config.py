@@ -10,6 +10,13 @@
 #   - No functions, no I/O, no side effects — constants only.
 #   - All other modules import from here; never hardcode values in page files.
 
+# ── Profile identity ─────────────────────────────────────────────────────────
+# Database filename — rename the file on disk when changing this.
+DB_FILENAME: str = "postdoc.db"
+
+# Label used in recommender follow-up email subjects.
+APPLICATION_LABEL: str = "academic application"
+
 # ── Universal placeholder glyph ───────────────────────────────────────────────
 # Em-dash (U+2014) used to render NULL / NaN / empty TEXT cells across every
 # user-facing surface (page tables, dashboard KPIs, exports markdown).

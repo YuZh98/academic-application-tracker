@@ -20,7 +20,7 @@ import config
 
 logger = logging.getLogger(__name__)
 
-DB_PATH: Path = Path(__file__).parent / "postdoc.db"
+DB_PATH: Path = Path(__file__).parent / config.DB_FILENAME
 
 
 # ── Connection ────────────────────────────────────────────────────────────────
