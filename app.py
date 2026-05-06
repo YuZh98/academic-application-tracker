@@ -40,7 +40,13 @@ database.init_db()
 st.markdown(
     """
 <style>
-/* KPI metric cards — elevated card style */
+/* ── Typography ─────────────────────────────────────────────────── */
+html, body, [data-testid="stAppViewContainer"] *, [data-testid="stSidebar"] * {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+                 'Segoe UI Variable', 'Segoe UI', Helvetica, Arial, sans-serif !important;
+}
+
+/* ── KPI metric cards — elevated card style ───────────────────── */
 [data-testid="stMetric"] {
     background: #ffffff;
     border: 1px solid #eef2f7;
@@ -56,27 +62,71 @@ st.markdown(
     font-weight: 700 !important;
 }
 [data-testid="stMetricValue"] > div {
-    font-size: 2.4rem !important;
+    font-size: 2rem !important;
     font-weight: 800 !important;
     color: #0f172a !important;
-    line-height: 1.15 !important;
+    line-height: 1.2 !important;
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
 }
-/* Empty-DB hero container — soft gradient instead of plain border */
+
+/* ── Hero container — soft indigo gradient ────────────────────── */
 [data-testid="stVerticalBlockBorderWrapper"] > div > div {
     border-radius: 14px !important;
     background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%) !important;
     border-color: #d9e4ff !important;
 }
-/* Section subheaders — slightly more weight */
+
+/* ── Section subheaders ──────────────────────────────────────── */
 [data-testid="stHeadingWithActionElements"] h3 {
     font-weight: 700 !important;
     color: #1e293b !important;
     letter-spacing: -0.01em !important;
 }
-/* Info / empty-state messages — rounded, subtler */
+
+/* ── Info / empty-state messages ─────────────────────────────── */
 [data-testid="stAlert"] {
     border-radius: 10px;
     border-left-width: 3px;
+}
+
+/* ── Dataframe / table outer container ────────────────────────── */
+[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    border: 1px solid #eef2f7 !important;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+/* ── Primary buttons ─────────────────────────────────────────── */
+[data-testid="stBaseButton-primary"] {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em !important;
+}
+
+/* ── Sidebar navigation pills ───────────────────────────────── */
+section[data-testid="stSidebarNav"] a {
+    border-radius: 8px;
+    padding: 0.35rem 0.7rem;
+    margin-bottom: 2px;
+    transition: background 0.15s, color 0.15s;
+    font-weight: 500;
+}
+section[data-testid="stSidebarNav"] a:hover {
+    background: rgba(79, 107, 239, 0.08);
+    color: #4F6BEF;
+}
+section[data-testid="stSidebarNav"] a[aria-current="page"] {
+    background: rgba(79, 107, 239, 0.10);
+    color: #4F6BEF;
+    font-weight: 600;
+}
+
+/* ── Dividers ──────────────────────────────────────────────── */
+hr {
+    border-color: #f0f3f8 !important;
+    margin: 0.5rem 0 !important;
 }
 </style>
 """,
@@ -139,6 +189,12 @@ st.title("Academic Application Tracker")
 st.caption(
     "Your complete academic job search — deadlines, applications, and letters, all in one place."
 )
+# Gradient accent line — brand identity mark below the title.
+st.markdown(
+    "<div style='height:3px;background:linear-gradient(90deg,#4F6BEF 0%,"
+    "#8B5CF6 50%,#10B981 100%);border-radius:2px;margin-bottom:0.25rem;'></div>",
+    unsafe_allow_html=True,
+)
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
@@ -177,7 +233,9 @@ if tracked == 0 and applied == 0 and interview == 0:
         ):
             st.switch_page("pages/1_Opportunities.py")
 
-c1, c2, c3, c4 = st.columns(4)
+# 4th column (Next Interview) gets extra width because its value can be
+# a long string like 'May 3 · Stanford University'.
+c1, c2, c3, c4 = st.columns([1, 1, 1, 1.5])
 with c1:
     # DESIGN §8.1 locks the Tracked KPI's help-tooltip string — explains
     # the Saved + Applied arithmetic on hover so the reader doesn't have
@@ -359,6 +417,12 @@ with _left_col:
                 gridcolor="#f0f2f6",
                 zeroline=False,
                 tickfont=dict(size=11, color="#94a3b8"),
+                # Force integer-only ticks so the axis never shows 0.5 or 1.5
+                # when there are only a few positions.
+                dtick=1,
+                tick0=0,
+                tickmode="linear",
+                rangemode="tozero",
             ),
             yaxis=dict(
                 showgrid=False,
@@ -433,14 +497,23 @@ with _right_col:
 #     above shifts when the first qualifying row lands).
 #   - Empty-state copy interpolates the selected window so the message
 #     stays coherent under any user choice.
+st.divider()
 _header_col, _control_col = st.columns([3, 1])
 with _control_col:
-    selected_window = st.selectbox(
-        "Window (days)",
-        options=config.UPCOMING_WINDOW_OPTIONS,
-        index=config.UPCOMING_WINDOW_OPTIONS.index(config.DEADLINE_ALERT_DAYS),
-        key="upcoming_window",
-        label_visibility="collapsed",
+    # Segmented control shows '30d | 60d | 90d' pill buttons — cleaner
+    # than a dropdown, and avoids a redundant number in the header.
+    # Returns None on first render if no default is applied yet; the
+    # `or` fallback keeps selected_window an int in all cases.
+    selected_window = (
+        st.segmented_control(
+            "Window",
+            options=config.UPCOMING_WINDOW_OPTIONS,
+            default=config.DEADLINE_ALERT_DAYS,
+            key="upcoming_window",
+            format_func=lambda x: f"{x}d",
+            label_visibility="collapsed",
+        )
+        or config.DEADLINE_ALERT_DAYS
     )
 with _header_col:
     st.subheader(f"Upcoming (next {selected_window} days)")
@@ -494,6 +567,7 @@ else:
 # The Compose-reminder-email button + LLM-prompts expander (DESIGN §8.4 D-C)
 # live on the Recommenders PAGE (Phase 5 T6), NOT here — T5 only renders the
 # alert cards.
+st.divider()
 st.subheader("Recommender Alerts")
 _pending_recs = database.get_pending_recommenders()
 if _pending_recs.empty:
