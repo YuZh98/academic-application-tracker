@@ -574,28 +574,59 @@ _upcoming = database.get_upcoming(days=selected_window)
 if _upcoming.empty:
     st.info(f"No deadlines or interviews in the next {selected_window} days.")
 else:
-    _upcoming_display = _upcoming.rename(
-        columns={
-            "date": "Date",
-            "days_left": "Days Left",
-            "label": "Label",
-            "kind": "Kind",
-            "status": "Status",
-            "urgency": "Urgency",
+    _today = date.today()
+    _upcoming_display = pd.DataFrame(
+        {
+            "Date": _upcoming["date"],
+            "Days Left": _upcoming["days_left"],
+            "Label": _upcoming["label"],
+            "Kind": _upcoming["kind"],
+            "Status": _upcoming["status"].map(lambda raw: config.STATUS_LABELS.get(raw, raw)),
+            # Numeric days remaining drives ProgressColumn below.
+            # Rows without a deadline (interviews with no scheduled_date)
+            # fall back to selected_window so their bar is full (not urgent).
+            "Urgency": _upcoming["date"].apply(
+                lambda d: max(0, (d - _today).days) if pd.notna(d) else selected_window
+            ),
         }
-    )
-    # Storage uses bracketed sentinels; UI strips them via STATUS_LABELS.
-    # `.get(raw, raw)` keeps a stale value visible rather than producing NaN —
-    # defensive belt-and-suspenders against an unrecognised status.
-    _upcoming_display["Status"] = _upcoming_display["Status"].map(
-        lambda raw: config.STATUS_LABELS.get(raw, raw)
     )
     st.dataframe(
         _upcoming_display,
         width="stretch",
         hide_index=True,
         column_config={
-            "Date": st.column_config.DateColumn(format="MMM D"),
+            "Date": st.column_config.DateColumn(
+                "Date",
+                format="MMM D",
+                help="Deadline or scheduled interview date",
+            ),
+            "Days Left": st.column_config.TextColumn(
+                "Days Left",
+                width="small",
+                help="Time remaining until this event",
+            ),
+            "Label": st.column_config.TextColumn(
+                "Label",
+                width="large",
+                help="Position and institution",
+            ),
+            "Kind": st.column_config.TextColumn(
+                "Kind",
+                width="medium",
+                help="'Deadline for application' or interview sequence number",
+            ),
+            "Status": st.column_config.TextColumn(
+                "Status",
+                width="small",
+                help="Current pipeline stage",
+            ),
+            "Urgency": st.column_config.ProgressColumn(
+                "Urgency",
+                min_value=0,
+                max_value=selected_window,
+                format="%d d",
+                help="Days remaining — shorter bar = more urgent",
+            ),
         },
     )
 
