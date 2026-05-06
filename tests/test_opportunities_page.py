@@ -278,6 +278,51 @@ class TestQuickAddFormBehaviour:
         names = set(df["position_name"].tolist())
         assert names == {"Position A", "Position B"}
 
+    def test_form_clears_after_successful_save(self, db):
+        """After a successful save, all Quick Add fields reset to defaults so
+        the user can immediately type the next position without manually
+        deleting the previous values."""
+        at = _run_page()
+        at.text_input(key="qa_position_name").input("Stanford BioStats")
+        at.text_input(key="qa_institute").input("Stanford")
+        at.text_input(key="qa_field").input("Biostatistics")
+        at.date_input(key="qa_deadline_date").set_value(datetime.date(2026, 6, 1))
+        at.selectbox(key="qa_priority").select("High")
+        at.text_input(key="qa_link").input("https://stanford.edu/biostats")
+        at.button(key=SUBMIT_KEY).click()
+        at.run()
+
+        assert not at.exception
+        # All text fields cleared
+        assert at.text_input(key="qa_position_name").value == "", (
+            f"qa_position_name should be empty, got {at.text_input(key='qa_position_name').value!r}"
+        )
+        assert at.text_input(key="qa_institute").value == ""
+        assert at.text_input(key="qa_field").value == ""
+        assert at.text_input(key="qa_link").value == ""
+        # Date and priority back to defaults
+        assert at.date_input(key="qa_deadline_date").value is None
+        assert at.selectbox(key="qa_priority").value == config.PRIORITY_VALUES[0]
+
+    def test_form_keeps_input_after_failed_save(self, db, monkeypatch):
+        """If the save fails (e.g. DB error or validation), Quick Add fields
+        must NOT clear — user shouldn't lose their input on a recoverable error."""
+
+        def _boom(_fields):
+            raise RuntimeError("db unavailable")
+
+        monkeypatch.setattr(database, "add_position", _boom)
+
+        at = _run_page()
+        at.text_input(key="qa_position_name").input("Stanford BioStats")
+        at.text_input(key="qa_institute").input("Stanford")
+        at.button(key=SUBMIT_KEY).click()
+        at.run()
+
+        # Save failed — fields should retain their values
+        assert at.text_input(key="qa_position_name").value == "Stanford BioStats"
+        assert at.text_input(key="qa_institute").value == "Stanford"
+
 
 # ── Positions table ───────────────────────────────────────────────────────────
 

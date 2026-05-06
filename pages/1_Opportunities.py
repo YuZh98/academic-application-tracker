@@ -164,6 +164,17 @@ if submitted:
             st.session_state.pop("positions_table", None)
             st.session_state.pop("selected_position_id", None)
             st.session_state.pop("_edit_form_sid", None)
+            # Clear Quick Add inputs so the user can immediately add another
+            # position without manually deleting the previous values.
+            for qa_key in (
+                "qa_position_name",
+                "qa_institute",
+                "qa_field",
+                "qa_deadline_date",
+                "qa_priority",
+                "qa_link",
+            ):
+                st.session_state.pop(qa_key, None)
             st.rerun()
         except Exception as e:
             st.error(f"Could not save position: {e}")
