@@ -150,12 +150,12 @@ assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
 # in v1.3 Sub-task 5 was a single-line swap of the stage-0 alias without
 # changing this table).
 FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
-    ("Saved", (STATUS_SAVED,), "blue"),
-    ("Applied", (STATUS_APPLIED,), "orange"),
-    ("Interview", (STATUS_INTERVIEW,), "violet"),
-    ("Offer", (STATUS_OFFER,), "green"),
-    ("Closed", (STATUS_CLOSED,), "gray"),
-    ("Archived", (STATUS_REJECTED, STATUS_DECLINED), "gray"),
+    ("Saved",     (STATUS_SAVED,),                    "#4F6BEF"),
+    ("Applied",   (STATUS_APPLIED,),                  "#F59E3A"),
+    ("Interview", (STATUS_INTERVIEW,),                "#8B5CF6"),
+    ("Offer",     (STATUS_OFFER,),                    "#10B981"),
+    ("Closed",    (STATUS_CLOSED,),                   "#94A3B8"),
+    ("Archived",  (STATUS_REJECTED, STATUS_DECLINED), "#94A3B8"),
 ]
 
 # Buckets hidden by default on the dashboard funnel. Users reveal them
