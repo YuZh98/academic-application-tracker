@@ -90,7 +90,7 @@ pages/
   2_Applications.py    Application + interview tracking
   3_Recommenders.py    Recommender tracker + reminder helpers
   4_Export.py          Manual export trigger + per-file download buttons
-tests/                 879-test suite (AppTest + unit + cohesion)
+tests/                 889-test suite (AppTest + unit + cohesion)
 docs/
   adr/                 Architecture decision records
   dev-notes/           Streamlit gotchas, dev setup, git workflow notes
