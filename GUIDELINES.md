@@ -9,7 +9,7 @@ For depth on Git and Streamlit state, see `docs/dev-notes/`._
 ## 1. Environment
 
 ```
-Python   3.14.0   (Homebrew, system-managed)
+Python   ≥ 3.11   (see pyproject.toml requires-python; tested on 3.11–3.14)
 venv     .venv/   (project-local; gitignored)
 ```
 
@@ -22,7 +22,7 @@ source .venv/bin/activate
 
 | Package | Required ≥ | Tested with (latest tag) |
 |---------|-----------|----------------------|
-| streamlit | 1.50 | 1.56.0 |
+| streamlit | 1.50 | 1.57.0 |
 | plotly | 5.22 | 6.7.0 |
 | pandas | 2.2 | 3.0.2 |
 | sqlite3 | stdlib — no install needed | — |
@@ -53,7 +53,7 @@ importing `exports` lazily inside each write function (not at module top).
 ### One responsibility per file
 - `database.py` — SQL only. No display logic, no `st.*` calls.
 - `exports.py` — File writing only. No business logic.
-- `config.py` — Constants only. No functions, no I/O.
+- `config.py` — Constants and pure functions. No I/O, no side effects.
 - Page files — Display only. No raw SQL. No file I/O.
 
 ---
@@ -386,11 +386,9 @@ they are not defects.
 
 **TDD cadence:** `test:` (red) → `feat:` (green) → `chore:` (tracker rollup).
 
-**Version tags:** `v0.x.0` for each phase shipped; `v1.0.0` at first
-publishable release; `v1.x.y` post-v1.
+**Version tags:** `v0.x.0` for each phase shipped. Project shipped as `v0.10.0` (public-launch release); no `v1.0.0` planned (see `roadmap.md`).
 
-**What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/`
-· `CLAUDE.md` · `PHASE_*_GUIDELINES.md`.
+**What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/` · local AI session config files · generated artifacts.
 
 **Pre-commit checklist** (CI re-runs the first four on every push and PR
 via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
