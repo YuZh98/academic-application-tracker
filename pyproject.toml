@@ -66,6 +66,8 @@ indent-style = "space"
 # point ("basic" mode) — strict would require widespread additional
 # annotations and is out of scope here. Re-runs of pyright against this
 # config must stay clean for every subsequent PR (CI gate).
+# Per-file strict overrides (via # pyright: strict at top of file):
+#   config.py — pure constants, zero project imports; strict since v0.10.x
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
 # Scope to project source + tests. Top-level files like requirements.txt,
