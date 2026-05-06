@@ -7,6 +7,12 @@ than large features. Read [`DESIGN.md`](DESIGN.md) before proposing
 architectural changes — it is the authoritative spec for the schema,
 page contracts, cascade rules, and exports format.
 
+## Where to start
+
+- **Understanding the architecture:** Read [`DESIGN.md`](DESIGN.md) for the schema, page contracts, cascade rules, and export format.
+- **Coding conventions:** Read [`GUIDELINES.md`](GUIDELINES.md) — naming, patterns, test structure, and doc conventions. Scan the checklist in §11 before every PR.
+- **What's been built:** [`CHANGELOG.md`](CHANGELOG.md) has per-release entries; [`docs/dev-notes/`](docs/dev-notes/) has deep-dives on Streamlit gotchas and the git workflow.
+
 ## Dev setup
 
 ```bash
@@ -39,8 +45,29 @@ pre-commit install
   isolation gate · CI matrix on Python 3.11–3.14.
 - **Changelog.** Add a `[Unreleased]` entry to
   [`CHANGELOG.md`](CHANGELOG.md) with the PR number and commit ref.
+
+  A changelog entry looks like this:
+
+  ````markdown
+  ### Added
+  - Add export timestamp to OPPORTUNITIES.md header (#84)
+
+  ### Changed
+  - Rename `priority_score` → `urgency_score` in Upcoming table column (#85)
+
+  ### Fixed
+  - Fix crash when `deadline_date` is NULL and urgency column renders (#86)
+  ````
+
+  One line per change, imperative mood, ends with PR number. Subsections
+  only appear when needed (don't add an empty `### Fixed` block). Changes
+  with no user-visible effect (pure refactors, test-only commits) don't
+  get entries.
+
 - **Tests for new behaviour.** Follow the TDD red → green → chore
   rollup cadence (see [`GUIDELINES.md`](GUIDELINES.md) §11).
+
+  **Test harness:** Page-level integration tests use Streamlit's official [`AppTest`](https://docs.streamlit.io/develop/api-reference/app-testing/st.testing.v1.apptest) harness — each test boots a real page file against a temp SQLite database. Unit tests for `database.py` and `exports.py` use a `db` fixture in `tests/conftest.py` that redirects `DB_PATH` and `EXPORTS_DIR` to a per-test temp directory. Use `database.add_position()` and similar helpers to seed data in tests — never raw SQL.
 
 ## Issue reporting
 
