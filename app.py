@@ -112,11 +112,11 @@ next_interview = _next_interview_display(database.get_upcoming_interviews())
 # `test_terminal_only_db_still_shows_hero`) needs updating.
 if tracked == 0 and applied == 0 and interview == 0:
     with st.container(border=True):
-        st.subheader("Welcome to your Academic Application Tracker")
+        st.subheader("Get started")
         st.markdown(
             "You haven't added any positions yet. "
-            "Start by logging one — even rough notes — "
-            "and come back here to see your pipeline take shape."
+            "Start by adding one — even partial details count — "
+            "and your application pipeline will appear here."
         )
         if st.button(
             "+ Add your first position",
@@ -133,7 +133,7 @@ with c1:
     st.metric(
         label="Tracked",
         value=str(tracked),
-        help="Saved + Applied — positions you're still actively pursuing",
+        help="Positions in your active pipeline before interview stage (Saved + Applied)",
     )
 with c2:
     st.metric(label="Applied", value=str(applied))
@@ -259,7 +259,7 @@ with _left_col:
 
     if _total == 0:
         # Branch (a): no data anywhere — nothing to disclose into.
-        st.info("Application funnel will appear once you've added positions.")
+        st.info("The Application Funnel will appear once you've added positions.")
     elif (not _funnel_expanded) and _all_visible_buckets_zero:
         # Branch (b): data exists but all of it sits in hidden buckets.
         # Info copy points at the toggle by LABEL (not by spatial
@@ -317,9 +317,11 @@ with _right_col:
         )
     else:
         _total = max(_ready + _pending, 1)
-        st.progress(_ready / _total, text=f"Ready to submit: {_ready}")
-        st.progress(_pending / _total, text=f"Still missing: {_pending}")
-        if st.button("→ Opportunities page", key="materials_readiness_cta"):
+        _pos_word = "position" if _ready == 1 else "positions"
+        st.progress(_ready / _total, text=f"Ready to submit: {_ready} {_pos_word}")
+        _inc_word = "position" if _pending == 1 else "positions"
+        st.progress(_pending / _total, text=f"Incomplete: {_pending} {_inc_word}")
+        if st.button("→ Review in Opportunities", key="materials_readiness_cta"):
             st.switch_page("pages/1_Opportunities.py")
 
 # ── Upcoming (T4) ─────────────────────────────────────────────────────────────
@@ -342,7 +344,7 @@ with _right_col:
 #     status → Status (mapped through STATUS_LABELS — DESIGN §8.0 strips
 #              the bracketed sentinel; '.get' default keeps an unrecognised
 #              status visible rather than producing NaN)
-#     urgency → Urgency ('🔴' / '🟡' / '')
+#     urgency → Urgency ('🔴' / '🟡' / '' / '—' for no deadline)
 #   - Subheader 'Upcoming (next X days)' renders in BOTH branches for
 #     page-height stability (T2/T3 precedent — without this, the layout
 #     above shifts when the first qualifying row lands).
@@ -367,7 +369,7 @@ else:
     _upcoming_display = _upcoming.rename(
         columns={
             "date": "Date",
-            "days_left": "Days left",
+            "days_left": "Days Left",
             "label": "Label",
             "kind": "Kind",
             "status": "Status",
@@ -443,6 +445,8 @@ else:
     # alphabetical order without any extra sort.
     for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
         with st.container(border=True):
+            _rel = str(_group.iloc[0]["relationship"] or "")
+            _rel_str = f" ({_rel})" if _rel else ""
             _bullets = []
             for _, _row in _group.iterrows():
                 _inst: Any = _row["institute"]
@@ -452,6 +456,6 @@ else:
                 _days_ago = (_today - date.fromisoformat(_asked_iso)).days
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
-                _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
-            _body = f"**⚠ {_name}**\n" + "\n".join(_bullets)
+                _bullets.append(f"- {_label} (asked {_days_ago} days ago, due {_due})")
+            _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
             st.markdown(_body)
