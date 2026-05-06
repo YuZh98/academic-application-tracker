@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/YuZh98/academic-application-tracker/security/advisories/new
+    about: Please report security issues privately via GitHub Security Advisory, not as a public issue.
+  - name: Question or discussion
+    url: https://github.com/YuZh98/academic-application-tracker/issues?q=is%3Aissue
+    about: For questions, please search existing issues first or open one with the "question" label.

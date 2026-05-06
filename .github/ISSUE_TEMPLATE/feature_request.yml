@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. The project's scope is documented in `roadmap.md` and `DESIGN.md` — proposals that fit the local-first, single-user shape are easier to land.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem you're solving
+      description: What need does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the change you'd like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative approaches you've thought about?
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else worth knowing (screenshots, links, related issues).
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I have searched existing issues to make sure this is not a duplicate.
+          required: true
+        - label: I have read `roadmap.md` to check whether this is already tracked.
+          required: true
