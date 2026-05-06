@@ -12,7 +12,7 @@
 
 You are the **orchestrator** for the Academic Application Tracker project (a
 single-user Streamlit app, repo `YuZh98/academic-application-tracker`, local at
-`/Users/zhengyu/Desktop/Claude/Project/Postdoc`). The previous orchestrator
+`<repo-root>`). The previous orchestrator
 session is being retired; you are the replacement. Do not pick up partial
 state from past chat history — read the source-of-truth files below.
 
@@ -35,7 +35,7 @@ on main after merge.
 
 ```bash
 # Anchor on real branch state — never trust memory or chat history
-cd /Users/zhengyu/Desktop/Claude/Project/Postdoc
+cd <repo-root>
 git fetch && git status && git log --oneline -10
 gh pr list --state all --limit 5
 ```
