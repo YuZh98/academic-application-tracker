@@ -7,10 +7,9 @@
 #     st.title("Export & Download")
 #   - One-line intro (wireframe-pinned).
 #   - st.button("Regenerate all markdown files", key="export_regenerate",
-#     type="primary") wraps exports.write_all() in try/except per
-#     GUIDELINES §8 (friendly error, no re-raise) — the inner per-writer
-#     log-and-continue (DESIGN §7 contract #1) means only EXPORTS_DIR.mkdir
-#     failures should reach the handler.
+#     type="primary") calls database.regenerate_exports() per
+#     GUIDELINES §8 (friendly error, no re-raise) and DESIGN §2
+#     (DESIGN §2: pages may not use the exports module directly).
 #   - Per-file mtimes block: one st.markdown line per locked filename,
 #     either "**FILENAME.md** — last generated: {Mon D, YYYY at H:MM AM/PM}"
 #     or "**FILENAME.md** — not yet generated. Use **Regenerate** above ..."
@@ -22,12 +21,10 @@
 # data=Path.read_bytes(), disabled with data=b"" when absent.
 
 from datetime import datetime
-from pathlib import Path
 
 import streamlit as st
 
 import database
-import exports
 
 # DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
 # with wide layout. Must precede any other st.* call.
@@ -53,13 +50,11 @@ st.markdown(
 
 # ── Regenerate button ────────────────────────────────────────────────────────
 #
-# Calls `exports.write_all()`. Per DESIGN §7 contract #1, write_all
-# log-and-continues on individual writer failure (each `write_*` runs
-# inside its own try/except), so only the EXPORTS_DIR.mkdir leg of
-# write_all can surface an exception to this handler. GUIDELINES §8
-# wraps the call so the user sees a friendly st.error rather than a
-# traceback, and the click handler does NOT re-raise — the button is
-# still rendered after a failure so the user can retry.
+# Calls database.regenerate_exports() — the thin wrapper in database.py
+# that imports exports lazily (deferred import to break circular
+# dependency) and calls write_all(). Errors propagate here so the page
+# can surface them via st.error. GUIDELINES §8: no re-raise, button
+# still rendered after failure so user can retry.
 
 if st.button(
     "Regenerate all markdown files",
@@ -67,7 +62,7 @@ if st.button(
     type="primary",
 ):
     try:
-        exports.write_all()
+        database.regenerate_exports()
         st.toast("All markdown files regenerated.")
     except Exception as e:
         # GUIDELINES §8: friendly error, no re-raise. Mirror of every
@@ -107,8 +102,7 @@ st.subheader("Download Files")
 
 _EXPORT_FILENAMES = ("OPPORTUNITIES.md", "PROGRESS.md", "RECOMMENDERS.md")
 
-for _filename in _EXPORT_FILENAMES:
-    _path: Path = exports.EXPORTS_DIR / _filename
+for _filename, _path in database.get_export_paths():
     _file_present = _path.exists()
 
     # T5 download button — enabled when the file exists with the file
