@@ -211,7 +211,7 @@ else:
             st.markdown(_body)
 
             # ──  Compose reminder email ────────────────────────────
-            
+
             _mailto_url = _build_compose_mailto(
                 recommender_name=str(_name),
                 n_positions=len(_group),
@@ -453,7 +453,7 @@ else:
     st.session_state.pop("_recs_edit_form_sid", None)
 
 
-# ── Delete confirm dialog 
+# ── Delete confirm dialog
 @st.dialog("Delete this recommender?")
 def _confirm_delete_recommender_dialog() -> None:
     """Modal confirm dialog for irreversible recommender deletion. The
@@ -521,7 +521,7 @@ if "recs_selected_id" in st.session_state:
             st.markdown(f"**Editing: {_rec_name or EM_DASH}**")
 
             # ── Pre-seed widget state ───────────────────────────────────
-    
+
             _sid_changed = st.session_state.get("_recs_edit_form_sid") != _rec_id
 
             _raw_confirmed = _rec_row["confirmed"]
@@ -593,7 +593,7 @@ if "recs_selected_id" in st.session_state:
                     key="recs_edit_submit",
                 )
 
-            
+
             if _edit_submitted:
                 _w_asked = st.session_state.get("recs_edit_asked_date")
                 _w_confirmed = st.session_state.get("recs_edit_confirmed")
