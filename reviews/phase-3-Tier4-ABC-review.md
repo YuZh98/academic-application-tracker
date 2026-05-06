@@ -277,4 +277,3 @@ Command: `git checkout main && git merge feature/phase-3-tier4 --no-ff -m "Merge
 ---
 
 **Final verdict after Q&A:** ready to merge. Branch is green (170/170 tests pass), history is clean, all review findings are addressed with regression guards, and no TODO/FIXME/print/debug residue remains in the diff.
-
