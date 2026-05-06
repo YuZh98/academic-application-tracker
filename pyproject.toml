@@ -69,3 +69,11 @@ exclude = [
     "build",
     "dist",
 ]
+
+[tool.coverage.run]
+omit = [
+    ".venv/*",
+    "docs/*",
+    "tests/*",
+    "conftest.py",
+]
