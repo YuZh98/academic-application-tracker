@@ -53,18 +53,16 @@ def _confirm_delete_dialog() -> None:
       ON DELETE CASCADE; PRAGMA foreign_keys=ON in database._connect).
       On success: st.toast, clear all four session_state keys (the
       _delete_target_* pair AND the selected_position_id / _edit_form_sid
-      pair — paired cleanup per the T4 pattern), st.rerun() which closes
-      the dialog.
+      pair — paired cleanup), st.rerun() which closes the dialog.
     • Cancel → clear only the _delete_target_* pair; selected_position_id
       / _edit_form_sid are preserved so the user returns to the same
       edit context. Plain st.rerun() closes the dialog.
 
-    Failure mode mirrors every other Tier-5 save path: a raising
-    delete_position is caught, surfaced as a friendly st.error, and NOT
-    re-raised — re-raising would make Streamlit render the very traceback
-    the handler exists to prevent (F1 / GUIDELINES §8). Selection and
-    pending-delete state are intentionally preserved on failure so the
-    user can retry without losing context.
+    Failure mode: a raising delete_position is caught, surfaced as a
+    friendly st.error, and NOT re-raised — re-raising would let Streamlit
+    render the raw traceback. Selection and pending-delete state are
+    intentionally preserved on failure so the user can retry without
+    losing context.
     """
     position_id: int | None = st.session_state.get("_delete_target_id")
     position_name: str = st.session_state.get("_delete_target_name", "")
@@ -151,7 +149,7 @@ if submitted:
     if not position_name:
         st.error("Position Name is required.")
     else:
-        fields: dict[str, Any] = {  # F5: dict[str, Any] per project standard
+        fields: dict[str, Any] = {
             "position_name": position_name,
             "institute": institute,
             "field": field,
@@ -228,7 +226,7 @@ if df.empty:
     st.info(config.EMPTY_NO_POSITIONS)
 elif df_filtered.empty:
     st.session_state.pop("selected_position_id", None)  # same reason
-    st.session_state.pop("_edit_form_sid", None)  # F4: same pairing
+    st.session_state.pop("_edit_form_sid", None)  # same reason
     st.info(config.EMPTY_FILTERED_POSITIONS)
 else:
     _n = len(df_filtered)
@@ -472,9 +470,9 @@ if "selected_position_id" in st.session_state:
                     database.update_position(sid, payload)
                     st.toast(f'Saved requirements for "{r["position_name"]}".')
                     st.session_state.pop("_edit_form_sid", None)
-                    # Same one-shot as T5-A: preserve the selection across
-                    # the post-save rerun despite st.dataframe resetting
-                    # its event on data-change reruns.
+                    # Preserve the selection across the post-save rerun:
+                    # st.dataframe resets its selection event on data-change
+                    # reruns, so the skip-reset flag keeps the row highlighted.
                     st.session_state["_skip_table_reset"] = True
                     st.rerun()
                 except Exception as exc:

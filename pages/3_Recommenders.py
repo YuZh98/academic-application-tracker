@@ -74,9 +74,9 @@ def _coerce_iso_to_date(v: Any) -> date | None:
 
 def _format_label(institute: Any, position_name: str) -> str:
     """'{institute}: {position_name}' when institute is non-empty; bare
-    position_name otherwise. Mirrors app.py T5 Label precedent — 'or'
-    treats None and '' both as falsy, so no explicit pd.isna guard needed
-    here: get_pending_recommenders surfaces missing TEXT cells as None."""
+    position_name otherwise. The 'or' treats None and '' both as falsy,
+    so no explicit pd.isna guard needed here: get_pending_recommenders
+    surfaces missing TEXT cells as None."""
     if institute:
         return f"{institute}: {position_name}"
     return position_name
@@ -85,7 +85,8 @@ def _format_label(institute: Any, position_name: str) -> str:
 def _format_due(deadline_iso: str | None) -> str:
     """Due-date in 'Mon D' form (no year — near-future deadlines).
     Em-dash for NULL/empty, mirroring NEXT_INTERVIEW_EMPTY.
-    pd.isna() catches both None and NaN-from-pandas (dev-notes gotcha #13)."""
+    pd.isna() catches both None and NaN-from-pandas (SQLite NULLs become
+    NaN when read through pandas, so an `is None` check alone is not enough)."""
     if deadline_iso is None or pd.isna(deadline_iso) or deadline_iso == "":
         return EM_DASH
     d = date.fromisoformat(str(deadline_iso))
@@ -109,15 +110,15 @@ def _format_confirmed(v: Any) -> str:
 
 
 def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
-    """Build the DESIGN §8.4 mailto URL for the Compose button (T6-A).
+    """Build the mailto URL for the Compose button.
     The subject interpolates the position count; the body interpolates
     the recommender's name. No `to:` field — the recommenders schema
-    doesn't store emails today, so the OS-level mail client prompts
+    doesn't store emails, so the OS-level mail client prompts
     the user for the recipient.
 
-    Subject follows English pluralization rules (DESIGN §8.4): at
-    ``N=1`` reads "letter for 1 <APPLICATION_LABEL>" (singular both
-    nouns); at ``N≥2`` reads "letters for N <APPLICATION_LABEL>s"."""
+    Subject follows English pluralization rules: at ``N=1`` reads
+    "letter for 1 <APPLICATION_LABEL>" (singular both nouns); at
+    ``N≥2`` reads "letters for N <APPLICATION_LABEL>s"."""
     label = config.APPLICATION_LABEL
     if n_positions == 1:
         subject = f"Following up: letter for 1 {label}"
@@ -138,7 +139,7 @@ def _build_llm_prompt(
     group: pd.DataFrame,
     days_ago: int,
 ) -> str:
-    """Build one LLM-prompt code block body per DESIGN §8.4 (T6-B).
+    """Build one LLM-prompt code block body for the Compose helper.
 
     Embeds:
       - recommender name + relationship (relationship omitted on NULL),
@@ -254,9 +255,8 @@ for _, _pos_row in _positions_df.iterrows():
         _safe_str(_pos_row["institute"]),
         _safe_str(_pos_row["position_name"]),
     )
-    # CL1 type-clean: pandas-stubs widens iterrows cells to
-    # Series | ndarray | Any. Funnel through Any so int() only sees
-    # the runtime scalar (PR #22 precedent).
+    # pandas-stubs widens iterrows() cell types to Series; cast to int
+    # via Any so the type-checker accepts the runtime scalar.
     _pos_id_raw: Any = _pos_row["id"]
     _position_label_to_id[_label] = int(_pos_id_raw)
 
@@ -489,9 +489,8 @@ def _confirm_delete_recommender_dialog() -> None:
                 st.session_state.pop("_recs_delete_target_name", None)
                 st.rerun()
             except Exception as e:
-                # GUIDELINES §8: friendly error, no re-raise. Sentinels
-                # survive so the dialog re-opens for retry on the next
-                # rerun (matches the Opportunities precedent).
+                # Friendly error, no re-raise. Sentinels survive so the
+                # dialog re-opens for retry on the next rerun.
                 st.error(f"Could not delete: {e}")
     with _col_cancel:
         if st.button(
