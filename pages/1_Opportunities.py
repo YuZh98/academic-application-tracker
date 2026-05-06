@@ -170,7 +170,9 @@ if submitted:
         except Exception as e:
             st.error(f"Could not save position: {e}")
 
+
 # ── Filter bar ────────────────────────────────────────────────────────
+
 col_search, col_status, col_priority, col_field = st.columns([3, 2, 2, 3])
 with col_search:
     search_filter = st.text_input(
@@ -312,7 +314,9 @@ else:
         st.session_state.pop("selected_position_id", None)
         st.session_state.pop("_edit_form_sid", None)
 
+
 # ── Edit panel (subheader + tabs shell) ──────────────────────────────
+
 
 if "selected_position_id" in st.session_state:
     sid = st.session_state["selected_position_id"]
