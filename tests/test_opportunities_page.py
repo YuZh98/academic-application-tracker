@@ -529,8 +529,8 @@ class TestFilterBarBehaviour:
         at = _run_page()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "2 position(s)" in at.caption[0].value, (
-            f"Expected '2 position(s)' in caption, got: {at.caption[0].value!r}"
+        assert "2 positions" in at.caption[0].value, (
+            f"Expected '2 positions' in caption, got: {at.caption[0].value!r}"
         )
 
     def test_filter_by_status_narrows_results(self, db):
@@ -546,8 +546,8 @@ class TestFilterBarBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
-            f"Expected '1 position(s)' after status filter, got: {at.caption[0].value!r}"
+        assert "1 position" in at.caption[0].value, (
+            f"Expected '1 position' after status filter, got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
         assert names == ["Open One"], (
@@ -582,8 +582,8 @@ class TestFilterBarBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
-            f"Expected '1 position(s)' after priority filter, got: {at.caption[0].value!r}"
+        assert "1 position" in at.caption[0].value, (
+            f"Expected '1 position' after priority filter, got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
         assert names == ["High Prio"], (
@@ -603,8 +603,8 @@ class TestFilterBarBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
-            f"Expected '1 position(s)' after field filter, got: {at.caption[0].value!r}"
+        assert "1 position" in at.caption[0].value, (
+            f"Expected '1 position' after field filter, got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
         assert names == ["ML Postdoc"], (
@@ -620,7 +620,7 @@ class TestFilterBarBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
+        assert "1 position" in at.caption[0].value, (
             "Expected case-insensitive field filter to match 'Machine Learning'"
         )
 
@@ -642,7 +642,7 @@ class TestFilterBarBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
+        assert "1 position" in at.caption[0].value, (
             f"Expected only position A after combined filter, got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
@@ -681,7 +681,7 @@ class TestFilterBarBehaviour:
         at.run()
         assert not at.exception, f"Field filter raised an exception: {at.exception}"
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
+        assert "1 position" in at.caption[0].value, (
             f"Expected 'C++ Programming' to match literal 'C++' filter; "
             f"got: {at.caption[0].value!r}"
         )
@@ -715,8 +715,8 @@ class TestPositionSearchStructure:
     def test_search_label_is_search_positions(self, db):
         at = _run_page()
         labels = [el.label for el in at.text_input]
-        assert "Search positions" in labels, (
-            f"Expected 'Search positions' label on the search text_input, got: {labels}"
+        assert "Search" in labels, (
+            f"Expected 'Search' label on the search text_input, got: {labels}"
         )
 
 
@@ -733,8 +733,8 @@ class TestPositionSearchBehaviour:
         # Default (no search input) — all three rows.
         assert not at.exception
         assert len(at.caption) == 1
-        assert "3 position(s)" in at.caption[0].value, (
-            f"Expected '3 position(s)' with empty search, got: {at.caption[0].value!r}"
+        assert "3 positions" in at.caption[0].value, (
+            f"Expected '3 positions' with empty search, got: {at.caption[0].value!r}"
         )
 
     def test_search_substring_filters_rows(self, db):
@@ -750,8 +750,8 @@ class TestPositionSearchBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
-            f"Expected '1 position(s)' after search='stanford', got: {at.caption[0].value!r}"
+        assert "1 position" in at.caption[0].value, (
+            f"Expected '1 position' after search='stanford', got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
         assert names == ["Postdoc Stanford"], (
@@ -793,7 +793,7 @@ class TestPositionSearchBehaviour:
             f"Search with '++' raised an exception (regex=False missing?): {at.exception}"
         )
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
+        assert "1 position" in at.caption[0].value, (
             f"Expected literal '++' to match 'C++ Postdoc'; got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
@@ -820,7 +820,7 @@ class TestPositionSearchBehaviour:
         at.run()
         assert not at.exception
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
+        assert "1 position" in at.caption[0].value, (
             f"Expected exactly 1 position after [SAVED]+'stanford' AND-filter; "
             f"got: {at.caption[0].value!r}"
         )
@@ -3249,7 +3249,7 @@ class TestFilterStatusFormatFunc:
         assert not at.exception
         # One row after filtering to Applied.
         assert len(at.caption) == 1
-        assert "1 position(s)" in at.caption[0].value, (
+        assert "1 position" in at.caption[0].value, (
             f"Expected exactly 1 applied row after filter, got: {at.caption[0].value!r}"
         )
         names = list(at.dataframe[0].value["position_name"])
