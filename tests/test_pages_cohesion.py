@@ -187,9 +187,14 @@ class TestSetPageConfigSweep:
         assert "st.set_page_config(" in src, (
             f"{page} must call st.set_page_config(...) per DESIGN §8.0."
         )
-        assert 'page_title="Academic Application Tracker"' in src, (
-            f'{page} must bind page_title="Academic Application Tracker" '
-            f"(locked across every page per DESIGN §8.0 / D14)."
+        # New convention: app.py uses the exact title; pages/*.py may prefix
+        # with the page name (e.g. 'Applications — Academic Application Tracker').
+        # The invariant is that every page_title contains 'Academic Application Tracker'.
+        # page_title must end with 'Academic Application Tracker" — matches both the
+        # bare form (app.py) and the page-prefixed form (pages/*.py uses
+        # '<PageName> — Academic Application Tracker').
+        assert 'Academic Application Tracker"' in src, (
+            f'{page} page_title must contain "Academic Application Tracker" per DESIGN §8.0 / D14.'
         )
         assert 'page_icon="📋"' in src, (
             f'{page} must bind page_icon="📋" (locked across every page per DESIGN §8.0 / D14).'
