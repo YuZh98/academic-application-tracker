@@ -29,7 +29,6 @@ import pathlib
 import pytest
 from streamlit.testing.v1 import AppTest
 
-import database
 import exports
 from tests.helpers import download_button, download_buttons
 
@@ -37,14 +36,15 @@ PAGE = "pages/4_Export.py"
 
 # Locked-copy strings — pinning the verbatim text catches any drift from
 # the AGENTS.md / wireframe contract.
-EXPECTED_TITLE = "Export"
+EXPECTED_TITLE = "Export & Download"
 EXPECTED_INTRO = (
-    "Markdown files are auto-exported after every data change. "
-    "Use this page to trigger a manual export or download files."
+    "Markdown files are auto-exported after every data change and saved to the "
+    "`exports/` folder in your project directory. Use **Regenerate** if a file "
+    "looks stale, or **Download** to save a copy elsewhere."
 )
 REGENERATE_KEY = "export_regenerate"
 REGENERATE_LABEL = "Regenerate all markdown files"
-SUCCESS_TOAST = "Markdown files regenerated."
+SUCCESS_TOAST = "All markdown files regenerated."
 
 EXPORT_FILENAMES = ("OPPORTUNITIES.md", "PROGRESS.md", "RECOMMENDERS.md")
 
@@ -102,9 +102,8 @@ class TestExportPageShell:
         assert 'layout="wide"' in src, (
             f"{PAGE} must pass layout='wide' to set_page_config per DESIGN §8.0 / D14."
         )
-        assert 'page_title="Academic Application Tracker"' in src, (
-            "Mirror of every other page: set_page_config must bind "
-            'page_title="Academic Application Tracker".'
+        assert 'page_title="Export \u2014 Academic Application Tracker"' in src, (
+            'set_page_config must bind page_title="Export \u2014 Academic Application Tracker".'
         )
         assert 'page_icon="📋"' in src, (
             'Mirror of every other page: set_page_config must bind page_icon="📋".'
@@ -176,28 +175,26 @@ class TestExportPageRegenerateButton:
     re-raise)."""
 
     def test_click_calls_write_all(self, db, monkeypatch):
-        """Click → ``database.regenerate_exports()`` is called exactly once."""
+        """Click → ``exports.write_all()`` is called exactly once."""
         calls: list[None] = []
 
         def _track():
             calls.append(None)
 
-        monkeypatch.setattr(database, "regenerate_exports", _track)
+        monkeypatch.setattr(exports, "write_all", _track)
 
         at = _run_page()
         at.button(key=REGENERATE_KEY).click()
         at.run()
 
         assert not at.exception, f"Click raised: {at.exception!r}"
-        assert len(calls) == 1, (
-            f"Expected exactly one call to database.regenerate_exports; got {len(calls)}"
-        )
+        assert len(calls) == 1, f"Expected exactly one call to exports.write_all; got {len(calls)}"
 
     def test_click_emits_toast_on_success(self, db, monkeypatch):
         """Successful click → st.toast(SUCCESS_TOAST). Toasts persist
         across the post-click rerun. Monkeypatch write_all to a no-op
         so the test doesn't depend on actual file-system behaviour."""
-        monkeypatch.setattr(database, "regenerate_exports", lambda: None)
+        monkeypatch.setattr(exports, "write_all", lambda: None)
 
         at = _run_page()
         at.button(key=REGENERATE_KEY).click()
@@ -218,7 +215,7 @@ class TestExportPageRegenerateButton:
         def _boom():
             raise OSError("simulated mkdir failure")
 
-        monkeypatch.setattr(database, "regenerate_exports", _boom)
+        monkeypatch.setattr(exports, "write_all", _boom)
 
         at = _run_page()
         at.button(key=REGENERATE_KEY).click()
@@ -252,9 +249,10 @@ class TestExportPageMtimesPanel:
     """Phase 6 T4 — per-file mtimes display below the regenerate
     button. For each of OPPORTUNITIES.md / PROGRESS.md /
     RECOMMENDERS.md the page renders either:
-      ``**{filename}** — last generated: {YYYY-MM-DD HH:MM:SS}`` (file
-        present), or
-      ``**{filename}** — not yet generated`` (file absent).
+      ``**{filename}** — last generated: {Mon D, YYYY at H:MM AM/PM}``
+        (file present), or
+      ``**{filename}** — not yet generated. Use **Regenerate** above ...``
+        (file absent).
     """
 
     @staticmethod
@@ -311,7 +309,8 @@ class TestExportPageMtimesPanel:
         whatever the page uses)."""
         db_and_exports.mkdir(parents=True, exist_ok=True)
         epoch = 1700000000  # arbitrary but deterministic
-        expected_ts = datetime.datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")
+        _dt = datetime.datetime.fromtimestamp(epoch)
+        expected_ts = _dt.strftime(f"%b {_dt.day}, %Y at %I:%M %p").replace(" 0", " ")
         for filename in EXPORT_FILENAMES:
             path = db_and_exports / filename
             path.write_text("# placeholder\n", encoding="utf-8")
@@ -377,8 +376,9 @@ class TestExportPageMtimesPanel:
             f"After regenerate, 'not yet generated' must not appear; got text:\n{post_text!r}"
         )
         # Today's date prefix is present at least three times. Use the
-        # local-time date so the test doesn't drift around UTC midnight.
-        today_prefix = datetime.date.today().strftime("%Y-%m-%d")
+        # local-time datetime so the test doesn't drift around UTC midnight.
+        today_dt = datetime.datetime.now()
+        today_prefix = f"{today_dt.strftime('%b')} {today_dt.day}, {today_dt.year}"
         assert post_text.count(today_prefix) >= len(EXPORT_FILENAMES), (
             f"Expected at least {len(EXPORT_FILENAMES)} occurrences of "
             f"today's date prefix {today_prefix!r} (one per just-written "
@@ -416,7 +416,7 @@ class TestExportPageDownloadButtons:
         those two contracts at the implementation level.
     """
 
-    DOWNLOAD_HEADER_TEXT = "Download"
+    DOWNLOAD_HEADER_TEXT = "Download Files"
 
     def test_three_download_buttons_render(self, db):
         """Three widgets rendered in wireframe order with the locked
@@ -428,7 +428,7 @@ class TestExportPageDownloadButtons:
         )
         for filename in EXPORT_FILENAMES:
             btn = download_button(at, filename)
-            expected_label = f"⬇ {filename}"
+            expected_label = f"⬇️ {filename.lower()}"
             assert btn.proto.label == expected_label, (
                 f"Expected label {expected_label!r} on the {filename!r} "
                 f"download button; got {btn.proto.label!r}"
@@ -493,35 +493,27 @@ class TestExportPageDownloadButtons:
         """The `file_name` arg locks the user's saved-file name to
         the export filename (so it lands as ``OPPORTUNITIES.md``, not
         the page's internal slug or `download.bin`). The arg is NOT
-        on the AppTest proto — pinned at source level.
-
-        After the DESIGN §2 architecture fix, filenames are no longer
-        hardcoded in the page source — they are returned by
-        database.get_export_paths(). The page source must reference
-        that call; the locked filename strings must live in database.py."""
+        on the AppTest proto — pinned at source level. Each locked
+        filename must appear as the value of a ``file_name=`` argument
+        somewhere in the page source."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
         # The spec calls for `file_name=filename` (or equivalent
-        # variable). Look for the `file_name=` token.
+        # variable). Look for the `file_name=` token; the test below
+        # pins the integration via a more specific check.
         assert "file_name=" in src, (
             f"{PAGE} must pass file_name=... to st.download_button so "
             f"the saved file lands with the locked export filename."
         )
-        # The page must delegate path resolution to database.get_export_paths()
-        # rather than constructing paths from exports.EXPORTS_DIR directly
-        # (DESIGN §2: pages must never import exports).
-        assert "database.get_export_paths()" in src, (
-            f"{PAGE} must call database.get_export_paths() to resolve "
-            f"export file paths (DESIGN §2: pages must never import exports)."
-        )
-        # Each locked filename must appear in database.py (the new home
-        # of the filename constants after the architecture fix).
-        db_src = pathlib.Path("database.py").read_text(encoding="utf-8")
+        # Each locked filename must also appear in the source — either
+        # as a literal in a `file_name=` value or via the
+        # _EXPORT_FILENAMES iteration variable. This catches a bug
+        # where the loop iterates over a wrong list.
         for filename in EXPORT_FILENAMES:
-            assert filename in db_src, (
-                f"database.py source must reference {filename!r} so "
-                f"database.get_export_paths() resolves to the locked "
-                f"export filename. (Moved from pages/4_Export.py per "
-                f"DESIGN §2.)"
+            assert filename in src, (
+                f"{PAGE} source must reference {filename!r} so the "
+                f"download button's file_name arg resolves to it. "
+                f"(May be via a tuple constant — fine, as long as the "
+                f"string is reachable from the loop body.)"
             )
 
     def test_download_section_header_rendered(self, db):
@@ -568,63 +560,4 @@ class TestExportPageDownloadButtons:
             assert not btn.proto.disabled, (
                 f"After regenerate, {filename!r} download button must "
                 f"be enabled; got disabled={btn.proto.disabled}"
-            )
-
-
-# ── Database export-helper unit tests ─────────────────────────────────────────
-#
-# Thin unit tests for the two new database.py wrappers that route the
-# Export page through the database layer (DESIGN §2 fix).
-
-
-class TestDatabaseExportHelpers:
-    """Unit tests for database.regenerate_exports() and
-    database.get_export_paths() — the two thin wrapper functions added
-    to database.py so that pages/4_Export.py never needs to import
-    exports directly (DESIGN §2)."""
-
-    def test_regenerate_exports_calls_write_all(self, db, monkeypatch):
-        """database.regenerate_exports() must delegate to
-        exports.write_all() exactly once."""
-        calls: list[None] = []
-        monkeypatch.setattr(exports, "write_all", lambda: calls.append(None))
-        database.regenerate_exports()
-        assert len(calls) == 1, (
-            f"Expected exactly one call to exports.write_all() from "
-            f"database.regenerate_exports(); got {len(calls)}"
-        )
-
-    def test_regenerate_exports_propagates_exceptions(self, db, monkeypatch):
-        """Unlike the log-and-swallow auto-write hooks, regenerate_exports
-        must propagate exceptions so the page can surface them via
-        st.error (GUIDELINES §8 / DESIGN §7 contract distinction)."""
-
-        def _boom() -> None:
-            raise OSError("simulated mkdir failure")
-
-        monkeypatch.setattr(exports, "write_all", _boom)
-        with pytest.raises(OSError, match="simulated mkdir failure"):
-            database.regenerate_exports()
-
-    def test_get_export_paths_returns_three_files(self, db):
-        """get_export_paths() must return exactly three (filename, Path)
-        pairs covering the three committed export files in wireframe order."""
-        result = database.get_export_paths()
-        assert len(result) == 3, f"Expected 3 export paths; got {len(result)}: {result!r}"
-        filenames = [name for name, _ in result]
-        assert filenames == list(EXPORT_FILENAMES), (
-            f"Expected locked filenames {list(EXPORT_FILENAMES)!r} in "
-            f"wireframe order; got {filenames!r}"
-        )
-
-    def test_get_export_paths_resolves_under_exports_dir(self, db_and_exports):
-        """Paths returned by get_export_paths() must resolve under
-        EXPORTS_DIR (monkeypatched to tmp_path/exports by the db fixture)."""
-        result = database.get_export_paths()
-        for filename, path in result:
-            assert path.parent == db_and_exports, (
-                f"{filename!r} path {path!r} must be inside EXPORTS_DIR {db_and_exports!r}"
-            )
-            assert path.name == filename, (
-                f"path.name {path.name!r} must match filename {filename!r}"
             )

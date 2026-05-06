@@ -129,15 +129,15 @@ class TestPageConfig:
 
 
 class TestPendingAlertsPanel:
-    """Phase 5 T4: Pending Alerts panel contract.
+    """Phase 5 T4: Recommender Alerts panel contract.
 
     Locked contract:
-      - st.subheader("Pending Alerts") renders in BOTH empty and populated
+      - st.subheader("Recommender Alerts") renders in BOTH empty and populated
         branches for page-height stability (mirrors dashboard T5 precedent).
       - Empty branch: st.info(EMPTY_COPY) verbatim, no alert cards.
       - Populated branch: one st.container(border=True) per distinct
         recommender_name (source-level pin). Each card is a single
-        st.markdown block whose body starts with **⚠ {name}** and
+        st.markdown block whose body starts with ⚠️ **{name}** and
         optionally includes ({relationship}) when the field is non-NULL.
         Each position owed appears as a bullet:
           - {institute}: {position_name} (asked {N}d ago, due {Mon D})
@@ -146,13 +146,13 @@ class TestPendingAlertsPanel:
         here — T4 only renders the alert cards.
     """
 
-    SUBHEADER = "Pending Alerts"
+    SUBHEADER = "Recommender Alerts"
     # Pin against the constant by name so a future wording edit in
     # config.py flows through here automatically — no test churn on
     # copy updates.
     EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDERS
     BORDER_SOURCE = "st.container(border=True)"
-    WARN_GLYPH = "⚠"
+    WARN_GLYPH = "⚠️"
 
     @classmethod
     def _alert_markdowns(cls, at: AppTest) -> list[str]:
@@ -664,12 +664,8 @@ class TestAllRecommendersTable:
         assert cells["A NULL"] == EM_DASH, (
             f"Confirmed=NULL must render as {EM_DASH!r}; got {cells['A NULL']!r}"
         )
-        assert cells["B No"] == config.CONFIRMED_LABELS[0], (
-            f"Confirmed=0 must render as {config.CONFIRMED_LABELS[0]!r}; got {cells['B No']!r}"
-        )
-        assert cells["C Yes"] == config.CONFIRMED_LABELS[1], (
-            f"Confirmed=1 must render as {config.CONFIRMED_LABELS[1]!r}; got {cells['C Yes']!r}"
-        )
+        assert cells["B No"] == "No", f"Confirmed=0 must render as 'No'; got {cells['B No']!r}"
+        assert cells["C Yes"] == "Yes", f"Confirmed=1 must render as 'Yes'; got {cells['C Yes']!r}"
 
     def test_table_uses_get_all_recommenders(self, db, monkeypatch):
         """Source-of-truth pin: the table reads from
@@ -835,8 +831,8 @@ class TestAddRecommenderSubmit:
         at.run()
 
         toasts = [el.value for el in at.toast]
-        assert any("Added" in v and "Dr. Toast" in v for v in toasts), (
-            f'Successful add must fire st.toast("Added Dr. Toast."); got toasts={toasts!r}'
+        assert any('Added "Dr. Toast"' in v for v in toasts), (
+            f"Successful add must fire st.toast('Added \"Dr. Toast\".')); got toasts={toasts!r}"
         )
         # Sanity: pid was used (suppresses unused-variable warning).
         assert pid > 0
@@ -1019,7 +1015,7 @@ class TestRecommenderEditFormRender:
     def test_pre_seed_confirmed_tri_state(self, db):
         """``confirmed`` is INTEGER tri-state (None/0/1) — pre-seed must
         carry the literal value (matching how the selectbox renders
-        None as '—', 0 as 'No', 1 as 'Yes')."""
+        None as 'Not yet / unknown', 0 as 'No', 1 as 'Yes')."""
         pid = _seed_position(name="Alpha")
         _seed_recommender(pid, recommender_name="Dr. Smith", confirmed=1)
         at = _run_page()
@@ -1403,7 +1399,7 @@ class TestT6ComposeButton:
     locked-copy ``mailto:`` URL.
 
     Locked contract (DESIGN §8.4 + AGENTS §T6-A):
-      - Label: ``Compose reminder email`` verbatim.
+      - Label: ``📧 Compose Reminder Email`` verbatim.
       - URL scheme: ``mailto:`` with empty path (no ``to:`` field — the
         recommenders schema doesn't store emails today).
       - Subject: ``Following up: letters for {N} postdoc applications``
@@ -1415,7 +1411,7 @@ class TestT6ComposeButton:
         themselves (groupby on recommender_name).
     """
 
-    LABEL = "Compose reminder email"
+    LABEL = "📧 Compose Reminder Email"
 
     def test_no_buttons_on_empty_db(self, db):
         """Empty DB → no alert cards → no compose buttons. The page
@@ -1569,9 +1565,9 @@ class TestT6ComposeButton:
 
 class TestT6LLMPromptsExpander:
     """Phase 5 T6-B: per-card ``st.expander`` revealing N pre-filled LLM
-    prompts (one per tone). DESIGN §8.4 + AGENTS §T6-B fix N=2 with tones
+    prompts (one per style). DESIGN §8.4 + AGENTS §T6-B fix N=2 with tones
     ``gentle`` and ``urgent``, so the expander label reads
-    ``LLM prompts (2 tones)``.
+    ``Draft email with AI (2 styles)``.
 
     Each prompt block is rendered via ``st.code(text, language='text')``
     so Streamlit's built-in copy-on-hover affordance works. Required
@@ -1583,7 +1579,7 @@ class TestT6LLMPromptsExpander:
       - explicit instruction asking the LLM to return BOTH subject and body.
     """
 
-    EXPANDER_LABEL = "LLM prompts (2 tones)"
+    EXPANDER_LABEL = "Draft email with AI (2 styles)"
     TONES = ("gentle", "urgent")
 
     def test_no_expander_on_empty_db(self, db):
