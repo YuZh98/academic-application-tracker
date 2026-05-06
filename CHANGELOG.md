@@ -21,9 +21,45 @@ _(empty)_
 
 ## [v0.11.0] - 2026-05-06
 
+### Added
+- Add `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1 (#54)
+- Add `CONTRIBUTING.md` — dev setup, PR workflow, commit format, testing conventions (#55)
+- Add pull request template (`.github/PULL_REQUEST_TEMPLATE.md`) (#56)
+- Add GitHub issue templates — bug report and feature request (#58)
+- Add Mermaid architecture flowchart to `DESIGN.md §2` alongside ASCII diagram (#60)
+- Add pre-commit hooks — trailing whitespace, EOF fixer, YAML/TOML check, merge-conflict detection (#59)
+- Add cohesion tests enforcing `DESIGN §2` import contract in CI — `database.py` never imports `streamlit`; pages never import `exports` directly (`tests/test_pages_cohesion.py`) (#66)
+- Add link column to Opportunities table with open-in-browser icon; add `CheckboxColumn` for Letters in Recommenders table; add help text on all table columns (`c56795f`)
+- Add Upcoming Urgency as `ProgressColumn` — numeric days-until value with colour-coded visual bar (#79)
+- Add v0.11.0 responsive screenshots — 5 pages × 4 widths (1024 / 1280 / 1440 / 1680 px) (#82)
+- Add `DB_FILENAME` and `APPLICATION_LABEL` constants to `config.py`; `database.DB_PATH` and recommender mailto subject now read from config (#86)
+
 ### Changed
-- Update dashboard screenshot to v0.11.0 across four widths (1024–1680 px) (#82)
-- Rewrite README with screenshot-first layout, problem-driven pitch, and engineering notes in collapsible section (#83)
+- Harden CI workflow with explicit permissions, concurrency cancel-in-progress, and `workflow_dispatch` trigger (#53)
+- Enrich `pyproject.toml` `[project]` metadata — description, keywords, classifiers (#57)
+- Fix 8 stale items in `DESIGN.md` — versions, removed constants, link column, file tree (`1e79b60`)
+- Update `GUIDELINES.md` — stale versions, config description, version scheme (`8f52fff`)
+- Add search bar and link column to Opportunities wireframe (`0d8132a`)
+- Add `CONFIRMED_LABELS` to `config.py`; remove hardcoded `"Yes"`/`"No"` strings; tighten pyright to strict-basic (`db36c2a`)
+- Dashboard visual polish — elevated metric cards, hex colour palette, tagline header, cleaner Plotly chart (#75)
+- Dashboard layout — segmented window control, KPI column widths, integer y-axis ticks, table borders, modern CSS (#76)
+- Restore Material Icons font in dashboard; normalise all Plotly bar charts to Graph Objects for consistency (#77)
+- Rewrite README with screenshot-first layout, problem-driven pitch, and engineering notes in collapsible `<details>` block (#83)
+- Expand `CONTRIBUTING.md` — CHANGELOG format example, test harness explanation (`AppTest` + `db` fixture), "Where to start" section (#87)
+- Remove ~20 internal design-doc shorthand comments (`F1`, `T3-A/B`, `CL1`, `DESIGN §8.x`, etc.) from source files; replace with plain-English rationale or delete where self-explanatory (#88)
+
+### Fixed
+- Fix Opportunities form IDs, widget keys, and config fallback to eliminate key-collision reruns (#67)
+- Route Export page file writes through `database` layer instead of direct filesystem calls (#69)
+- Fix dashboard UX copy — column casing, CTA verb phrasing, hero text, alert glyphs (#70)
+- Fix Recommenders and Export UX copy — status glyphs, label casing, date formatting (#71)
+- Fix Applications UX copy — rename Recs → Letters, date field labels, interview UX, save button label (#72)
+- Fix Opportunities UX copy — delete dialog text, column headers, label casing, tooltip wording (#73)
+- Fix cohesion CI — flexible `page_title` assertion, remove stale `exports` import from `pages/4_Export.py` (#74)
+- Fix dashboard — restore Material Icons CDN link dropped during CSS refactor; unify Plotly charts to `graph_objects` (#77)
+
+### Removed
+- Remove `docs/internal/` from git index (`AGENTS.md`, `ORCHESTRATOR_HANDOFF.md`, `TASKS.md`) — dev-process metadata kept locally, not tracked in the public repo (#85)
 
 ## [v0.10.0] — 2026-05-06 — Public-launch polish + publish-readiness final layer
 
