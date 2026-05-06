@@ -149,10 +149,7 @@ def write_all() -> None:
         )
         return
 
-    # Iterate by slot NAME (not by captured function reference) so the
-    # log message always reads as the intended writer slot — useful
-    # because monkeypatched stand-ins (test fixtures) carry their own
-    # `__name__` and would otherwise leak into the operator-facing log.
+   
     for name in ("write_opportunities", "write_progress", "write_recommenders"):
         try:
             globals()[name]()
@@ -199,12 +196,6 @@ def write_opportunities() -> None:
     EXPORTS_DIR.mkdir(exist_ok=True)
 
     df = database.get_all_positions()
-    # get_all_positions sorts deadline_date ASC NULLS LAST; add the
-    # position_id ASC tiebreaker so equal-deadline rows have a stable
-    # order across reruns (mirror of get_applications_table — pinned by
-    # the test_sort_order_by_deadline_asc_nulls_last test). pandas
-    # sort_values supports na_position='last' on the deadline column
-    # without disturbing the existing ordering for non-NULL values.
     if not df.empty:
         df = df.sort_values(
             by=["deadline_date", "id"],
@@ -291,15 +282,6 @@ def write_progress() -> None:
 
     lines: list[str] = [header, separator]
     for _, row in df.iterrows():
-        # Per-row interviews lookup. N+1 queries per row is fine here
-        # (low position counts, single-user app); a richer joined query
-        # in database.py would be premature optimization. The reader's
-        # contract: empty DataFrame for a position with no interviews,
-        # one row per interview ordered by sequence ASC. Only the
-        # `scheduled_date` column matters for the summary cell.
-        # iterrows cells have Series | ndarray | Any
-        # union types from pandas-stubs. Funnel through Any so int()
-        # only sees the (real, runtime) scalar.
         pid_raw: Any = row["position_id"]
         position_id = int(pid_raw)
         interviews_df = database.get_interviews(position_id)

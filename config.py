@@ -42,12 +42,7 @@ STATUS_COLORS: dict[str, str] = {
     "[DECLINED]": "gray",
 }
 
-# Storage-to-UI label map. STATUS_VALUES keeps bracketed enum sentinels in
-# storage so DB rows round-trip exactly and a raw status literal stays
-# unambiguous in queries and logs; every user-facing surface goes through
-# STATUS_LABELS to strip the brackets. Never print a raw STATUS_VALUES entry
-# to the UI — look it up here instead (DESIGN §8.0 Status label convention).
-# Drift caught by invariant #3 below.
+# Storage-to-UI label map. 
 STATUS_LABELS: dict[str, str] = {
     "[SAVED]": "Saved",
     "[APPLIED]": "Applied",
@@ -58,10 +53,7 @@ STATUS_LABELS: dict[str, str] = {
     "[DECLINED]": "Declined",
 }
 
-# Named aliases for the individual pipeline statuses. Page code that needs
-# a *specific* status (e.g. the dashboard's per-bucket KPI counts) references
-# these rather than hardcoding the literal — keeps the anti-typo guardrail in
-# place without forcing positional-index access into STATUS_VALUES.
+# Named aliases for the individual pipeline statuses. 
 STATUS_SAVED: str = STATUS_VALUES[0]  # "[SAVED]"
 STATUS_APPLIED: str = STATUS_VALUES[1]  # "[APPLIED]"
 STATUS_INTERVIEW: str = STATUS_VALUES[2]  # "[INTERVIEW]"
@@ -70,18 +62,10 @@ STATUS_CLOSED: str = STATUS_VALUES[4]  # "[CLOSED]"
 STATUS_REJECTED: str = STATUS_VALUES[5]  # "[REJECTED]"
 STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 
-# Terminal statuses — positions in these states are done and excluded from
-# actionable views (upcoming deadlines, materials readiness, etc.).
-# database.py reads this list; never hardcode these strings outside config.py.
+# Terminal statuses — positions in these states are done and excluded from actionable views (upcoming deadlines, materials readiness, etc.).
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
 # Applications-page filter sentinel + exclusion set (DESIGN §8.3).
-# The Applications page selectbox offers an "Active" sentinel as
-# its default — semantically "every status that is still actionable"
-# (excludes pre-application STATUS_SAVED and withdrawn STATUS_CLOSED).
-# The literal lives in config (not the page) so a future surface — e.g.
-# a "Tracked: Active" KPI variant on the dashboard — can reference it
-# without hardcoding. Drift caught by §5.2 invariant #12.
 STATUS_FILTER_ACTIVE: str = "Active"
 
 # Universal "no narrowing applied" sentinel for filter selectboxes
@@ -104,20 +88,16 @@ STATUS_FILTER_ACTIVE_EXCLUDED: frozenset[str] = frozenset(
     }
 )
 
-# Guard (DESIGN §5.2 #2): STATUS_COLORS must have exactly one entry per
-# STATUS_VALUES item. Catches drift at import time rather than as a
-# KeyError deep in page code.
+
 assert set(STATUS_VALUES) == set(STATUS_COLORS), (
     "STATUS_COLORS must have exactly one entry per STATUS_VALUES item. "
     f"Missing from STATUS_COLORS: {set(STATUS_VALUES) - set(STATUS_COLORS)}"
 )
-# Invariant (DESIGN §5.2 #3): every status has a UI label, no extras.
 assert set(STATUS_VALUES) == set(STATUS_LABELS), (
     "STATUS_LABELS must have exactly one entry per STATUS_VALUES item. "
     f"Missing from STATUS_LABELS: {set(STATUS_VALUES) - set(STATUS_LABELS)}. "
     f"Extra: {set(STATUS_LABELS) - set(STATUS_VALUES)}."
 )
-# Invariant (DESIGN §5.2 #4): terminal statuses are a subset of all statuses.
 assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
     "TERMINAL_STATUSES must only contain values defined in STATUS_VALUES. "
     f"Unknown: {set(TERMINAL_STATUSES) - set(STATUS_VALUES)}"
@@ -158,33 +138,12 @@ FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
 # The toggle reads its label at render time
 # via:
 #     config.FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]
-#
-# A label describes what the click WILL DO, not the current state:
-#   key=False (currently collapsed) → label invites EXPAND   ("+ Show all stages")
-#   key=True  (currently expanded ) → label invites COLLAPSE ("− Show fewer stages")
-#
-# Locked in config so the page file never carries a user-facing literal
-# (GUIDELINES §6 "no hardcoded vocab"). The `<symbol> <verb-phrase>`
-# shape matches the project's CTA convention used by the empty-DB hero
-# ("+ Add your first position") and the Materials Readiness CTA
-# ("→ Opportunities page") — visual-vocabulary cohesion across all four
-# dashboard CTAs. The leading `+` (U+002B) / `−` (U+2212 minus, NOT the
-# hyphen-minus U+002D) encode the click's effect direction: adds buckets
-# to the view / removes some from it.
-#
-# Invariant #11 below pins the dict to exactly the keys {True, False};
-# a missing key would surface as a render-time KeyError on first toggle.
 FUNNEL_TOGGLE_LABELS: dict[bool, str] = {
     False: "+ Show all stages",
     True: "− Show fewer stages",
 }
 
-# Invariant (DESIGN §5.2 #5): flatten the raw-status tuples across all
-# FUNNEL_BUCKETS entries; the result must be a multiset-equal permutation
-# of STATUS_VALUES. This asserts two facts at once — every raw status
-# appears in some bucket, AND no status appears in more than one bucket.
-# A violation means either a new status was added to STATUS_VALUES without
-# placing it in a bucket, or a status was duplicated across buckets.
+
 _funnel_flat: list[str] = [raw for _, raws, _ in FUNNEL_BUCKETS for raw in raws]
 assert sorted(_funnel_flat) == sorted(STATUS_VALUES), (
     "FUNNEL_BUCKETS raw-status coverage must equal STATUS_VALUES as a multiset "
@@ -193,9 +152,6 @@ assert sorted(_funnel_flat) == sorted(STATUS_VALUES), (
     f"STATUS_VALUES:     {sorted(STATUS_VALUES)!r}."
 )
 
-# Invariant (DESIGN §5.2 #6): FUNNEL_DEFAULT_HIDDEN must reference labels
-# that actually exist in FUNNEL_BUCKETS — otherwise a label could be
-# hidden by default with no corresponding bucket to reveal.
 _bucket_labels: set[str] = {label for label, _, _ in FUNNEL_BUCKETS}
 assert FUNNEL_DEFAULT_HIDDEN <= _bucket_labels, (
     "FUNNEL_DEFAULT_HIDDEN must reference labels that exist in FUNNEL_BUCKETS. "
@@ -203,21 +159,9 @@ assert FUNNEL_DEFAULT_HIDDEN <= _bucket_labels, (
 )
 
 # ── Controlled vocabularies ───────────────────────────────────────────────────
-# Used by st.selectbox() in page files.
-# Append to any list to add a new option — no other changes needed.
-
 PRIORITY_VALUES: list[str] = ["High", "Medium", "Low", "Stretch"]
-
-# Three-value categorical answering "does the posting accept this applicant's
-# work authorization?" Paired with the freetext `work_auth_note` column so the
-# enum stays filter-friendly while nuance ("green card required", "J-1 OK
-# with a waiver") lands in free text (DESIGN §5.1 + D22).
 WORK_AUTH_OPTIONS: list[str] = ["Yes", "No", "Unknown"]
-
-# Employment type (DESIGN §5.1). Column is plain TEXT — no DDL change —
-# so dev DBs carrying legacy 'Yes' / 'No' values need manual translation.
 FULL_TIME_OPTIONS: list[str] = ["Full-time", "Part-time", "Contract"]
-
 SOURCE_OPTIONS: list[str] = [
     "Lab website",
     "AcademicJobsOnline",
@@ -228,7 +172,6 @@ SOURCE_OPTIONS: list[str] = [
     "Listserv",
     "Other",
 ]
-
 RESPONSE_TYPES: list[str] = [
     "Acknowledgement",
     "Screening Call",
@@ -237,21 +180,9 @@ RESPONSE_TYPES: list[str] = [
     "Offer",
     "Other",
 ]
-
-# Named alias for the response that fires the R3 auto-promotion cascade
-# (DESIGN §9.3). database.upsert_application reads this rather than the
-# hardcoded literal so a future rename of the 'Offer' entry inside
-# RESPONSE_TYPES doesn't silently break R3 — same anti-typo guardrail
-# as the STATUS_* aliases. The literal lives here (not as
-# RESPONSE_TYPES[i]) because RESPONSE_TYPES order is not a contract;
-# only membership matters, and invariant #9 below catches drift.
 RESPONSE_TYPE_OFFER: str = "Offer"
 
-# Invariant (DESIGN §5.2 #9): RESPONSE_TYPE_OFFER must be a real
-# selectbox option. If a future rename drops 'Offer' from
-# RESPONSE_TYPES without also updating the alias, the user's pick
-# would never match the cascade trigger — caught at import-time
-# rather than as a silent R3 no-op in production.
+
 assert RESPONSE_TYPE_OFFER in RESPONSE_TYPES, (
     f"RESPONSE_TYPE_OFFER={RESPONSE_TYPE_OFFER!r} must be a member of "
     f"RESPONSE_TYPES={RESPONSE_TYPES!r}. R3 cascade depends on this."
@@ -287,35 +218,12 @@ CONFIRMED_LABELS: dict[int | None, str] = {
     None: EM_DASH,
 }
 
-# Vocabulary for the interviews sub-table's `format` column (DESIGN §6.2).
-# Kept small on purpose — "Other" is the escape hatch for edge cases so the
-# list doesn't bloat with one-off formats (hybrid, dinner, campus visit…).
+# Vocabulary for the interviews sub-table's `format` column 
 INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
-
 # Tones offered by the Recommenders-page LLM-prompts expander.
-# The expander renders one prompt per tone — the label
-# `f"LLM prompts ({len(REMINDER_TONES)} tones)"` reads its count from
-# this tuple so adding a third tone (e.g. "formal") is a config-only
-# edit. Tuple (not list) so it's hashable + immutable.
 REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
 
-# ── Requirement document types ────────────────────────────────────────────────
-# Each tuple: (db_req_column, db_done_column, display_label)
-#
-#   db_req_column  — TEXT column in positions table: 'Yes' | 'Optional' | 'No'
-#   db_done_column — INTEGER column in positions table: 0 = not ready, 1 = ready
-#   display_label  — Human-readable name shown in the UI
-#
-# To add a new document type (e.g., Portfolio):
-#   1. Append ("req_portfolio", "done_portfolio", "Portfolio") here.
-#   2. database.init_db() will create the new columns on next run.
-#   3. No other file needs to change.
-# Canonical DB values for the req_* TEXT columns. Order is the display order
-# the Requirements-tab radios use — "Required" first so the common
-# case is the leftmost/default-read option. Per GUIDELINES §6, never hardcode
-# these strings in page files. DESIGN §5.1 + D21 pin the full-word vocabulary
-# (Yes/Optional/No) — consistent with D20's full-word philosophy for
-# type-safe, self-descriptive raw dumps.
+# Requirement document types
 REQUIREMENT_VALUES: list[str] = ["Yes", "Optional", "No"]
 
 # UI labels for each canonical value. `st.radio(..., format_func=...)` looks
@@ -327,8 +235,6 @@ REQUIREMENT_LABELS: dict[str, str] = {
     "No": "Not needed",
 }
 
-# Invariant (DESIGN §5.2 #7): one label per canonical value — catches drift at
-# import time rather than as a KeyError deep in page code.
 assert set(REQUIREMENT_LABELS) == set(REQUIREMENT_VALUES), (
     "REQUIREMENT_LABELS must have exactly one entry per REQUIREMENT_VALUES item. "
     f"Missing: {set(REQUIREMENT_VALUES) - set(REQUIREMENT_LABELS)}"
@@ -345,9 +251,6 @@ REQUIREMENT_DOCS: list[tuple[str, str, str]] = [
 ]
 
 # ── Quick-add form fields ─────────────────────────────────────────────────────
-# The minimal set shown in the quick-add expander on the Opportunities page.
-# Each string must be an exact column name in the positions table.
-# Verified against DESIGN.md §6 database schema — all match.
 QUICK_ADD_FIELDS: list[str] = [
     "position_name",  # text input
     "institute",  # text input
@@ -358,12 +261,7 @@ QUICK_ADD_FIELDS: list[str] = [
 ]
 
 # ── Opportunities edit panel ────────────────────────────────────────────────────
-# Tab labels for the inline edit panel below the positions table.
-# Order determines the display order of st.tabs(...); first item is shown by
-# default. Rename or reorder here rather than in pages/1_Opportunities.py.
-#
-# To add a new tab (e.g., "Contacts"): append the label here and extend the
-# page's tab-body dispatch in pages/1_Opportunities.py.
+
 EDIT_PANEL_TABS: list[str] = ["Overview", "Requirements", "Materials", "Notes"]
 
 # ── Dashboard display thresholds ──────────────────────────────────────────────
@@ -372,75 +270,34 @@ DEADLINE_URGENT_DAYS = 7  # Color a deadline red if it falls within this many da
 RECOMMENDER_ALERT_DAYS = 7  # Alert if a recommender was asked N+ days ago with no submission
 
 # User-selectable widths (in days) for the dashboard's Upcoming-panel
-# selectbox (DESIGN §8.1). The selectbox defaults to
-# DEADLINE_ALERT_DAYS and lets the user widen the view to see further
-# ahead. The urgency band (🔴 / 🟡) stays tied to DEADLINE_URGENT_DAYS /
-# DEADLINE_ALERT_DAYS regardless of the selected window — wider windows
-# surface more rows but do not lower urgency. Invariant #10 below
-# guarantees the default value is a real option.
 UPCOMING_WINDOW_OPTIONS: list[int] = [30, 60, 90]
 
-# Invariant (DESIGN §5.2 #8): urgency window cannot exceed the alert window.
-# Swapping these by accident would mark every upcoming deadline "urgent"
-# (collapsing the urgency signal) — caught at import before any page renders.
 assert DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS, (
     f"DEADLINE_URGENT_DAYS={DEADLINE_URGENT_DAYS} must be <= "
     f"DEADLINE_ALERT_DAYS={DEADLINE_ALERT_DAYS}"
 )
-
-# Invariant (DESIGN §5.2 #10): the Upcoming-panel selectbox default
-# (= DEADLINE_ALERT_DAYS) must be a real option in the offered list,
-# otherwise the selectbox couldn't render at the spec'd default.
-# Catches a config edit that drops 30 from UPCOMING_WINDOW_OPTIONS
-# without updating the default.
 assert DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS, (
     f"DEADLINE_ALERT_DAYS={DEADLINE_ALERT_DAYS} must appear in "
     f"UPCOMING_WINDOW_OPTIONS={UPCOMING_WINDOW_OPTIONS!r}. The "
     f"Upcoming-panel selectbox default uses DEADLINE_ALERT_DAYS — "
     f"dropping it from the list would leave the default unable to render."
 )
-
-# Invariant (DESIGN §5.2 #11): FUNNEL_TOGGLE_LABELS must have exactly
-# the keys {True, False}. The page reads it as
-# config.FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]] —
-# a missing key surfaces as a render-time KeyError on first toggle into
-# that state; an extra key would silently no-op (harmless but confusing
-# for a future maintainer). Caught at import before any page renders.
 assert set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}, (
     f"FUNNEL_TOGGLE_LABELS must have exactly the keys {{True, False}}. "
     f"Got: {sorted(FUNNEL_TOGGLE_LABELS.keys())!r}. The page indexes "
     f"this dict by the bool value of st.session_state['_funnel_expanded']."
 )
-
-# Invariant (DESIGN §5.2 #12): STATUS_FILTER_ACTIVE_EXCLUDED must be a
-# subset of STATUS_VALUES. Catches a typo in the exclusion set or a
-# rename of a STATUS_VALUES entry that doesn't propagate. Without this
-# guard, an unknown status in the exclusion set would surface as a
-# silent filter no-op (page hides nothing extra) rather than a clear
-# import-time AssertionError.
 assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
     f"STATUS_FILTER_ACTIVE_EXCLUDED must be a subset of STATUS_VALUES. "
     f"Unknown entries: "
     f"{STATUS_FILTER_ACTIVE_EXCLUDED - set(STATUS_VALUES)!r}"
 )
-# Invariant: CONFIRMED_LABELS must cover the three possible confirmed states.
 assert set(CONFIRMED_LABELS.keys()) == {1, 0, None}, (
     "CONFIRMED_LABELS must have exactly keys {1, 0, None}."
 )
 
 
 # ── Empty-state copy ──────────────────────────────────────────────────────────
-# Locked copy for the five `st.info(...)` empty-state messages surfaced
-# across the app — one constant per surface (per-surface naming, not a
-# single template, because the wording is intentionally surface-specific:
-# "filters" plural for Opportunities, "filter" singular for Applications
-# matches each page's filter-bar cardinality; "recommenders" on the
-# Recommenders page vs. "recommender follow-ups" on the dashboard
-# distinguishes the page-level vs. alert-panel framing).
-#
-# Tests assert against these constants by name (not via substring
-# matches on the verbatim string), so a copy edit flows through to
-# assertions without test churn.
 EMPTY_FILTERED_POSITIONS: str = "No positions match the current filters."
 EMPTY_NO_POSITIONS: str = "No positions yet — use Quick Add above to get started."
 EMPTY_FILTERED_APPLICATIONS: str = "No applications match the current filter."
@@ -449,12 +306,6 @@ EMPTY_PENDING_RECOMMENDER_FOLLOWUPS: str = "No pending recommender follow-ups."
 
 
 # ── Urgency banding ──────────────────────────────────────────────────────────
-# The same banding fires on the dashboard's Upcoming panel, in the
-# Opportunities table's Urgency column, and (potentially) in any
-# future surface that needs the at-a-glance "how close is this?" cue.
-# The threshold logic exists in exactly one
-# place — page + database wrappers parse their input shapes (date
-# string vs. integer days) and delegate to this function.
 def urgency_glyph(days_away: int | None) -> str:
     """Return the urgency glyph for ``days_away`` days until a deadline.
 
