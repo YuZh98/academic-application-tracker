@@ -323,26 +323,26 @@ if "selected_position_id" in st.session_state:
     selected_row = df[df["id"] == sid]
     if not selected_row.empty:
         r = selected_row.iloc[0]
-       
+
         _status_label = config.STATUS_LABELS.get(r["status"], r["status"])
         st.subheader(f"{r['position_name']} · {_status_label}")
 
-        
-        
+
+
         safe_priority = (
             r["priority"] if r["priority"] in config.PRIORITY_VALUES else config.PRIORITY_VALUES[0]
         )
         safe_status = (
             r["status"] if r["status"] in config.STATUS_VALUES else config.STATUS_VALUES[0]
         )
-        
+
         raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
         safe_work_auth = (
             raw_work_auth
             if raw_work_auth in config.WORK_AUTH_OPTIONS
             else config.WORK_AUTH_OPTIONS[0]
         )
-        
+
         try:
             safe_deadline = (
                 datetime.date.fromisoformat(r["deadline_date"]) if r["deadline_date"] else None
@@ -379,10 +379,10 @@ if "selected_position_id" in st.session_state:
                 st.session_state[_key] = _value
         st.session_state["_edit_form_sid"] = sid
 
-    
+
         tabs = st.tabs(config.EDIT_PANEL_TABS)
 
-        with tabs[0]: 
+        with tabs[0]:
             with st.form("edit_overview_form"):
                 st.text_input("Position Name", key="edit_position_name")
                 st.text_input("Institute", key="edit_institute")
@@ -408,7 +408,7 @@ if "selected_position_id" in st.session_state:
                     key="edit_overview_submit",
                 )
 
-        
+
             if overview_submitted:
                 new_name = (st.session_state.get("edit_position_name") or "").strip()
                 if not new_name:
@@ -439,7 +439,7 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save changes: {exc}")
 
-           
+
             if st.button("Delete", type="primary", key="edit_delete"):
                 st.session_state["_delete_target_id"] = sid
                 st.session_state["_delete_target_name"] = r["position_name"]
@@ -447,7 +447,7 @@ if "selected_position_id" in st.session_state:
             elif st.session_state.get("_delete_target_id") == sid:
                 _confirm_delete_dialog()
 
-        with tabs[1]: 
+        with tabs[1]:
             with st.form("edit_requirements_form"):
                 for req_col, _done_col, label in config.REQUIREMENT_DOCS:
                     st.radio(
@@ -462,7 +462,7 @@ if "selected_position_id" in st.session_state:
                     key="edit_requirements_submit",
                 )
 
-           
+
             if requirements_submitted:
                 payload: dict[str, Any] = {
                     req_col: st.session_state[f"edit_{req_col}"]
@@ -480,7 +480,7 @@ if "selected_position_id" in st.session_state:
                 except Exception as exc:
                     st.error(f"Could not save requirements: {exc}")
 
-        with tabs[2]:       
+        with tabs[2]:
             visible = [
                 (req_col, done_col, label)
                 for req_col, done_col, label in config.REQUIREMENT_DOCS
@@ -513,7 +513,7 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save materials: {exc}")
 
-        with tabs[3]: 
+        with tabs[3]:
             with st.form("edit_notes_form"):
                 st.text_area(
                     "Notes",
@@ -526,7 +526,7 @@ if "selected_position_id" in st.session_state:
                     key="edit_notes_submit",
                 )
 
-            
+
             if notes_submitted:
                 payload: dict[str, Any] = {
                     "notes": st.session_state.get("edit_notes", "") or "",

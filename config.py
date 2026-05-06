@@ -42,7 +42,7 @@ STATUS_COLORS: dict[str, str] = {
     "[DECLINED]": "gray",
 }
 
-# Storage-to-UI label map. 
+# Storage-to-UI label map.
 STATUS_LABELS: dict[str, str] = {
     "[SAVED]": "Saved",
     "[APPLIED]": "Applied",
@@ -53,7 +53,7 @@ STATUS_LABELS: dict[str, str] = {
     "[DECLINED]": "Declined",
 }
 
-# Named aliases for the individual pipeline statuses. 
+# Named aliases for the individual pipeline statuses.
 STATUS_SAVED: str = STATUS_VALUES[0]  # "[SAVED]"
 STATUS_APPLIED: str = STATUS_VALUES[1]  # "[APPLIED]"
 STATUS_INTERVIEW: str = STATUS_VALUES[2]  # "[INTERVIEW]"
@@ -218,7 +218,7 @@ CONFIRMED_LABELS: dict[int | None, str] = {
     None: EM_DASH,
 }
 
-# Vocabulary for the interviews sub-table's `format` column 
+# Vocabulary for the interviews sub-table's `format` column
 INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
 # Tones offered by the Recommenders-page LLM-prompts expander.
 REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
