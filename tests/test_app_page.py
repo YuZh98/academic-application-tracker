@@ -2035,7 +2035,9 @@ class TestT4UpcomingTimeline:
     )
     DISPLAY_COLUMNS = ["Date", "Days Left", "Label", "Kind", "Status", "Urgency"]
     WINDOW_KEY = "upcoming_window"
-    DATE_COLUMN_FORMAT_SOURCE = 'st.column_config.DateColumn(format="MMM D")'
+    DATE_COLUMN_FORMAT_SOURCE = (
+        'st.column_config.DateColumn(\n                "Date",\n                format="MMM D"'
+    )
 
     @staticmethod
     def _half_width_columns(at: AppTest):
@@ -2307,9 +2309,11 @@ class TestT4UpcomingTimeline:
             f"Expected 'Stanford: Postdoc-X' label. Got: {labels}"
         )
 
-    def test_urgency_column_passes_through_emoji_glyphs(self, db):
-        """T4-A returns '🔴' for in-7d rows; T4-B's column rename does
-        not strip the glyph."""
+    def test_urgency_column_shows_numeric_days_remaining(self, db):
+        """Urgency column now holds the integer days-remaining value for
+        use with ProgressColumn. An in-2d deadline row must have a value
+        <= DEADLINE_URGENT_DAYS, confirming the numeric computation is
+        correct and the column passes through data (not emoji strings)."""
         database.add_position(
             make_position(
                 {
@@ -2319,7 +2323,11 @@ class TestT4UpcomingTimeline:
         )
         at = _run_page()
         urgencies = list(at.dataframe[0].value["Urgency"])
-        assert "🔴" in urgencies, f"In-2d row should show '🔴' in Urgency. Got: {urgencies}"
+        assert urgencies, f"Expected at least one Urgency value. Got: {urgencies}"
+        assert any(u <= config.DEADLINE_URGENT_DAYS for u in urgencies), (
+            f"In-2d row must have Urgency <= DEADLINE_URGENT_DAYS="
+            f"{config.DEADLINE_URGENT_DAYS}. Got: {urgencies}"
+        )
 
     def test_days_left_column_passes_through_phrasing(self, db):
         """T4-A's days_left phrasing ('in N days') makes it into the
