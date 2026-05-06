@@ -49,7 +49,7 @@ def _safe_str(v: Any) -> str:
 def _format_label(institute: Any, position_name: Any) -> str:
     """Position cell — ``f'{institute}: {position_name}'`` when
     institute is non-empty, bare ``position_name`` otherwise.
-    Same shape as T4 Upcoming's Label column (DESIGN §8.1)."""
+    Same shape as the Upcoming page's Label column."""
     inst = _safe_str(institute)
     name = _safe_str(position_name)
     if inst:
@@ -61,7 +61,7 @@ def _format_date_or_em(iso_str: Any) -> str:
     """Render an ISO ``YYYY-MM-DD`` string as ``'Mon D'`` (e.g.
     ``'Apr 19'``); return EM_DASH for None / NaN / empty / unparseable.
 
-    Matches the T4 Upcoming Date-column format (``MMM D``, no year).
+    Matches the Upcoming page's Date-column format (``MMM D``, no year).
     Done by hand rather than via ``st.column_config.DateColumn`` because
     this page renders the table as text cells (a per-cell-formatted
     table — see `_format_confirmation` for the why)."""
@@ -76,21 +76,17 @@ def _format_date_or_em(iso_str: Any) -> str:
 
 
 def _format_confirmation(received: Any, iso_str: Any) -> str:
-    """Confirmation cell — DESIGN §8.3 D-A amendment (Phase 5 T1-C).
+    """Confirmation cell combining the boolean flag and date into a single
+    readable string.
 
-    The original D-A spec carried ``confirmation_date`` as a per-cell
-    tooltip, but Streamlit 1.56's ``st.dataframe`` does not expose a
-    per-cell tooltip API (``st.column_config.Column(help=...)`` is
-    column-header only; pandas Styler tooltips don't transfer through
-    the Arrow protobuf). The amendment folds the tooltip text into
-    inline cell content so every piece of D-A's information stays
-    visible at-a-glance:
+    ``st.dataframe`` does not expose a per-cell tooltip API
+    (``st.column_config.Column(help=...)`` is column-header only; pandas
+    Styler tooltips don't transfer through the Arrow protobuf), so the date
+    is folded directly into the cell text rather than hidden in a tooltip:
 
       - ``received == 0``        → ``'—'``
       - ``received == 1`` + date → ``'✓ {Mon D}'`` (e.g. ``'✓ Apr 19'``)
-      - ``received == 1`` + None → ``'✓ (no date)'``
-
-    Resolution recorded in `reviews/phase-5-tier1-review.md`."""
+      - ``received == 1`` + None → ``'✓ (no date)'``"""
     if pd.isna(received) or not bool(received):
         return EM_DASH
     formatted = _format_date_or_em(iso_str)
@@ -113,7 +109,7 @@ def _coerce_iso_to_date(v: Any) -> datetime.date | None:
     Date inputs accept ``value=None`` (renders an empty picker) and
     real ``datetime.date`` instances; they reject NaN, ``""``, and
     ISO strings (the widget itself does no parsing). The Opportunities
-    page guards the same case via its F5 fix — a single malformed
+    page guards the same case — a single malformed
     deadline cell would otherwise crash the whole page on
     `date.fromisoformat(...)`. Swallow that error so the widget renders
     empty and the user fixes the cell rather than seeing a traceback."""
@@ -128,38 +124,35 @@ def _coerce_iso_to_date(v: Any) -> datetime.date | None:
 
 @st.dialog("Delete this interview?")
 def _confirm_interview_delete_dialog() -> None:
-    """T3-B: modal confirm dialog for irreversible interview deletion
-    (DESIGN §8.3 D-B). Mirrors the Opportunities-page
-    `_confirm_delete_dialog` pattern.
+    """Modal confirm dialog for irreversible interview deletion.
+    Mirrors the Opportunities-page `_confirm_delete_dialog` pattern.
 
     The target interview is read from session_state keys
     `_apps_interview_delete_target_id` (the row's primary key) and
     `_apps_interview_delete_target_seq` (the sequence number, used in
     the warning copy so the user knows which row is about to go).
     Passing via session_state — rather than function arguments — is
-    load-bearing for the gotcha #3 re-open trick: the outer script
-    re-invokes this dialog on every rerun while the pending sentinels
-    are set, so AppTest's script-run model can reach the
-    Confirm/Cancel handlers (Streamlit's own dialog auto-re-render
-    magic does not carry through AppTest).
+    load-bearing: the outer script re-invokes this dialog on every rerun
+    while the pending sentinels are set, so AppTest's script-run model
+    can reach the Confirm/Cancel handlers (Streamlit's own dialog
+    auto-re-render magic does not carry through AppTest).
 
     Outcomes:
 
     • Confirm → `database.delete_interview(id)` (a leaf delete; no FK
       cascade — the `interviews` table is on the child side of the
-      one FK in DESIGN §6.2). On success: pop both pending sentinels,
+      application FK). On success: pop both pending sentinels,
       set `_applications_skip_table_reset=True` so the dataframe-event-
-      reset rerun preserves the position selection ,
+      reset rerun preserves the position selection,
       `st.toast(f"Deleted interview {seq}.")`, `st.rerun()` → dialog
       closes naturally on the next render (no pending sentinels).
     • Cancel → pop both pending sentinels, set
       `_applications_skip_table_reset=True` (preserves selection
       across the rerun), `st.rerun()`. No DB write.
-    • Failure (delete raises) → `st.error(...)` per GUIDELINES §8;
-      sentinels SURVIVE so the dialog re-opens on the next rerun
-      and the user can retry. Mirrors the Opportunities-page
-      failure-preserves-state precedent — there is no DB rollback to
-      undo, the user just gets to try again.
+    • Failure (delete raises) → `st.error(...)`; sentinels SURVIVE so
+      the dialog re-opens on the next rerun and the user can retry.
+      Mirrors the Opportunities-page failure-preserves-state precedent
+      — there is no DB rollback to undo, the user just gets to try again.
     """
     iid: int | None = st.session_state.get("_apps_interview_delete_target_id")
     seq: int | None = st.session_state.get("_apps_interview_delete_target_seq")
@@ -194,10 +187,8 @@ def _confirm_interview_delete_dialog() -> None:
                 st.toast(f"Deleted interview {seq}.")
                 st.rerun()
             except Exception as e:
-                # GUIDELINES §8: friendly error, no re-raise. Sentinels
-                # survive so the dialog re-opens on the next rerun for
-                # retry — Opportunities-page failure-preserves-state
-                # precedent.
+                # Friendly error, no re-raise. Sentinels survive so the
+                # dialog re-opens on the next rerun for retry.
                 st.error(f"Could not delete interview: {e}")
     with col_cancel:
         if st.button(
@@ -424,7 +415,7 @@ if "applications_selected_position_id" in st.session_state:
 
                 detail_submitted = st.form_submit_button("Save", key="apps_detail_submit")
 
-            # ── Interviews list (T3-A / T3-rev-B) ───────────────────
+            # ── Interviews list ──────────────────────────────────────
 
             st.markdown("#### Interviews")
 
@@ -457,8 +448,8 @@ if "applications_selected_position_id" in st.session_state:
 
             saves_clicked: list[tuple[int, int]] = []
             for _i, (_, _iv_row) in enumerate(interviews_df.iterrows()):
-                # CL1 type-clean: same iterrows-Series-widening fix as
-                # the seed loop above. Funnel through Any before int().
+                # pandas-stubs widens iterrows() cell types to Series;
+                # funnel through Any so int() only sees the runtime scalar.
                 _iid_raw: Any = _iv_row["id"]
                 _seq_raw: Any = _iv_row["sequence"]
                 _iid = int(_iid_raw)
