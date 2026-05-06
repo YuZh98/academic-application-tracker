@@ -70,12 +70,12 @@ Page source: `pages/1_Opportunities.py`. See
 ║  │ Link: ___________________________ [ + Add Position ]       ║
 ║  └─────────────────────────────────────────────────────────── ║
 ║                                                                ║
-║  Filter: Status [All ▼]  Priority [All ▼]  Field [________]   ║
+║  Search [________________]  Status [All ▼]  Priority [All ▼]  Field [____]  ║
 ║                                                                ║
-║  Position   Institute  Priority   Status    Due      ║
-║  ────────────────────────────────────────────────────────────  ║
-║  BioStats   Stanford   🟡 High   Applied   ——        ║
-║  Postdoc    MIT        🟡 High   Saved     May 15    ║
+║  Position   Institute  Priority   Status    Due      Urgency  Link  ║
+║  ──────────────────────────────────────────────────────────────────  ║
+║  BioStats   Stanford   🟡 High   Applied   ——        🔴       🔗    ║
+║  Postdoc    MIT        🟡 High   Saved     May 15             🔗    ║
 ║  ··· (click row to expand) ···                                 ║
 ║                                                                ║
 ║  ┌──── Stanford BioStats Postdoc  ·  Applied  ─────────────┐   ║
