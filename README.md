@@ -1,6 +1,6 @@
 # Academic Application Tracker
 
-[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A local, single-user Streamlit app that answers one daily question
 for an academic applicant: **"What do I do today?"** Tracks
@@ -11,6 +11,8 @@ recommender-letter-driven application flows shared by **postdoc,
 PhD, faculty, and fellowship** applications — anywhere you're
 juggling deadlines, materials readiness, and follow-ups across many
 institutions in parallel.
+
+![Dashboard — empty state on first run](docs/ui/screenshots/v0.10.0/dashboard-1280.png)
 
 Built as a personal tool while job-hunting — and as a portfolio
 piece demonstrating disciplined software engineering on a
