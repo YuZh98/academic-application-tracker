@@ -34,6 +34,55 @@ st.set_page_config(
 
 database.init_db()
 
+# ── Visual polish (CSS injection) ─────────────────────────────────────────────
+# Injected once per session. Uses stable data-testid selectors (Streamlit 1.57).
+# All widget contracts stay unchanged — this is purely presentational.
+st.markdown(
+    """
+<style>
+/* KPI metric cards — elevated card style */
+[data-testid="stMetric"] {
+    background: #ffffff;
+    border: 1px solid #eef2f7;
+    border-radius: 14px;
+    padding: 1.1rem 1.4rem 0.9rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.04);
+}
+[data-testid="stMetricLabel"] p {
+    font-size: 0.70rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.09em !important;
+    color: #94a3b8 !important;
+    font-weight: 700 !important;
+}
+[data-testid="stMetricValue"] > div {
+    font-size: 2.4rem !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    line-height: 1.15 !important;
+}
+/* Empty-DB hero container — soft gradient instead of plain border */
+[data-testid="stVerticalBlockBorderWrapper"] > div > div {
+    border-radius: 14px !important;
+    background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%) !important;
+    border-color: #d9e4ff !important;
+}
+/* Section subheaders — slightly more weight */
+[data-testid="stHeadingWithActionElements"] h3 {
+    font-weight: 700 !important;
+    color: #1e293b !important;
+    letter-spacing: -0.01em !important;
+}
+/* Info / empty-state messages — rounded, subtler */
+[data-testid="stAlert"] {
+    border-radius: 10px;
+    border-left-width: 3px;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +136,9 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 # is cognitive noise for the common case. (The pre-v1.3 C3-locked Refresh
 # button was removed in Sub-task 12 alongside the DESIGN §8.0 alignment.)
 st.title("Academic Application Tracker")
+st.caption(
+    "Your complete academic job search — deadlines, applications, and letters, all in one place."
+)
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Four equal columns per DESIGN.md §app.py. Labels are the UI contract.
@@ -274,6 +326,9 @@ with _left_col:
             for label, count, color in _bucket_counts
             if _funnel_expanded or label not in config.FUNNEL_DEFAULT_HIDDEN
         ]
+        # Colors come directly from config.FUNNEL_BUCKETS[i][2] — the
+        # polished hex palette is defined there (per the test contract:
+        # "a future color tweak should live in config.FUNNEL_BUCKETS").
         _funnel_fig = go.Figure(
             data=[
                 go.Bar(
@@ -281,6 +336,10 @@ with _left_col:
                     y=[label for label, _, _ in _visible_buckets],
                     orientation="h",
                     marker_color=[color for _, _, color in _visible_buckets],
+                    marker_line_width=0,
+                    text=[str(count) if count else "" for _, count, _ in _visible_buckets],
+                    textposition="outside",
+                    textfont=dict(size=13, color="#374151"),
                 )
             ]
         )
@@ -288,7 +347,31 @@ with _left_col:
         # so the first visible bucket sits at the top (pipeline reads
         # top-down — same reasoning as pre-Sub-task-12, just bucket-scoped).
         _funnel_fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(_funnel_fig, key="funnel_chart")
+        _funnel_fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=0, r=40, t=8, b=4),
+            font=dict(
+                family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                size=13,
+            ),
+            xaxis=dict(
+                gridcolor="#f0f2f6",
+                zeroline=False,
+                tickfont=dict(size=11, color="#94a3b8"),
+            ),
+            yaxis=dict(
+                showgrid=False,
+                tickfont=dict(size=13, color="#374151"),
+            ),
+            height=230,
+            bargap=0.35,
+        )
+        st.plotly_chart(
+            _funnel_fig,
+            key="funnel_chart",
+            config={"displayModeBar": False},
+        )
         # The toggle has already been rendered above in the subheader row
         # (whenever `_show_funnel_toggle` is True); branch (c) does not
         # render its own button — that's the post-T6 placement contract.
