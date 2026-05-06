@@ -185,8 +185,8 @@ pages/*.py  ← imports database, config; NEVER imports exports
 
 ## Current state (updated after each merged PR)
 
-**Latest tag:** `v0.9.0` (v1.0-rc schema cleanup + publish-readiness scaffolding)
-**`main` HEAD:** v0.9.0 shipped via PR #46 (publish-readiness) + PR #47 (drop legacy `applications.confirmation_email` column); test suite at 883 passed + 1 xfailed; pyright fence holds (0/0); next milestone is `v1.0.0` (remaining: P4a Streamlit Cloud deploy or P4b walkthrough GIF · Phase 7 T5 responsive layout · P3 dep prune · P5 cross-doc link verify · P6 v1.0.0 tag)
+**Latest tag:** `v0.10.0` (public-launch polish + publish-readiness final layer — the project's public-launch release; no `v1.0.0` planned)
+**`main` HEAD:** v0.10.0 shipped via PRs #48 (SECURITY.md) / #49 (pytest-cov) / #50 (README badges) / #51 (CI matrix 3.11–3.14) + orchestrator-direct commits (T5 screenshots × 20 PNGs + README hero embed + coverage badge). Suite at 883 passed + 1 xfailed; pyright fence holds (0/0); coverage 97%. Next step is user-driven repo visibility flip (`gh repo edit --visibility public`) — not part of any tag.
 
 ### Phase 5 — Applications + Recommenders pages ✅ closed at `v0.6.0`
 
