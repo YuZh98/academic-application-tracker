@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.4 | **Last updated:** 2026-04-30 | **Status:** v1 target design (authoritative)
+**Version:** 1.5 | **Last updated:** 2026-05-06 | **Status:** authoritative
 
 ---
 
@@ -83,7 +83,7 @@ Local single-user web app:
 
 ```mermaid
 flowchart BT
-    config[config.py<br/><small>constants only</small>]
+    config[config.py<br/><small>constants + pure functions</small>]
     database[database.py<br/><small>SQL only</small>]
     exports[exports.py<br/><small>markdown writers</small>]
     pages[pages/*.py<br/><small>display layer</small>]
@@ -124,7 +124,7 @@ The dotted edge from `database` to `exports` is the deferred-import escape hatch
 
 | Component | Choice | Required ≥ | Rationale |
 |-----------|--------|-----------|-----------|
-| Language | Python | 3.14 | Already there; familiar to stats/data users |
+| Language | Python | 3.11 | Declared floor in `pyproject.toml`; familiar to stats/data users |
 | Environment | venv (`.venv/`) | stdlib | Zero extra tools; isolates pkgs; gitignored |
 | UI framework | Streamlit | 1.50 | Python-native; `width="stretch"` and `st.switch_page` need ≥ 1.50 |
 | Charts | Plotly (Graph Objects) | 5.22 | Used via `plotly.graph_objects.Figure` / `go.Bar`; click events for future interactivity |
@@ -173,7 +173,10 @@ Postdoc/
 ├── reviews/                  Pre-merge review docs, one per tier (committed)
 ├── docs/                     Supplemental documentation (committed)
 │   ├── adr/                  Architectural Decision Records (forward-only)
-│   └── dev-notes/            Deep-dive references (git, Streamlit state)
+│   ├── dev-notes/            Deep-dive references (git, Streamlit state)
+│   ├── internal/             Agent-handoff + sprint tracker (dev process)
+│   ├── ui/                   Wireframes + responsive screenshots
+│   └── seed-templates/       Pre-app markdown templates (design-history archive)
 │
 ├── DESIGN.md                 This file
 ├── GUIDELINES.md             Coding conventions (read at every session start)
@@ -182,8 +185,7 @@ Postdoc/
 ├── README.md                 Public entry point
 ├── LICENSE                   MIT
 │
-├── CLAUDE.md                 Internal working memory (GITIGNORED)
-├── PHASE_*_GUIDELINES.md     Internal phase playbooks (GITIGNORED)
+├── (local AI session config) (GITIGNORED — not tracked)
 │
 └── .gitignore
 ```
@@ -197,13 +199,6 @@ Postdoc/
 `config.py` = **single source of truth** for vocab, constants, field defs. Every other module reads from it; no other file hardcodes status string, priority value, or req-doc label.
 
 ### 5.1 Symbol index
-
-#### Tracker identity
-
-| Constant | Type | Role |
-|----------|------|------|
-| `TRACKER_PROFILE` | `str` | Profile discriminator; v1 = `"postdoc"`. Extension hook for v2+ profile variants (§12.1). |
-| `VALID_PROFILES` | `set[str]` | Import-time validation set for `TRACKER_PROFILE`; guarded by §5.2 invariant #1. |
 
 #### Status pipeline
 
@@ -268,7 +263,8 @@ Postdoc/
 
 `config.py` runs these assertions at module import. Violation aborts app startup w/ clear traceback — catches drift before any page renders:
 
-1. `TRACKER_PROFILE in VALID_PROFILES` — profile = known value
+_Invariant #1 (`TRACKER_PROFILE in VALID_PROFILES`) was removed in Phase 7 CL2 — the constants were no-ops since v1.1._
+
 2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has per-status color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has UI label
 4. `set(TERMINAL_STATUSES) <= set(STATUS_VALUES)` — terminals = subset
@@ -601,7 +597,7 @@ Layout wireframe: [`docs/ui/wireframes.md#opportunities`](docs/ui/wireframes.md#
 | Filter: Status | `st.selectbox(["All"] + STATUS_VALUES, format_func=STATUS_LABELS.get)` — UI shows labels; filter compares raw values |
 | Filter: Priority | `st.selectbox(["All"] + PRIORITY_VALUES)` |
 | Filter: Field | `st.text_input`; substring match via `df["field"].str.contains(..., case=False, na=False, regex=False)` — literal match so `"C++"` no crash pandas |
-| Table | `st.dataframe(width="stretch", on_select="rerun", selection_mode="single-row")`; sorted by `deadline_date ASC NULLS LAST`; Status col displays `STATUS_LABELS[raw]`; Due col carries urgency badge driven by DEADLINE thresholds |
+| Table | `st.dataframe(width="stretch", on_select="rerun", selection_mode="single-row")`; sorted by `deadline_date ASC NULLS LAST`; Status col displays `STATUS_LABELS[raw]`; Due col carries urgency badge driven by DEADLINE thresholds; `link` col rendered as `st.column_config.LinkColumn("Link", display_text="🔗 Open")` — empty cells render blank |
 | Row click | Selects row; edit panel renders beneath using **unfiltered** `df` for lookup (so narrowing filter never dismisses in-progress edit) |
 | Overview tab | Pre-filled edit widgets for all overview cols; Status selectbox uses `format_func` convention; `work_auth` uses `WORK_AUTH_OPTIONS` selectbox + `work_auth_note` text_area below it |
 | Requirements tab | One `st.radio` per `REQUIREMENT_DOCS` entry; options = `REQUIREMENT_VALUES`; `format_func=REQUIREMENT_LABELS.get`; Save writes only `req_*` keys so `done_*` survives flips between states |
@@ -771,7 +767,7 @@ Cancel preserves current edit context (selected row + tab state) so user returns
 | D12 | Cross-table cascade lives in `database.py` writers | Atomic, testable, pages stay display-only | Page-level detect-and-prompt — leaks business logic into UI; loses atomicity |
 | D13 | No 🔄 Refresh button on dashboard top bar | Streamlit reruns on any interaction; single-user local app rarely has cross-tab writes | Manual refresh button — cognitive noise for common case |
 | D14 | `st.set_page_config(layout="wide", ...)` on every page | Data-heavy views need horizontal room | Default centered layout — ~750px cramps every page |
-| D15 | `TRACKER_PROFILE` validated at import time against `VALID_PROFILES` | Cheap forward-compat hook for v2 profile variants; catches typos now | Hardcode `"postdoc"` — no v2 extension point |
+| D15 | `TRACKER_PROFILE` validated at import time against `VALID_PROFILES` — **reversed in Phase 7 CL2.** Constants removed (no-ops since v1.1); profile expansion deferred to v2 (§12.1). | Was: cheap forward-compat hook for v2 profile variants | Hardcode `"postdoc"` — no v2 extension point |
 | D16 | Bracketed status storage values + bracket-stripped UI labels | Visual enum sentinel in logs/DB; `STATUS_LABELS` delivers clean UI | Raw labels in storage — harder to grep; conflicts w/ freetext "Saved" elsewhere |
 | D17 | Archived = `[REJECTED]` + `[DECLINED]` on dashboard funnel only; `[CLOSED]` stays own bar | Rejection + declined-offer = both outcomes after engagement; CLOSED = pre-engagement withdrawal — genuinely diff state | Group all three terminals — loses semantic distinction |
 | D18 | `interviews` sub-table instead of flat `interview1_date`/`interview2_date` cols | Real apps have 3+ interviews (phone → committee → chalk talk → dean); flat cap = arbitrary cliff | Flat cols — capped data model at unrealistic limit |
