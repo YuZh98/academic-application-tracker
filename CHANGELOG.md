@@ -17,6 +17,27 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+_(empty)_
+
+## [v0.10.0] — 2026-05-06 — Public-launch polish + publish-readiness final layer
+
+_v0.10.0 is the final pre-public-flip release. No new features, no schema changes, no behaviour changes — every commit is dev-tooling, public-surface doc polish, or visual artefact. Bundles four worker-shipped PRs (CI matrix expansion to 3.11–3.14, `pytest-cov` setup with coverage at 97%, `SECURITY.md` vulnerability-reporting policy, README CI/Python/license badges) + two orchestrator-direct artefacts (Phase 7 T5 responsive-layout screenshots × 20 PNGs at 1024/1280/1440/1680 across all five pages; README hero embed + coverage badge). Closes the long-deferred Phase 7 T5 (unblocked by Chrome DevTools MCP availability). Three doc-drift carryover commits from `v0.9.0` close-out absorbed. `v0.10.0` is the project's public-launch release; no `v1.0.0` planned. Suite stable at 883 + 1 xfailed; pyright fence holds 0/0. Detailed entries below preserve the per-commit forensic record._
+
+### Added
+- Add `pytest-cov==6.1.0` to `requirements-dev.txt`; add `[tool.coverage.run] omit = [".venv/*", "docs/*", "tests/*", "conftest.py"]` to `pyproject.toml`. Coverage stays opt-in (NOT in pytest `addopts`) so CI runs aren't slowed; run manually via `pytest --cov=. --cov-report=term-missing tests/ -q`. **Coverage at HEAD: 97%.** PR #49 (`f49a5d9`).
+- Add `SECURITY.md` at repo root — vulnerability-reporting policy. Standard solo-project shape: supported versions table (current minor only), private GitHub security advisory as the report channel, scope clarification (in-scope = app code; out-of-scope = user's local DB / OS / interpreter), best-effort SLA. PR #48 (`1fb9978`).
+- Add three badges to `README.md` second line: GitHub Actions CI status, Python `3.11–3.14` shields.io, MIT license shields.io. CI badge 404s until repo flips public — expected; resolves on flip with no code change. PR #50 (`e749f74`).
+- Add coverage badge to `README.md` (static shields.io, "97%", "brightgreen"). Static rather than codecov-linked because the project doesn't push to codecov; updates manually when a coverage shift is worth re-stating. (`ce4ec5a`).
+- Add `docs/ui/screenshots/v0.10.0/` with 20 PNGs — 5 pages × 4 widths (1024 / 1280 / 1440 / 1680). All captured against an empty SQLite DB (live `postdoc.db` swapped aside during capture, restored after) so the published images show genuine first-run UX without leaking any of the user's tracking data. Closes Phase 7 T5 (deferred from `v0.8.0`; unblocked by Chrome DevTools MCP). Layout audit findings: KPI grid stays 4-column at 1024px, no horizontal scroll, no panel collapse, filters wrap cleanly. (`26dbde5`).
+- Embed `dashboard-1280.png` as hero screenshot in `README.md` between the tagline paragraph and the "portfolio piece" sentence. Shows the genuine first-run empty-state UX as the README's primary visual. (`ce4ec5a`).
+
+### Changed
+- Expand CI Python matrix from `["3.14"]` to `["3.11", "3.12", "3.13", "3.14"]` in `.github/workflows/ci.yml`. Adds `fail-fast: false` so one version's failure doesn't cancel the others. Job name parametrised: `Tests + Lint` → `Tests + Lint (${{ matrix.python-version }})`. Closes the gap between declared `requires-python = ">=3.11"` and actual CI coverage. PR #51 (`f24a1e8`).
+- Document zero-orphan `requirements.txt` direct-dep audit result in TASKS P3 (`1275a08`); rebrand `CHANGELOG.md` framing line `Postdoc Tracker` → `Academic Application Tracker` to match the v0.9.0 rebrand (`5809e68`).
+
+### Fixed
+- Repair four cross-doc relative paths broken by the `docs/internal/` reorg in PR #46 (`8ab7d3d`).
+
 ## [v0.9.0] — 2026-05-05 — v1.0-rc: schema cleanup + publish-readiness scaffolding
 
 _v0.9.0 ships the v1.0-rc work that clears the path to `v1.0.0`. The long-running v1.3 Sub-task 10 split migration finally lands its physical drop step (PR #47 — `applications.confirmation_email` TEXT column physically removed via SQLite 3.35+ `ALTER TABLE DROP COLUMN`; idempotent via `PRAGMA table_info` gate; data-safe — column NULL-only since v1.3). Publish-readiness scaffolding lands ahead of the public flip (PR #46 — MIT `LICENSE`, public-facing `README.md` with engineering-practices block, repo rename `hugs_application_tracker` → `academic-application-tracker`, doc-tier reorg moving dev-process artifacts to `docs/internal/`, `[project] requires-python>=3.11` floor declared, brand `Postdoc Tracker` → `Academic Application Tracker` across 18 files). DESIGN §6.3 "Remove a col" row also gained two-shape guidance (DROP COLUMN preferred when constraint-eligible; rebuild fallback when not). Suite climbs 879 → 883 (+4 net = +5 new − 1 deleted; 1 xfail unchanged); pyright stays 0/0. Schema migration auto-runs on next `init_db()` after pull. Remaining v1.0-rc deliverables before `v1.0.0`: P4a Streamlit Cloud deploy or P4b recorded walkthrough GIF, Phase 7 T5 responsive layout check (deferred — bundles with screenshots), P3 transitive-dep prune, P5 cross-doc link verification, P6 `v1.0.0` PR + tag + GitHub release._
@@ -2688,7 +2709,8 @@ _v0.1.0 closes Phase 3 — `pages/1_Opportunities.py` lands across five tiers (Q
 
 ## Version links
 
-[Unreleased]: https://github.com/YuZh98/academic-application-tracker/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/YuZh98/academic-application-tracker/compare/v0.10.0...HEAD
+[v0.10.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.10.0
 [v0.9.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.9.0
 [v0.8.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.8.0
 [v0.7.0]: https://github.com/YuZh98/academic-application-tracker/releases/tag/v0.7.0

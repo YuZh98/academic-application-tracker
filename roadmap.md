@@ -15,55 +15,47 @@ job tracker without rewriting existing code.
 
 ## Current Status
 
-**Last shipped tag:** `v0.9.0` (v1.0-rc schema cleanup + publish-readiness
-scaffolding, 2026-05-05). Schema cleanup (PR #47) physically dropped the
-legacy `applications.confirmation_email` column via SQLite 3.35+
-`ALTER TABLE DROP COLUMN`, closing the v1.3 Sub-task 10 split migration.
-Publish-readiness (PR #46) added MIT `LICENSE` + public-facing
-`README.md` + repo rename to `academic-application-tracker` + doc-tier
-reorg moving dev-process artifacts to `docs/internal/` + Python
-`>=3.11` floor declaration. Suite at 883 passed + 1 xfailed; pyright
-fence holds 0/0.
+**Last shipped tag:** `v0.10.0` (public-launch polish + publish-readiness
+final layer, 2026-05-06). The project's **public-launch release** — no
+`v1.0.0` planned. Bundles four worker-shipped polish PRs (CI matrix
+expansion to 3.11–3.14, `pytest-cov` setup with coverage at 97%,
+`SECURITY.md`, README CI/Python/license badges) + Phase 7 T5 responsive
+screenshots × 20 PNGs (1024/1280/1440/1680 across all five pages) +
+README hero embed + coverage badge. Closes the long-deferred Phase 7
+T5 (unblocked by Chrome DevTools MCP). Suite at 883 passed + 1 xfailed;
+pyright fence holds 0/0; coverage 97%.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**In flight:** the rest of v1.0-rc / v1.0.0:
+**Next step:** user-driven repo visibility flip — `gh repo edit
+--visibility public` whenever the user is ready. Not part of any tag;
+the codebase is stable at `v0.10.0`.
 
-1. **P4a Live demo** — Streamlit Cloud deploy (verify SQLite ephemeral-
-   storage behavior or arrange persistence). User-driven.
-2. **P4b Walkthrough GIF** — recorded short walkthrough committed to
-   `docs/`. Bundles with **Phase 7 T5** (responsive layout at 1024 /
-   1280 / 1440 / 1680 widths — screenshots to
-   `docs/ui/screenshots/v1.0.0/`).
-3. **P6** — `v1.0.0` PR + tag + GitHub release notes once P4a or P4b
-   lands.
-
-(P3 dep audit + P5 cross-doc link verify closed 2026-05-05.)
+**v1.0.0 explicitly NOT planned.** The pre-1.0 SemVer convention (each
+minor = one phase) maps cleanly to the project's release cadence.
+Stopping at `v0.10.0` keeps the user free to break things post-public
+without committing to a major-version bump promise.
 
 ---
 
-## v1 Ship Criteria
-
-v1.0 ships when **all four** are true:
+## Public-launch Ship Criteria — all met @ `v0.10.0`
 
 1. ✅ **All phases complete** — Phase 4 (Dashboard) at `v0.5.0`; Phase 5
    (Applications + Recommenders) at `v0.6.0`; Phase 6 (Exports) at
    `v0.7.0`; Phase 7 (Polish) at `v0.8.0`.
-2. ✅ **Publish scaffolding** — `README.md`, `LICENSE`, `CHANGELOG.md`
-   committed at the repo root (PR #46).
-3. ⏳ **Working demo path** — either a live [Streamlit
-   Cloud](https://streamlit.io/cloud) instance or a recorded walkthrough
-   GIF in `docs/`.
+2. ✅ **Publish scaffolding** — `README.md`, `LICENSE`, `CHANGELOG.md`,
+   `SECURITY.md` at repo root.
+3. ✅ **Working demo path** — Phase 7 T5 responsive screenshots × 20 PNGs
+   in `docs/ui/screenshots/v0.10.0/` + Dashboard hero embedded in README.
 4. ✅ **Schema cleanup** — physical drop of legacy `confirmation_email`
-   column per DESIGN §6.3 (PR #47, `v0.9.0`) closed the v1.3 split
-   migration loop.
+   column per DESIGN §6.3 (PR #47, `v0.9.0`).
 
-### Nice-to-have (not binding)
+### Engineering polish — all met @ `v0.10.0`
 - ✅ Pre-commit (ruff) + GitHub Actions CI green on main
-- ✅ 800+ tests on main; zero deprecation warnings (suite at 879)
+- ✅ 800+ tests on main; zero deprecation warnings (suite at 883 + 1 xfailed)
 - ✅ Cold-clone to running app in ≤ 3 commands (verified by README quick start)
-- ⏳ pytest-cov coverage report (number for the README)
-- ⏳ CI matrix runs declared floor (3.11) through tested-with (3.14)
+- ✅ pytest-cov coverage report (97% in README badge)
+- ✅ CI matrix runs declared floor (3.11) through tested-with (3.14)
 
 ---
 
