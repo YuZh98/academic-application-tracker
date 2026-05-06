@@ -37,6 +37,7 @@ def _run_page() -> AppTest:
 
 # ── T1: App shell + KPI grid ──────────────────────────────────────────────────
 
+
 class TestT1AppShell:
     """T1-A + T1-B: smoke test on an empty DB, and the 4-column KPI skeleton.
 
@@ -59,13 +60,9 @@ class TestT1AppShell:
     def test_page_has_four_kpi_columns(self, db):
         """Dashboard must render exactly 4 KPI cards with the spec'd labels."""
         at = _run_page()
-        assert len(at.metric) == 4, (
-            f"Expected 4 st.metric cards, got {len(at.metric)}"
-        )
+        assert len(at.metric) == 4, f"Expected 4 st.metric cards, got {len(at.metric)}"
         labels = [m.label for m in at.metric]
-        assert labels == KPI_LABELS, (
-            f"Expected KPI labels in order {KPI_LABELS}, got {labels}"
-        )
+        assert labels == KPI_LABELS, f"Expected KPI labels in order {KPI_LABELS}, got {labels}"
 
     def test_page_config_sets_wide_layout(self, db):
         """DESIGN §8.0 requires `st.set_page_config(layout="wide", ...)` on
@@ -80,22 +77,22 @@ class TestT1AppShell:
         from silently passing.
         """
         import pathlib
+
         src = pathlib.Path("app.py").read_text(encoding="utf-8")
         assert "st.set_page_config(" in src, (
             "app.py must call st.set_page_config(...) per DESIGN §8.0."
         )
         assert 'page_title="Academic Application Tracker"' in src, (
-            "set_page_config must bind page_title=\"Academic Application Tracker\"."
+            'set_page_config must bind page_title="Academic Application Tracker".'
         )
-        assert 'page_icon="📋"' in src, (
-            "set_page_config must bind page_icon=\"📋\" per DESIGN §8.0."
-        )
+        assert 'page_icon="📋"' in src, 'set_page_config must bind page_icon="📋" per DESIGN §8.0.'
         assert 'layout="wide"' in src, (
-            "set_page_config must bind layout=\"wide\" per DESIGN §8.0 / D14."
+            'set_page_config must bind layout="wide" per DESIGN §8.0 / D14.'
         )
 
 
 # ── T1-C: KPI count wiring + Tracked tooltip + refresh-button-absent ──────────
+
 
 class TestT1CKpiCounts:
     """T1-C: wire `count_by_status()` into Tracked / Applied / Interview.
@@ -116,7 +113,7 @@ class TestT1CKpiCounts:
         at `metric.proto.help` (probed before writing this test).
     """
 
-    TRACKED_HELP = "Saved + Applied — positions you're still actively pursuing"
+    TRACKED_HELP = "Positions in your active pipeline before interview stage (Saved + Applied)"
 
     @staticmethod
     def _kpis(at: AppTest) -> dict[str, str]:
@@ -129,7 +126,9 @@ class TestT1CKpiCounts:
         kpis = self._kpis(at)
         assert kpis["Tracked"] == "0", f"Tracked on empty DB should be 0, got {kpis['Tracked']!r}"
         assert kpis["Applied"] == "0", f"Applied on empty DB should be 0, got {kpis['Applied']!r}"
-        assert kpis["Interview"] == "0", f"Interview on empty DB should be 0, got {kpis['Interview']!r}"
+        assert kpis["Interview"] == "0", (
+            f"Interview on empty DB should be 0, got {kpis['Interview']!r}"
+        )
         assert kpis["Next Interview"] == "—", (
             f"Next Interview is T1-D's to wire; should still be em-dash, got {kpis['Next Interview']!r}"
         )
@@ -172,9 +171,7 @@ class TestT1CKpiCounts:
     def test_terminal_statuses_are_not_tracked(self, db):
         """Positions in TERMINAL_STATUSES are neither tracked nor applied nor interviewing."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
 
         at = _run_page()
         kpis = self._kpis(at)
@@ -219,6 +216,7 @@ class TestT1CKpiCounts:
 
 # ── T1-D: Next Interview KPI — wire get_upcoming_interviews() ─────────────────
 
+
 class TestT1DNextInterviewKpi:
     """T1-D: wire database.get_upcoming_interviews() into the Next Interview
     KPI card per DESIGN.md §app.py; '—' on empty per locked decision U3.
@@ -249,9 +247,7 @@ class TestT1DNextInterviewKpi:
 
     def test_empty_db_shows_em_dash(self, db):
         at = _run_page()
-        assert self._next(at) == "—", (
-            f"Empty DB must show '—' per U3, got {self._next(at)!r}"
-        )
+        assert self._next(at) == "—", f"Empty DB must show '—' per U3, got {self._next(at)!r}"
 
     def test_position_without_interview_dates_shows_em_dash(self, db):
         """A tracked position with no interview rows scheduled must leave
@@ -263,9 +259,7 @@ class TestT1DNextInterviewKpi:
     def test_all_past_interviews_show_em_dash(self, db):
         """If every seeded interview date is in the past, nothing is upcoming."""
         yesterday = (date.today() - timedelta(days=1)).isoformat()
-        pid = database.add_position(
-            make_position({"position_name": "P", "institute": "Stanford"})
-        )
+        pid = database.add_position(make_position({"position_name": "P", "institute": "Stanford"}))
         database.add_interview(pid, {"scheduled_date": yesterday})
         database.add_interview(pid, {"scheduled_date": yesterday})
         at = _run_page()
@@ -288,13 +282,11 @@ class TestT1DNextInterviewKpi:
         """Across positions, the earliest future date wins — and it carries
         its own position's institute."""
         d_early = date.today() + timedelta(days=5)
-        d_late  = date.today() + timedelta(days=20)
+        d_late = date.today() + timedelta(days=20)
         pid_a = database.add_position(
             make_position({"position_name": "A", "institute": "Stanford"})
         )
-        pid_b = database.add_position(
-            make_position({"position_name": "B", "institute": "MIT"})
-        )
+        pid_b = database.add_position(make_position({"position_name": "B", "institute": "MIT"}))
         database.add_interview(pid_a, {"scheduled_date": d_late.isoformat()})
         database.add_interview(pid_b, {"scheduled_date": d_early.isoformat()})
 
@@ -308,13 +300,11 @@ class TestT1DNextInterviewKpi:
         the same position must NOT promote past an earlier interview
         on a different position."""
         d_near = date.today() + timedelta(days=3)
-        d_far  = date.today() + timedelta(days=30)
+        d_far = date.today() + timedelta(days=30)
         pid_a = database.add_position(
             make_position({"position_name": "A", "institute": "Stanford"})
         )
-        pid_b = database.add_position(
-            make_position({"position_name": "B", "institute": "MIT"})
-        )
+        pid_b = database.add_position(make_position({"position_name": "B", "institute": "MIT"}))
         # Position A has the earlier interview (sequence 2), B has a far one.
         database.add_interview(pid_a, {"scheduled_date": d_near.isoformat()})
         database.add_interview(pid_b, {"scheduled_date": d_far.isoformat()})
@@ -329,15 +319,13 @@ class TestT1DNextInterviewKpi:
         filter in get_upcoming_interviews drops the past row entirely
         (one row per interview, so no row-level ambiguity between
         past and future dates)."""
-        past   = (date.today() - timedelta(days=7)).isoformat()
-        d_far  = (date.today() + timedelta(days=25)).isoformat()
+        past = (date.today() - timedelta(days=7)).isoformat()
+        d_far = (date.today() + timedelta(days=25)).isoformat()
         d_near = date.today() + timedelta(days=3)
         pid_a = database.add_position(
             make_position({"position_name": "A", "institute": "Stanford"})
         )
-        pid_b = database.add_position(
-            make_position({"position_name": "B", "institute": "MIT"})
-        )
+        pid_b = database.add_position(make_position({"position_name": "B", "institute": "MIT"}))
         database.add_interview(pid_a, {"scheduled_date": past})
         database.add_interview(pid_a, {"scheduled_date": d_far})
         database.add_interview(pid_b, {"scheduled_date": d_near.isoformat()})
@@ -351,6 +339,7 @@ class TestT1DNextInterviewKpi:
 
 
 # ── T1-E: fully-empty-DB hero callout + CTA into Opportunities ────────────────
+
 
 class TestT1EEmptyDbHero:
     """T1-E: hero panel above the KPI grid when Tracked + Applied + Interview
@@ -372,9 +361,7 @@ class TestT1EEmptyDbHero:
 
     @staticmethod
     def _has_cta(at: AppTest) -> bool:
-        return any(
-            b.label == TestT1EEmptyDbHero.CTA_LABEL for b in at.button
-        )
+        return any(b.label == TestT1EEmptyDbHero.CTA_LABEL for b in at.button)
 
     @staticmethod
     def _hero_heading_rendered(at: AppTest) -> bool:
@@ -386,7 +373,7 @@ class TestT1EEmptyDbHero:
         T3 readiness, etc.) lands a panel subheader and the hero is silently
         removed — counting subheaders alone would mask that regression once
         the page has any other subheader on it."""
-        return any("Welcome" in s.value for s in at.subheader)
+        return any("Get started" in s.value for s in at.subheader)
 
     def test_empty_db_renders_hero_with_cta(self, db):
         """Fresh DB: hero + CTA are visible."""
@@ -414,9 +401,7 @@ class TestT1EEmptyDbHero:
         """A single [SAVED] position bumps Tracked off zero → hero hides."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
-        assert not self._has_cta(at), (
-            "Hero CTA must NOT render once a trackable position exists."
-        )
+        assert not self._has_cta(at), "Hero CTA must NOT render once a trackable position exists."
 
     def test_hero_hidden_when_applied_position_exists(self, db):
         database.add_position(make_position({"position_name": "A", "status": "[APPLIED]"}))
@@ -434,9 +419,7 @@ class TestT1EEmptyDbHero:
         'all three counts == 0' trigger — swap to a total-positions gate
         later via a single test update if the product call changes."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         assert self._has_cta(at), (
             "With only terminal-status rows, all three counted KPIs are zero "
@@ -450,6 +433,7 @@ class TestT1EEmptyDbHero:
         st.switch_page raises; instead we pin the target by reading app.py's
         source — the page path is part of the UI contract."""
         import pathlib
+
         src = pathlib.Path("app.py").read_text(encoding="utf-8")
         assert self.HERO_TARGET_PAGE in src, (
             f"app.py must st.switch_page() to {self.HERO_TARGET_PAGE!r}; "
@@ -461,6 +445,7 @@ class TestT1EEmptyDbHero:
 
 
 # ── T2-A: Application Funnel — Plotly horizontal bar from FUNNEL_BUCKETS ──────
+
 
 class TestT2AFunnelBar:
     """T2-A: Plotly horizontal bar funnel built from `count_by_status()`
@@ -506,7 +491,8 @@ class TestT2AFunnelBar:
         """Indices of FUNNEL_BUCKETS entries that render by default
         (i.e. not in FUNNEL_DEFAULT_HIDDEN)."""
         return [
-            i for i, (label, _, _) in enumerate(config.FUNNEL_BUCKETS)
+            i
+            for i, (label, _, _) in enumerate(config.FUNNEL_BUCKETS)
             if label not in config.FUNNEL_DEFAULT_HIDDEN
         ]
 
@@ -518,6 +504,7 @@ class TestT2AFunnelBar:
         single entry point for every T2-A assertion to keep one failure
         message per missing-chart scenario."""
         import json
+
         charts = at.get("plotly_chart")
         assert len(charts) >= 1, (
             f"Expected at least one plotly chart on the dashboard (the "
@@ -541,9 +528,7 @@ class TestT2AFunnelBar:
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         charts = at.get("plotly_chart")
-        assert len(charts) >= 1, (
-            f"Expected an Application Funnel plotly chart, got {len(charts)}."
-        )
+        assert len(charts) >= 1, f"Expected an Application Funnel plotly chart, got {len(charts)}."
 
     def test_funnel_has_one_bar_per_visible_bucket_in_order(self, db):
         """y-axis labels match the visible-bucket subset of
@@ -557,9 +542,7 @@ class TestT2AFunnelBar:
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         trace = self._funnel_trace(at)
-        expected_labels = [
-            config.FUNNEL_BUCKETS[i][0] for i in self._visible_bucket_indices()
-        ]
+        expected_labels = [config.FUNNEL_BUCKETS[i][0] for i in self._visible_bucket_indices()]
         assert list(trace["y"]) == expected_labels, (
             f"Funnel y-axis must list visible FUNNEL_BUCKETS labels in order.\n"
             f"  expected: {expected_labels}\n"
@@ -572,8 +555,7 @@ class TestT2AFunnelBar:
         at = _run_page()
         trace = self._funnel_trace(at)
         assert trace.get("orientation") == "h", (
-            f"Funnel must be horizontal (orientation='h'), got "
-            f"{trace.get('orientation')!r}"
+            f"Funnel must be horizontal (orientation='h'), got {trace.get('orientation')!r}"
         )
 
     def test_funnel_x_values_sum_bucket_raw_statuses(self, db):
@@ -613,9 +595,7 @@ class TestT2AFunnelBar:
         at = _run_page()
         trace = self._funnel_trace(at)
         marker = trace.get("marker", {})
-        expected_colors = [
-            config.FUNNEL_BUCKETS[i][2] for i in self._visible_bucket_indices()
-        ]
+        expected_colors = [config.FUNNEL_BUCKETS[i][2] for i in self._visible_bucket_indices()]
         assert list(marker.get("color", [])) == expected_colors, (
             f"Funnel marker colors must come from FUNNEL_BUCKETS[i][2], in "
             f"visible-bucket order.\n  expected: {expected_colors}\n"
@@ -635,6 +615,7 @@ class TestT2AFunnelBar:
         trips — without it, flipping the data list would silently also
         flip the colors + the logical pairing."""
         import json
+
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         at = _run_page()
         spec = json.loads(at.get("plotly_chart")[0].proto.spec)
@@ -665,12 +646,11 @@ class TestT2AFunnelBar:
             if label == saved_label:
                 assert count == 1, f"'Saved' bar should be 1, got {count}"
             else:
-                assert count == 0, (
-                    f"Bucket {label!r} has no seeded rows; expected 0, got {count}"
-                )
+                assert count == 0, f"Bucket {label!r} has no seeded rows; expected 0, got {count}"
 
 
 # ── T2-B: Application Funnel empty-state (3 branches) ─────────────────────────
+
 
 class TestT2BFunnelEmptyState:
     """T2-B: the three-branch empty-state matrix for the funnel
@@ -708,15 +688,14 @@ class TestT2BFunnelEmptyState:
     behaviour; the pre-v1.3 Option C test is replaced.
     """
 
-    EMPTY_COPY_A = "Application funnel will appear once you've added positions."
+    EMPTY_COPY_A = "The Application Funnel will appear once you've added positions."
     # Branch (b) info copy points at the toggle by LABEL (not by spatial
     # direction) so the copy stays correct regardless of where the toggle
     # sits relative to the info — DESIGN §8.1 T6 amendment. Pre-T6 wording
     # ("Click [expand] below to reveal them.") was tied to the old
     # below-the-info placement.
     EMPTY_COPY_B = (
-        "All your positions are in hidden buckets. "
-        "Click 'Show all stages' to reveal them."
+        "All your positions are in hidden buckets. Click 'Show all stages' to reveal them."
     )
     # Toggle label literal — duplicated from config.FUNNEL_TOGGLE_LABELS[False]
     # at class scope (rather than `config.FUNNEL_TOGGLE_LABELS[False]` directly)
@@ -779,9 +758,7 @@ class TestT2BFunnelEmptyState:
         no chart. This is the v1.3 replacement for the pre-Sub-task-12
         'terminal-only DB still renders figure' behaviour."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         assert len(at.get("plotly_chart")) == 0, (
             "Branch (b): chart must NOT render when all non-zero buckets "
@@ -797,15 +774,14 @@ class TestT2BFunnelEmptyState:
         )
         assert not self._copy_shown(at, self.EMPTY_COPY_A), (
             "Branch (b): EMPTY_COPY_A must NOT appear — branches are "
-            "mutually exclusive. Got info bodies: " f"{self._info_bodies(at)}"
+            "mutually exclusive. Got info bodies: "
+            f"{self._info_bodies(at)}"
         )
 
     def test_branch_b_empty_copy_is_spec_exact(self, db):
         """Exact copy pin for branch (b)."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         matching = [i for i in at.info if i.value == self.EMPTY_COPY_B]
         assert len(matching) == 1, (
@@ -863,9 +839,7 @@ class TestT2BFunnelEmptyState:
         )
         # Branch (b) — terminal-only DB
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         assert self._funnel_subheader_shown(at), (
             "Branch (b): 'Application Funnel' subheader missing. "
@@ -881,6 +855,7 @@ class TestT2BFunnelEmptyState:
 
 
 # ── T2-C: Application Funnel — placed in left half of st.columns(2) (U2) ──────
+
 
 class TestT2CFunnelLayout:
     """T2-C: place the funnel inside the LEFT half of an `st.columns(2)` so
@@ -950,8 +925,7 @@ class TestT2CFunnelLayout:
         at = _run_page()
         halves = self._half_width_columns(at)
         assert len(halves) == 2, (
-            f"Precondition for this test: exactly 2 half-width columns. "
-            f"Got {len(halves)}."
+            f"Precondition for this test: exactly 2 half-width columns. Got {len(halves)}."
         )
         left, right = halves[0], halves[1]
         assert self._column_has_funnel_subheader(left), (
@@ -1004,6 +978,7 @@ class TestT2CFunnelLayout:
 
 
 # ── T2-D: Funnel [expand] toggle (Sub-task 12) ────────────────────────────────
+
 
 class TestT2DFunnelExpand:
     """T2-D: clicking the funnel disclosure toggle from its default
@@ -1058,6 +1033,7 @@ class TestT2DFunnelExpand:
     @staticmethod
     def _chart_y_labels(at: AppTest) -> list[str]:
         import json
+
         charts = at.get("plotly_chart")
         assert len(charts) >= 1, "Expected a chart after expanding."
         spec = json.loads(charts[0].proto.spec)
@@ -1080,17 +1056,14 @@ class TestT2DFunnelExpand:
         empty DB → no `[expand]` button — nothing to expand into."""
         at = _run_page()
         assert self._expand_buttons(at) == [], (
-            "Branch (a): [expand] must be SUPPRESSED. "
-            f"Got labels: {[b.label for b in at.button]}"
+            f"Branch (a): [expand] must be SUPPRESSED. Got labels: {[b.label for b in at.button]}"
         )
 
     def test_expand_button_present_in_branch_b(self, db):
         """Branch (b) re-pin: terminal-only DB → `[expand]` renders
         directly under the empty-state info."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         assert len(self._expand_buttons(at)) == 1, (
             "Branch (b): expected exactly one [expand] button. "
@@ -1120,8 +1093,7 @@ class TestT2DFunnelExpand:
         buttons[0].click().run()
         assert not at.exception, f"[expand] click raised: {at.exception}"
         assert at.session_state[self.STATE_KEY] is True, (
-            f"After click: {self.STATE_KEY} must be True. "
-            f"Got {at.session_state[self.STATE_KEY]!r}."
+            f"After click: {self.STATE_KEY} must be True. Got {at.session_state[self.STATE_KEY]!r}."
         )
 
     def test_clicking_expand_reveals_all_buckets_on_chart(self, db):
@@ -1139,7 +1111,8 @@ class TestT2DFunnelExpand:
         # Pre-click: only default-visible buckets on the y-axis.
         pre = self._chart_y_labels(at)
         expected_pre = [
-            label for label, _, _ in config.FUNNEL_BUCKETS
+            label
+            for label, _, _ in config.FUNNEL_BUCKETS
             if label not in config.FUNNEL_DEFAULT_HIDDEN
         ]
         assert pre == expected_pre, (
@@ -1175,14 +1148,10 @@ class TestT2DFunnelExpand:
         next render is branch (c) with the chart drawn across ALL buckets.
         Verifies the `[expand]` recovery path DESIGN §8.1 promises."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         # Branch (b): no chart yet.
-        assert len(at.get("plotly_chart")) == 0, (
-            "Precondition: branch (b) renders no chart."
-        )
+        assert len(at.get("plotly_chart")) == 0, "Precondition: branch (b) renders no chart."
         buttons = self._expand_buttons(at)
         assert len(buttons) == 1
         buttons[0].click().run()
@@ -1191,9 +1160,7 @@ class TestT2DFunnelExpand:
         # before the chart-presence assertion below.
         assert not at.exception, f"Toggle click raised: {at.exception}"
         # Post-click: branch (c) with chart including all buckets.
-        assert len(at.get("plotly_chart")) >= 1, (
-            "Post-click from branch (b): chart must render."
-        )
+        assert len(at.get("plotly_chart")) >= 1, "Post-click from branch (b): chart must render."
         post = self._chart_y_labels(at)
         expected_post = [label for label, _, _ in config.FUNNEL_BUCKETS]
         assert post == expected_post, (
@@ -1203,6 +1170,7 @@ class TestT2DFunnelExpand:
 
 
 # ── T6 polish: Funnel disclosure toggle (round-trip + tertiary + subheader-row)─
+
 
 class TestT6FunnelToggle:
     """Phase 4 T6 polish — Funnel disclosure toggle: bidirectional state,
@@ -1260,13 +1228,12 @@ class TestT6FunnelToggle:
     # — same reasoning documented in TestT2BFunnelEmptyState. Drift
     # against config is pinned by Group A.3 below + the invariant #11
     # tests in test_config.py.
-    EXPAND_LABEL    = "+ Show all stages"
-    COLLAPSE_LABEL  = "− Show fewer stages"   # U+2212 minus, paired with U+002B '+'
-    STATE_KEY       = "_funnel_expanded"
-    SUBHEADER       = "Application Funnel"
-    BRANCH_B_COPY   = (
-        "All your positions are in hidden buckets. "
-        "Click 'Show all stages' to reveal them."
+    EXPAND_LABEL = "+ Show all stages"
+    COLLAPSE_LABEL = "− Show fewer stages"  # U+2212 minus, paired with U+002B '+'
+    STATE_KEY = "_funnel_expanded"
+    SUBHEADER = "Application Funnel"
+    BRANCH_B_COPY = (
+        "All your positions are in hidden buckets. Click 'Show all stages' to reveal them."
     )
 
     # ── Helpers ────────────────────────────────────────────────────────────
@@ -1289,6 +1256,7 @@ class TestT6FunnelToggle:
         round-trip tests to verify the chart shrinks back to the
         default-visible buckets after a collapse click."""
         import json
+
         charts = at.get("plotly_chart")
         if not charts:
             return 0
@@ -1303,6 +1271,7 @@ class TestT6FunnelToggle:
         different cwd at runtime (project doesn't pin cwd in pytest
         fixtures)."""
         from pathlib import Path
+
         repo_root = Path(__file__).resolve().parent.parent
         return (repo_root / "app.py").read_text(encoding="utf-8")
 
@@ -1320,8 +1289,7 @@ class TestT6FunnelToggle:
             f"Got button labels: {[b.label for b in at.button]}"
         )
         assert toggle.label == self.EXPAND_LABEL, (
-            f"Collapsed state: label must be {self.EXPAND_LABEL!r}. "
-            f"Got {toggle.label!r}."
+            f"Collapsed state: label must be {self.EXPAND_LABEL!r}. Got {toggle.label!r}."
         )
 
     def test_expanded_state_shows_collapse_label(self, db):
@@ -1406,13 +1374,15 @@ class TestT6FunnelToggle:
         database.add_position(make_position({"position_name": "C", "status": "[REJECTED]"}))
         at = _run_page()
         n_pre = self._chart_bucket_count(at)
-        expected_pre = len([
-            label for label, _, _ in config.FUNNEL_BUCKETS
-            if label not in config.FUNNEL_DEFAULT_HIDDEN
-        ])
+        expected_pre = len(
+            [
+                label
+                for label, _, _ in config.FUNNEL_BUCKETS
+                if label not in config.FUNNEL_DEFAULT_HIDDEN
+            ]
+        )
         assert n_pre == expected_pre, (
-            f"Pre-click: expected {expected_pre} default-visible bars; "
-            f"got {n_pre}."
+            f"Pre-click: expected {expected_pre} default-visible bars; got {n_pre}."
         )
         toggle = self._toggle(at, label=self.EXPAND_LABEL)
         assert toggle is not None
@@ -1421,8 +1391,7 @@ class TestT6FunnelToggle:
         assert at.session_state[self.STATE_KEY] is True
         n_post = self._chart_bucket_count(at)
         assert n_post == len(config.FUNNEL_BUCKETS), (
-            f"Post-expand: expected all {len(config.FUNNEL_BUCKETS)} bars; "
-            f"got {n_post}."
+            f"Post-expand: expected all {len(config.FUNNEL_BUCKETS)} bars; got {n_post}."
         )
 
     def test_click_when_expanded_collapses(self, db):
@@ -1449,10 +1418,13 @@ class TestT6FunnelToggle:
             "Post-collapse: state must flip back to False."
         )
         n_post = self._chart_bucket_count(at)
-        expected_post = len([
-            label for label, _, _ in config.FUNNEL_BUCKETS
-            if label not in config.FUNNEL_DEFAULT_HIDDEN
-        ])
+        expected_post = len(
+            [
+                label
+                for label, _, _ in config.FUNNEL_BUCKETS
+                if label not in config.FUNNEL_DEFAULT_HIDDEN
+            ]
+        )
         assert n_post == expected_post, (
             f"Post-collapse: visible-bar count must shrink back to "
             f"default ({expected_post}); got {n_post}."
@@ -1475,9 +1447,7 @@ class TestT6FunnelToggle:
         initial_count = self._chart_bucket_count(at)
         # Click 1 (expand).
         toggle_1 = self._toggle(at, label=self.EXPAND_LABEL)
-        assert toggle_1 is not None, (
-            "Round-trip click 1: expand-labelled toggle must render."
-        )
+        assert toggle_1 is not None, "Round-trip click 1: expand-labelled toggle must render."
         toggle_1.click().run()
         assert not at.exception
         # Click 2 (collapse) — state-aware lookup so a missing button
@@ -1491,23 +1461,18 @@ class TestT6FunnelToggle:
         assert not at.exception
         # Final state matches initial — involution.
         final_toggle = self._toggle(at)
-        assert final_toggle is not None, (
-            "Final render: toggle must exist after round-trip."
-        )
+        assert final_toggle is not None, "Final render: toggle must exist after round-trip."
         final_label = final_toggle.label
         final_state = at.session_state[self.STATE_KEY]
         final_count = self._chart_bucket_count(at)
         assert final_label == initial_label, (
-            f"Involution: label must return to {initial_label!r}; "
-            f"got {final_label!r}."
+            f"Involution: label must return to {initial_label!r}; got {final_label!r}."
         )
         assert final_state == initial_state, (
-            f"Involution: state flag must return to {initial_state!r}; "
-            f"got {final_state!r}."
+            f"Involution: state flag must return to {initial_state!r}; got {final_state!r}."
         )
         assert final_count == initial_count, (
-            f"Involution: visible-bar count must return to "
-            f"{initial_count}; got {final_count}."
+            f"Involution: visible-bar count must return to {initial_count}; got {final_count}."
         )
 
     def test_round_trip_through_branch_b(self, db):
@@ -1518,9 +1483,7 @@ class TestT6FunnelToggle:
         round-trips through the empty-state matrix without trapping
         the user in either branch."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         # Precondition: branch (b).
         assert len(at.get("plotly_chart")) == 0, "Precondition: branch (b)."
@@ -1536,9 +1499,7 @@ class TestT6FunnelToggle:
         toggle_1.click().run()
         assert not at.exception
         assert at.session_state[self.STATE_KEY] is True
-        assert len(at.get("plotly_chart")) >= 1, (
-            "Post-expand: branch (c) chart must render."
-        )
+        assert len(at.get("plotly_chart")) >= 1, "Post-expand: branch (c) chart must render."
         assert not any(i.value == self.BRANCH_B_COPY for i in at.info), (
             "Post-expand: branch (b) info must NOT render alongside chart."
         )
@@ -1578,10 +1539,7 @@ class TestT6FunnelToggle:
         # the count vacuously. Inline `# foo` after code is not stripped
         # because the line still contains executable code; that's the
         # right semantics — a real call would still count.
-        code_lines = [
-            line for line in src.splitlines()
-            if not line.lstrip().startswith("#")
-        ]
+        code_lines = [line for line in src.splitlines() if not line.lstrip().startswith("#")]
         code = "\n".join(code_lines)
         count = code.count("st.columns([3, 1])") + code.count("st.columns([3,1])")
         assert count >= 2, (
@@ -1606,15 +1564,12 @@ class TestT6FunnelToggle:
         `type="tertiary"` (e.g. the section header explaining the
         toggle) don't double-count."""
         src = self._read_app_source()
-        code_lines = [
-            line for line in src.splitlines()
-            if not line.lstrip().startswith("#")
-        ]
+        code_lines = [line for line in src.splitlines() if not line.lstrip().startswith("#")]
         code = "\n".join(code_lines)
         count = code.count('type="tertiary"')
         assert count == 1, (
             f"DESIGN §8.1 T6 amendment: funnel toggle must be the only "
-            f"`type=\"tertiary\"` button on app.py (a tertiary CTA "
+            f'`type="tertiary"` button on app.py (a tertiary CTA '
             f"elsewhere would break the disclosure-affordance contract). "
             f"Expected exactly 1 executable-code occurrence; found "
             f"{count}. Comment-only lines were filtered before counting."
@@ -1641,14 +1596,11 @@ class TestT6FunnelToggle:
         the info — but presence is what the matrix pins, not position
         (position is C.1)."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         toggle = self._toggle(at)
         assert toggle is not None, (
-            "Branch (b): toggle must render. "
-            f"Got: {[b.label for b in at.button]}"
+            f"Branch (b): toggle must render. Got: {[b.label for b in at.button]}"
         )
         assert toggle.label == self.EXPAND_LABEL, (
             f"Branch (b) at default state: label must be "
@@ -1663,9 +1615,7 @@ class TestT6FunnelToggle:
         the literal label so the copy stays correct regardless of where
         the toggle sits visually."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(
-                make_position({"position_name": f"P-{term}", "status": term})
-            )
+            database.add_position(make_position({"position_name": f"P-{term}", "status": term}))
         at = _run_page()
         matching = [i for i in at.info if i.value == self.BRANCH_B_COPY]
         assert len(matching) == 1, (
@@ -1723,6 +1673,7 @@ class TestT6FunnelToggle:
 
 # ── T3: Materials Readiness — right half of the T2-C `st.columns(2)` ──────────
 
+
 class TestT3MaterialsReadiness:
     """T3: Materials Readiness panel on the dashboard.
 
@@ -1752,10 +1703,9 @@ class TestT3MaterialsReadiness:
 
     SUBHEADER = "Materials Readiness"
     EMPTY_COPY = (
-        "Materials readiness will appear once you've added positions "
-        "with required documents."
+        "Materials readiness will appear once you've added positions with required documents."
     )
-    CTA_LABEL = "→ Opportunities page"
+    CTA_LABEL = "→ Review in Opportunities"
     CTA_KEY = "materials_readiness_cta"
     TARGET_PAGE = "pages/1_Opportunities.py"
 
@@ -1866,18 +1816,36 @@ class TestT3MaterialsReadiness:
           - 'Ready' iff every req_* = 'Yes' also has done_* = 1.
           - Only counts positions with at least one required doc.
         Using req_cv='Yes' for all three; flip done_cv for the ready one."""
-        database.add_position(make_position({
-            "position_name": "Ready-A", "status": "[SAVED]",
-            "req_cv": "Yes", "done_cv": 1,
-        }))
-        database.add_position(make_position({
-            "position_name": "Pending-B", "status": "[APPLIED]",
-            "req_cv": "Yes", "done_cv": 0,
-        }))
-        database.add_position(make_position({
-            "position_name": "Pending-C", "status": "[INTERVIEW]",
-            "req_cv": "Yes", "done_cv": 0,
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Ready-A",
+                    "status": "[SAVED]",
+                    "req_cv": "Yes",
+                    "done_cv": 1,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Pending-B",
+                    "status": "[APPLIED]",
+                    "req_cv": "Yes",
+                    "done_cv": 0,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Pending-C",
+                    "status": "[INTERVIEW]",
+                    "req_cv": "Yes",
+                    "done_cv": 0,
+                }
+            )
+        )
 
         at = _run_page()
         right = self._right_col(at)
@@ -1908,32 +1876,48 @@ class TestT3MaterialsReadiness:
         'Still missing: M' copy, in that order. The conductor brief
         accepts the verified parameter name (`text=`) — asserting on the
         visible string is what the UI contract promises."""
-        database.add_position(make_position({
-            "position_name": "Ready-A", "status": "[SAVED]",
-            "req_cv": "Yes", "done_cv": 1,
-        }))
-        database.add_position(make_position({
-            "position_name": "Pending-B", "status": "[APPLIED]",
-            "req_cv": "Yes", "done_cv": 0,
-        }))
-        database.add_position(make_position({
-            "position_name": "Pending-C", "status": "[INTERVIEW]",
-            "req_cv": "Yes", "done_cv": 0,
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Ready-A",
+                    "status": "[SAVED]",
+                    "req_cv": "Yes",
+                    "done_cv": 1,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Pending-B",
+                    "status": "[APPLIED]",
+                    "req_cv": "Yes",
+                    "done_cv": 0,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Pending-C",
+                    "status": "[INTERVIEW]",
+                    "req_cv": "Yes",
+                    "done_cv": 0,
+                }
+            )
+        )
 
         at = _run_page()
         right = self._right_col(at)
         bars = right.get("progress")
-        assert len(bars) == 2, (
-            f"Precondition for this test: 2 progress bars. Got {len(bars)}."
-        )
+        assert len(bars) == 2, f"Precondition for this test: 2 progress bars. Got {len(bars)}."
         label0 = bars[0].proto.text
         label1 = bars[1].proto.text
-        assert label0 == "Ready to submit: 1", (
-            f"First bar label must be 'Ready to submit: 1', got {label0!r}"
+        assert label0 == "Ready to submit: 1 position", (
+            f"First bar label must be 'Ready to submit: 1 position', got {label0!r}"
         )
-        assert label1 == "Still missing: 2", (
-            f"Second bar label must be 'Still missing: 2', got {label1!r}"
+        assert label1 == "Incomplete: 2 positions", (
+            f"Second bar label must be 'Incomplete: 2 positions', got {label1!r}"
         )
 
     def test_terminal_only_db_shows_empty_state(self, db):
@@ -1945,9 +1929,15 @@ class TestT3MaterialsReadiness:
         terminal-only DB) because the readiness panel is definitionally
         scoped to the active pipeline."""
         for term in config.TERMINAL_STATUSES:
-            database.add_position(make_position({
-                "position_name": f"P-{term}", "status": term, "req_cv": "Yes",
-            }))
+            database.add_position(
+                make_position(
+                    {
+                        "position_name": f"P-{term}",
+                        "status": term,
+                        "req_cv": "Yes",
+                    }
+                )
+            )
         at = _run_page()
         right = self._right_col(at)
         assert len(right.get("progress")) == 0, (
@@ -1959,21 +1949,25 @@ class TestT3MaterialsReadiness:
             f"Got right-column info bodies: {[i.value for i in right.info]}"
         )
         cta_buttons = [b for b in right.button if b.key == self.CTA_KEY]
-        assert cta_buttons == [], (
-            "CTA must NOT render in the terminal-only (empty-state) case."
-        )
+        assert cta_buttons == [], "CTA must NOT render in the terminal-only (empty-state) case."
 
     def test_cta_button_routes_to_opportunities_page(self, db):
         """CTA contract (D2):
-          (a) A button with key='materials_readiness_cta' and label
-              '→ Opportunities page' renders in the populated case.
-          (b) app.py source contains the st.switch_page('pages/1_Opportunities.py')
-              call inside the readiness block (AppTest single-file mode
-              cannot navigate siblings — T1-E precedent)."""
-        database.add_position(make_position({
-            "position_name": "A", "status": "[SAVED]",
-            "req_cv": "Yes", "done_cv": 0,
-        }))
+        (a) A button with key='materials_readiness_cta' and label
+            '→ Opportunities page' renders in the populated case.
+        (b) app.py source contains the st.switch_page('pages/1_Opportunities.py')
+            call inside the readiness block (AppTest single-file mode
+            cannot navigate siblings — T1-E precedent)."""
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "A",
+                    "status": "[SAVED]",
+                    "req_cv": "Yes",
+                    "done_cv": 0,
+                }
+            )
+        )
         at = _run_page()
         right = self._right_col(at)
         cta_buttons = [b for b in right.button if b.key == self.CTA_KEY]
@@ -1982,19 +1976,20 @@ class TestT3MaterialsReadiness:
             f"in the right column. Got keys: {[b.key for b in right.button]}"
         )
         assert cta_buttons[0].label == self.CTA_LABEL, (
-            f"CTA button label must be exactly {self.CTA_LABEL!r}, got "
-            f"{cta_buttons[0].label!r}"
+            f"CTA button label must be exactly {self.CTA_LABEL!r}, got {cta_buttons[0].label!r}"
         )
 
         import pathlib
+
         src = pathlib.Path("app.py").read_text(encoding="utf-8")
         assert f'st.switch_page("{self.TARGET_PAGE}")' in src, (
-            f"app.py must call st.switch_page(\"{self.TARGET_PAGE}\") — "
+            f'app.py must call st.switch_page("{self.TARGET_PAGE}") — '
             "T1-E precedent pins the route target at the source level."
         )
 
 
 # ── T4: Upcoming timeline panel ───────────────────────────────────────────────
+
 
 class TestT4UpcomingTimeline:
     """T4-B: Upcoming panel rendering on the dashboard.
@@ -2031,10 +2026,9 @@ class TestT4UpcomingTimeline:
 
     SUBHEADER_DEFAULT = f"Upcoming (next {config.DEADLINE_ALERT_DAYS} days)"
     EMPTY_COPY_DEFAULT = (
-        f"No deadlines or interviews in the next "
-        f"{config.DEADLINE_ALERT_DAYS} days."
+        f"No deadlines or interviews in the next {config.DEADLINE_ALERT_DAYS} days."
     )
-    DISPLAY_COLUMNS = ["Date", "Days left", "Label", "Kind", "Status", "Urgency"]
+    DISPLAY_COLUMNS = ["Date", "Days Left", "Label", "Kind", "Status", "Urgency"]
     WINDOW_KEY = "upcoming_window"
     DATE_COLUMN_FORMAT_SOURCE = 'st.column_config.DateColumn(format="MMM D")'
 
@@ -2061,9 +2055,13 @@ class TestT4UpcomingTimeline:
 
     def test_subheader_renders_on_populated_db(self, db):
         """Same page-height-stability invariant on the populated path."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         assert self._has_subheader(at), (
             f"Populated DB: expected top-level {self.SUBHEADER_DEFAULT!r} "
@@ -2152,9 +2150,13 @@ class TestT4UpcomingTimeline:
     def test_populated_db_renders_dataframe(self, db):
         """Populated DB: an st.dataframe renders; the empty-state info
         must NOT appear (branches are mutually exclusive)."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         assert len(at.dataframe) == 1, (
             f"Populated DB: expected exactly one dataframe in the "
@@ -2171,14 +2173,17 @@ class TestT4UpcomingTimeline:
         """Display-header rename contract: T4-A's lowercase
         (date, days_left, label, kind, status, urgency) become
         Title-Case headers in the rendered dataframe."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         df = at.dataframe[0].value
         assert list(df.columns) == self.DISPLAY_COLUMNS, (
-            f"Expected display column headers {self.DISPLAY_COLUMNS!r}, "
-            f"got {list(df.columns)!r}"
+            f"Expected display column headers {self.DISPLAY_COLUMNS!r}, got {list(df.columns)!r}"
         )
 
     def test_status_column_shows_ui_labels_not_raw_sentinels(self, db):
@@ -2186,9 +2191,13 @@ class TestT4UpcomingTimeline:
         the user. T4-B maps T4-A's raw `status` through STATUS_LABELS
         for the displayed Status column — both an equality check and a
         belt-and-suspenders startswith('[') guard."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         df = at.dataframe[0].value
         statuses = list(df["Status"])
@@ -2207,9 +2216,13 @@ class TestT4UpcomingTimeline:
         """T4-A's date-object contract must survive the column rename.
         DateColumn formatting is applied client-side; the underlying
         column dtype + cell types are what tests can see."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         df = at.dataframe[0].value
         cells = list(df["Date"])
@@ -2223,6 +2236,7 @@ class TestT4UpcomingTimeline:
         see the rendered string. Pin the moment.js format string at the
         source level — same precedent as st.switch_page targets in T1-E."""
         import pathlib
+
         src = pathlib.Path("app.py").read_text(encoding="utf-8")
         assert self.DATE_COLUMN_FORMAT_SOURCE in src, (
             f"app.py must call {self.DATE_COLUMN_FORMAT_SOURCE!r} for "
@@ -2233,43 +2247,56 @@ class TestT4UpcomingTimeline:
         """T4-A returns 'Deadline for application' for deadline rows;
         T4-B passes it through unchanged — the Kind cell reads as
         natural language for the user."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         kinds = list(at.dataframe[0].value["Kind"])
         assert "Deadline for application" in kinds, (
-            f"Deadline row Kind must read 'Deadline for application'. "
-            f"Got Kind cells: {kinds}"
+            f"Deadline row Kind must read 'Deadline for application'. Got Kind cells: {kinds}"
         )
 
     def test_kind_column_for_interview_includes_sequence_number(self, db):
         """Interview rows use the sequence-aware 'Interview N' phrasing.
         Position with no deadline + one interview at +5d → exactly one
         'Interview 1' row."""
-        pos_id = database.add_position(make_position({
-            "position_name": "P-int",
-            "deadline_date": None,
-        }))
-        database.add_interview(pos_id, {
-            "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
-        })
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "position_name": "P-int",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_interview(
+            pos_id,
+            {
+                "scheduled_date": (date.today() + timedelta(days=5)).isoformat(),
+            },
+        )
         at = _run_page()
         kinds = list(at.dataframe[0].value["Kind"])
         assert kinds == ["Interview 1"], (
-            f"Single-interview row Kind must read ['Interview 1']. "
-            f"Got: {kinds}"
+            f"Single-interview row Kind must read ['Interview 1']. Got: {kinds}"
         )
 
     def test_label_column_includes_institute(self, db):
         """Label format '{institute}: {position_name}' makes it through
         T4-A's projection and T4-B's column rename without
         modification."""
-        database.add_position(make_position({
-            "position_name": "Postdoc-X",
-            "institute":     "Stanford",
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Postdoc-X",
+                    "institute": "Stanford",
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         labels = list(at.dataframe[0].value["Label"])
         assert "Stanford: Postdoc-X" in labels, (
@@ -2279,25 +2306,31 @@ class TestT4UpcomingTimeline:
     def test_urgency_column_passes_through_emoji_glyphs(self, db):
         """T4-A returns '🔴' for in-7d rows; T4-B's column rename does
         not strip the glyph."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=2)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=2)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         urgencies = list(at.dataframe[0].value["Urgency"])
-        assert "🔴" in urgencies, (
-            f"In-2d row should show '🔴' in Urgency. Got: {urgencies}"
-        )
+        assert "🔴" in urgencies, f"In-2d row should show '🔴' in Urgency. Got: {urgencies}"
 
     def test_days_left_column_passes_through_phrasing(self, db):
         """T4-A's days_left phrasing ('in N days') makes it into the
         rendered Days left column unchanged."""
-        database.add_position(make_position({
-            "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
-        days_left = list(at.dataframe[0].value["Days left"])
+        days_left = list(at.dataframe[0].value["Days Left"])
         assert "in 5 days" in days_left, (
-            f"Expected 'in 5 days' in Days left column. Got: {days_left}"
+            f"Expected 'in 5 days' in Days Left column. Got: {days_left}"
         )
 
     # ── Group E: selectbox interaction ────────────────────────────────────
@@ -2330,28 +2363,30 @@ class TestT4UpcomingTimeline:
         (empty state). After widening to 60-day, the row appears in
         the dataframe — proves the selectbox value drives
         get_upcoming(days=...)."""
-        database.add_position(make_position({
-            "position_name": "Far",
-            "deadline_date": (date.today() + timedelta(days=50)).isoformat(),
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Far",
+                    "deadline_date": (date.today() + timedelta(days=50)).isoformat(),
+                }
+            )
+        )
         at = _run_page()
         assert len(at.dataframe) == 0, (
-            "Default 30-day window must NOT surface the +50d position "
-            "(it's outside the window)."
+            "Default 30-day window must NOT surface the +50d position (it's outside the window)."
         )
         at.selectbox(key=self.WINDOW_KEY).set_value(60).run()
         assert len(at.dataframe) == 1, (
-            f"After widening to 60-day window, expected one dataframe. "
-            f"Got {len(at.dataframe)}."
+            f"After widening to 60-day window, expected one dataframe. Got {len(at.dataframe)}."
         )
         labels = list(at.dataframe[0].value["Label"])
         assert any("Far" in label for label in labels), (
-            f"After widening, expected the +50d 'Far' position in the "
-            f"Label column. Got: {labels}"
+            f"After widening, expected the +50d 'Far' position in the Label column. Got: {labels}"
         )
 
 
 # ── T5: Recommender Alerts panel ──────────────────────────────────────────────
+
 
 class TestT5RecommenderAlerts:
     """T5-A: Recommender Alerts panel rendering on the dashboard.
@@ -2394,7 +2429,7 @@ class TestT5RecommenderAlerts:
     # copy updates.
     EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDER_FOLLOWUPS
     BORDER_SOURCE = "st.container(border=True)"
-    WARN_GLYPH = "⚠"
+    WARN_GLYPH = "⚠️"
 
     @staticmethod
     def _has_subheader(at: AppTest, value: str) -> bool:
@@ -2419,19 +2454,26 @@ class TestT5RecommenderAlerts:
     ) -> int:
         """Seed one pending recommender (asked >= RECOMMENDER_ALERT_DAYS
         ago, no submitted_date yet) and return the recommender row id."""
-        pos_id = database.add_position(make_position({
-            "position_name": position_name,
-            "institute":     institute,
-            "deadline_date": (
-                (date.today() + timedelta(days=deadline_offset)).isoformat()
-                if deadline_offset is not None
-                else None
-            ),
-        }))
-        return database.add_recommender(pos_id, {
-            "recommender_name": recommender_name,
-            "asked_date": (date.today() - timedelta(days=days_ago)).isoformat(),
-        })
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "position_name": position_name,
+                    "institute": institute,
+                    "deadline_date": (
+                        (date.today() + timedelta(days=deadline_offset)).isoformat()
+                        if deadline_offset is not None
+                        else None
+                    ),
+                }
+            )
+        )
+        return database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": recommender_name,
+                "asked_date": (date.today() - timedelta(days=days_ago)).isoformat(),
+            },
+        )
 
     # ── Group A: subheader stability + layout ─────────────────────────────
 
@@ -2469,6 +2511,7 @@ class TestT5RecommenderAlerts:
         gates on the T5 panel adding its own bordered-container call.
         """
         import pathlib
+
         src = pathlib.Path("app.py").read_text(encoding="utf-8")
         count = src.count(self.BORDER_SOURCE)
         assert count >= 2, (
@@ -2490,8 +2533,7 @@ class TestT5RecommenderAlerts:
             f"{[i.value for i in at.info]}"
         )
         assert self._alert_markdowns(at) == [], (
-            f"Empty DB: no alert cards should render. Got bodies: "
-            f"{self._alert_markdowns(at)}"
+            f"Empty DB: no alert cards should render. Got bodies: {self._alert_markdowns(at)}"
         )
 
     def test_unsubmitted_but_recent_ask_does_not_fire(self, db):
@@ -2509,8 +2551,7 @@ class TestT5RecommenderAlerts:
             f"Got info bodies: {[i.value for i in at.info]}"
         )
         assert self._alert_markdowns(at) == [], (
-            f"Asked-today recommender should NOT produce a card. "
-            f"Got: {self._alert_markdowns(at)}"
+            f"Asked-today recommender should NOT produce a card. Got: {self._alert_markdowns(at)}"
         )
 
     def test_asked_at_alert_boundary_fires(self, db):
@@ -2557,15 +2598,13 @@ class TestT5RecommenderAlerts:
     # ── Group C: card content contract ────────────────────────────────────
 
     def test_card_header_uses_warn_glyph_and_bold_name(self, db):
-        """`**⚠ {Name}**` header — bold so it stands apart from the
-        bullets visually, with the warn-glyph as the at-a-glance
-        signal that the card is an alert."""
+        """`⚠️ **{Name}**` header — glyph outside bold, bold name stands apart
+        from the bullets visually; emoji variant for consistent rendering."""
         self._seed_pending(recommender_name="Dr. Smith")
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        assert any("**⚠ Dr. Smith**" in body for body in bodies), (
-            f"Expected '**⚠ Dr. Smith**' header in some card body. "
-            f"Got: {bodies}"
+        assert any("⚠️ **Dr. Smith**" in body for body in bodies), (
+            f"Expected '⚠️ **Dr. Smith**' header in some card body. Got: {bodies}"
         )
 
     def test_card_bullet_includes_institute_and_position_name(self, db):
@@ -2589,22 +2628,17 @@ class TestT5RecommenderAlerts:
         self._seed_pending(position_name="LonePost", institute="")
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        assert any(
-            "LonePost" in body and "Stanford:" not in body
-            for body in bodies
-        ), (
-            f"Expected bare 'LonePost' (no institute prefix) when "
-            f"institute is empty. Got: {bodies}"
+        assert any("LonePost" in body and "Stanford:" not in body for body in bodies), (
+            f"Expected bare 'LonePost' (no institute prefix) when institute is empty. Got: {bodies}"
         )
 
     def test_card_bullet_includes_asked_days_phrasing(self, db):
-        """`asked Nd ago` phrasing per TASKS.md (supersedes the older
-        wireframe '14 days ago')."""
+        """`asked N days ago` phrasing — full word 'days' for readability."""
         self._seed_pending(days_ago=14)
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        assert any("asked 14d ago" in body for body in bodies), (
-            f"Expected 'asked 14d ago' in some card body. Got: {bodies}"
+        assert any("asked 14 days ago" in body for body in bodies), (
+            f"Expected 'asked 14 days ago' in some card body. Got: {bodies}"
         )
 
     def test_card_bullet_includes_due_date_in_short_format(self, db):
@@ -2636,29 +2670,43 @@ class TestT5RecommenderAlerts:
         with TWO bullet lines. Pins the group-by-recommender_name
         contract — the user sees one row per person, not per letter."""
         # Two distinct positions, same recommender.
-        pos1 = database.add_position(make_position({
-            "position_name": "Pos-A",
-            "institute":     "Stanford",
-            "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
-        }))
-        pos2 = database.add_position(make_position({
-            "position_name": "Pos-B",
-            "institute":     "MIT",
-            "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
-        }))
+        pos1 = database.add_position(
+            make_position(
+                {
+                    "position_name": "Pos-A",
+                    "institute": "Stanford",
+                    "deadline_date": (date.today() + timedelta(days=10)).isoformat(),
+                }
+            )
+        )
+        pos2 = database.add_position(
+            make_position(
+                {
+                    "position_name": "Pos-B",
+                    "institute": "MIT",
+                    "deadline_date": (date.today() + timedelta(days=20)).isoformat(),
+                }
+            )
+        )
         asked_iso = (date.today() - timedelta(days=14)).isoformat()
-        database.add_recommender(pos1, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": asked_iso,
-        })
-        database.add_recommender(pos2, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": asked_iso,
-        })
+        database.add_recommender(
+            pos1,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": asked_iso,
+            },
+        )
+        database.add_recommender(
+            pos2,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": asked_iso,
+            },
+        )
 
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        smith_cards = [b for b in bodies if "**⚠ Dr. Smith**" in b]
+        smith_cards = [b for b in bodies if "⚠️ **Dr. Smith**" in b]
         assert len(smith_cards) == 1, (
             f"Two pending letters for Dr. Smith should produce ONE "
             f"card (grouped by recommender_name). Got {len(smith_cards)} "
@@ -2666,60 +2714,80 @@ class TestT5RecommenderAlerts:
         )
         body = smith_cards[0]
         assert "Stanford: Pos-A" in body and "MIT: Pos-B" in body, (
-            f"Single Smith card should list BOTH positions as bullets. "
-            f"Got body: {body!r}"
+            f"Single Smith card should list BOTH positions as bullets. Got body: {body!r}"
         )
 
     def test_two_recommenders_render_two_cards(self, db):
         """Two distinct recommender names → two separate cards."""
-        pos1 = database.add_position(make_position({
-            "position_name": "Pos-A",
-            "institute":     "Stanford",
-        }))
-        pos2 = database.add_position(make_position({
-            "position_name": "Pos-B",
-            "institute":     "MIT",
-        }))
+        pos1 = database.add_position(
+            make_position(
+                {
+                    "position_name": "Pos-A",
+                    "institute": "Stanford",
+                }
+            )
+        )
+        pos2 = database.add_position(
+            make_position(
+                {
+                    "position_name": "Pos-B",
+                    "institute": "MIT",
+                }
+            )
+        )
         asked_iso = (date.today() - timedelta(days=14)).isoformat()
-        database.add_recommender(pos1, {
-            "recommender_name": "Dr. Smith",
-            "asked_date": asked_iso,
-        })
-        database.add_recommender(pos2, {
-            "recommender_name": "Dr. Jones",
-            "asked_date": asked_iso,
-        })
+        database.add_recommender(
+            pos1,
+            {
+                "recommender_name": "Dr. Smith",
+                "asked_date": asked_iso,
+            },
+        )
+        database.add_recommender(
+            pos2,
+            {
+                "recommender_name": "Dr. Jones",
+                "asked_date": asked_iso,
+            },
+        )
 
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        smith_cards = [b for b in bodies if "**⚠ Dr. Smith**" in b]
-        jones_cards = [b for b in bodies if "**⚠ Dr. Jones**" in b]
+        smith_cards = [b for b in bodies if "⚠️ **Dr. Smith**" in b]
+        jones_cards = [b for b in bodies if "⚠️ **Dr. Jones**" in b]
         assert len(smith_cards) == 1, (
-            f"Expected exactly one Dr. Smith card. Got {len(smith_cards)}: "
-            f"{smith_cards}"
+            f"Expected exactly one Dr. Smith card. Got {len(smith_cards)}: {smith_cards}"
         )
         assert len(jones_cards) == 1, (
-            f"Expected exactly one Dr. Jones card. Got {len(jones_cards)}: "
-            f"{jones_cards}"
+            f"Expected exactly one Dr. Jones card. Got {len(jones_cards)}: {jones_cards}"
         )
 
     def test_submitted_letters_do_not_appear(self, db):
         """A recommender whose `submitted_date` is set must NOT appear
         in the alerts panel — the SQL filter `submitted_date IS NULL`
         is doing the work, but pin it from the page side too."""
-        pos_id = database.add_position(make_position({
-            "position_name": "Done-Letter-Pos",
-        }))
-        rec_id = database.add_recommender(pos_id, {
-            "recommender_name": "Dr. Done",
-            "asked_date": (date.today() - timedelta(days=14)).isoformat(),
-        })
-        database.update_recommender(rec_id, {
-            "submitted_date": date.today().isoformat(),
-        })
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "position_name": "Done-Letter-Pos",
+                }
+            )
+        )
+        rec_id = database.add_recommender(
+            pos_id,
+            {
+                "recommender_name": "Dr. Done",
+                "asked_date": (date.today() - timedelta(days=14)).isoformat(),
+            },
+        )
+        database.update_recommender(
+            rec_id,
+            {
+                "submitted_date": date.today().isoformat(),
+            },
+        )
         at = _run_page()
         bodies = self._alert_markdowns(at)
         assert all("Dr. Done" not in body for body in bodies), (
-            f"Submitted-letter recommender 'Dr. Done' must NOT appear. "
-            f"Got bodies: {bodies}"
+            f"Submitted-letter recommender 'Dr. Done' must NOT appear. Got bodies: {bodies}"
         )
