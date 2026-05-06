@@ -41,11 +41,11 @@ import streamlit as st
 
 import config
 import database
+
 # Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
 # bare name so existing per-page references remain unchanged (every
 # in-file site reads it; ruff won't flag F401).
 from config import EM_DASH
-
 
 # DESIGN §8.0 — first executable Streamlit call on every page. Streamlit
 # raises if anything else runs before this. Re-executed on every page
@@ -66,6 +66,7 @@ st.title("Applications")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
@@ -198,12 +199,8 @@ def _confirm_interview_delete_dialog() -> None:
       failure-preserves-state precedent — there is no DB rollback to
       undo, the user just gets to try again.
     """
-    iid: int | None = st.session_state.get(
-        "_apps_interview_delete_target_id"
-    )
-    seq: int | None = st.session_state.get(
-        "_apps_interview_delete_target_seq"
-    )
+    iid: int | None = st.session_state.get("_apps_interview_delete_target_id")
+    seq: int | None = st.session_state.get("_apps_interview_delete_target_seq")
     if iid is None:
         # Defensive: the post-loop guard already filters by
         # `pending_id in current_ids`, so this branch should be
@@ -212,10 +209,7 @@ def _confirm_interview_delete_dialog() -> None:
         st.error("Delete target was lost — please re-open the dialog.")
         return
 
-    st.warning(
-        f"Interview {seq} will be permanently deleted. "
-        f"This **cannot be undone**."
-    )
+    st.warning(f"Interview {seq} will be permanently deleted. This **cannot be undone**.")
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
         if st.button(
@@ -228,10 +222,12 @@ def _confirm_interview_delete_dialog() -> None:
                 database.delete_interview(iid)
                 st.session_state["_applications_skip_table_reset"] = True
                 st.session_state.pop(
-                    "_apps_interview_delete_target_id", None,
+                    "_apps_interview_delete_target_id",
+                    None,
                 )
                 st.session_state.pop(
-                    "_apps_interview_delete_target_seq", None,
+                    "_apps_interview_delete_target_seq",
+                    None,
                 )
                 st.toast(f"Deleted interview {seq}.")
                 st.rerun()
@@ -248,10 +244,12 @@ def _confirm_interview_delete_dialog() -> None:
             width="stretch",
         ):
             st.session_state.pop(
-                "_apps_interview_delete_target_id", None,
+                "_apps_interview_delete_target_id",
+                None,
             )
             st.session_state.pop(
-                "_apps_interview_delete_target_seq", None,
+                "_apps_interview_delete_target_seq",
+                None,
             )
             # _applications_skip_table_reset preserves the position
             # selection across the cancel-driven rerun (gotcha #11):
@@ -356,22 +354,23 @@ else:
     # `_format_label` helper that combined them is still used by the
     # detail-card header below; only the table render switched to bare
     # cells.
-    display_df = pd.DataFrame({
-        "Position":  df_filtered["position_name"].apply(_safe_str_or_em),
-        "Institute": df_filtered["institute"].apply(_safe_str_or_em),
-        "Applied":   df_filtered["applied_date"].apply(_format_date_or_em),
-        "Letters": df_filtered["position_id"].apply(
-            lambda pid: "✓" if database.is_all_recs_submitted(pid) else EM_DASH
-        ),
-        "Confirmation": df_filtered.apply(
-            lambda r: _format_confirmation(
-                r["confirmation_received"], r["confirmation_date"],
+    display_df = pd.DataFrame(
+        {
+            "Position": df_filtered["position_name"].apply(_safe_str_or_em),
+            "Institute": df_filtered["institute"].apply(_safe_str_or_em),
+            "Applied": df_filtered["applied_date"].apply(_format_date_or_em),
+            "Letters": df_filtered["position_id"].apply(database.is_all_recs_submitted),
+            "Confirmation": df_filtered.apply(
+                lambda r: _format_confirmation(
+                    r["confirmation_received"],
+                    r["confirmation_date"],
+                ),
+                axis=1,
             ),
-            axis=1,
-        ),
-        "Response": df_filtered["response_type"].apply(_safe_str_or_em),
-        "Result":   df_filtered["result"].apply(_safe_str_or_em),
-    }).reset_index(drop=True)
+            "Response": df_filtered["response_type"].apply(_safe_str_or_em),
+            "Result": df_filtered["result"].apply(_safe_str_or_em),
+        }
+    ).reset_index(drop=True)
 
     # T2-A / T3-rev-A: column_config locks per-column widths so the
     # selectable table doesn't collapse to equal-width cells. Position
@@ -388,14 +387,42 @@ else:
         width="stretch",
         hide_index=True,
         column_config={
-            "Position":     st.column_config.TextColumn("Position",     width="large"),
-            "Institute":    st.column_config.TextColumn("Institute",    width="medium"),
-            "Applied":      st.column_config.TextColumn("Applied",      width="small"),
-            "Letters":      st.column_config.TextColumn("Letters",      width="small",
-                    help="✓ = all recommendation letters submitted"),
-            "Confirmation": st.column_config.TextColumn("Confirmation", width="medium"),
-            "Response":     st.column_config.TextColumn("Response",     width="small"),
-            "Result":       st.column_config.TextColumn("Result",       width="small"),
+            "Position": st.column_config.TextColumn(
+                "Position",
+                width="large",
+                help="Position title",
+            ),
+            "Institute": st.column_config.TextColumn(
+                "Institute",
+                width="medium",
+                help="Institution or organisation",
+            ),
+            "Applied": st.column_config.TextColumn(
+                "Applied",
+                width="small",
+                help="Date application was submitted",
+            ),
+            "Letters": st.column_config.CheckboxColumn(
+                "Letters",
+                width="small",
+                help="All recommendation letters submitted",
+                disabled=True,
+            ),
+            "Confirmation": st.column_config.TextColumn(
+                "Confirmation",
+                width="medium",
+                help="Whether a confirmation email was received",
+            ),
+            "Response": st.column_config.TextColumn(
+                "Response",
+                width="small",
+                help="Type of response received (e.g. Interview Invite)",
+            ),
+            "Result": st.column_config.TextColumn(
+                "Result",
+                width="small",
+                help="Final outcome of the application",
+            ),
         },
         key="apps_table",
         on_select="rerun",
@@ -495,9 +522,7 @@ if "applications_selected_position_id" in st.session_state:
             # The Save handler pops this sentinel before st.rerun() so
             # the post-Save render fires branch (a) and re-seeds widgets
             # from the just-persisted DB values.
-            sid_changed = (
-                st.session_state.get("_applications_edit_form_sid") != sid
-            )
+            sid_changed = st.session_state.get("_applications_edit_form_sid") != sid
 
             # F-style coercion (mirrors Opportunities §8.2 F2/F5 helpers)
             # so out-of-vocab / NULL cells never reach a widget in an
@@ -505,27 +530,25 @@ if "applications_selected_position_id" in st.session_state:
             # row — `.get` returns None for absent / NULL cells.
             raw_response_type = app_row.get("response_type")
             safe_response_type = (
-                raw_response_type if raw_response_type in config.RESPONSE_TYPES
-                else None
+                raw_response_type if raw_response_type in config.RESPONSE_TYPES else None
             )
             raw_result = app_row.get("result")
             safe_result = (
-                raw_result if raw_result in config.RESULT_VALUES
-                else config.RESULT_DEFAULT
+                raw_result if raw_result in config.RESULT_VALUES else config.RESULT_DEFAULT
             )
 
             canonical: dict[str, Any] = {
-                "apps_applied_date":          _coerce_iso_to_date(app_row.get("applied_date")),
+                "apps_applied_date": _coerce_iso_to_date(app_row.get("applied_date")),
                 # confirmation_received is INTEGER 0/1; coerce via
                 # bool() with `or 0` covering None — `bool(None or 0)`
                 # is False; `bool(1 or 0)` is True.
                 "apps_confirmation_received": bool(app_row.get("confirmation_received") or 0),
-                "apps_confirmation_date":     _coerce_iso_to_date(app_row.get("confirmation_date")),
-                "apps_response_type":         safe_response_type,
-                "apps_response_date":         _coerce_iso_to_date(app_row.get("response_date")),
-                "apps_result":                safe_result,
-                "apps_result_notify_date":    _coerce_iso_to_date(app_row.get("result_notify_date")),
-                "apps_notes":                 _safe_str(app_row.get("notes")),
+                "apps_confirmation_date": _coerce_iso_to_date(app_row.get("confirmation_date")),
+                "apps_response_type": safe_response_type,
+                "apps_response_date": _coerce_iso_to_date(app_row.get("response_date")),
+                "apps_result": safe_result,
+                "apps_result_notify_date": _coerce_iso_to_date(app_row.get("result_notify_date")),
+                "apps_notes": _safe_str(app_row.get("notes")),
             }
             for _key, _value in canonical.items():
                 if sid_changed or _key not in st.session_state:
@@ -587,9 +610,7 @@ if "applications_selected_position_id" in st.session_state:
 
                 st.text_area("Notes", key="apps_notes")
 
-                detail_submitted = st.form_submit_button(
-                    "Save", key="apps_detail_submit"
-                )
+                detail_submitted = st.form_submit_button("Save", key="apps_detail_submit")
 
             # ── Interviews list (T3-A / T3-rev-B) ───────────────────
             #
@@ -633,7 +654,8 @@ if "applications_selected_position_id" in st.session_state:
                 else frozenset()
             )
             saved_sentinel = st.session_state.get(
-                "_apps_interviews_seeded_ids", frozenset(),
+                "_apps_interviews_seeded_ids",
+                frozenset(),
             )
             seeded_ids = saved_sentinel & current_ids
             for _, _iv_row in interviews_df.iterrows():
@@ -651,16 +673,12 @@ if "applications_selected_position_id" in st.session_state:
                 # ever sees a member of [None, *INTERVIEW_FORMATS].
                 _fmt_str = _safe_str(_iv_row["format"])
                 _fmt = _fmt_str if _fmt_str in config.INTERVIEW_FORMATS else None
-                st.session_state[f"apps_interview_{_iid}_date"] = (
-                    _coerce_iso_to_date(_iv_row["scheduled_date"])
+                st.session_state[f"apps_interview_{_iid}_date"] = _coerce_iso_to_date(
+                    _iv_row["scheduled_date"]
                 )
                 st.session_state[f"apps_interview_{_iid}_format"] = _fmt
-                st.session_state[f"apps_interview_{_iid}_notes"] = (
-                    _safe_str(_iv_row["notes"])
-                )
-            st.session_state["_apps_interviews_seeded_ids"] = (
-                seeded_ids | current_ids
-            )
+                st.session_state[f"apps_interview_{_iid}_notes"] = _safe_str(_iv_row["notes"])
+            st.session_state["_apps_interviews_seeded_ids"] = seeded_ids | current_ids
 
             # ── Per-row blocks (T3-rev-B) ────────────────────────────
             #
@@ -723,7 +741,8 @@ if "applications_selected_position_id" in st.session_state:
                             key=f"apps_interview_{_iid}_notes",
                         )
                     if st.form_submit_button(
-                        "Save", key=f"apps_interview_{_iid}_save",
+                        "Save",
+                        key=f"apps_interview_{_iid}_save",
                     ):
                         saves_clicked.append((_iid, _seq))
 
@@ -737,12 +756,8 @@ if "applications_selected_position_id" in st.session_state:
                     f"🗑️ Delete Interview {_seq}",
                     key=f"apps_interview_{_iid}_delete",
                 ):
-                    st.session_state[
-                        "_apps_interview_delete_target_id"
-                    ] = _iid
-                    st.session_state[
-                        "_apps_interview_delete_target_seq"
-                    ] = _seq
+                    st.session_state["_apps_interview_delete_target_id"] = _iid
+                    st.session_state["_apps_interview_delete_target_seq"] = _seq
 
             # ── Dialog re-open guard (T3-B; gotcha #3) ───────────────
             #
@@ -756,19 +771,19 @@ if "applications_selected_position_id" in st.session_state:
             # post-confirm rerun (the deleted id is no longer in
             # current_ids — but the Confirm handler also pops the
             # sentinels itself so this is belt-and-suspenders).
-            _pending_delete_id = st.session_state.get(
-                "_apps_interview_delete_target_id"
-            )
+            _pending_delete_id = st.session_state.get("_apps_interview_delete_target_id")
             if _pending_delete_id is not None:
                 if _pending_delete_id in current_ids:
                     _confirm_interview_delete_dialog()
                 else:
                     # Stale target — silent cleanup, no error / toast.
                     st.session_state.pop(
-                        "_apps_interview_delete_target_id", None,
+                        "_apps_interview_delete_target_id",
+                        None,
                     )
                     st.session_state.pop(
-                        "_apps_interview_delete_target_seq", None,
+                        "_apps_interview_delete_target_seq",
+                        None,
                     )
 
             # ── Add button (outside the form per Streamlit 1.56) ─────
@@ -783,9 +798,7 @@ if "applications_selected_position_id" in st.session_state:
             # newly-Added id (current_ids - seeded_ids = {new_id}), so
             # existing widget session_state values survive the rerun
             # untouched.
-            _add_label = (
-                "Add interview" if interviews_df.empty else "Add another interview"
-            )
+            _add_label = "Add interview" if interviews_df.empty else "Add another interview"
             add_clicked = st.button(_add_label, key="apps_add_interview")
 
         if detail_submitted:
@@ -796,44 +809,32 @@ if "applications_selected_position_id" in st.session_state:
             # comparison normalizes widget shape ↔ DB shape (date ↔ ISO
             # string, bool ↔ 0/1 INTEGER) so the diff doesn't
             # false-positive on cosmetic differences.
-            applied_d   = st.session_state["apps_applied_date"]
-            conf_d      = st.session_state["apps_confirmation_date"]
-            resp_d      = st.session_state["apps_response_date"]
-            result_n_d  = st.session_state["apps_result_notify_date"]
+            applied_d = st.session_state["apps_applied_date"]
+            conf_d = st.session_state["apps_confirmation_date"]
+            resp_d = st.session_state["apps_response_date"]
+            result_n_d = st.session_state["apps_result_notify_date"]
             _w_applied_iso = applied_d.isoformat() if applied_d else None
-            _w_conf_received = int(
-                st.session_state["apps_confirmation_received"]
-            )
+            _w_conf_received = int(st.session_state["apps_confirmation_received"])
             _w_conf_iso = conf_d.isoformat() if conf_d else None
             _w_response_type = st.session_state["apps_response_type"]
             _w_response_iso = resp_d.isoformat() if resp_d else None
             _w_result = st.session_state["apps_result"]
-            _w_result_notify_iso = (
-                result_n_d.isoformat() if result_n_d else None
-            )
+            _w_result_notify_iso = result_n_d.isoformat() if result_n_d else None
             _w_notes = st.session_state["apps_notes"]
 
             _db_applied_iso = _safe_str(app_row.get("applied_date")) or None
             _db_conf_received = int(app_row.get("confirmation_received") or 0)
-            _db_conf_iso = (
-                _safe_str(app_row.get("confirmation_date")) or None
-            )
+            _db_conf_iso = _safe_str(app_row.get("confirmation_date")) or None
             _db_response_type_raw = app_row.get("response_type")
             _db_response_type = (
-                _db_response_type_raw
-                if _db_response_type_raw in config.RESPONSE_TYPES
-                else None
+                _db_response_type_raw if _db_response_type_raw in config.RESPONSE_TYPES else None
             )
             _db_response_iso = _safe_str(app_row.get("response_date")) or None
             _db_result_raw = app_row.get("result")
             _db_result = (
-                _db_result_raw
-                if _db_result_raw in config.RESULT_VALUES
-                else config.RESULT_DEFAULT
+                _db_result_raw if _db_result_raw in config.RESULT_VALUES else config.RESULT_DEFAULT
             )
-            _db_result_notify_iso = (
-                _safe_str(app_row.get("result_notify_date")) or None
-            )
+            _db_result_notify_iso = _safe_str(app_row.get("result_notify_date")) or None
             _db_notes = _safe_str(app_row.get("notes"))
 
             fields: dict[str, Any] = {}
@@ -865,7 +866,8 @@ if "applications_selected_position_id" in st.session_state:
                     # (idempotent — fresh values will match in-flight).
                     st.session_state["_applications_skip_table_reset"] = True
                     st.session_state.pop(
-                        "_applications_edit_form_sid", None,
+                        "_applications_edit_form_sid",
+                        None,
                     )
                     st.toast("No changes to save.")
                     st.rerun()
@@ -873,7 +875,9 @@ if "applications_selected_position_id" in st.session_state:
                 # the same transaction; the returned indicator drives
                 # the cascade-promotion toast surfaced below.
                 result = database.upsert_application(
-                    sid, fields, propagate_status=True,
+                    sid,
+                    fields,
+                    propagate_status=True,
                 )
                 # Set the skip-flag BEFORE st.rerun() so the
                 # selection-resolution block on the post-Save rerun
@@ -945,7 +949,8 @@ if "applications_selected_position_id" in st.session_state:
                 )
                 _w_notes_str = _safe_str(
                     st.session_state.get(
-                        f"apps_interview_{_iid}_notes", "",
+                        f"apps_interview_{_iid}_notes",
+                        "",
                     )
                 )
                 _w_date_iso = _w_date.isoformat() if _w_date else None
@@ -954,11 +959,7 @@ if "applications_selected_position_id" in st.session_state:
                 _db_date_str = _safe_str(_db_row["scheduled_date"])
                 _db_date_iso = _db_date_str if _db_date_str else None
                 _db_fmt_str = _safe_str(_db_row["format"])
-                _db_format = (
-                    _db_fmt_str
-                    if _db_fmt_str in config.INTERVIEW_FORMATS
-                    else None
-                )
+                _db_format = _db_fmt_str if _db_fmt_str in config.INTERVIEW_FORMATS else None
                 _db_notes_str = _safe_str(_db_row["notes"])
                 _db_notes = _db_notes_str if _db_notes_str else None
 
@@ -999,7 +1000,9 @@ if "applications_selected_position_id" in st.session_state:
         if add_clicked:
             try:
                 _add_result = database.add_interview(
-                    sid, {}, propagate_status=True,
+                    sid,
+                    {},
+                    propagate_status=True,
                 )
                 st.session_state["_applications_skip_table_reset"] = True
                 st.toast("Added interview.")
