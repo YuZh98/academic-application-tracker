@@ -125,7 +125,7 @@ st.set_page_config(
 
 st.title("Opportunities")
 
-# ── TIER 1: Quick-add expander ────────────────────────────────────────────────
+# ── Quick-add expander ────────────────────────────────────────────────
 with st.expander("Quick Add", expanded=False):
     with st.form(key="quick_add_form"):
         col1, col2, col3 = st.columns(3)
@@ -170,7 +170,7 @@ if submitted:
         except Exception as e:
             st.error(f"Could not save position: {e}")
 
-# ── TIER 2: Filter bar ────────────────────────────────────────────────────────
+# ── Filter bar ────────────────────────────────────────────────────────
 col_search, col_status, col_priority, col_field = st.columns([3, 2, 2, 3])
 with col_search:
     search_filter = st.text_input(
@@ -193,7 +193,7 @@ with col_priority:
 with col_field:
     field_filter = st.text_input("Field", placeholder="Filter by field…", key="filter_field")
 
-# ── TIER 3: Positions table ───────────────────────────────────────────────────
+# ── Positions table ───────────────────────────────────────────────────
 df = database.get_all_positions()
 
 df_filtered: pd.DataFrame = df
@@ -202,8 +202,6 @@ if status_filter != config.FILTER_ALL:
 if priority_filter != config.FILTER_ALL:
     df_filtered = cast(pd.DataFrame, df_filtered[df_filtered["priority"] == priority_filter])
 if field_filter.strip():
-    # F1: regex=False treats the search term as a literal string, not a regex
-    # pattern. Without it, "C++" raises re.error and crashes the page.
     df_filtered = cast(
         pd.DataFrame,
         df_filtered[
@@ -314,7 +312,7 @@ else:
         st.session_state.pop("selected_position_id", None)
         st.session_state.pop("_edit_form_sid", None)
 
-# ── TIER 4: Edit panel (subheader + tabs shell) ──────────────────────────────
+# ── Edit panel (subheader + tabs shell) ──────────────────────────────
 
 if "selected_position_id" in st.session_state:
     sid = st.session_state["selected_position_id"]
