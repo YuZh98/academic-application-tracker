@@ -104,7 +104,9 @@ def _confirm_delete_dialog() -> None:
             # still fires — the user reads "Deleted" but the row is intact.
             # Surface a clear error and keep state untouched for retry.
             if position_id is None:
-                st.error("The position to delete could not be identified — please close this dialog and try again.")
+                st.error(
+                    "The position to delete could not be identified — please close this dialog and try again."
+                )
                 return
             try:
                 database.delete_position(position_id)
@@ -364,6 +366,7 @@ else:
         "status_label",
         "deadline_date",
         "deadline_urgency",
+        "link",
     ]
     # T4-A: enable single-row selection. AppTest drives this by writing to
     # session_state["positions_table"] directly (no click-a-row API exists),
@@ -379,15 +382,45 @@ else:
         hide_index=True,
         column_order=display_cols,
         column_config={
-            "position_name": st.column_config.TextColumn("Position", width="large"),
-            "institute": st.column_config.TextColumn("Institute", width="medium"),
-            "priority": st.column_config.TextColumn("Priority", width="small"),
+            "position_name": st.column_config.TextColumn(
+                "Position",
+                width="large",
+                help="Position title",
+            ),
+            "institute": st.column_config.TextColumn(
+                "Institute",
+                width="medium",
+                help="Institution or organisation",
+            ),
+            "priority": st.column_config.TextColumn(
+                "Priority",
+                width="small",
+                help="Your personal priority for this position",
+            ),
             # DESIGN §8.0 + §8.2: header reads "Status" (the UI-facing
             # concept); the underlying df column is `status_label` so the
             # cell values go through the STATUS_LABELS map.
-            "status_label": st.column_config.TextColumn("Status", width="medium"),
-            "deadline_date": st.column_config.TextColumn("Deadline", width="small"),
-            "deadline_urgency": st.column_config.TextColumn("Urgency", width="small", help="🔴 ≤7 days · 🟡 ≤30 days · blank = not urgent · — = no deadline"),
+            "status_label": st.column_config.TextColumn(
+                "Status",
+                width="medium",
+                help="Current stage in the application pipeline",
+            ),
+            "deadline_date": st.column_config.TextColumn(
+                "Deadline",
+                width="small",
+                help="Application submission deadline",
+            ),
+            "deadline_urgency": st.column_config.TextColumn(
+                "Urgency",
+                width="small",
+                help="🔴 ≤7 days · 🟡 ≤30 days · blank = not urgent · — = no deadline",
+            ),
+            "link": st.column_config.LinkColumn(
+                "Link",
+                display_text="🔗 Open",
+                width="small",
+                help="Link to the job posting",
+            ),
         },
         key="positions_table",
         on_select="rerun",
@@ -660,8 +693,12 @@ if "selected_position_id" in st.session_state:
                 # specific nuance — "green card required", "J-1 OK
                 # with a waiver"). Keys do not collide with the form
                 # id "edit_overview" per DESIGN §8.0.
-                st.selectbox("Work Authorization", config.WORK_AUTH_OPTIONS, key="edit_work_auth",
-                             help="Does this posting explicitly accept your work authorization / visa status?")
+                st.selectbox(
+                    "Work Authorization",
+                    config.WORK_AUTH_OPTIONS,
+                    key="edit_work_auth",
+                    help="Does this posting explicitly accept your work authorization / visa status?",
+                )
                 st.text_area("Work Authorization Notes", key="edit_work_auth_note")
                 overview_submitted = st.form_submit_button(
                     "Save Changes",

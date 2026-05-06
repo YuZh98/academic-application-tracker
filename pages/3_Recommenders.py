@@ -533,12 +533,36 @@ _event = st.dataframe(
     width="stretch",
     hide_index=True,
     column_config={
-        "Position": st.column_config.TextColumn("Position", width="large"),
-        "Recommender": st.column_config.TextColumn("Recommender", width="medium"),
-        "Relationship": st.column_config.TextColumn("Relationship", width="medium"),
-        "Asked": st.column_config.TextColumn("Asked", width="small"),
-        "Confirmed": st.column_config.TextColumn("Confirmed", width="small"),
-        "Submitted": st.column_config.TextColumn("Submitted", width="small"),
+        "Position": st.column_config.TextColumn(
+            "Position",
+            width="large",
+            help="Position this recommendation is for",
+        ),
+        "Recommender": st.column_config.TextColumn(
+            "Recommender",
+            width="medium",
+            help="Recommender's name",
+        ),
+        "Relationship": st.column_config.TextColumn(
+            "Relationship",
+            width="medium",
+            help="Your relationship with this recommender",
+        ),
+        "Asked": st.column_config.TextColumn(
+            "Asked",
+            width="small",
+            help="Date you asked for the letter",
+        ),
+        "Confirmed": st.column_config.TextColumn(
+            "Confirmed",
+            width="small",
+            help="Whether the recommender confirmed they will write",
+        ),
+        "Submitted": st.column_config.TextColumn(
+            "Submitted",
+            width="small",
+            help="Date the letter was submitted (— if not yet)",
+        ),
     },
     key="recs_table",
     on_select="rerun",
