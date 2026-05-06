@@ -43,6 +43,7 @@ import streamlit as st
 
 import config
 import database
+
 # Phase 7 cleanup CL2: EM_DASH lifted to config; re-export under the
 # bare name so existing per-page references remain unchanged.
 from config import EM_DASH
@@ -117,17 +118,9 @@ def _format_due(deadline_iso: str | None) -> str:
     return f"{d.strftime('%b')} {d.day}"
 
 
-def _format_confirmed(v: Any) -> str:
-    """Tri-state Confirmed column: NULL → '—', 0 → 'No', 1 → 'Yes'.
-    Mirrors the same vocabulary used by the inline edit selectbox so the
-    table cell and the edit widget read coherently for the user."""
-    if v is None or (isinstance(v, float) and math.isnan(v)):
-        return EM_DASH
-    try:
-        i = int(v)
-    except (TypeError, ValueError):
-        return EM_DASH
-    return "Yes" if i == 1 else "No"
+def _format_confirmed(i: int | None) -> str:
+    """Format the recommender confirmed INTEGER as a display string."""
+    return config.CONFIRMED_LABELS.get(i, config.EM_DASH)
 
 
 # ── T6: Reminder helpers ──────────────────────────────────────────────────────
@@ -186,11 +179,7 @@ def _build_llm_prompt(
     The prompt is plain prose (rendered via `st.code(..., language='text')`
     so Streamlit's copy-on-hover button is exposed without applying any
     syntax highlighting that would mis-color the prose)."""
-    rel_str = (
-        f" ({relationship})"
-        if relationship and not pd.isna(relationship)
-        else ""
-    )
+    rel_str = f" ({relationship})" if relationship and not pd.isna(relationship) else ""
 
     pos_lines: list[str] = []
     for _, row in group.iterrows():
@@ -243,9 +232,7 @@ else:
     # preserves both within-group deadline order and across-group alphabetical
     # order without any extra sort. enumerate() supplies a per-card index for
     # the T6 link-button key so two cards never collide on a duplicate widget id.
-    for _idx, (_name, _group) in enumerate(
-        _pending_recs.groupby("recommender_name", sort=False)
-    ):
+    for _idx, (_name, _group) in enumerate(_pending_recs.groupby("recommender_name", sort=False)):
         with st.container(border=True):
             # Relationship: first row's value (same recommender → same person).
             # Guard against NaN surfaced by pandas for NULL TEXT columns.
@@ -292,9 +279,7 @@ else:
             # prompt is one block per tone, not per position, so a
             # single integer summary keeps the prompt text clean.
             _max_days = max(_per_row_days) if _per_row_days else 0
-            _rel_for_prompt: str | None = (
-                None if (_rel is None or pd.isna(_rel)) else str(_rel)
-            )
+            _rel_for_prompt: str | None = None if (_rel is None or pd.isna(_rel)) else str(_rel)
             with st.expander(
                 f"LLM prompts ({len(config.REMINDER_TONES)} tones)",
                 expanded=False,
@@ -377,9 +362,7 @@ with st.expander("Add Recommender", expanded=False):
                 value=None,
                 key="recs_add_asked_date",
             )
-        _add_submitted = st.form_submit_button(
-            "+ Add Recommender", key="recs_add_submit"
-        )
+        _add_submitted = st.form_submit_button("+ Add Recommender", key="recs_add_submit")
 
 # T5-B submit handler — outside the form so st.error / st.toast render in
 # the page body (the quick-add precedent on the Opportunities page).
@@ -497,37 +480,43 @@ if _filtered_df.empty:
     # empty DB / heavily-filtered view.
     _display_df = pd.DataFrame(
         columns=[
-            "Position", "Recommender", "Relationship",
-            "Asked", "Confirmed", "Submitted",
+            "Position",
+            "Recommender",
+            "Relationship",
+            "Asked",
+            "Confirmed",
+            "Submitted",
         ]
     )
 else:
-    _display_df = pd.DataFrame({
-        "Position": _filtered_df.apply(
-            lambda r: _format_label(
-                _safe_str(r["institute"]),
-                _safe_str(r["position_name"]),
+    _display_df = pd.DataFrame(
+        {
+            "Position": _filtered_df.apply(
+                lambda r: _format_label(
+                    _safe_str(r["institute"]),
+                    _safe_str(r["position_name"]),
+                ),
+                axis=1,
             ),
-            axis=1,
-        ),
-        "Recommender":  _filtered_df["recommender_name"].apply(_safe_str_or_em),
-        "Relationship": _filtered_df["relationship"].apply(_safe_str_or_em),
-        "Asked":        _filtered_df["asked_date"].apply(_safe_str_or_em),
-        "Confirmed":    _filtered_df["confirmed"].apply(_format_confirmed),
-        "Submitted":    _filtered_df["submitted_date"].apply(_safe_str_or_em),
-    })
+            "Recommender": _filtered_df["recommender_name"].apply(_safe_str_or_em),
+            "Relationship": _filtered_df["relationship"].apply(_safe_str_or_em),
+            "Asked": _filtered_df["asked_date"].apply(_safe_str_or_em),
+            "Confirmed": _filtered_df["confirmed"].apply(_format_confirmed),
+            "Submitted": _filtered_df["submitted_date"].apply(_safe_str_or_em),
+        }
+    )
 
 _event = st.dataframe(
     _display_df,
     width="stretch",
     hide_index=True,
     column_config={
-        "Position":     st.column_config.TextColumn("Position",     width="large"),
-        "Recommender":  st.column_config.TextColumn("Recommender",  width="medium"),
+        "Position": st.column_config.TextColumn("Position", width="large"),
+        "Recommender": st.column_config.TextColumn("Recommender", width="medium"),
         "Relationship": st.column_config.TextColumn("Relationship", width="medium"),
-        "Asked":        st.column_config.TextColumn("Asked",        width="small"),
-        "Confirmed":    st.column_config.TextColumn("Confirmed",    width="small"),
-        "Submitted":    st.column_config.TextColumn("Submitted",    width="small"),
+        "Asked": st.column_config.TextColumn("Asked", width="small"),
+        "Confirmed": st.column_config.TextColumn("Confirmed", width="small"),
+        "Submitted": st.column_config.TextColumn("Submitted", width="small"),
     },
     key="recs_table",
     on_select="rerun",
@@ -583,12 +572,8 @@ def _confirm_delete_recommender_dialog() -> None:
     flag is set, which is what keeps Confirm/Cancel reachable through
     AppTest's script-run model (gotcha #3)."""
     rec_id_target: int | None = st.session_state.get("_recs_delete_target_id")
-    rec_name_target: str = st.session_state.get(
-        "_recs_delete_target_name", ""
-    )
-    st.warning(
-        f'Delete **"{rec_name_target}"**? This **cannot be undone**.'
-    )
+    rec_name_target: str = st.session_state.get("_recs_delete_target_name", "")
+    st.warning(f'Delete **"{rec_name_target}"**? This **cannot be undone**.')
     _col_confirm, _col_cancel = st.columns(2)
     with _col_confirm:
         if st.button(
@@ -598,9 +583,7 @@ def _confirm_delete_recommender_dialog() -> None:
             width="stretch",
         ):
             if rec_id_target is None:
-                st.error(
-                    "Delete target was lost — please re-open the dialog."
-                )
+                st.error("Delete target was lost — please re-open the dialog.")
                 return
             try:
                 database.delete_recommender(rec_id_target)
@@ -663,9 +646,7 @@ if "recs_selected_id" in st.session_state:
             #   (b) Same row, key missing → restore from canonical.
             #   (c) Same row, key present → leave it alone (preserves
             #       in-flight form draft / AppTest set_value semantics).
-            _sid_changed = (
-                st.session_state.get("_recs_edit_form_sid") != _rec_id
-            )
+            _sid_changed = st.session_state.get("_recs_edit_form_sid") != _rec_id
 
             _raw_confirmed = _rec_row["confirmed"]
             _safe_confirmed: int | None
@@ -682,14 +663,12 @@ if "recs_selected_id" in st.session_state:
                 _safe_confirmed = None
 
             _canonical: dict[str, Any] = {
-                "recs_edit_asked_date":         _coerce_iso_to_date(_rec_row["asked_date"]),
-                "recs_edit_confirmed":          _safe_confirmed,
-                "recs_edit_submitted_date":     _coerce_iso_to_date(_rec_row["submitted_date"]),
-                "recs_edit_reminder_sent":      bool(_rec_row.get("reminder_sent") or 0),
-                "recs_edit_reminder_sent_date": _coerce_iso_to_date(
-                    _rec_row["reminder_sent_date"]
-                ),
-                "recs_edit_notes":              _safe_str(_rec_row["notes"]),
+                "recs_edit_asked_date": _coerce_iso_to_date(_rec_row["asked_date"]),
+                "recs_edit_confirmed": _safe_confirmed,
+                "recs_edit_submitted_date": _coerce_iso_to_date(_rec_row["submitted_date"]),
+                "recs_edit_reminder_sent": bool(_rec_row.get("reminder_sent") or 0),
+                "recs_edit_reminder_sent_date": _coerce_iso_to_date(_rec_row["reminder_sent_date"]),
+                "recs_edit_notes": _safe_str(_rec_row["notes"]),
             }
             for _key, _value in _canonical.items():
                 if _sid_changed or _key not in st.session_state:
@@ -708,10 +687,7 @@ if "recs_selected_id" in st.session_state:
                     st.selectbox(
                         "Confirmed",
                         options=[None, 0, 1],
-                        format_func=lambda v: (
-                            EM_DASH if v is None
-                            else ("Yes" if v == 1 else "No")
-                        ),
+                        format_func=lambda v: config.CONFIRMED_LABELS.get(v, config.EM_DASH),
                         key="recs_edit_confirmed",
                     )
                     st.date_input(
@@ -749,19 +725,13 @@ if "recs_selected_id" in st.session_state:
                 _w_asked = st.session_state.get("recs_edit_asked_date")
                 _w_confirmed = st.session_state.get("recs_edit_confirmed")
                 _w_submitted = st.session_state.get("recs_edit_submitted_date")
-                _w_reminder_bool = bool(
-                    st.session_state.get("recs_edit_reminder_sent")
-                )
-                _w_reminder_date = st.session_state.get(
-                    "recs_edit_reminder_sent_date"
-                )
-                _w_notes = _safe_str(
-                    st.session_state.get("recs_edit_notes", "")
-                )
+                _w_reminder_bool = bool(st.session_state.get("recs_edit_reminder_sent"))
+                _w_reminder_date = st.session_state.get("recs_edit_reminder_sent_date")
+                _w_notes = _safe_str(st.session_state.get("recs_edit_notes", ""))
 
-                _w_asked_iso     = _w_asked.isoformat()     if _w_asked     else None
+                _w_asked_iso = _w_asked.isoformat() if _w_asked else None
                 _w_submitted_iso = _w_submitted.isoformat() if _w_submitted else None
-                _w_reminder_iso  = _w_reminder_date.isoformat() if _w_reminder_date else None
+                _w_reminder_iso = _w_reminder_date.isoformat() if _w_reminder_date else None
 
                 _db_asked_iso = _safe_str(_rec_row["asked_date"]) or None
                 _db_submitted_iso = _safe_str(_rec_row["submitted_date"]) or None
