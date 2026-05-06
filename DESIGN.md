@@ -79,6 +79,36 @@ Local single-user web app:
                                    └────────────────────────────┘
 ```
 
+**Visual** (rendered by GitHub-Flavored Markdown):
+
+```mermaid
+flowchart BT
+    config[config.py<br/><small>constants only</small>]
+    database[database.py<br/><small>SQL only</small>]
+    exports[exports.py<br/><small>markdown writers</small>]
+    pages[pages/*.py<br/><small>display layer</small>]
+    app[app.py<br/><small>Dashboard</small>]
+
+    database -->|imports| config
+    exports -->|imports| config
+    exports -->|imports| database
+    app -->|imports| config
+    app -->|imports| database
+    pages -->|imports| config
+    pages -->|imports| database
+
+    database -.->|deferred import<br/>inside writers| exports
+
+    classDef leaf fill:#e1f5fe,stroke:#01579b
+    classDef data fill:#fff3e0,stroke:#e65100
+    classDef ui fill:#f3e5f5,stroke:#4a148c
+    class config leaf
+    class database,exports data
+    class app,pages ui
+```
+
+The dotted edge from `database` to `exports` is the deferred-import escape hatch that breaks the otherwise-circular dependency (see GUIDELINES §2 Module Import Contract). Solid edges represent module-top imports.
+
 ### Layer rules (enforced)
 
 | Layer | May import | May NOT import |
