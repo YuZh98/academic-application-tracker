@@ -51,7 +51,7 @@ from config import EM_DASH
 # DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
 # with wide layout. Must precede any other st.* call.
 st.set_page_config(
-    page_title="Academic Application Tracker",
+    page_title="Recommenders — Academic Application Tracker",
     page_icon="📋",
     layout="wide",
 )
@@ -83,6 +83,17 @@ def _safe_str_or_em(v: Any) -> str:
     """Render a TEXT cell as its string value or EM_DASH for empty."""
     s = _safe_str(v)
     return s if s else EM_DASH
+
+
+def _format_date_or_em(v: Any) -> str:
+    """Format an ISO date string as 'Mon D' or return EM_DASH for null."""
+    if not v or (isinstance(v, float) and math.isnan(v)):
+        return EM_DASH
+    try:
+        d = date.fromisoformat(str(v))
+        return f"{d.strftime('%b')} {d.day}"
+    except (ValueError, TypeError):
+        return EM_DASH
 
 
 def _coerce_iso_to_date(v: Any) -> date | None:
@@ -118,9 +129,17 @@ def _format_due(deadline_iso: str | None) -> str:
     return f"{d.strftime('%b')} {d.day}"
 
 
-def _format_confirmed(i: int | None) -> str:
-    """Format the recommender confirmed INTEGER as a display string."""
-    return config.CONFIRMED_LABELS.get(i, config.EM_DASH)
+def _format_confirmed(v: Any) -> str:
+    """Tri-state Confirmed column: NULL → '—', 0 → 'No', 1 → 'Yes'.
+    Mirrors the same vocabulary used by the inline edit selectbox so the
+    table cell and the edit widget read coherently for the user."""
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return EM_DASH
+    try:
+        i = int(v)
+    except (TypeError, ValueError):
+        return EM_DASH
+    return "Yes" if i == 1 else "No"
 
 
 # ── T6: Reminder helpers ──────────────────────────────────────────────────────
@@ -205,21 +224,24 @@ def _build_llm_prompt(
     )
 
 
-# ── Pending Alerts ────────────────────────────────────────────────────────────
+# ── Recommender Alerts ───────────────────────────────────────────────────────
 #
 # Driven by database.get_pending_recommenders() (default RECOMMENDER_ALERT_DAYS).
 # One st.container(border=True) per distinct recommender_name; each card lists
 # every position that recommender still owes a letter for and (T6) carries the
-# Compose reminder email link button + LLM prompts expander.
+# Compose Reminder Email link button + Draft email with AI expander.
 #
 # Locked card format (DESIGN §8.4):
-#   **⚠ {name}** ({relationship})          ← relationship omitted when NULL
+#   ⚠️ **{name}** ({relationship})          ← relationship omitted when NULL
 #   - {institute}: {position_name} (asked {N}d ago, due {Mon D})
 #   - ...
-#   [Compose reminder email]               ← T6-A mailto link button
-#   ▸ LLM prompts (N tones)                 ← T6-B expander, N = len(config.REMINDER_TONES)
+#   [📧 Compose Reminder Email]            ← T6-A mailto link button
+#   ▸ Draft email with AI (N styles)        ← T6-B expander, N = len(config.REMINDER_TONES)
 
-st.subheader("Pending Alerts")
+st.subheader("Recommender Alerts")
+st.caption(
+    f"Recommenders asked more than {config.RECOMMENDER_ALERT_DAYS} days ago who have not yet submitted a letter."
+)
 _pending_recs = database.get_pending_recommenders()
 
 if _pending_recs.empty:
@@ -252,7 +274,7 @@ else:
                 _due = _format_due(_due_raw)
                 _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
 
-            _body = f"**⚠ {_name}**{_rel_str}\n" + "\n".join(_bullets)
+            _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
             st.markdown(_body)
 
             # ── T6-A: Compose reminder email ────────────────────────────
@@ -265,7 +287,7 @@ else:
                 n_positions=len(_group),
             )
             st.link_button(
-                "Compose reminder email",
+                "📧 Compose Reminder Email",
                 url=_mailto_url,
                 key=f"recs_compose_{_idx}",
             )
@@ -281,7 +303,7 @@ else:
             _max_days = max(_per_row_days) if _per_row_days else 0
             _rel_for_prompt: str | None = None if (_rel is None or pd.isna(_rel)) else str(_rel)
             with st.expander(
-                f"LLM prompts ({len(config.REMINDER_TONES)} tones)",
+                f"Draft email with AI ({len(config.REMINDER_TONES)} styles)",
                 expanded=False,
             ):
                 for _tone in config.REMINDER_TONES:
@@ -391,7 +413,7 @@ if _add_submitted:
         # caller never sees the traceback the handler exists to hide.
         try:
             database.add_recommender(_pos_id, _fields)
-            st.toast(f"Added {_name_raw}.")
+            st.toast(f'Added "{_name_raw}".')
             st.rerun()
         except Exception as e:
             st.error(f"Could not add recommender: {e}")
@@ -500,9 +522,9 @@ else:
             ),
             "Recommender": _filtered_df["recommender_name"].apply(_safe_str_or_em),
             "Relationship": _filtered_df["relationship"].apply(_safe_str_or_em),
-            "Asked": _filtered_df["asked_date"].apply(_safe_str_or_em),
+            "Asked": _filtered_df["asked_date"].apply(_format_date_or_em),
             "Confirmed": _filtered_df["confirmed"].apply(_format_confirmed),
-            "Submitted": _filtered_df["submitted_date"].apply(_safe_str_or_em),
+            "Submitted": _filtered_df["submitted_date"].apply(_format_date_or_em),
         }
     )
 
@@ -687,8 +709,11 @@ if "recs_selected_id" in st.session_state:
                     st.selectbox(
                         "Confirmed",
                         options=[None, 0, 1],
-                        format_func=lambda v: config.CONFIRMED_LABELS.get(v, config.EM_DASH),
+                        format_func=lambda v: (
+                            "Not yet / unknown" if v is None else ("Yes" if v == 1 else "No")
+                        ),
                         key="recs_edit_confirmed",
+                        help="Whether the recommender has confirmed they will write the letter.",
                     )
                     st.date_input(
                         "Submitted date",
@@ -701,7 +726,7 @@ if "recs_selected_id" in st.session_state:
                         key="recs_edit_reminder_sent",
                     )
                     st.date_input(
-                        "Reminder sent date",
+                        "Reminder date",
                         value=None,
                         key="recs_edit_reminder_sent_date",
                     )
@@ -710,7 +735,7 @@ if "recs_selected_id" in st.session_state:
                     key="recs_edit_notes",
                 )
                 _edit_submitted = st.form_submit_button(
-                    "Save Changes",
+                    "Save",
                     key="recs_edit_submit",
                 )
 
