@@ -462,6 +462,40 @@ class TestPositionsTable:
         )
 
 
+    # ── Issue #62: link column in the positions table ────────────────────────
+
+    def test_link_column_present_in_column_config(self):
+        """st.column_config.LinkColumn must be used for the link column.
+
+        Source-grep guard: verifies the implementation file uses LinkColumn
+        (not TextColumn) for the link field, keeping the cell clickable."""
+        import pathlib as _pl
+        src = _pl.Path("pages/1_Opportunities.py").read_text()
+        assert "LinkColumn" in src, (
+            "Expected st.column_config.LinkColumn in pages/1_Opportunities.py — "
+            'add: "link": st.column_config.LinkColumn("Link", '
+            'display_text="🔗 Open", width="small")'
+        )
+
+    def test_link_column_in_display_cols(self):
+        """'link' must appear in display_cols so the column is rendered.
+
+        Source-grep guard: verifies the link field is listed in
+        display_cols (the column_order list passed to st.dataframe)."""
+        import pathlib as _pl
+        import re as _re
+        src = _pl.Path("pages/1_Opportunities.py").read_text()
+        match = _re.search(r'display_cols\s*=\s*\[([^\]]*?)\]', src, _re.DOTALL)
+        assert match is not None, (
+            "Could not find 'display_cols = [...]' in pages/1_Opportunities.py"
+        )
+        cols_block = match.group(1)
+        assert '"link"' in cols_block or "'link'" in cols_block, (
+            "Expected link in the display_cols list inside "
+            "pages/1_Opportunities.py - add 'link' after 'deadline_urgency'"
+        )
+
+
 # ── Filter bar structure ──────────────────────────────────────────────────────
 
 
