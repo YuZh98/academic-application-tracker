@@ -116,12 +116,13 @@ def _build_compose_mailto(*, recommender_name: str, n_positions: int) -> str:
     the user for the recipient.
 
     Subject follows English pluralization rules (DESIGN §8.4): at
-    ``N=1`` reads "letter for 1 postdoc application" (singular both
-    nouns); at ``N≥2`` reads "letters for N postdoc applications"."""
+    ``N=1`` reads "letter for 1 <APPLICATION_LABEL>" (singular both
+    nouns); at ``N≥2`` reads "letters for N <APPLICATION_LABEL>s"."""
+    label = config.APPLICATION_LABEL
     if n_positions == 1:
-        subject = "Following up: letter for 1 postdoc application"
+        subject = f"Following up: letter for 1 {label}"
     else:
-        subject = f"Following up: letters for {n_positions} postdoc applications"
+        subject = f"Following up: letters for {n_positions} {label}s"
     body = (
         f"Hi {recommender_name}, just a quick check-in on the letters of "
         f"recommendation you offered. Thank you so much!"
