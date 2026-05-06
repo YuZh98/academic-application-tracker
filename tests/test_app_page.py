@@ -1677,26 +1677,26 @@ class TestT6FunnelToggle:
 class TestT3MaterialsReadiness:
     """T3: Materials Readiness panel on the dashboard.
 
-    Locked design decisions (conductor brief, 2026-04-22):
-      D1. Visual = TWO `st.progress` bars (Ready, Missing); each value =
-          count / max(ready + pending, 1). No st.metric, no Plotly.
-      D2. CTA button labelled exactly '→ Opportunities page' with
+    Locked design decisions (updated post-visual-polish):
+      D1. Visual = Plotly horizontal bar chart (same style as Application
+          Funnel). Two bars: 'Ready to submit' (green) and 'Incomplete'
+          (gray). key='materials_chart'. D1 originally specified
+          st.progress; replaced with Plotly for visual consistency.
+      D2. CTA button labelled exactly '→ Review in Opportunities' with
           key='materials_readiness_cta' calling
           st.switch_page('pages/1_Opportunities.py') on click.
-      D3. Empty state: when `ready + pending == 0`, skip both bars + CTA
+      D3. Empty state: when `ready + pending == 0`, skip chart + CTA
           and render st.info with the locked copy. Subheader ALWAYS renders.
       D4. Ship as one commit-triple (no T3-A / T3-B split).
-      D5. Denominator guarded by `max(ready + pending, 1)`.
 
     Layout: the panel lives in the RIGHT half of the SINGLE `st.columns(2)`
     created in T2-C (no new split). The `proto.weight == 0.5` pair is the
     structural marker — same pattern as TestT2CFunnelLayout.
 
-    AppTest access pattern (probed against Streamlit 1.56):
-      - `st.progress(value: float, text: str | None)` — AppTest exposes
-        each bar as an `UnknownElement` at `at.get("progress")`; the
-        underlying proto has `.value` (int 0-100) and `.text` (label).
-        Column-scoped retrieval (`col.get("progress")`) works identically.
+    AppTest access pattern:
+      - `at.get('plotly_chart')` returns all Plotly charts; the materials
+        chart is identified by its y-axis labels ('Ready to submit', 'Incomplete').
+        `json.loads(chart.proto.spec)` gives the full figure JSON.
       - CTA route: AppTest single-file mode cannot navigate siblings, so
         the switch_page target is pinned at the source level (T1-E precedent).
     """
@@ -1773,15 +1773,28 @@ class TestT3MaterialsReadiness:
             f"{[s.value for s in left.subheader]}"
         )
 
+    @staticmethod
+    def _materials_spec(at: AppTest) -> "dict | None":
+        """Return the materials-readiness Plotly chart spec dict, or None.
+
+        Identifies the materials chart by its y-axis labels — distinguishes
+        it from the Application Funnel chart on the same page."""
+        import json
+
+        for chart in at.get("plotly_chart"):
+            spec = json.loads(chart.proto.spec)
+            if spec.get("data"):
+                ys = spec["data"][0].get("y", [])
+                if "Ready to submit" in ys:
+                    return spec
+        return None
+
     def test_empty_db_shows_info_empty_state(self, db):
         """Empty DB (ready + pending == 0): exactly one st.info inside
-        the right column, zero progress bars, no CTA button. D3 locked."""
+        the right column, zero materials chart, no CTA button. D3 locked."""
         at = _run_page()
         right = self._right_col(at)
-        assert len(right.get("progress")) == 0, (
-            f"Empty DB must render NO progress bars in the right column "
-            f"(D3). Got {len(right.get('progress'))}."
-        )
+        assert self._materials_spec(at) is None, "Empty DB must render NO materials chart (D3)."
         info_bodies = [i.value for i in right.info]
         assert len(info_bodies) == 1, (
             f"Empty DB must render exactly one st.info in the right "
@@ -1808,8 +1821,8 @@ class TestT3MaterialsReadiness:
         )
 
     def test_populated_db_renders_two_progress_bars(self, db):
-        """Seed 1 ready + 2 pending → exactly 2 progress bars (values
-        1/3 and 2/3) in the right column, no empty-state info.
+        """Seed 1 ready + 2 pending → materials chart with 2 bars in the
+        right column, no empty-state info.
 
         Readiness semantics (database.compute_materials_readiness):
           - Active-only (status in OPEN / APPLIED / INTERVIEW).
@@ -1849,21 +1862,17 @@ class TestT3MaterialsReadiness:
 
         at = _run_page()
         right = self._right_col(at)
-        bars = right.get("progress")
-        assert len(bars) == 2, (
-            f"Populated DB (1 ready + 2 pending) must render exactly 2 "
-            f"progress bars in the right column. Got {len(bars)}."
+        spec = self._materials_spec(at)
+        assert spec is not None, (
+            "Populated DB (1 ready + 2 pending) must render a materials "
+            "readiness chart. No chart found."
         )
-        # proto.value is the 0-100 int form of the float passed to st.progress.
-        v0 = bars[0].proto.value / 100.0
-        v1 = bars[1].proto.value / 100.0
-        assert abs(v0 - (1 / 3)) < 0.02, (
-            f"First bar (Ready) should be 1/3 ≈ 0.333; got {v0} "
-            f"(proto.value={bars[0].proto.value})."
+        trace = spec["data"][0]
+        assert list(trace["y"]) == ["Ready to submit", "Incomplete"], (
+            f"Chart y-axis must be ['Ready to submit', 'Incomplete']. Got {trace['y']}"
         )
-        assert abs(v1 - (2 / 3)) < 0.02, (
-            f"Second bar (Missing) should be 2/3 ≈ 0.667; got {v1} "
-            f"(proto.value={bars[1].proto.value})."
+        assert list(trace["x"]) == [1, 2], (
+            f"Chart x-values must be [1, 2] (ready=1, pending=2). Got {trace['x']}"
         )
         assert all(i.value != self.EMPTY_COPY for i in right.info), (
             "Empty-state info must NOT render once any position has a "
@@ -1872,10 +1881,8 @@ class TestT3MaterialsReadiness:
         )
 
     def test_progress_labels_include_counts(self, db):
-        """Progress bar labels carry the exact 'Ready to submit: N' and
-        'Still missing: M' copy, in that order. The conductor brief
-        accepts the verified parameter name (`text=`) — asserting on the
-        visible string is what the UI contract promises."""
+        """Chart bar text carries 'N position(s)' count labels in order
+        (Ready to submit first, Incomplete second)."""
         database.add_position(
             make_position(
                 {
@@ -1908,16 +1915,14 @@ class TestT3MaterialsReadiness:
         )
 
         at = _run_page()
-        right = self._right_col(at)
-        bars = right.get("progress")
-        assert len(bars) == 2, f"Precondition for this test: 2 progress bars. Got {len(bars)}."
-        label0 = bars[0].proto.text
-        label1 = bars[1].proto.text
-        assert label0 == "Ready to submit: 1 position", (
-            f"First bar label must be 'Ready to submit: 1 position', got {label0!r}"
+        spec = self._materials_spec(at)
+        assert spec is not None, "Precondition: materials chart must render."
+        texts = list(spec["data"][0].get("text", []))
+        assert texts[0] == "1 position", (
+            f"First bar (Ready) text must be '1 position', got {texts[0]!r}"
         )
-        assert label1 == "Incomplete: 2 positions", (
-            f"Second bar label must be 'Incomplete: 2 positions', got {label1!r}"
+        assert texts[1] == "2 positions", (
+            f"Second bar (Incomplete) text must be '2 positions', got {texts[1]!r}"
         )
 
     def test_terminal_only_db_shows_empty_state(self, db):
@@ -1940,8 +1945,8 @@ class TestT3MaterialsReadiness:
             )
         at = _run_page()
         right = self._right_col(at)
-        assert len(right.get("progress")) == 0, (
-            "Terminal-only DB → ready + pending == 0 → no progress bars."
+        assert self._materials_spec(at) is None, (
+            "Terminal-only DB → ready + pending == 0 → no materials chart."
         )
         matching = [i for i in right.info if i.value == self.EMPTY_COPY]
         assert len(matching) == 1, (
