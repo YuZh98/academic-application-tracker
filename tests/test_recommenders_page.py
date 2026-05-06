@@ -33,37 +33,37 @@ PAGE = "pages/3_Recommenders.py"
 
 # T5 widget keys / sentinels — pinned in AGENTS.md "Immediate task" + DESIGN
 # §8.4. Names follow the project's `recs_` widget-key prefix (GUIDELINES §13).
-TABLE_KEY                = "recs_table"
-FILTER_POSITION_KEY      = "recs_filter_position"
-FILTER_RECOMMENDER_KEY   = "recs_filter_recommender"
+TABLE_KEY = "recs_table"
+FILTER_POSITION_KEY = "recs_filter_position"
+FILTER_RECOMMENDER_KEY = "recs_filter_recommender"
 
-ADD_FORM_ID              = "recs_add_form"
-ADD_POSITION_KEY         = "recs_add_position"
-ADD_NAME_KEY             = "recs_add_name"
-ADD_RELATIONSHIP_KEY     = "recs_add_relationship"
-ADD_ASKED_DATE_KEY       = "recs_add_asked_date"
-ADD_SUBMIT_KEY           = "recs_add_submit"
+ADD_FORM_ID = "recs_add_form"
+ADD_POSITION_KEY = "recs_add_position"
+ADD_NAME_KEY = "recs_add_name"
+ADD_RELATIONSHIP_KEY = "recs_add_relationship"
+ADD_ASKED_DATE_KEY = "recs_add_asked_date"
+ADD_SUBMIT_KEY = "recs_add_submit"
 
-EDIT_FORM_ID             = "recs_edit_form"
-EDIT_ASKED_DATE_KEY      = "recs_edit_asked_date"
-EDIT_CONFIRMED_KEY       = "recs_edit_confirmed"
-EDIT_SUBMITTED_DATE_KEY  = "recs_edit_submitted_date"
-EDIT_REMINDER_SENT_KEY   = "recs_edit_reminder_sent"
-EDIT_REMINDER_DATE_KEY   = "recs_edit_reminder_sent_date"
-EDIT_NOTES_KEY           = "recs_edit_notes"
-EDIT_SUBMIT_KEY          = "recs_edit_submit"
+EDIT_FORM_ID = "recs_edit_form"
+EDIT_ASKED_DATE_KEY = "recs_edit_asked_date"
+EDIT_CONFIRMED_KEY = "recs_edit_confirmed"
+EDIT_SUBMITTED_DATE_KEY = "recs_edit_submitted_date"
+EDIT_REMINDER_SENT_KEY = "recs_edit_reminder_sent"
+EDIT_REMINDER_DATE_KEY = "recs_edit_reminder_sent_date"
+EDIT_NOTES_KEY = "recs_edit_notes"
+EDIT_SUBMIT_KEY = "recs_edit_submit"
 
-DELETE_BUTTON_KEY        = "recs_edit_delete"
-DELETE_CONFIRM_KEY       = "recs_delete_confirm"
-DELETE_CANCEL_KEY        = "recs_delete_cancel"
+DELETE_BUTTON_KEY = "recs_edit_delete"
+DELETE_CONFIRM_KEY = "recs_delete_confirm"
+DELETE_CANCEL_KEY = "recs_delete_cancel"
 
 # Internal sentinels — page-prefixed so they don't collide with the
 # Opportunities / Applications page state machinery.
-SELECTED_REC_ID_KEY      = "recs_selected_id"
-EDIT_FORM_SID_KEY        = "_recs_edit_form_sid"
-SKIP_TABLE_RESET_KEY     = "_recs_skip_table_reset"
-DELETE_TARGET_ID_KEY     = "_recs_delete_target_id"
-DELETE_TARGET_NAME_KEY   = "_recs_delete_target_name"
+SELECTED_REC_ID_KEY = "recs_selected_id"
+EDIT_FORM_SID_KEY = "_recs_edit_form_sid"
+SKIP_TABLE_RESET_KEY = "_recs_skip_table_reset"
+DELETE_TARGET_ID_KEY = "_recs_delete_target_id"
+DELETE_TARGET_NAME_KEY = "_recs_delete_target_name"
 
 EM_DASH = "—"
 
@@ -75,9 +75,7 @@ def _select_row(at: AppTest, row_index: int) -> None:
     test_opportunities_page.py / test_applications_page.py — the shape
     matches what Streamlit 1.56 produces for ``on_select='rerun'`` +
     ``selection_mode='single-row'``."""
-    at.session_state[TABLE_KEY] = {
-        "selection": {"rows": [row_index], "columns": []}
-    }
+    at.session_state[TABLE_KEY] = {"selection": {"rows": [row_index], "columns": []}}
     at.run()
 
 
@@ -88,9 +86,7 @@ def _keep_selection(at: AppTest, row_index: int) -> None:
     #11). Multi-step flows that span an internal rerun (a Save handler
     that calls ``st.rerun()``, a button click followed by ``at.run()``)
     need this to mimic the browser-side selection persistence."""
-    at.session_state[TABLE_KEY] = {
-        "selection": {"rows": [row_index], "columns": []}
-    }
+    at.session_state[TABLE_KEY] = {"selection": {"rows": [row_index], "columns": []}}
 
 
 def _ss_or_none(at: AppTest, key: str):
@@ -383,9 +379,7 @@ class TestPendingAlertsPanel:
 def _seed_position(name: str = "BioStats Postdoc", institute: str = "Stanford") -> int:
     """Add one position via the canonical add_position path. Returns its
     new id."""
-    return database.add_position(
-        make_position({"position_name": name, "institute": institute})
-    )
+    return database.add_position(make_position({"position_name": name, "institute": institute}))
 
 
 def _seed_recommender(
@@ -492,14 +486,12 @@ class TestAllRecommendersFilters:
         # label format isn't pinned — what matters is the user can find
         # the position by something they recognise (institute or name).
         assert opts[0] == self.ALL, (
-            f"Position filter first option must be {self.ALL!r} sentinel; "
-            f"got {opts!r}"
+            f"Position filter first option must be {self.ALL!r} sentinel; got {opts!r}"
         )
         joined = " ".join(opts)
         for token in ("Alpha", "Beta", "MIT", "Stanford"):
             assert token in joined, (
-                f"Position filter must surface {token!r} in its option "
-                f"labels; got options={opts!r}"
+                f"Position filter must surface {token!r} in its option labels; got options={opts!r}"
             )
 
     def test_recommender_filter_options_include_seeded_names(self, db):
@@ -513,9 +505,7 @@ class TestAllRecommendersFilters:
             f"Recommender filter first option must be {self.ALL!r}; got {opts!r}"
         )
         for name in ("Dr. Foo", "Dr. Bar"):
-            assert name in opts, (
-                f"Recommender filter options must include {name!r}; got {opts!r}"
-            )
+            assert name in opts, f"Recommender filter options must include {name!r}; got {opts!r}"
 
     def test_recommender_filter_dedupes_repeated_names(self, db):
         """Two recommender rows for the same person across different
@@ -543,8 +533,12 @@ class TestAllRecommendersTable:
     ``database.get_all_recommenders()``."""
 
     DISPLAY_COLUMNS = [
-        "Position", "Recommender", "Relationship",
-        "Asked", "Confirmed", "Submitted",
+        "Position",
+        "Recommender",
+        "Relationship",
+        "Asked",
+        "Confirmed",
+        "Submitted",
     ]
 
     def _table_df(self, at: AppTest):
@@ -602,8 +596,7 @@ class TestAllRecommendersTable:
         df = self._table_df(at)
         recs = [str(v) for v in df["Recommender"]]
         assert any("Dr. Foo" in v for v in recs), (
-            f"Filtering to position 'Alpha' must keep its recommender; "
-            f"got Recommender={recs!r}"
+            f"Filtering to position 'Alpha' must keep its recommender; got Recommender={recs!r}"
         )
         assert not any("Dr. Bar" in v for v in recs), (
             f"Filtering to position 'Alpha' must hide other positions' "
@@ -638,8 +631,7 @@ class TestAllRecommendersTable:
         df = self._table_df(at)
         positions = [str(v) for v in df["Position"]]
         assert any("MIT" in v and "Postdoc Slot" in v for v in positions), (
-            f"Position cell must include institute + position_name; "
-            f"got {positions!r}"
+            f"Position cell must include institute + position_name; got {positions!r}"
         )
 
     def test_position_label_bare_when_no_institute(self, db):
@@ -649,8 +641,7 @@ class TestAllRecommendersTable:
         df = self._table_df(at)
         positions = [str(v) for v in df["Position"]]
         assert any("Solo Postdoc" in v for v in positions), (
-            f"Bare position_name must appear in Position column; "
-            f"got {positions!r}"
+            f"Bare position_name must appear in Position column; got {positions!r}"
         )
         assert all(": Solo Postdoc" not in v for v in positions), (
             f"Empty institute must not produce a colon prefix; got {positions!r}"
@@ -662,25 +653,22 @@ class TestAllRecommendersTable:
         the same NULL placeholder used by the inline edit selectbox."""
         pid = _seed_position(name="Alpha")
         _seed_recommender(pid, recommender_name="A NULL", confirmed=None)
-        _seed_recommender(pid, recommender_name="B No",   confirmed=0)
-        _seed_recommender(pid, recommender_name="C Yes",  confirmed=1)
+        _seed_recommender(pid, recommender_name="B No", confirmed=0)
+        _seed_recommender(pid, recommender_name="C Yes", confirmed=1)
 
         at = _run_page()
         df = self._table_df(at)
         # Build a {recommender_name: confirmed_cell} map; the table
         # ordering is name-ASC per database.get_all_recommenders contract.
-        cells = {
-            str(name): str(conf)
-            for name, conf in zip(df["Recommender"], df["Confirmed"])
-        }
+        cells = {str(name): str(conf) for name, conf in zip(df["Recommender"], df["Confirmed"])}
         assert cells["A NULL"] == EM_DASH, (
             f"Confirmed=NULL must render as {EM_DASH!r}; got {cells['A NULL']!r}"
         )
-        assert cells["B No"] == "No", (
-            f"Confirmed=0 must render as 'No'; got {cells['B No']!r}"
+        assert cells["B No"] == config.CONFIRMED_LABELS[0], (
+            f"Confirmed=0 must render as {config.CONFIRMED_LABELS[0]!r}; got {cells['B No']!r}"
         )
-        assert cells["C Yes"] == "Yes", (
-            f"Confirmed=1 must render as 'Yes'; got {cells['C Yes']!r}"
+        assert cells["C Yes"] == config.CONFIRMED_LABELS[1], (
+            f"Confirmed=1 must render as {config.CONFIRMED_LABELS[1]!r}; got {cells['C Yes']!r}"
         )
 
     def test_table_uses_get_all_recommenders(self, db, monkeypatch):
@@ -695,12 +683,23 @@ class TestAllRecommendersTable:
         # Patch get_all_recommenders to return an empty frame; the
         # table must reflect the empty view.
         import pandas as pd
-        empty = pd.DataFrame(columns=[
-            "id", "position_id", "recommender_name", "relationship",
-            "asked_date", "confirmed", "submitted_date",
-            "reminder_sent", "reminder_sent_date", "notes",
-            "position_name", "institute",
-        ])
+
+        empty = pd.DataFrame(
+            columns=[
+                "id",
+                "position_id",
+                "recommender_name",
+                "relationship",
+                "asked_date",
+                "confirmed",
+                "submitted_date",
+                "reminder_sent",
+                "reminder_sent_date",
+                "notes",
+                "position_name",
+                "institute",
+            ]
+        )
         monkeypatch.setattr(database, "get_all_recommenders", lambda: empty)
         at = _run_page()
         # The page may render an empty st.dataframe OR an empty-state
@@ -739,24 +738,20 @@ class TestAddRecommenderFormRender:
     def test_add_form_name_widget_renders(self, db):
         at = _run_page()
         ti = at.text_input(key=ADD_NAME_KEY)
-        assert ti is not None, (
-            f"Add form must render a name text_input with key={ADD_NAME_KEY!r}"
-        )
+        assert ti is not None, f"Add form must render a name text_input with key={ADD_NAME_KEY!r}"
 
     def test_add_form_relationship_widget_renders(self, db):
         at = _run_page()
         sb = at.selectbox(key=ADD_RELATIONSHIP_KEY)
         assert sb is not None, (
-            f"Add form must render a relationship selectbox "
-            f"with key={ADD_RELATIONSHIP_KEY!r}"
+            f"Add form must render a relationship selectbox with key={ADD_RELATIONSHIP_KEY!r}"
         )
 
     def test_add_form_asked_date_widget_renders(self, db):
         at = _run_page()
         di = at.date_input(key=ADD_ASKED_DATE_KEY)
         assert di is not None, (
-            f"Add form must render an asked_date date_input "
-            f"with key={ADD_ASKED_DATE_KEY!r}"
+            f"Add form must render an asked_date date_input with key={ADD_ASKED_DATE_KEY!r}"
         )
 
     def test_add_form_submit_button_renders(self, db):
@@ -764,13 +759,11 @@ class TestAddRecommenderFormRender:
         at = _run_page()
         # at.button(key=...) raises KeyError for missing keys.
         btn = at.button(key=ADD_SUBMIT_KEY)
-        assert btn is not None, (
-            f"Add form must render a submit button with key={ADD_SUBMIT_KEY!r}"
-        )
+        assert btn is not None, f"Add form must render a submit button with key={ADD_SUBMIT_KEY!r}"
 
     def test_position_options_come_from_get_all_positions(self, db):
         _seed_position(name="Alpha", institute="MIT")
-        _seed_position(name="Beta",  institute="Stanford")
+        _seed_position(name="Beta", institute="Stanford")
         at = _run_page()
         sb = at.selectbox(key=ADD_POSITION_KEY)
         joined = " ".join(str(o) for o in sb.options)
@@ -818,21 +811,17 @@ class TestAddRecommenderSubmit:
 
         at.text_input(key=ADD_NAME_KEY).set_value("Dr. New")
         at.selectbox(key=ADD_RELATIONSHIP_KEY).select("PhD Advisor")
-        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(
-            datetime.date(2026, 4, 1)
-        )
+        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(datetime.date(2026, 4, 1))
         at.button(key=ADD_SUBMIT_KEY).click()
         at.run()
 
         assert not at.exception, f"Add raised: {at.exception!r}"
         recs = database.get_recommenders(pid)
-        assert len(recs) == 1, (
-            f"Submit must INSERT one recommender for pid={pid}; got {len(recs)}"
-        )
+        assert len(recs) == 1, f"Submit must INSERT one recommender for pid={pid}; got {len(recs)}"
         row = recs.iloc[0]
         assert row["recommender_name"] == "Dr. New"
-        assert row["relationship"]     == "PhD Advisor"
-        assert row["asked_date"]       == "2026-04-01"
+        assert row["relationship"] == "PhD Advisor"
+        assert row["asked_date"] == "2026-04-01"
 
     def test_submit_fires_added_toast(self, db):
         pid = _seed_position(name="Alpha")
@@ -841,16 +830,13 @@ class TestAddRecommenderSubmit:
         sb.select(next(o for o in sb.options if "Alpha" in str(o)))
         at.text_input(key=ADD_NAME_KEY).set_value("Dr. Toast")
         at.selectbox(key=ADD_RELATIONSHIP_KEY).select("PhD Advisor")
-        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(
-            datetime.date(2026, 4, 1)
-        )
+        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(datetime.date(2026, 4, 1))
         at.button(key=ADD_SUBMIT_KEY).click()
         at.run()
 
         toasts = [el.value for el in at.toast]
         assert any("Added" in v and "Dr. Toast" in v for v in toasts), (
-            f"Successful add must fire st.toast(\"Added Dr. Toast.\"); "
-            f"got toasts={toasts!r}"
+            f'Successful add must fire st.toast("Added Dr. Toast."); got toasts={toasts!r}'
         )
         # Sanity: pid was used (suppresses unused-variable warning).
         assert pid > 0
@@ -865,22 +851,16 @@ class TestAddRecommenderSubmit:
         sb.select(next(o for o in sb.options if "Alpha" in str(o)))
         at.text_input(key=ADD_NAME_KEY).set_value("   ")  # whitespace only
         at.selectbox(key=ADD_RELATIONSHIP_KEY).select("PhD Advisor")
-        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(
-            datetime.date(2026, 4, 1)
-        )
+        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(datetime.date(2026, 4, 1))
         at.button(key=ADD_SUBMIT_KEY).click()
         at.run()
 
         # No DB write.
         recs = database.get_all_recommenders()
-        assert len(recs) == 0, (
-            f"Whitespace-only name must NOT be persisted; got {len(recs)} rows"
-        )
+        assert len(recs) == 0, f"Whitespace-only name must NOT be persisted; got {len(recs)} rows"
         # Friendly st.error.
         errors = [el.value for el in at.error]
-        assert errors, (
-            f"Whitespace-only name must surface an st.error; got errors={errors!r}"
-        )
+        assert errors, f"Whitespace-only name must surface an st.error; got errors={errors!r}"
         # No success toast.
         toasts = [el.value for el in at.toast]
         assert not any("Added" in v for v in toasts), (
@@ -895,6 +875,7 @@ class TestAddRecommenderSubmit:
 
         def _boom(*args, **kwargs):
             raise RuntimeError("disk on fire")
+
         monkeypatch.setattr(database, "add_recommender", _boom)
 
         at = _run_page()
@@ -902,9 +883,7 @@ class TestAddRecommenderSubmit:
         sb.select(next(o for o in sb.options if "Alpha" in str(o)))
         at.text_input(key=ADD_NAME_KEY).set_value("Dr. Smith")
         at.selectbox(key=ADD_RELATIONSHIP_KEY).select("PhD Advisor")
-        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(
-            datetime.date(2026, 4, 1)
-        )
+        at.date_input(key=ADD_ASKED_DATE_KEY).set_value(datetime.date(2026, 4, 1))
         at.button(key=ADD_SUBMIT_KEY).click()
         at.run()
 
@@ -937,13 +916,10 @@ class TestRecommendersTableSelection:
         source level. Mirror of the Opportunities / Applications source-
         grep pin."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
-        assert "on_select=\"rerun\"" in src or "on_select='rerun'" in src, (
+        assert 'on_select="rerun"' in src or "on_select='rerun'" in src, (
             f"{PAGE} must pass on_select='rerun' on the recs table"
         )
-        assert (
-            "selection_mode=\"single-row\"" in src
-            or "selection_mode='single-row'" in src
-        ), (
+        assert 'selection_mode="single-row"' in src or "selection_mode='single-row'" in src, (
             f"{PAGE} must pass selection_mode='single-row' on the recs table"
         )
 
@@ -958,8 +934,7 @@ class TestRecommendersTableSelection:
             f"Selecting row 0 must populate {SELECTED_REC_ID_KEY!r}"
         )
         assert at.session_state[SELECTED_REC_ID_KEY] == rec_id, (
-            f"Expected selected rec_id={rec_id!r}; got "
-            f"{at.session_state[SELECTED_REC_ID_KEY]!r}"
+            f"Expected selected rec_id={rec_id!r}; got {at.session_state[SELECTED_REC_ID_KEY]!r}"
         )
 
     def test_no_selection_no_edit_card(self, db):
@@ -982,14 +957,17 @@ class TestRecommenderEditFormRender:
     with editable widgets for asked_date, confirmed, submitted_date,
     reminder_sent + reminder_sent_date, notes."""
 
-    @pytest.mark.parametrize("widget_key", [
-        EDIT_ASKED_DATE_KEY,
-        EDIT_CONFIRMED_KEY,
-        EDIT_SUBMITTED_DATE_KEY,
-        EDIT_REMINDER_SENT_KEY,
-        EDIT_REMINDER_DATE_KEY,
-        EDIT_NOTES_KEY,
-    ])
+    @pytest.mark.parametrize(
+        "widget_key",
+        [
+            EDIT_ASKED_DATE_KEY,
+            EDIT_CONFIRMED_KEY,
+            EDIT_SUBMITTED_DATE_KEY,
+            EDIT_REMINDER_SENT_KEY,
+            EDIT_REMINDER_DATE_KEY,
+            EDIT_NOTES_KEY,
+        ],
+    )
     def test_edit_widget_present(self, db, widget_key):
         """Each editable field must render in the edit form once a row
         is selected. Membership in session_state is the cleanest pin —
@@ -1000,16 +978,12 @@ class TestRecommenderEditFormRender:
         at = _run_page()
         _select_row(at, 0)
         assert widget_key in at.session_state, (
-            f"Edit form must render widget with key={widget_key!r} once "
-            f"a row is selected"
+            f"Edit form must render widget with key={widget_key!r} once a row is selected"
         )
 
     def test_form_id_is_recs_edit_form(self):
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
-        assert (
-            f'st.form("{EDIT_FORM_ID}"' in src
-            or f"st.form('{EDIT_FORM_ID}'" in src
-        ), (
+        assert f'st.form("{EDIT_FORM_ID}"' in src or f"st.form('{EDIT_FORM_ID}'" in src, (
             f"Page must call st.form({EDIT_FORM_ID!r}, ...) per AGENTS §T5-C"
         )
 
@@ -1064,8 +1038,7 @@ class TestRecommenderEditFormRender:
         at = _run_page()
         _select_row(at, 0)
         assert at.session_state[EDIT_NOTES_KEY] == "", (
-            f"NULL notes must pre-seed as ''; got "
-            f"{at.session_state[EDIT_NOTES_KEY]!r}"
+            f"NULL notes must pre-seed as ''; got {at.session_state[EDIT_NOTES_KEY]!r}"
         )
 
 
@@ -1076,14 +1049,14 @@ class TestRecommenderEditFormSave:
     def test_save_persists_asked_date(self, db):
         pid = _seed_position(name="Alpha")
         rec_id = _seed_recommender(
-            pid, recommender_name="Dr. Smith", asked_date="2026-04-01",
+            pid,
+            recommender_name="Dr. Smith",
+            asked_date="2026-04-01",
         )
         at = _run_page()
         _select_row(at, 0)
 
-        at.date_input(key=EDIT_ASKED_DATE_KEY).set_value(
-            datetime.date(2026, 4, 20)
-        )
+        at.date_input(key=EDIT_ASKED_DATE_KEY).set_value(datetime.date(2026, 4, 20))
         _keep_selection(at, 0)
         at.button(key=EDIT_SUBMIT_KEY).click()
         at.run()
@@ -1098,7 +1071,9 @@ class TestRecommenderEditFormSave:
     def test_save_persists_confirmed(self, db):
         pid = _seed_position(name="Alpha")
         rec_id = _seed_recommender(
-            pid, recommender_name="Dr. Smith", confirmed=None,
+            pid,
+            recommender_name="Dr. Smith",
+            confirmed=None,
         )
         at = _run_page()
         _select_row(at, 0)
@@ -1154,6 +1129,7 @@ class TestRecommenderEditFormSave:
         def _spy(rec_id, fields):
             captured.append(dict(fields))
             return orig(rec_id, fields)
+
         monkeypatch.setattr(database, "update_recommender", _spy)
 
         at = _run_page()
@@ -1167,16 +1143,13 @@ class TestRecommenderEditFormSave:
 
         assert not at.exception, f"Save raised: {at.exception!r}"
         assert captured, (
-            "Save must call database.update_recommender at least once; "
-            "captured nothing"
+            "Save must call database.update_recommender at least once; captured nothing"
         )
         # The handler may or may not call update_recommender on a no-op;
         # but on a real change it must include 'notes'. Untouched
         # asked_date / confirmed must NOT appear.
         last = captured[-1]
-        assert "notes" in last, (
-            f"Save payload must include the changed 'notes' field; got {last!r}"
-        )
+        assert "notes" in last, f"Save payload must include the changed 'notes' field; got {last!r}"
         assert "asked_date" not in last, (
             f"Save payload must NOT include unchanged 'asked_date'; got {last!r}"
         )
@@ -1197,8 +1170,7 @@ class TestRecommenderEditFormSave:
 
         toasts = [el.value for el in at.toast]
         assert any("Saved" in v or "Dr. Smith" in v for v in toasts), (
-            f"Successful Save must fire st.toast(\"Saved …\"); "
-            f"got toasts={toasts!r}"
+            f'Successful Save must fire st.toast("Saved …"); got toasts={toasts!r}'
         )
         # Use pid to suppress unused-variable warnings — the variable
         # documents the scope of the seeded row.
@@ -1223,8 +1195,7 @@ class TestRecommenderEditFormSave:
         assert not at.exception, f"Save raised: {at.exception!r}"
         toasts = [el.value for el in at.toast]
         assert any("No changes to save." in v for v in toasts), (
-            f"No-op Save must fire st.toast(\"No changes to save.\"); "
-            f"got toasts={toasts!r}"
+            f'No-op Save must fire st.toast("No changes to save."); got toasts={toasts!r}'
         )
         assert not any("Saved" in v for v in toasts), (
             f"No-op Save must NOT fire the Saved toast (dishonest when "
@@ -1237,6 +1208,7 @@ class TestRecommenderEditFormSave:
 
         def _boom(*args, **kwargs):
             raise RuntimeError("write failed")
+
         monkeypatch.setattr(database, "update_recommender", _boom)
 
         at = _run_page()
@@ -1248,8 +1220,7 @@ class TestRecommenderEditFormSave:
         at.run()
 
         assert not at.exception, (
-            f"Save failure must be caught (GUIDELINES §8); got "
-            f"exception={at.exception!r}"
+            f"Save failure must be caught (GUIDELINES §8); got exception={at.exception!r}"
         )
         errors = [el.value for el in at.error]
         assert any("write failed" in v for v in errors), (
@@ -1354,8 +1325,7 @@ class TestRecommenderEditDelete:
 
         toasts = [el.value for el in at.toast]
         assert any("Dr. Toast" in v for v in toasts), (
-            f"Confirm-delete must fire a toast referencing the deleted "
-            f"recommender; got {toasts!r}"
+            f"Confirm-delete must fire a toast referencing the deleted recommender; got {toasts!r}"
         )
         assert pid > 0
 
@@ -1388,6 +1358,7 @@ class TestRecommenderEditDelete:
 
         def _boom(_rec_id):
             raise RuntimeError("delete failed")
+
         monkeypatch.setattr(database, "delete_recommender", _boom)
 
         at = _run_page()
@@ -1399,8 +1370,7 @@ class TestRecommenderEditDelete:
         at.run()
 
         assert not at.exception, (
-            f"Delete failure must be caught + surfaced via st.error; got "
-            f"exception={at.exception!r}"
+            f"Delete failure must be caught + surfaced via st.error; got exception={at.exception!r}"
         )
         errors = [el.value for el in at.error]
         assert any("delete failed" in v for v in errors), (
@@ -1515,10 +1485,13 @@ class TestT6ComposeButton:
         pos_b = database.add_position(make_position({"position_name": "Pos B"}))
         asked = (datetime.date.today() - datetime.timedelta(days=14)).isoformat()
         for pid in (pos_a, pos_b):
-            database.add_recommender(pid, {
-                "recommender_name": "Dr. Smith",
-                "asked_date": asked,
-            })
+            database.add_recommender(
+                pid,
+                {
+                    "recommender_name": "Dr. Smith",
+                    "asked_date": asked,
+                },
+            )
 
         at = _run_page()
         compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
@@ -1553,10 +1526,12 @@ class TestT6ComposeButton:
         → two buttons. Per-card uniqueness of widget keys is implied
         (Streamlit raises DuplicateWidgetID otherwise)."""
         TestPendingAlertsPanel._seed_pending(
-            recommender_name="Dr. Alpha", position_name="Alpha Postdoc",
+            recommender_name="Dr. Alpha",
+            position_name="Alpha Postdoc",
         )
         TestPendingAlertsPanel._seed_pending(
-            recommender_name="Dr. Beta", position_name="Beta Postdoc",
+            recommender_name="Dr. Beta",
+            position_name="Beta Postdoc",
         )
         at = _run_page()
         assert not at.exception, (
@@ -1564,19 +1539,19 @@ class TestT6ComposeButton:
             f"non-unique compose-button keys: {at.exception!r}"
         )
         compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
-        assert len(compose) == 2, (
-            f"Two recommenders → two Compose buttons; got {len(compose)}"
-        )
+        assert len(compose) == 2, f"Two recommenders → two Compose buttons; got {len(compose)}"
 
     def test_body_per_card_uses_correct_recommender_name(self, db):
         """Multi-card: each Compose button's body must use ITS recommender's
         name, not a shared / first-card name. Catches a bug where the body
         is computed once outside the groupby loop."""
         TestPendingAlertsPanel._seed_pending(
-            recommender_name="Dr. Alpha", position_name="Alpha Postdoc",
+            recommender_name="Dr. Alpha",
+            position_name="Alpha Postdoc",
         )
         TestPendingAlertsPanel._seed_pending(
-            recommender_name="Dr. Beta", position_name="Beta Postdoc",
+            recommender_name="Dr. Beta",
+            position_name="Beta Postdoc",
         )
         at = _run_page()
         compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
@@ -1616,8 +1591,7 @@ class TestT6LLMPromptsExpander:
         at = _run_page()
         labels = [e.label for e in at.expander]
         assert self.EXPANDER_LABEL not in labels, (
-            f"Empty DB must not render the LLM-prompts expander; got "
-            f"expander labels={labels!r}"
+            f"Empty DB must not render the LLM-prompts expander; got expander labels={labels!r}"
         )
 
     def test_single_pending_renders_one_expander(self, db):
@@ -1638,8 +1612,7 @@ class TestT6LLMPromptsExpander:
         at = _run_page()
         labels = [e.label for e in at.expander]
         assert any(self.EXPANDER_LABEL in label for label in labels), (
-            f"Expected an expander labelled {self.EXPANDER_LABEL!r}; "
-            f"got labels={labels!r}"
+            f"Expected an expander labelled {self.EXPANDER_LABEL!r}; got labels={labels!r}"
         )
 
     def test_expander_holds_two_code_blocks(self, db):
@@ -1660,10 +1633,12 @@ class TestT6LLMPromptsExpander:
         and that the same widget keys aren't reused (Streamlit raises
         DuplicateWidgetID otherwise)."""
         TestPendingAlertsPanel._seed_pending(
-            recommender_name="Dr. Alpha", position_name="Alpha Postdoc",
+            recommender_name="Dr. Alpha",
+            position_name="Alpha Postdoc",
         )
         TestPendingAlertsPanel._seed_pending(
-            recommender_name="Dr. Beta", position_name="Beta Postdoc",
+            recommender_name="Dr. Beta",
+            position_name="Beta Postdoc",
         )
         at = _run_page()
         assert not at.exception, (
@@ -1671,13 +1646,9 @@ class TestT6LLMPromptsExpander:
             f"issue from the expander keys: {at.exception!r}"
         )
         matching = [e for e in at.expander if e.label == self.EXPANDER_LABEL]
-        assert len(matching) == 2, (
-            f"Two recommenders → two expanders; got {len(matching)}"
-        )
+        assert len(matching) == 2, f"Two recommenders → two expanders; got {len(matching)}"
         codes = list(at.code)
-        assert len(codes) == 4, (
-            f"Two cards × two tones each → 4 code blocks; got {len(codes)}"
-        )
+        assert len(codes) == 4, f"Two cards × two tones each → 4 code blocks; got {len(codes)}"
 
     def test_each_prompt_includes_recommender_name_and_relationship(self, db):
         TestPendingAlertsPanel._seed_pending(
@@ -1686,13 +1657,10 @@ class TestT6LLMPromptsExpander:
         )
         at = _run_page()
         codes = list(at.code)
-        assert codes, (
-            "precondition: pending recommender must produce prompt code blocks"
-        )
+        assert codes, "precondition: pending recommender must produce prompt code blocks"
         for c in codes:
             assert "Dr. Jones" in c.value, (
-                f"Every prompt must reference the recommender name; got "
-                f"prompt={c.value!r}"
+                f"Every prompt must reference the recommender name; got prompt={c.value!r}"
             )
             assert "Committee Member" in c.value, (
                 f"Every prompt must reference the recommender's "
@@ -1708,26 +1676,19 @@ class TestT6LLMPromptsExpander:
             institute="MIT",
             deadline_offset=10,
         )
-        deadline_iso = (
-            datetime.date.today() + datetime.timedelta(days=10)
-        ).isoformat()
+        deadline_iso = (datetime.date.today() + datetime.timedelta(days=10)).isoformat()
         at = _run_page()
         codes = list(at.code)
-        assert codes, (
-            "precondition: pending recommender must produce prompt code blocks"
-        )
+        assert codes, "precondition: pending recommender must produce prompt code blocks"
         for c in codes:
             assert "CSAIL Postdoc" in c.value, (
-                f"Every prompt must include the position name; got "
-                f"prompt={c.value!r}"
+                f"Every prompt must include the position name; got prompt={c.value!r}"
             )
             assert "MIT" in c.value, (
-                f"Every prompt must include the institute; got "
-                f"prompt={c.value!r}"
+                f"Every prompt must include the institute; got prompt={c.value!r}"
             )
             assert deadline_iso in c.value, (
-                f"Every prompt must include the deadline (ISO date); got "
-                f"prompt={c.value!r}"
+                f"Every prompt must include the deadline (ISO date); got prompt={c.value!r}"
             )
 
     def test_each_prompt_includes_days_since_asked(self, db):
@@ -1736,13 +1697,10 @@ class TestT6LLMPromptsExpander:
         TestPendingAlertsPanel._seed_pending(days_ago=14)
         at = _run_page()
         codes = list(at.code)
-        assert codes, (
-            "precondition: pending recommender must produce prompt code blocks"
-        )
+        assert codes, "precondition: pending recommender must produce prompt code blocks"
         for c in codes:
             assert "14" in c.value, (
-                f"Every prompt must include the days-since-asked count "
-                f"(14); got prompt={c.value!r}"
+                f"Every prompt must include the days-since-asked count (14); got prompt={c.value!r}"
             )
 
     def test_each_prompt_carries_a_target_tone_keyword(self, db):
@@ -1764,18 +1722,14 @@ class TestT6LLMPromptsExpander:
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
         codes = list(at.code)
-        assert codes, (
-            "precondition: pending recommender must produce prompt code blocks"
-        )
+        assert codes, "precondition: pending recommender must produce prompt code blocks"
         for c in codes:
             v = c.value.lower()
             assert "subject" in v, (
-                f"Every prompt must instruct the LLM to return a subject; "
-                f"got prompt={c.value!r}"
+                f"Every prompt must instruct the LLM to return a subject; got prompt={c.value!r}"
             )
             assert "body" in v, (
-                f"Every prompt must instruct the LLM to return a body; "
-                f"got prompt={c.value!r}"
+                f"Every prompt must instruct the LLM to return a body; got prompt={c.value!r}"
             )
 
     def test_code_blocks_use_text_language(self):
@@ -1797,9 +1751,7 @@ class TestT6LLMPromptsExpander:
         TestPendingAlertsPanel._seed_pending()
         at = _run_page()
         codes = list(at.code)
-        assert codes, (
-            "precondition: pending recommender must produce prompt code blocks"
-        )
+        assert codes, "precondition: pending recommender must produce prompt code blocks"
         for c in codes:
             assert c.language == "text", (
                 f"Every prompt code block must render with language='text'; "

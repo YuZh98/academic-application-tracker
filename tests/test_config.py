@@ -6,11 +6,13 @@
 
 import importlib
 import sys
+
 import pytest
+
 import config
 
-
 # ── STATUS_VALUES / STATUS_COLORS consistency ─────────────────────────────────
+
 
 def test_status_colors_matches_status_values():
     """Every status value must have a color entry and no extras."""
@@ -23,8 +25,17 @@ def test_status_colors_matches_status_values():
 
 
 _VALID_ST_BADGE_COLORS = {
-    "red", "orange", "yellow", "blue", "green", "violet", "gray", "grey", "primary"
+    "red",
+    "orange",
+    "yellow",
+    "blue",
+    "green",
+    "violet",
+    "gray",
+    "grey",
+    "primary",
 }
+
 
 def test_status_colors_are_valid_streamlit_literals():
     """All STATUS_COLORS values must be accepted color literals for st.badge().
@@ -43,6 +54,7 @@ def test_status_values_are_non_empty_strings():
 
 # ── RESULT_VALUES / RESULT_DEFAULT coupling ───────────────────────────────────
 
+
 def test_result_default_equals_result_values_first():
     """RESULT_DEFAULT must match RESULT_VALUES[0] (the SQLite schema DEFAULT)."""
     assert config.RESULT_DEFAULT == config.RESULT_VALUES[0], (
@@ -56,6 +68,7 @@ def test_result_default_is_pending():
 
 
 # ── Threshold ordering ────────────────────────────────────────────────────────
+
 
 def test_deadline_urgent_less_than_alert():
     """DEADLINE_URGENT_DAYS < DEADLINE_ALERT_DAYS — urgent is the inner window."""
@@ -71,6 +84,7 @@ def test_all_thresholds_positive():
 
 
 # ── REQUIREMENT_DOCS structure ────────────────────────────────────────────────
+
 
 def test_requirement_docs_are_3_tuples():
     """Each entry in REQUIREMENT_DOCS must be a 3-element tuple of non-empty strings."""
@@ -91,9 +105,9 @@ def test_requirement_docs_column_prefixes():
 
 def test_requirement_docs_no_duplicate_columns():
     """All req_* and done_* column names must be globally unique."""
-    req_cols  = [r for r, _, _ in config.REQUIREMENT_DOCS]
+    req_cols = [r for r, _, _ in config.REQUIREMENT_DOCS]
     done_cols = [d for _, d, _ in config.REQUIREMENT_DOCS]
-    all_cols  = req_cols + done_cols
+    all_cols = req_cols + done_cols
     assert len(all_cols) == len(set(all_cols)), (
         f"Duplicate column names in REQUIREMENT_DOCS: "
         f"{[c for c in all_cols if all_cols.count(c) > 1]}"
@@ -101,6 +115,7 @@ def test_requirement_docs_no_duplicate_columns():
 
 
 # ── QUICK_ADD_FIELDS ──────────────────────────────────────────────────────────
+
 
 def test_quick_add_fields_contains_position_name():
     """position_name is required for the quick-add form to function."""
@@ -113,26 +128,30 @@ def test_quick_add_fields_are_strings():
 
 # ── Vocabularies are non-empty ────────────────────────────────────────────────
 
-@pytest.mark.parametrize("name, lst", [
-    ("PRIORITY_VALUES",    config.PRIORITY_VALUES),
-    ("WORK_AUTH_OPTIONS",  config.WORK_AUTH_OPTIONS),
-    ("FULL_TIME_OPTIONS",  config.FULL_TIME_OPTIONS),
-    ("SOURCE_OPTIONS",     config.SOURCE_OPTIONS),
-    ("RESPONSE_TYPES",     config.RESPONSE_TYPES),
-    ("RESULT_VALUES",      config.RESULT_VALUES),
-    ("RELATIONSHIP_VALUES", config.RELATIONSHIP_VALUES),
-])
+
+@pytest.mark.parametrize(
+    "name, lst",
+    [
+        ("PRIORITY_VALUES", config.PRIORITY_VALUES),
+        ("WORK_AUTH_OPTIONS", config.WORK_AUTH_OPTIONS),
+        ("FULL_TIME_OPTIONS", config.FULL_TIME_OPTIONS),
+        ("SOURCE_OPTIONS", config.SOURCE_OPTIONS),
+        ("RESPONSE_TYPES", config.RESPONSE_TYPES),
+        ("RESULT_VALUES", config.RESULT_VALUES),
+        ("RELATIONSHIP_VALUES", config.RELATIONSHIP_VALUES),
+    ],
+)
 def test_vocabulary_lists_are_non_empty(name, lst):
     assert len(lst) > 0, f"{name} must not be empty"
 
 
 # ── TERMINAL_STATUSES ────────────────────────────────────────────────────────
 
+
 def test_terminal_statuses_are_subset_of_status_values():
     """Every terminal status must be a known STATUS_VALUES entry."""
     assert set(config.TERMINAL_STATUSES) <= set(config.STATUS_VALUES), (
-        f"Unknown terminal statuses: "
-        f"{set(config.TERMINAL_STATUSES) - set(config.STATUS_VALUES)}"
+        f"Unknown terminal statuses: {set(config.TERMINAL_STATUSES) - set(config.STATUS_VALUES)}"
     )
 
 
@@ -141,6 +160,7 @@ def test_terminal_statuses_non_empty():
 
 
 # ── Module-level assertion guard is live ─────────────────────────────────────
+
 
 def test_status_guard_fires_on_drift(monkeypatch):
     """The STATUS_COLORS assertion in config.py fires when there is a mismatch.
@@ -161,6 +181,7 @@ def test_status_guard_fires_on_drift(monkeypatch):
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── STATUS_* aliases for terminal statuses (DESIGN §5.1 Status pipeline) ──────
+
 
 def test_status_closed_alias_matches_status_values():
     """STATUS_CLOSED must equal the literal '[CLOSED]' from STATUS_VALUES."""
@@ -183,8 +204,12 @@ def test_status_declined_alias_matches_status_values():
 def test_all_seven_status_aliases_match_status_values_order():
     """Named aliases follow STATUS_VALUES index order (per DESIGN §5.1)."""
     expected = [
-        config.STATUS_SAVED, config.STATUS_APPLIED, config.STATUS_INTERVIEW,
-        config.STATUS_OFFER, config.STATUS_CLOSED, config.STATUS_REJECTED,
+        config.STATUS_SAVED,
+        config.STATUS_APPLIED,
+        config.STATUS_INTERVIEW,
+        config.STATUS_OFFER,
+        config.STATUS_CLOSED,
+        config.STATUS_REJECTED,
         config.STATUS_DECLINED,
     ]
     assert expected == config.STATUS_VALUES, (
@@ -201,6 +226,7 @@ def test_all_seven_status_aliases_match_status_values_order():
 
 
 # ── STATUS_LABELS + invariant #3 (DESIGN §5.1, §5.2 #3) ───────────────────────
+
 
 def test_status_labels_is_dict_with_string_values():
     """STATUS_LABELS maps each status to a non-empty UI label string."""
@@ -229,13 +255,13 @@ def test_status_labels_are_bracket_stripped():
 def test_status_labels_spec_values():
     """Pin the bracket-stripped, title-cased mapping for the v1 seven statuses."""
     assert config.STATUS_LABELS == {
-        "[SAVED]":     "Saved",
-        "[APPLIED]":   "Applied",
+        "[SAVED]": "Saved",
+        "[APPLIED]": "Applied",
         "[INTERVIEW]": "Interview",
-        "[OFFER]":     "Offer",
-        "[CLOSED]":    "Closed",
-        "[REJECTED]":  "Rejected",
-        "[DECLINED]":  "Declined",
+        "[OFFER]": "Offer",
+        "[CLOSED]": "Closed",
+        "[REJECTED]": "Rejected",
+        "[DECLINED]": "Declined",
     }
 
 
@@ -250,6 +276,7 @@ def test_invariant_3_fires_on_missing_label():
 
 
 # ── FUNNEL_DEFAULT_HIDDEN + invariant #6 (DESIGN §5.1, §5.2 #6) ───────────────
+
 
 def test_funnel_default_hidden_is_set_of_strings():
     assert isinstance(config.FUNNEL_DEFAULT_HIDDEN, set)
@@ -281,6 +308,7 @@ def test_invariant_6_fires_on_unknown_hidden_label():
 
 # ── INTERVIEW_FORMATS (DESIGN §5.1 Vocabularies) ──────────────────────────────
 
+
 def test_interview_formats_is_non_empty_list_of_strings():
     assert isinstance(config.INTERVIEW_FORMATS, list)
     assert len(config.INTERVIEW_FORMATS) > 0
@@ -294,6 +322,7 @@ def test_interview_formats_spec_values():
 
 # ── Invariant #8 (DESIGN §5.2 #8) ─────────────────────────────────────────────
 
+
 def test_invariant_8_urgent_leq_alert():
     """DESIGN §5.2 invariant #8: DEADLINE_URGENT_DAYS <= DEADLINE_ALERT_DAYS.
 
@@ -301,15 +330,14 @@ def test_invariant_8_urgent_leq_alert():
     this test pins the exact DESIGN-spec inequality so the import-time
     assert stays wired to DESIGN even if someone relaxes the strict test.)"""
     assert config.DEADLINE_URGENT_DAYS <= config.DEADLINE_ALERT_DAYS, (
-        f"URGENT={config.DEADLINE_URGENT_DAYS} must be <= "
-        f"ALERT={config.DEADLINE_ALERT_DAYS}"
+        f"URGENT={config.DEADLINE_URGENT_DAYS} must be <= ALERT={config.DEADLINE_ALERT_DAYS}"
     )
 
 
 def test_invariant_8_fires_on_inverted_thresholds():
     """Replicate DESIGN §5.2 invariant #8 on synthetic inverted values."""
     broken_urgent = config.DEADLINE_ALERT_DAYS + 1
-    broken_alert  = config.DEADLINE_ALERT_DAYS
+    broken_alert = config.DEADLINE_ALERT_DAYS
     assert not (broken_urgent <= broken_alert), (
         "Guard should fire: urgent window cannot exceed alert window"
     )
@@ -323,6 +351,7 @@ def test_invariant_8_fires_on_inverted_thresholds():
 # `work_auth_note` column (D22). FULL_TIME_OPTIONS replaces the ambiguous
 # Yes/No/Part-time list with the employment-type vocabulary
 # Full-time/Part-time/Contract. Both columns stay plain TEXT — no DDL impact.
+
 
 def test_work_auth_options_spec_values():
     """DESIGN §5.1: WORK_AUTH_OPTIONS = ['Yes', 'No', 'Unknown'] (D22).
@@ -349,6 +378,7 @@ def test_full_time_options_spec_values():
 # (Yes/Optional/No). DESIGN decision D21 ties this to D20's "full-word"
 # philosophy — consistent, self-descriptive in raw dumps, no storage penalty.
 
+
 def test_requirement_values_spec_values():
     """DESIGN §5.1: REQUIREMENT_VALUES = ['Yes', 'Optional', 'No'] (D21).
 
@@ -363,9 +393,9 @@ def test_requirement_labels_spec_values():
     format_func=REQUIREMENT_LABELS.get so session_state holds the canonical
     DB value (no save-time translation)."""
     assert config.REQUIREMENT_LABELS == {
-        "Yes":      "Required",
+        "Yes": "Required",
         "Optional": "Optional",
-        "No":       "Not needed",
+        "No": "Not needed",
     }
 
 
@@ -388,6 +418,7 @@ def test_invariant_7_requirement_labels_keys_equal_values():
 # literals are not named here to keep the GUIDELINES §6 pre-merge
 # grep at zero hits.
 
+
 def test_status_values_spec_values():
     """DESIGN §5.1 Status pipeline: STATUS_VALUES starts with [SAVED]
     followed by APPLIED → INTERVIEW → OFFER → CLOSED → REJECTED →
@@ -395,8 +426,13 @@ def test_status_values_spec_values():
     config-drive, Sub-task 4), and auto-promotion rules R1/R3 (§9.3)
     read STATUS_VALUES[0] as the source stage for R1."""
     assert config.STATUS_VALUES == [
-        "[SAVED]", "[APPLIED]", "[INTERVIEW]", "[OFFER]",
-        "[CLOSED]", "[REJECTED]", "[DECLINED]",
+        "[SAVED]",
+        "[APPLIED]",
+        "[INTERVIEW]",
+        "[OFFER]",
+        "[CLOSED]",
+        "[REJECTED]",
+        "[DECLINED]",
     ]
 
 
@@ -416,7 +452,7 @@ def test_priority_values_spec_values():
     # Pre-v1.3 short code must be absent. Single-quoted so the
     # GUIDELINES §6 grep (which targets the double-quoted form) stays
     # at zero hits post-rename.
-    assert 'Med' not in config.PRIORITY_VALUES
+    assert "Med" not in config.PRIORITY_VALUES
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -430,6 +466,7 @@ def test_priority_values_spec_values():
 # upsert_application's hardcoded 'Offer' string would no longer match).
 # Invariant #9 (`RESPONSE_TYPE_OFFER in RESPONSE_TYPES`) is the
 # import-time guard that catches the drift before any page renders.
+
 
 def test_response_type_offer_value_is_offer():
     """DESIGN §5.1: RESPONSE_TYPE_OFFER == 'Offer' — the literal R3
@@ -459,9 +496,7 @@ def test_invariant_9_fires_on_drift():
     the test_invariant_*_fires_on_drift pattern (synthetic-drift, no
     actual config reload). The replicated guard logic must detect
     the missing alias the same way the import-time assert would."""
-    broken_response_types = [
-        v for v in config.RESPONSE_TYPES if v != config.RESPONSE_TYPE_OFFER
-    ]
+    broken_response_types = [v for v in config.RESPONSE_TYPES if v != config.RESPONSE_TYPE_OFFER]
     assert config.RESPONSE_TYPE_OFFER not in broken_response_types, (
         "Guard should fire: RESPONSE_TYPE_OFFER not in synthetic "
         "broken_response_types (the entry was deliberately removed)"
@@ -475,6 +510,7 @@ def test_invariant_9_fires_on_drift():
 # of the offered list — invariant #10 catches a config edit that drops
 # the default value from the options list.
 
+
 def test_upcoming_window_options_is_non_empty_int_list():
     """DESIGN §5.1: UPCOMING_WINDOW_OPTIONS is the user-selectable widths
     (in days) for the dashboard's Upcoming-panel selectbox. Must be a
@@ -482,12 +518,8 @@ def test_upcoming_window_options_is_non_empty_int_list():
     zero- or past-window which makes no sense for an 'upcoming' panel."""
     assert isinstance(config.UPCOMING_WINDOW_OPTIONS, list)
     assert len(config.UPCOMING_WINDOW_OPTIONS) > 0
-    assert all(
-        isinstance(v, int) and v > 0
-        for v in config.UPCOMING_WINDOW_OPTIONS
-    ), (
-        f"All entries must be positive ints; got "
-        f"{config.UPCOMING_WINDOW_OPTIONS!r}"
+    assert all(isinstance(v, int) and v > 0 for v in config.UPCOMING_WINDOW_OPTIONS), (
+        f"All entries must be positive ints; got {config.UPCOMING_WINDOW_OPTIONS!r}"
     )
 
 
@@ -510,10 +542,7 @@ def test_invariant_10_fires_on_drift():
     UPCOMING_WINDOW_OPTIONS list that has dropped DEADLINE_ALERT_DAYS —
     mirrors the test_invariant_*_fires_on_drift pattern (synthetic-drift,
     no actual config reload)."""
-    broken_options = [
-        v for v in config.UPCOMING_WINDOW_OPTIONS
-        if v != config.DEADLINE_ALERT_DAYS
-    ]
+    broken_options = [v for v in config.UPCOMING_WINDOW_OPTIONS if v != config.DEADLINE_ALERT_DAYS]
     assert config.DEADLINE_ALERT_DAYS not in broken_options, (
         "Guard should fire: DEADLINE_ALERT_DAYS not in synthetic "
         "broken_options (the entry was deliberately removed)"
@@ -527,19 +556,18 @@ def test_invariant_10_fires_on_drift():
 # missing either would surface as a render-time KeyError; an extra key
 # would silently no-op. Invariant #11 catches both at import time.
 
+
 def test_funnel_toggle_labels_is_bool_keyed_dict():
     assert isinstance(config.FUNNEL_TOGGLE_LABELS, dict), (
-        f"FUNNEL_TOGGLE_LABELS must be a dict; got "
-        f"{type(config.FUNNEL_TOGGLE_LABELS).__name__}"
+        f"FUNNEL_TOGGLE_LABELS must be a dict; got {type(config.FUNNEL_TOGGLE_LABELS).__name__}"
     )
     assert all(isinstance(k, bool) for k in config.FUNNEL_TOGGLE_LABELS), (
         "FUNNEL_TOGGLE_LABELS keys must be booleans (state flags) — "
         f"got types: {sorted(type(k).__name__ for k in config.FUNNEL_TOGGLE_LABELS)}"
     )
-    assert all(
-        isinstance(v, str) and v
-        for v in config.FUNNEL_TOGGLE_LABELS.values()
-    ), "Every label must be a non-empty string."
+    assert all(isinstance(v, str) and v for v in config.FUNNEL_TOGGLE_LABELS.values()), (
+        "Every label must be a non-empty string."
+    )
 
 
 def test_funnel_toggle_labels_spec_values():
@@ -552,11 +580,8 @@ def test_funnel_toggle_labels_spec_values():
     from the view."""
     assert config.FUNNEL_TOGGLE_LABELS == {
         False: "+ Show all stages",
-        True:  "− Show fewer stages",
-    }, (
-        "FUNNEL_TOGGLE_LABELS drifted from spec values. Got: "
-        f"{config.FUNNEL_TOGGLE_LABELS!r}"
-    )
+        True: "− Show fewer stages",
+    }, f"FUNNEL_TOGGLE_LABELS drifted from spec values. Got: {config.FUNNEL_TOGGLE_LABELS!r}"
 
 
 def test_invariant_11_keys_exact():
@@ -577,8 +602,7 @@ def test_invariant_11_fires_on_drift():
     module."""
     broken_labels = {False: config.FUNNEL_TOGGLE_LABELS[False]}  # missing True
     assert set(broken_labels.keys()) != {True, False}, (
-        "Guard should fire: synthetic dict only has key False "
-        "(True deliberately removed)."
+        "Guard should fire: synthetic dict only has key False (True deliberately removed)."
     )
 
 
@@ -590,10 +614,10 @@ def test_invariant_11_fires_on_drift():
 # future surface (e.g. a "Tracked: Active" KPI variant on the dashboard)
 # can reference them without hardcoding.
 
+
 def test_status_filter_active_is_non_empty_string():
     assert isinstance(config.STATUS_FILTER_ACTIVE, str) and config.STATUS_FILTER_ACTIVE, (
-        f"STATUS_FILTER_ACTIVE must be a non-empty str; got "
-        f"{config.STATUS_FILTER_ACTIVE!r}"
+        f"STATUS_FILTER_ACTIVE must be a non-empty str; got {config.STATUS_FILTER_ACTIVE!r}"
     )
 
 
@@ -649,10 +673,12 @@ def test_status_filter_active_excluded_contains_saved_and_closed():
     Pin the membership so a future tweak can't silently broaden the
     exclusion (e.g., to also exclude [REJECTED] / [DECLINED]) without
     a deliberate spec amendment."""
-    assert config.STATUS_FILTER_ACTIVE_EXCLUDED == frozenset({
-        config.STATUS_SAVED,
-        config.STATUS_CLOSED,
-    }), (
+    assert config.STATUS_FILTER_ACTIVE_EXCLUDED == frozenset(
+        {
+            config.STATUS_SAVED,
+            config.STATUS_CLOSED,
+        }
+    ), (
         f"STATUS_FILTER_ACTIVE_EXCLUDED drifted from spec. "
         f"Got: {config.STATUS_FILTER_ACTIVE_EXCLUDED!r}; "
         f"expected frozenset({{STATUS_SAVED, STATUS_CLOSED}})"
@@ -674,6 +700,7 @@ def test_invariant_12_fires_on_drift():
 
 # ── Fresh import exercises every module-level assertion ──────────────────────
 
+
 def test_config_reimports_cleanly():
     """A fresh import of config must execute all §5.2 invariants without
     raising. This is the most direct proof the import-time guards are wired
@@ -691,6 +718,7 @@ def test_config_reimports_cleanly():
 # pages/1_Opportunities.py::_deadline_urgency and database.py::_urgency_glyph
 # at the days_away→glyph banding step (the page-layer wrapper still does the
 # date-string parse + None-coercion before delegating).
+
 
 def test_em_dash_value():
     """EM_DASH is the unicode em-dash (U+2014), used as the NULL/empty
@@ -723,6 +751,7 @@ def test_reminder_tones_tuple():
 # Tests exercise each band's interior + every boundary so a future
 # threshold tweak surfaces as exactly the boundary tests that move,
 # rather than as a vague "urgency drift" failure.
+
 
 def test_urgency_glyph_zero_days_is_red():
     """Today's deadline is urgent."""
@@ -765,3 +794,22 @@ def test_urgency_glyph_none_is_em_dash():
     had this behaviour; CL2 hoists it to config so the page wrapper
     only owns the date-string→days conversion."""
     assert config.urgency_glyph(None) == config.EM_DASH
+
+
+# ── CONFIRMED_LABELS (recommenders confirmed tri-state) ─────────────────────────────────
+
+
+class TestConfirmedLabels:
+    """Tests for config.CONFIRMED_LABELS, the display-string map for the
+    recommender `confirmed` INTEGER column (0/1/NULL)."""
+
+    def test_confirmed_labels_covers_all_states(self):
+        """CONFIRMED_LABELS must have exactly the keys {1, 0, None} — one
+        entry for each possible value of the INTEGER tri-state column."""
+        assert set(config.CONFIRMED_LABELS.keys()) == {1, 0, None}
+
+    def test_confirmed_labels_values(self):
+        """Display strings: 1 → 'Yes', 0 → 'No', None → EM_DASH."""
+        assert config.CONFIRMED_LABELS[1] == "Yes"
+        assert config.CONFIRMED_LABELS[0] == "No"
+        assert config.CONFIRMED_LABELS[None] == config.EM_DASH
