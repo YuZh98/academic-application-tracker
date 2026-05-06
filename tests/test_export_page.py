@@ -29,6 +29,7 @@ import pathlib
 import pytest
 from streamlit.testing.v1 import AppTest
 
+import database
 import exports
 from tests.helpers import download_button, download_buttons
 
@@ -99,16 +100,14 @@ class TestExportPageShell:
             f"{PAGE} must call st.set_page_config(...) per DESIGN §8.0."
         )
         assert 'layout="wide"' in src, (
-            f"{PAGE} must pass layout='wide' to set_page_config per "
-            f"DESIGN §8.0 / D14."
+            f"{PAGE} must pass layout='wide' to set_page_config per DESIGN §8.0 / D14."
         )
         assert 'page_title="Academic Application Tracker"' in src, (
-            'Mirror of every other page: set_page_config must bind '
+            "Mirror of every other page: set_page_config must bind "
             'page_title="Academic Application Tracker".'
         )
         assert 'page_icon="📋"' in src, (
-            'Mirror of every other page: set_page_config must bind '
-            'page_icon="📋".'
+            'Mirror of every other page: set_page_config must bind page_icon="📋".'
         )
 
     def test_init_db_called(self, db):
@@ -118,8 +117,7 @@ class TestExportPageShell:
         populated DB is invisible to AppTest."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
         assert "database.init_db()" in src, (
-            f"{PAGE} must call database.init_db() near the top "
-            f"(mirror of every other page)."
+            f"{PAGE} must call database.init_db() near the top (mirror of every other page)."
         )
 
     def test_page_runs_without_exception_on_empty_db(self, db):
@@ -158,9 +156,7 @@ class TestExportPageShell:
         # at.button(key=...) raises KeyError for missing keys — the
         # access itself pins existence.
         btn = at.button(key=REGENERATE_KEY)
-        assert btn is not None, (
-            f"Expected button with key={REGENERATE_KEY!r}"
-        )
+        assert btn is not None, f"Expected button with key={REGENERATE_KEY!r}"
         assert btn.label == REGENERATE_LABEL, (
             f"Expected button label {REGENERATE_LABEL!r}; got {btn.label!r}"
         )
@@ -180,13 +176,13 @@ class TestExportPageRegenerateButton:
     re-raise)."""
 
     def test_click_calls_write_all(self, db, monkeypatch):
-        """Click → ``exports.write_all()`` is called exactly once."""
+        """Click → ``database.regenerate_exports()`` is called exactly once."""
         calls: list[None] = []
 
         def _track():
             calls.append(None)
 
-        monkeypatch.setattr(exports, "write_all", _track)
+        monkeypatch.setattr(database, "regenerate_exports", _track)
 
         at = _run_page()
         at.button(key=REGENERATE_KEY).click()
@@ -194,14 +190,14 @@ class TestExportPageRegenerateButton:
 
         assert not at.exception, f"Click raised: {at.exception!r}"
         assert len(calls) == 1, (
-            f"Expected exactly one call to exports.write_all; got {len(calls)}"
+            f"Expected exactly one call to database.regenerate_exports; got {len(calls)}"
         )
 
     def test_click_emits_toast_on_success(self, db, monkeypatch):
         """Successful click → st.toast(SUCCESS_TOAST). Toasts persist
         across the post-click rerun. Monkeypatch write_all to a no-op
         so the test doesn't depend on actual file-system behaviour."""
-        monkeypatch.setattr(exports, "write_all", lambda: None)
+        monkeypatch.setattr(database, "regenerate_exports", lambda: None)
 
         at = _run_page()
         at.button(key=REGENERATE_KEY).click()
@@ -210,8 +206,7 @@ class TestExportPageRegenerateButton:
         assert not at.exception, f"Click raised: {at.exception!r}"
         toast_values = [t.value for t in at.toast]
         assert SUCCESS_TOAST in toast_values, (
-            f"Expected toast {SUCCESS_TOAST!r} after successful click; "
-            f"got toasts={toast_values!r}"
+            f"Expected toast {SUCCESS_TOAST!r} after successful click; got toasts={toast_values!r}"
         )
 
     def test_click_emits_error_on_write_all_failure(self, db, monkeypatch):
@@ -219,10 +214,11 @@ class TestExportPageRegenerateButton:
         permission denied) → st.error surfaces the message verbatim;
         the handler does NOT re-raise (GUIDELINES §8) and the button
         is still rendered for retry."""
+
         def _boom():
             raise OSError("simulated mkdir failure")
 
-        monkeypatch.setattr(exports, "write_all", _boom)
+        monkeypatch.setattr(database, "regenerate_exports", _boom)
 
         at = _run_page()
         at.button(key=REGENERATE_KEY).click()
@@ -240,14 +236,12 @@ class TestExportPageRegenerateButton:
         # Button still renders post-error — user can retry.
         retry_btn = at.button(key=REGENERATE_KEY)
         assert retry_btn is not None, (
-            "Regenerate button must still render after a failed click "
-            "so the user can retry."
+            "Regenerate button must still render after a failed click so the user can retry."
         )
         # No success toast on the failure path.
         toast_values = [t.value for t in at.toast]
         assert SUCCESS_TOAST not in toast_values, (
-            f"Failed click must NOT fire the success toast; "
-            f"got toasts={toast_values!r}"
+            f"Failed click must NOT fire the success toast; got toasts={toast_values!r}"
         )
 
 
@@ -272,7 +266,8 @@ class TestExportPageMtimesPanel:
         return "\n".join(m.value for m in at.markdown)
 
     def test_mtimes_show_not_yet_generated_when_files_absent(
-        self, db_and_exports,
+        self,
+        db_and_exports,
     ):
         """Fresh DB, no files in EXPORTS_DIR → each filename surfaces
         with the ``not yet generated`` placeholder. Pre-condition:
@@ -289,10 +284,7 @@ class TestExportPageMtimesPanel:
         at = _run_page()
         text = self._all_text(at)
         for filename in EXPORT_FILENAMES:
-            assert filename in text, (
-                f"Expected {filename!r} in rendered page; "
-                f"got text={text!r}"
-            )
+            assert filename in text, f"Expected {filename!r} in rendered page; got text={text!r}"
             # The "not yet generated" placeholder appears next to each
             # missing filename. Substring check on the whole page text
             # is enough to pin the per-file rendering — a regression
@@ -319,9 +311,7 @@ class TestExportPageMtimesPanel:
         whatever the page uses)."""
         db_and_exports.mkdir(parents=True, exist_ok=True)
         epoch = 1700000000  # arbitrary but deterministic
-        expected_ts = datetime.datetime.fromtimestamp(epoch).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        expected_ts = datetime.datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")
         for filename in EXPORT_FILENAMES:
             path = db_and_exports / filename
             path.write_text("# placeholder\n", encoding="utf-8")
@@ -330,9 +320,7 @@ class TestExportPageMtimesPanel:
         at = _run_page()
         text = self._all_text(at)
         for filename in EXPORT_FILENAMES:
-            assert filename in text, (
-                f"Expected {filename!r} in rendered page; got text={text!r}"
-            )
+            assert filename in text, f"Expected {filename!r} in rendered page; got text={text!r}"
         # Three filenames, three timestamps. Single substring check
         # pins the format; counting catches a regression that uses
         # the same mtime for one file and "not yet generated" for
@@ -366,8 +354,7 @@ class TestExportPageMtimesPanel:
         at = _run_page()
         pre_text = self._all_text(at)
         assert "not yet generated" in pre_text, (
-            "precondition: pre-click page must show 'not yet generated' "
-            "for the missing files"
+            "precondition: pre-click page must show 'not yet generated' for the missing files"
         )
 
         at.button(key=REGENERATE_KEY).click()
@@ -387,8 +374,7 @@ class TestExportPageMtimesPanel:
         # for all three filenames, and a YYYY-MM-DD prefix should
         # appear at least three times (one per file).
         assert "not yet generated" not in post_text, (
-            f"After regenerate, 'not yet generated' must not appear; "
-            f"got text:\n{post_text!r}"
+            f"After regenerate, 'not yet generated' must not appear; got text:\n{post_text!r}"
         )
         # Today's date prefix is present at least three times. Use the
         # local-time date so the test doesn't drift around UTC midnight.
@@ -438,8 +424,7 @@ class TestExportPageDownloadButtons:
         at = _run_page()
         buttons = download_buttons(at)
         assert len(buttons) == len(EXPORT_FILENAMES), (
-            f"Expected {len(EXPORT_FILENAMES)} download buttons "
-            f"(one per file); got {len(buttons)}"
+            f"Expected {len(EXPORT_FILENAMES)} download buttons (one per file); got {len(buttons)}"
         )
         for filename in EXPORT_FILENAMES:
             btn = download_button(at, filename)
@@ -474,9 +459,7 @@ class TestExportPageDownloadButtons:
         renders enabled (disabled=False)."""
         db_and_exports.mkdir(parents=True, exist_ok=True)
         for filename in EXPORT_FILENAMES:
-            (db_and_exports / filename).write_text(
-                "# placeholder\n", encoding="utf-8"
-            )
+            (db_and_exports / filename).write_text("# placeholder\n", encoding="utf-8")
         at = _run_page()
         for filename in EXPORT_FILENAMES:
             btn = download_button(at, filename)
@@ -510,27 +493,35 @@ class TestExportPageDownloadButtons:
         """The `file_name` arg locks the user's saved-file name to
         the export filename (so it lands as ``OPPORTUNITIES.md``, not
         the page's internal slug or `download.bin`). The arg is NOT
-        on the AppTest proto — pinned at source level. Each locked
-        filename must appear as the value of a ``file_name=`` argument
-        somewhere in the page source."""
+        on the AppTest proto — pinned at source level.
+
+        After the DESIGN §2 architecture fix, filenames are no longer
+        hardcoded in the page source — they are returned by
+        database.get_export_paths(). The page source must reference
+        that call; the locked filename strings must live in database.py."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
         # The spec calls for `file_name=filename` (or equivalent
-        # variable). Look for the `file_name=` token; the test below
-        # pins the integration via a more specific check.
+        # variable). Look for the `file_name=` token.
         assert "file_name=" in src, (
             f"{PAGE} must pass file_name=... to st.download_button so "
             f"the saved file lands with the locked export filename."
         )
-        # Each locked filename must also appear in the source — either
-        # as a literal in a `file_name=` value or via the
-        # _EXPORT_FILENAMES iteration variable. This catches a bug
-        # where the loop iterates over a wrong list.
+        # The page must delegate path resolution to database.get_export_paths()
+        # rather than constructing paths from exports.EXPORTS_DIR directly
+        # (DESIGN §2: pages must never import exports).
+        assert "database.get_export_paths()" in src, (
+            f"{PAGE} must call database.get_export_paths() to resolve "
+            f"export file paths (DESIGN §2: pages must never import exports)."
+        )
+        # Each locked filename must appear in database.py (the new home
+        # of the filename constants after the architecture fix).
+        db_src = pathlib.Path("database.py").read_text(encoding="utf-8")
         for filename in EXPORT_FILENAMES:
-            assert filename in src, (
-                f"{PAGE} source must reference {filename!r} so the "
-                f"download button's file_name arg resolves to it. "
-                f"(May be via a tuple constant — fine, as long as the "
-                f"string is reachable from the loop body.)"
+            assert filename in db_src, (
+                f"database.py source must reference {filename!r} so "
+                f"database.get_export_paths() resolves to the locked "
+                f"export filename. (Moved from pages/4_Export.py per "
+                f"DESIGN §2.)"
             )
 
     def test_download_section_header_rendered(self, db):
@@ -577,4 +568,63 @@ class TestExportPageDownloadButtons:
             assert not btn.proto.disabled, (
                 f"After regenerate, {filename!r} download button must "
                 f"be enabled; got disabled={btn.proto.disabled}"
+            )
+
+
+# ── Database export-helper unit tests ─────────────────────────────────────────
+#
+# Thin unit tests for the two new database.py wrappers that route the
+# Export page through the database layer (DESIGN §2 fix).
+
+
+class TestDatabaseExportHelpers:
+    """Unit tests for database.regenerate_exports() and
+    database.get_export_paths() — the two thin wrapper functions added
+    to database.py so that pages/4_Export.py never needs to import
+    exports directly (DESIGN §2)."""
+
+    def test_regenerate_exports_calls_write_all(self, db, monkeypatch):
+        """database.regenerate_exports() must delegate to
+        exports.write_all() exactly once."""
+        calls: list[None] = []
+        monkeypatch.setattr(exports, "write_all", lambda: calls.append(None))
+        database.regenerate_exports()
+        assert len(calls) == 1, (
+            f"Expected exactly one call to exports.write_all() from "
+            f"database.regenerate_exports(); got {len(calls)}"
+        )
+
+    def test_regenerate_exports_propagates_exceptions(self, db, monkeypatch):
+        """Unlike the log-and-swallow auto-write hooks, regenerate_exports
+        must propagate exceptions so the page can surface them via
+        st.error (GUIDELINES §8 / DESIGN §7 contract distinction)."""
+
+        def _boom() -> None:
+            raise OSError("simulated mkdir failure")
+
+        monkeypatch.setattr(exports, "write_all", _boom)
+        with pytest.raises(OSError, match="simulated mkdir failure"):
+            database.regenerate_exports()
+
+    def test_get_export_paths_returns_three_files(self, db):
+        """get_export_paths() must return exactly three (filename, Path)
+        pairs covering the three committed export files in wireframe order."""
+        result = database.get_export_paths()
+        assert len(result) == 3, f"Expected 3 export paths; got {len(result)}: {result!r}"
+        filenames = [name for name, _ in result]
+        assert filenames == list(EXPORT_FILENAMES), (
+            f"Expected locked filenames {list(EXPORT_FILENAMES)!r} in "
+            f"wireframe order; got {filenames!r}"
+        )
+
+    def test_get_export_paths_resolves_under_exports_dir(self, db_and_exports):
+        """Paths returned by get_export_paths() must resolve under
+        EXPORTS_DIR (monkeypatched to tmp_path/exports by the db fixture)."""
+        result = database.get_export_paths()
+        for filename, path in result:
+            assert path.parent == db_and_exports, (
+                f"{filename!r} path {path!r} must be inside EXPORTS_DIR {db_and_exports!r}"
+            )
+            assert path.name == filename, (
+                f"path.name {path.name!r} must match filename {filename!r}"
             )

@@ -1119,6 +1119,33 @@ def delete_recommender(rec_id: int) -> None:
         )
 
 
+def regenerate_exports() -> None:
+    """Trigger a full markdown export regeneration on demand.
+
+    Called by pages/4_Export.py's manual-trigger button. Unlike the
+    auto-write hook in write functions (which logs-and-continues),
+    errors here propagate to the caller so the page can surface them
+    via st.error.
+    """
+    import exports as _exports  # deferred to break circular import
+
+    _exports.write_all()
+
+
+def get_export_paths() -> list[tuple[str, Path]]:
+    """Return (filename, Path) pairs for the three committed export files.
+
+    Called by pages/4_Export.py to resolve file paths for mtime display
+    and download buttons without importing exports directly.
+    """
+    import exports as _exports  # deferred to break circular import
+
+    return [
+        (filename, _exports.EXPORTS_DIR / filename)
+        for filename in ["OPPORTUNITIES.md", "PROGRESS.md", "RECOMMENDERS.md"]
+    ]
+
+
 # ── Dashboard queries ─────────────────────────────────────────────────────────
 
 
