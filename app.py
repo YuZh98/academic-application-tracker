@@ -287,7 +287,7 @@ with _left_col:
                 )
             ]
         )
-        
+
         _funnel_fig.update_yaxes(autorange="reversed")
         _funnel_fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",

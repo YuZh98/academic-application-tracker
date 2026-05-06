@@ -56,13 +56,13 @@ def init_db() -> None:
     Note: f-strings are used for column names only. All column names come from
     config constants, never from user input, so this is safe."""
 
-  
+
     req_done_cols = ""
     for req_col, done_col, _ in config.REQUIREMENT_DOCS:
         req_done_cols += f",\n    {req_col:<30} TEXT    DEFAULT 'No'"
         req_done_cols += f",\n    {done_col:<30} INTEGER DEFAULT 0"
 
-   
+
     status_default = config.STATUS_VALUES[0]
     result_default = config.RESULT_DEFAULT
 
@@ -97,7 +97,7 @@ def init_db() -> None:
             )
         """)
 
-       
+
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS applications (
                 position_id           INTEGER PRIMARY KEY,
@@ -116,7 +116,7 @@ def init_db() -> None:
             )
         """)
 
-        
+
         interviews_existed_pre_create = (
             conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'interviews'"
@@ -138,7 +138,7 @@ def init_db() -> None:
             )
         """)
 
-       
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS recommenders (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,18 +172,18 @@ def init_db() -> None:
             if done_col not in existing_cols:
                 conn.execute(f"ALTER TABLE positions ADD COLUMN {done_col} INTEGER DEFAULT 0")
 
-     
+
         if "updated_at" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN updated_at TEXT")
             conn.execute(
                 "UPDATE positions SET updated_at = datetime('now') WHERE updated_at IS NULL"
             )
 
-       
+
         if "work_auth_note" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN work_auth_note TEXT")
 
-       
+
         if not interviews_existed_pre_create:
             conn.execute(
                 "INSERT INTO interviews (application_id, sequence, scheduled_date) "
@@ -202,7 +202,7 @@ def init_db() -> None:
                 "   OR interview2_date IS NOT NULL"
             )
 
-  
+
         applications_cols = {
             row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
         }
@@ -217,7 +217,7 @@ def init_db() -> None:
         if "confirmation_date" not in applications_cols:
             conn.execute("ALTER TABLE applications ADD COLUMN confirmation_date TEXT")
         if confirmation_split_needed:
-            
+
             conn.execute(
                 "UPDATE applications "
                 "SET confirmation_received = 1, "
@@ -228,21 +228,21 @@ def init_db() -> None:
             conn.execute(
                 "UPDATE applications SET confirmation_received = 1 WHERE confirmation_email = 'Y'"
             )
-            
+
             conn.execute(
                 "UPDATE applications "
                 "SET confirmation_email = NULL "
                 "WHERE confirmation_email IS NOT NULL"
             )
 
-    
+
         applications_cols_post_split = {
             row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
         }
         if "confirmation_email" in applications_cols_post_split:
             conn.execute("ALTER TABLE applications DROP COLUMN confirmation_email")
 
-        
+
         rec_cols_info = conn.execute("PRAGMA table_info(recommenders)").fetchall()
         confirmed_type = next(
             (row["type"] for row in rec_cols_info if row["name"] == "confirmed"),
@@ -294,7 +294,7 @@ def init_db() -> None:
             conn.execute("DROP TABLE recommenders")
             conn.execute("ALTER TABLE recommenders_new RENAME TO recommenders")
 
-        
+
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS positions_updated_at
                 AFTER UPDATE ON positions FOR EACH ROW
@@ -303,7 +303,7 @@ def init_db() -> None:
             END
         """)
 
-     
+
         for req_col, _done_col, _ in config.REQUIREMENT_DOCS:
             conn.execute(
                 f"UPDATE positions SET {req_col} = "
@@ -393,7 +393,7 @@ def update_position(position_id: int, fields: dict[str, Any]) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-   
+
     try:
         _exports.write_all()
     except Exception:
@@ -410,7 +410,7 @@ def delete_position(position_id: int) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-  
+
     try:
         _exports.write_all()
     except Exception:
@@ -509,7 +509,7 @@ def upsert_application(
                     (config.STATUS_APPLIED, position_id, config.STATUS_SAVED),
                 )
 
-          
+
             if fields.get("response_type") == config.RESPONSE_TYPE_OFFER:
                 terminal = tuple(config.TERMINAL_STATUSES)
                 placeholder_list = ", ".join("?" * len(terminal))
@@ -597,7 +597,7 @@ def add_interview(
     the status update.
 
     Calls exports.write_all() on success."""
-  
+
     fields = dict(fields)
 
     with _connect() as conn:
@@ -632,7 +632,7 @@ def add_interview(
                 (config.STATUS_INTERVIEW, application_id, config.STATUS_APPLIED),
             )
 
-        
+
         cur = conn.execute(
             "SELECT status FROM positions WHERE id = ?",
             (application_id,),
@@ -712,7 +712,7 @@ def delete_interview(interview_id: int) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    
+
     try:
         _exports.write_all()
     except Exception:
@@ -739,7 +739,7 @@ def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
 
     import exports as _exports  # deferred: avoids circular import
 
-    
+
     try:
         _exports.write_all()
     except Exception:
@@ -803,7 +803,7 @@ def delete_recommender(rec_id: int) -> None:
 
     import exports as _exports  # deferred: avoids circular import
 
-    
+
     try:
         _exports.write_all()
     except Exception:
