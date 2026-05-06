@@ -90,18 +90,12 @@ def _confirm_delete_dialog() -> None:
     position_name: str = st.session_state.get("_delete_target_name", "")
 
     st.warning(
-        f'Delete **"{position_name}"**? This also removes its '
-        f"application, interview, and recommender rows (FK cascade) "
-        f"and **cannot be undone**."
+        f'Delete **"{position_name}"**? This will also permanently delete all associated '
+        f"application, interview, and recommender data. This **cannot be undone**."
     )
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
-        if st.button(
-            "Confirm Delete",
-            type="primary",
-            key="edit_delete_confirm",
-            width="stretch",
-        ):
+        if st.button("Delete Position", key="edit_delete_confirm", type="primary"):
             # Review Fix #1 (phase-3-tier5-review.md): defend against a
             # missing _delete_target_id (stale session_state, orphaned
             # rerun, future refactor drops the assignment). Without this
@@ -110,7 +104,7 @@ def _confirm_delete_dialog() -> None:
             # still fires — the user reads "Deleted" but the row is intact.
             # Surface a clear error and keep state untouched for retry.
             if position_id is None:
-                st.error("Delete target was lost — please re-open the dialog.")
+                st.error("The position to delete could not be identified — please close this dialog and try again.")
                 return
             try:
                 database.delete_position(position_id)
@@ -198,7 +192,7 @@ with st.expander("Quick Add", expanded=False):
             priority = st.selectbox("Priority", config.PRIORITY_VALUES, key="qa_priority")
         with col3:
             field = st.text_input("Field", key="qa_field")
-            link = st.text_input("Link (URL)", key="qa_link")
+            link = st.text_input("Link", key="qa_link", placeholder="https://…")
 
         submitted = st.form_submit_button("+ Add Position", key="qa_submit")
 
@@ -262,7 +256,7 @@ with col_search:
     # one column keeps "what you type matches what's printed in the
     # Position column" predictable).
     search_filter = st.text_input(
-        "Search positions",
+        "Search",
         placeholder="Search by position name…",
         key="filter_search",
     )
@@ -345,7 +339,8 @@ elif df_filtered.empty:
     st.session_state.pop("_edit_form_sid", None)  # F4: same pairing
     st.info(config.EMPTY_FILTERED_POSITIONS)
 else:
-    st.caption(f"{len(df_filtered)} position(s) tracked.")
+    _n = len(df_filtered)
+    st.caption(f"{_n} " + ("position" if _n == 1 else "positions") + " tracked.")
 
     # T3-A / T3-B: build display DataFrame with urgency flag, then render table.
     df_display = df_filtered.copy()
@@ -391,8 +386,8 @@ else:
             # concept); the underlying df column is `status_label` so the
             # cell values go through the STATUS_LABELS map.
             "status_label": st.column_config.TextColumn("Status", width="medium"),
-            "deadline_date": st.column_config.TextColumn("Due", width="small"),
-            "deadline_urgency": st.column_config.TextColumn("Urgency", width="small"),
+            "deadline_date": st.column_config.TextColumn("Deadline", width="small"),
+            "deadline_urgency": st.column_config.TextColumn("Urgency", width="small", help="🔴 ≤7 days · 🟡 ≤30 days · blank = not urgent · — = no deadline"),
         },
         key="positions_table",
         on_select="rerun",
@@ -665,8 +660,9 @@ if "selected_position_id" in st.session_state:
                 # specific nuance — "green card required", "J-1 OK
                 # with a waiver"). Keys do not collide with the form
                 # id "edit_overview" per DESIGN §8.0.
-                st.selectbox("Work Authorization", config.WORK_AUTH_OPTIONS, key="edit_work_auth")
-                st.text_area("Work Authorization Note", key="edit_work_auth_note")
+                st.selectbox("Work Authorization", config.WORK_AUTH_OPTIONS, key="edit_work_auth",
+                             help="Does this posting explicitly accept your work authorization / visa status?")
+                st.text_area("Work Authorization Notes", key="edit_work_auth_note")
                 overview_submitted = st.form_submit_button(
                     "Save Changes",
                     key="edit_overview_submit",
@@ -705,7 +701,7 @@ if "selected_position_id" in st.session_state:
                     # the handler exists to prevent.
                     try:
                         database.update_position(sid, payload)
-                        st.toast(f'Saved "{new_name}".')
+                        st.toast(f'Saved overview for "{new_name}".')
                         # Pop the sentinel so the next render re-seeds the
                         # widgets from the freshly-persisted DB values
                         # (e.g. position_name is now the stripped version).
