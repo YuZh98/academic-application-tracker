@@ -17,7 +17,7 @@ this doc.
 ### Pre-flight (run before writing any code)
 
 ```bash
-cd /Users/zhengyu/Desktop/Claude/Project/Postdoc
+cd <repo-root>
 git fetch && git checkout main && git pull --ff-only origin main
 git log --oneline -5            # confirm main HEAD matches "Current state"
 source .venv/bin/activate
