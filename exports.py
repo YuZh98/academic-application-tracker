@@ -1,4 +1,3 @@
-# exports.py
 # Markdown export generators — DESIGN §7.
 #
 # Called by database.py after every write operation:
@@ -20,12 +19,6 @@ import config
 logger = logging.getLogger(__name__)
 
 EXPORTS_DIR: Path = Path(__file__).parent / "exports"
-
-# Phase 7 cleanup CL2: the em-dash glyph for empty/NULL cells lives on
-# config.EM_DASH now (single source of truth across pages + exports).
-# References below read `config.EM_DASH` directly — the previous
-# module-private `_EM_DASH = "—"` was dropped to avoid a hop through a
-# per-module alias.
 
 
 def _safe_str_or_em(v: Any) -> str:
@@ -57,7 +50,7 @@ def _md_escape_cell(s: str) -> str:
 
 def _format_confirmation(received: Any, iso_date: Any) -> str:
     """Render the (confirmation_received, confirmation_date) pair as a
-    single cell — DESIGN §8.3 D-A T1-C inline-text pattern.
+    single cell (DESIGN §8.3).
 
     Tri-state cell:
       received=0 / NULL / NaN  → ``config.EM_DASH``
@@ -76,9 +69,11 @@ def _format_confirmation(received: Any, iso_date: Any) -> str:
             return config.EM_DASH
     except (TypeError, ValueError):
         return config.EM_DASH
-    iso_str = "" if (
-        iso_date is None or (isinstance(iso_date, float) and math.isnan(iso_date))
-    ) else str(iso_date)
+    iso_str = (
+        ""
+        if (iso_date is None or (isinstance(iso_date, float) and math.isnan(iso_date)))
+        else str(iso_date)
+    )
     if not iso_str:
         return "✓ (no date)"
     return f"✓ {iso_str}"
@@ -163,8 +158,7 @@ def write_all() -> None:
             globals()[name]()
         except Exception:
             logger.exception(
-                f"exports.write_all(): {name} failed; "
-                "subsequent writers will still run"
+                f"exports.write_all(): {name} failed; subsequent writers will still run"
             )
 
 
@@ -219,10 +213,7 @@ def write_opportunities() -> None:
             kind="stable",
         ).reset_index(drop=True)
 
-    header = (
-        "| Position | Institute | Field | Deadline "
-        "| Priority | Status | Created | Updated |"
-    )
+    header = "| Position | Institute | Field | Deadline | Priority | Status | Created | Updated |"
     separator = "| --- | --- | --- | --- | --- | --- | --- | --- |"
 
     lines: list[str] = [header, separator]
@@ -306,15 +297,13 @@ def write_progress() -> None:
         # contract: empty DataFrame for a position with no interviews,
         # one row per interview ordered by sequence ASC. Only the
         # `scheduled_date` column matters for the summary cell.
-        # PR #22 precedent: iterrows cells get Series | ndarray | Any
+        # iterrows cells have Series | ndarray | Any
         # union types from pandas-stubs. Funnel through Any so int()
         # only sees the (real, runtime) scalar.
         pid_raw: Any = row["position_id"]
         position_id = int(pid_raw)
         interviews_df = database.get_interviews(position_id)
-        scheduled_dates = (
-            list(interviews_df["scheduled_date"]) if not interviews_df.empty else []
-        )
+        scheduled_dates = list(interviews_df["scheduled_date"]) if not interviews_df.empty else []
 
         cells = [
             _safe_str_or_em(row["position_name"]),
@@ -356,7 +345,7 @@ def write_recommenders() -> None:
         (``—`` / ``✓ {ISO}`` / ``✓ (no date)``) — REUSED because the
         ``(reminder_sent, reminder_sent_date)`` pair has the same
         ``(flag, date)`` shape as the Applications-page Confirmation
-        pattern (DESIGN §8.3 D-A T1-C precedent).
+        pattern (DESIGN §8.3).
       - ``_md_escape_cell`` on every cell.
       - No status sentinel — recommenders don't carry pipeline status.
 
@@ -372,7 +361,7 @@ def write_recommenders() -> None:
     ``database.get_all_recommenders()`` SQL covers the first + third
     keys (``recommender_name ASC, id ASC``); ``deadline_date`` is
     merged in from ``database.get_all_positions()`` here in pandas
-    (mirror of T2's "compose multiple reads in exports.py" precedent).
+    (the deadline sort key is merged here in pandas to avoid a new joined query in database.py).
     The ``pandas.sort_values(... kind='stable')`` re-sort on top of
     that defends against a future upstream change to either reader's
     SQL ORDER BY clause.
@@ -393,12 +382,8 @@ def write_recommenders() -> None:
         # Trim positions to (id, deadline_date) so the merge doesn't
         # pollute the row with stray columns; rename id → position_id
         # to align with df's join column.
-        positions = (
-            database.get_all_positions()
-            [["id", "deadline_date"]]
-            .rename(  # type: ignore[call-overload]
-                columns={"id": "position_id", "deadline_date": "_pos_deadline"},
-            )
+        positions = database.get_all_positions()[["id", "deadline_date"]].rename(  # type: ignore[call-overload]
+            columns={"id": "position_id", "deadline_date": "_pos_deadline"},
         )
         df = df.merge(positions, on="position_id", how="left")
         df = df.sort_values(
