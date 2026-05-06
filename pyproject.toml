@@ -6,7 +6,7 @@
 
 [project]
 name = "academic-application-tracker"
-version = "0.10.0"
+version = "0.11.0"
 description = "Local-first Streamlit app for tracking postdoc / PhD / faculty / fellowship applications — positions, interviews, recommendation letters, deadlines."
 authors = [{ name = "Yu Zheng" }]
 readme = "README.md"
