@@ -166,7 +166,7 @@ Postdoc/
 │   ├── PROGRESS.md
 │   └── RECOMMENDERS.md
 │
-├── postdoc.db                SQLite database (GITIGNORED — binary, personal data)
+├── postdoc.db                SQLite database (GITIGNORED — binary, personal data; filename configurable via config.DB_FILENAME)
 ├── requirements.txt          Pinned versions (committed)
 │
 ├── tests/                    pytest suite (committed)

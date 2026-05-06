@@ -1402,7 +1402,8 @@ class TestT6ComposeButton:
       - Label: ``📧 Compose Reminder Email`` verbatim.
       - URL scheme: ``mailto:`` with empty path (no ``to:`` field — the
         recommenders schema doesn't store emails today).
-      - Subject: ``Following up: letters for {N} postdoc applications``
+      - Subject: ``Following up: letters for {N} <APPLICATION_LABEL>s``
+        (label sourced from ``config.APPLICATION_LABEL``)
         where ``N`` is the count of positions that recommender owes
         letters for.
       - Body: ``Hi {recommender_name}, just a quick check-in on the
@@ -1466,7 +1467,7 @@ class TestT6ComposeButton:
         at = _run_page()
         compose = [b for b in link_buttons(at) if b.proto.label == self.LABEL]
         decoded = decode_mailto(compose[0].proto.url)
-        expected = "Following up: letter for 1 postdoc application"
+        expected = f"Following up: letter for 1 {config.APPLICATION_LABEL}"
         assert decoded["subject"] == expected, (
             f"Subject must be {expected!r}; got {decoded['subject']!r}"
         )
@@ -1495,7 +1496,7 @@ class TestT6ComposeButton:
             f"Two-position single-recommender → one Compose button; got {len(compose)}"
         )
         decoded = decode_mailto(compose[0].proto.url)
-        expected = "Following up: letters for 2 postdoc applications"
+        expected = f"Following up: letters for 2 {config.APPLICATION_LABEL}s"
         assert decoded["subject"] == expected, (
             f"Subject N must equal owed-position count; expected {expected!r}, "
             f"got {decoded['subject']!r}"
