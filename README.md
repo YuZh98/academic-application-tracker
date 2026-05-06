@@ -1,5 +1,7 @@
 # Academic Application Tracker
 
+[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A local, single-user Streamlit app that answers one daily question
 for an academic applicant: **"What do I do today?"** Tracks
 positions, applications, interviews, and recommendation letters
