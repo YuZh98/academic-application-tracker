@@ -6,7 +6,7 @@
 #   - set_page_config(layout="wide"), database.init_db(), st.title("Export")
 #   - One-line intro (wireframe-pinned).
 #   - st.button("Regenerate all markdown files", key="export_regenerate",
-#     type="primary") wraps exports.write_all() in try/except per
+#     type="primary") wraps database.regenerate_exports() in try/except per
 #     GUIDELINES §8 (friendly error, no re-raise) — the inner per-writer
 #     log-and-continue (DESIGN §7 contract #1) means only EXPORTS_DIR.mkdir
 #     failures should reach the handler.
@@ -20,12 +20,10 @@
 # data=Path.read_bytes(), disabled with data=b"" when absent.
 
 from datetime import datetime
-from pathlib import Path
 
 import streamlit as st
 
 import database
-import exports
 
 # DESIGN §8.0 + D14: every page's FIRST Streamlit call is set_page_config
 # with wide layout. Must precede any other st.* call.
@@ -50,13 +48,14 @@ st.markdown(
 
 # ── Regenerate button ────────────────────────────────────────────────────────
 #
-# Calls `exports.write_all()`. Per DESIGN §7 contract #1, write_all
-# log-and-continues on individual writer failure (each `write_*` runs
-# inside its own try/except), so only the EXPORTS_DIR.mkdir leg of
-# write_all can surface an exception to this handler. GUIDELINES §8
-# wraps the call so the user sees a friendly st.error rather than a
-# traceback, and the click handler does NOT re-raise — the button is
-# still rendered after a failure so the user can retry.
+# Calls `database.regenerate_exports()`. Per DESIGN §7 contract #1,
+# write_all log-and-continues on individual writer failure (each
+# `write_*` runs inside its own try/except), so only the
+# EXPORTS_DIR.mkdir leg of write_all can surface an exception to this
+# handler. GUIDELINES §8 wraps the call so the user sees a friendly
+# st.error rather than a traceback, and the click handler does NOT
+# re-raise — the button is still rendered after a failure so the user
+# can retry.
 
 if st.button(
     "Regenerate all markdown files",
@@ -64,7 +63,7 @@ if st.button(
     type="primary",
 ):
     try:
-        exports.write_all()
+        database.regenerate_exports()
         st.toast("Markdown files regenerated.")
     except Exception as e:
         # GUIDELINES §8: friendly error, no re-raise. Mirror of every
@@ -86,8 +85,10 @@ if st.button(
 # rendering would have moved the bold filename onto the button label
 # and broken T4's substring assertions in TestExportPageMtimesPanel.
 #
-# The three filenames mirror the three exports.write_* generators
-# (Phase 6 T1 / T2 / T3); the order here matches the wireframe.
+# Paths are resolved via database.get_export_paths() which returns
+# (filename, Path) pairs for the three locked export files. This routes
+# all exports-module access through database.py per DESIGN §2 (pages
+# must access exports only via database wrappers, never directly).
 #
 # `Path.exists()` check first rather than `try / except FileNotFoundError`
 # on `.stat()` / `.read_bytes()` — both are idiomatic, but exists()
@@ -99,10 +100,7 @@ if st.button(
 st.divider()
 st.subheader("Download")
 
-_EXPORT_FILENAMES = ("OPPORTUNITIES.md", "PROGRESS.md", "RECOMMENDERS.md")
-
-for _filename in _EXPORT_FILENAMES:
-    _path: Path = exports.EXPORTS_DIR / _filename
+for _filename, _path in database.get_export_paths():
     _file_present = _path.exists()
 
     # T5 download button — enabled when the file exists with the file
@@ -129,9 +127,7 @@ for _filename in _EXPORT_FILENAMES:
     # T4 mtime line, unchanged — the "**{filename}** — ..." prose stays
     # the load-bearing substring that T4 tests pin against.
     if _file_present:
-        _ts = datetime.fromtimestamp(_path.stat().st_mtime).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        _ts = datetime.fromtimestamp(_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         st.markdown(f"**{_filename}** — last generated: {_ts}")
     else:
         st.markdown(f"**{_filename}** — not yet generated")
