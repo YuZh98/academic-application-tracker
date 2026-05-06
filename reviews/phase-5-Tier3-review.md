@@ -565,7 +565,7 @@ T2-A's two pinning tests verify this for the application-level Save handler:
 T3-rev-B's per-row Save handler uses the SAME flag (line 894) but has no analogous test. The regression failure mode:
 
 ```
-User clicks Save on interview row 1 → 
+User clicks Save on interview row 1 →
    st.rerun() fires WITHOUT skip flag →
    dataframe event = empty →
    else branch pops applications_selected_position_id →
