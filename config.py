@@ -1,5 +1,4 @@
 # pyright: strict
-# config.py
 # Single source of truth for all constants, vocabularies, and field definitions.
 # This is the ONLY file that needs to change when:
 #   - Adding a new document requirement type
@@ -13,12 +12,8 @@
 
 # ── Universal placeholder glyph ───────────────────────────────────────────────
 # Em-dash (U+2014) used to render NULL / NaN / empty TEXT cells across every
-# user-facing surface (page tables, dashboard KPIs, exports markdown). Lifted
-# to config in Phase 7 cleanup CL2 — was previously duplicated as
-# `EM_DASH = "—"` in pages/1_Opportunities.py + pages/2_Applications.py +
-# pages/3_Recommenders.py, as `_EM_DASH` in exports.py, and as
-# `NEXT_INTERVIEW_EMPTY` in app.py (same value, different name). Single
-# source of truth so a future glyph change is a one-line edit.
+# user-facing surface (page tables, dashboard KPIs, exports markdown).
+# Single source of truth so a future glyph change is a one-line edit.
 EM_DASH: str = "—"
 
 # ── Status pipeline ───────────────────────────────────────────────────────────
@@ -66,12 +61,7 @@ STATUS_LABELS: dict[str, str] = {
 # Named aliases for the individual pipeline statuses. Page code that needs
 # a *specific* status (e.g. the dashboard's per-bucket KPI counts) references
 # these rather than hardcoding the literal — keeps the anti-typo guardrail in
-# place without forcing positional-index access into STATUS_VALUES. Added in
-# Phase 4 T1-C for app.py's Tracked / Applied / Interview counters; extended
-# in the v1.1 doc refactor (F2 / F4 fix) so FUNNEL_BUCKETS below can be
-# defined without literals. The stage-0 alias was renamed in v1.3
-# Sub-task 5 alongside the stage-0 literal rename; existing rows migrate
-# in place via the one-shot UPDATE in database.init_db() (DESIGN §6.3).
+# place without forcing positional-index access into STATUS_VALUES.
 STATUS_SAVED: str = STATUS_VALUES[0]  # "[SAVED]"
 STATUS_APPLIED: str = STATUS_VALUES[1]  # "[APPLIED]"
 STATUS_INTERVIEW: str = STATUS_VALUES[2]  # "[INTERVIEW]"
@@ -85,8 +75,8 @@ STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 # database.py reads this list; never hardcode these strings outside config.py.
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
-# Applications-page filter sentinel + exclusion set (DESIGN §8.3, Phase 5
-# T1-B). The Applications page selectbox offers an "Active" sentinel as
+# Applications-page filter sentinel + exclusion set (DESIGN §8.3).
+# The Applications page selectbox offers an "Active" sentinel as
 # its default — semantically "every status that is still actionable"
 # (excludes pre-application STATUS_SAVED and withdrawn STATUS_CLOSED).
 # The literal lives in config (not the page) so a future surface — e.g.
@@ -97,8 +87,7 @@ STATUS_FILTER_ACTIVE: str = "Active"
 # Universal "no narrowing applied" sentinel for filter selectboxes
 # (Opportunities, Applications, Recommenders). The filter selectbox is
 # rendered as `[FILTER_ALL] + <real options>` and the page checks
-# `if selected != config.FILTER_ALL: ...narrow...`. Lifted to config in
-# Phase 7 cleanup CL2 — was a magic "All" literal in three pages.
+# `if selected != config.FILTER_ALL: ...narrow...`.
 # Lives alongside STATUS_FILTER_ACTIVE because the two are the
 # Applications page's two sentinel options on its single status filter.
 FILTER_ALL: str = "All"
@@ -146,16 +135,14 @@ assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
 # withdrawal is a genuinely distinct state (DESIGN D17).
 #
 # Raw statuses are referenced via the named aliases above so the bucket
-# layout survives a STATUS_VALUES reorder or rename (the stage-0 rename
-# in v1.3 Sub-task 5 was a single-line swap of the stage-0 alias without
-# changing this table).
+# layout survives a STATUS_VALUES reorder or rename.
 FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
-    ("Saved",     (STATUS_SAVED,),                    "#4F6BEF"),
-    ("Applied",   (STATUS_APPLIED,),                  "#F59E3A"),
-    ("Interview", (STATUS_INTERVIEW,),                "#8B5CF6"),
-    ("Offer",     (STATUS_OFFER,),                    "#10B981"),
-    ("Closed",    (STATUS_CLOSED,),                   "#94A3B8"),
-    ("Archived",  (STATUS_REJECTED, STATUS_DECLINED), "#94A3B8"),
+    ("Saved", (STATUS_SAVED,), "#4F6BEF"),
+    ("Applied", (STATUS_APPLIED,), "#F59E3A"),
+    ("Interview", (STATUS_INTERVIEW,), "#8B5CF6"),
+    ("Offer", (STATUS_OFFER,), "#10B981"),
+    ("Closed", (STATUS_CLOSED,), "#94A3B8"),
+    ("Archived", (STATUS_REJECTED, STATUS_DECLINED), "#94A3B8"),
 ]
 
 # Buckets hidden by default on the dashboard funnel. Users reveal them
@@ -167,8 +154,8 @@ FUNNEL_BUCKETS: list[tuple[str, tuple[str, ...], str]] = [
 # FUNNEL_BUCKETS — enforced by invariant #6 below.
 FUNNEL_DEFAULT_HIDDEN: set[str] = {"Closed", "Archived"}
 
-# State-keyed labels for the funnel disclosure toggle (DESIGN §8.1
-# T6 amendment, 2026-04-30). The toggle reads its label at render time
+# State-keyed labels for the funnel disclosure toggle (DESIGN §8.1).
+# The toggle reads its label at render time
 # via:
 #     config.FUNNEL_TOGGLE_LABELS[st.session_state["_funnel_expanded"]]
 #
@@ -224,17 +211,11 @@ PRIORITY_VALUES: list[str] = ["High", "Medium", "Low", "Stretch"]
 # Three-value categorical answering "does the posting accept this applicant's
 # work authorization?" Paired with the freetext `work_auth_note` column so the
 # enum stays filter-friendly while nuance ("green card required", "J-1 OK
-# with a waiver") lands in free text (DESIGN §5.1 + D22). Replaced the
-# six-value Any/OPT/J-1/H1B/No Sponsorship/Ask list in v1.3 — any legacy
-# values lingering in a dev DB stay as orphan TEXT (column has no constraint);
-# see CHANGELOG [Unreleased] Sub-task 3 for the recommended manual translation.
+# with a waiver") lands in free text (DESIGN §5.1 + D22).
 WORK_AUTH_OPTIONS: list[str] = ["Yes", "No", "Unknown"]
 
-# Employment type. The pre-v1.3 Yes/No/Part-time list was ambiguous
-# (Yes = full-time? Yes = available?); the v1.3 vocabulary names the
-# category explicitly (DESIGN §5.1). Column remains plain TEXT — no DDL
-# change — so dev DBs carrying 'Yes' / 'No' need manual translation
-# (CHANGELOG [Unreleased] Sub-task 3).
+# Employment type (DESIGN §5.1). Column is plain TEXT — no DDL change —
+# so dev DBs carrying legacy 'Yes' / 'No' values need manual translation.
 FULL_TIME_OPTIONS: list[str] = ["Full-time", "Part-time", "Contract"]
 
 SOURCE_OPTIONS: list[str] = [
@@ -311,13 +292,11 @@ CONFIRMED_LABELS: dict[int | None, str] = {
 # list doesn't bloat with one-off formats (hybrid, dinner, campus visit…).
 INTERVIEW_FORMATS: list[str] = ["Phone", "Video", "Onsite", "Other"]
 
-# Tones offered by the Recommenders-page LLM-prompts expander
-# (Phase 5 T6). The expander renders one prompt per tone — the label
+# Tones offered by the Recommenders-page LLM-prompts expander.
+# The expander renders one prompt per tone — the label
 # `f"LLM prompts ({len(REMINDER_TONES)} tones)"` reads its count from
 # this tuple so adding a third tone (e.g. "formal") is a config-only
-# edit. Tuple (not list) so it's hashable + immutable. Lifted to config
-# in Phase 7 cleanup CL2 — was a private `_REMINDER_TONES` in
-# pages/3_Recommenders.py.
+# edit. Tuple (not list) so it's hashable + immutable.
 REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
 
 # ── Requirement document types ────────────────────────────────────────────────
@@ -332,12 +311,11 @@ REMINDER_TONES: tuple[str, ...] = ("gentle", "urgent")
 #   2. database.init_db() will create the new columns on next run.
 #   3. No other file needs to change.
 # Canonical DB values for the req_* TEXT columns. Order is the display order
-# the Requirements-tab radios use (T4-D) — "Required" first so the common
+# the Requirements-tab radios use — "Required" first so the common
 # case is the leftmost/default-read option. Per GUIDELINES §6, never hardcode
 # these strings in page files. DESIGN §5.1 + D21 pin the full-word vocabulary
 # (Yes/Optional/No) — consistent with D20's full-word philosophy for
-# type-safe, self-descriptive raw dumps; the short-code form (Y/Optional/N)
-# was used before v1.3 and migrates in place via init_db() on next start.
+# type-safe, self-descriptive raw dumps.
 REQUIREMENT_VALUES: list[str] = ["Yes", "Optional", "No"]
 
 # UI labels for each canonical value. `st.radio(..., format_func=...)` looks
@@ -379,7 +357,7 @@ QUICK_ADD_FIELDS: list[str] = [
     "link",  # text input (URL)
 ]
 
-# ── Opportunities edit panel (Tier 4) ─────────────────────────────────────────
+# ── Opportunities edit panel ────────────────────────────────────────────────────
 # Tab labels for the inline edit panel below the positions table.
 # Order determines the display order of st.tabs(...); first item is shown by
 # default. Rename or reorder here rather than in pages/1_Opportunities.py.
@@ -394,7 +372,7 @@ DEADLINE_URGENT_DAYS = 7  # Color a deadline red if it falls within this many da
 RECOMMENDER_ALERT_DAYS = 7  # Alert if a recommender was asked N+ days ago with no submission
 
 # User-selectable widths (in days) for the dashboard's Upcoming-panel
-# selectbox (DESIGN §8.1, T4-0b lock-down). The selectbox defaults to
+# selectbox (DESIGN §8.1). The selectbox defaults to
 # DEADLINE_ALERT_DAYS and lets the user widen the view to see further
 # ahead. The urgency band (🔴 / 🟡) stays tied to DEADLINE_URGENT_DAYS /
 # DEADLINE_ALERT_DAYS regardless of the selected window — wider windows
@@ -470,11 +448,11 @@ EMPTY_PENDING_RECOMMENDERS: str = "No pending recommenders."
 EMPTY_PENDING_RECOMMENDER_FOLLOWUPS: str = "No pending recommender follow-ups."
 
 
-# ── Urgency banding (Phase 7 T1 contract; CL2 lift) ───────────────────────────
+# ── Urgency banding ──────────────────────────────────────────────────────────
 # The same banding fires on the dashboard's Upcoming panel, in the
 # Opportunities table's Urgency column, and (potentially) in any
 # future surface that needs the at-a-glance "how close is this?" cue.
-# Lifted here in CL2 so the threshold logic exists in exactly one
+# The threshold logic exists in exactly one
 # place — page + database wrappers parse their input shapes (date
 # string vs. integer days) and delegate to this function.
 def urgency_glyph(days_away: int | None) -> str:
@@ -487,7 +465,7 @@ def urgency_glyph(days_away: int | None) -> str:
         None (no deadline at all)            → EM_DASH
 
     The ``None`` branch distinguishes "no deadline at all" (em-dash
-    placeholder, Phase 7 T1) from "deadline far enough away that no
+    placeholder) from "deadline far enough away that no
     signal fires" (empty string). Both look "absent" to a casual
     reader, but the em-dash makes "we know there's nothing scheduled"
     visible, while the empty string lets the table cell read as

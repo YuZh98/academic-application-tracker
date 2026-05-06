@@ -1,16 +1,5 @@
-# app.py
 # Streamlit entry point — dashboard home page.
 #
-# Phase 4 build-out: answers "What do I do today?" at a glance. This file
-# is layered in over several tiers (see PHASE_4_GUIDELINES.md):
-#   T1 — app shell + 4 KPI cards + empty-DB hero                ✅ done
-#   T2 — application funnel (Plotly bar, FUNNEL_BUCKETS aggregation,
-#        bidirectional disclosure toggle, 3-branch empty-state)   ✅ done
-#   T3 — materials readiness panel                              ✅ done
-#   T4 — upcoming timeline (full-width, dynamic window selector) ✅ done
-#   T5 — recommender alerts (cards grouped by recommender_name)  ✅ done
-#   T6 — disclosure-toggle polish (bidirectional, tertiary, subheader-
-#        row inline placement) — DESIGN §8.1 T6 amendment        ✅ done
 
 from datetime import date
 from typing import Any
@@ -144,17 +133,15 @@ hr {
 def _next_interview_display(upcoming: pd.DataFrame) -> str:
     """Format the Next-Interview KPI value from get_upcoming_interviews().
 
-    User-locked behaviour (2026-04-21):
+    Behaviour:
       - Pick the EARLIEST future scheduled_date across all upcoming
         interviews.
       - The paired institute belongs to whichever position owns that date.
       - Render as '{Mon D} · {institute}' (short month + day, no year).
       - Empty / no upcoming date → ``config.EM_DASH`` ('—').
 
-    Sub-task 8 rewrote get_upcoming_interviews() to return row-per-
-    interview from the normalized interviews sub-table (DESIGN §6.2 +
-    D18) with a single scheduled_date column — rows are guaranteed to
-    carry future dates (the SQL filters on `scheduled_date >= today`)
+    Rows from the normalized interviews sub-table (DESIGN §6.2) carry
+    future dates (the SQL filters on `scheduled_date >= today`)
     and are ordered ASC by scheduled_date. So iloc[0] would also be
     correct today; the explicit min-scan is kept for robustness against
     a future query tweak that drops or reorders the sort.
@@ -187,8 +174,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 # ── Top bar ───────────────────────────────────────────────────────────────────
 # Plain title only — no 🔄 Refresh button per DESIGN D13. Streamlit reruns
 # on any widget interaction; for a single-user local app a manual refresh
-# is cognitive noise for the common case. (The pre-v1.3 C3-locked Refresh
-# button was removed in Sub-task 12 alongside the DESIGN §8.0 alignment.)
+# is cognitive noise for the common case.
 st.title("Academic Application Tracker")
 st.caption(
     "Your complete academic job search — deadlines, applications, and letters, all in one place."
@@ -205,23 +191,20 @@ st.markdown(
 # Tracked = saved + applied — "opportunities that might get moved forward".
 # Applied and Interview are single-bucket counts of their namesake status.
 # Next Interview = earliest future scheduled_date across all rows of
-# database.get_upcoming_interviews() (row-per-interview post-Sub-task 8,
-# DESIGN §6.2 + D18), rendered '{Mon D} · {institute}'; '—' when none
-# (locked decision U3). All status literals via config.STATUS_* aliases.
+# database.get_upcoming_interviews() (DESIGN §6.2), rendered '{Mon D} · {institute}'; '—' when none.
+# All status literals via config.STATUS_* aliases.
 _status_counts = database.count_by_status()
 tracked = _status_counts.get(config.STATUS_SAVED, 0) + _status_counts.get(config.STATUS_APPLIED, 0)
 applied = _status_counts.get(config.STATUS_APPLIED, 0)
 interview = _status_counts.get(config.STATUS_INTERVIEW, 0)
 next_interview = _next_interview_display(database.get_upcoming_interviews())
 
-# ── Empty-DB hero (T1-E) ──────────────────────────────────────────────────────
-# Locked decision U5: when the counted KPI buckets are all zero, show a hero
+# ── Empty-DB hero ────────────────────────────────────────────────────────────
+# When the counted KPI buckets are all zero, show a hero
 # panel above the KPI grid with a CTA that routes to the Opportunities page.
-# The grid still renders below — tests pin this so the hero is purely additive.
-# Trigger = tracked + applied + interview == 0. A DB with only terminal-status
-# rows (CLOSED/REJECTED/DECLINED) also satisfies this; if product call later
-# narrows the trigger to 'total positions == 0', a single test (currently
-# `test_terminal_only_db_still_shows_hero`) needs updating.
+# The grid still renders below. A DB with only terminal-status rows also
+# triggers this; narrowing to 'total positions == 0' would require updating
+# `test_terminal_only_db_still_shows_hero`.
 if tracked == 0 and applied == 0 and interview == 0:
     with st.container(border=True):
         st.subheader("Get started")
@@ -256,15 +239,14 @@ with c3:
 with c4:
     st.metric(label="Next Interview", value=next_interview)
 
-# ── Funnel + Readiness row (T2-C) ─────────────────────────────────────────────
-# Two equal-width columns per locked decision U2: Application Funnel on the
-# left, Materials Readiness (T3) on the right. T3-B will place its content
-# inside `_right_col` below — the split is created once here and reused so
+# ── Funnel + Readiness row ───────────────────────────────────────────────────
+# Two equal-width columns: Application Funnel on the
+# left, Materials Readiness on the right. The split is created once here and reused so
 # the dashboard stays a single 2-column row (no second `st.columns(2)` call).
 _left_col, _right_col = st.columns(2)
 
 with _left_col:
-    # ── Application Funnel (T2-A + T2-B + T2-D + T6 disclosure-toggle) ────────
+    # ── Application Funnel ──────────────────────────────────────────────────────
     # Plotly horizontal bar driven by config.FUNNEL_BUCKETS. One bar per
     # VISIBLE bucket in list display order; the y-axis is reversed so the
     # pipeline reads top-down (first bucket at the top). Bar counts sum
@@ -284,14 +266,11 @@ with _left_col:
     #     collapse).
     #   State flag: st.session_state["_funnel_expanded"] — False by default.
     #
-    # Disclosure toggle (T6 amendment, DESIGN §8.1):
+    # Disclosure toggle (DESIGN §8.1):
     #   - Single `st.button(type="tertiary")` placed in the funnel
     #     subheader row via `st.columns([3, 1])` (subheader left, toggle
     #     right) — same idiom as the Upcoming panel's window selector.
-    #   - Bidirectional: clicking from collapsed → expand; clicking from
-    #     expanded → collapse. Solves the pre-T6 dead-end where
-    #     `[expand]` had no companion `[collapse]` and the only way back
-    #     to the focused view was a fresh session.
+    #   - Bidirectional: clicking collapsed → expand, or expanded → collapse.
     #   - Label sourced from config.FUNNEL_TOGGLE_LABELS keyed by the
     #     state flag — describes what the click WILL do, not the
     #     current state.
@@ -354,7 +333,6 @@ with _left_col:
 
     if _show_funnel_toggle:
         # Branches (b) and (c): subheader-row layout with toggle on the right.
-        # Mirrors the T4 Upcoming-panel idiom for chart-with-controls panels.
         _funnel_header_col, _funnel_toggle_col = st.columns([3, 1])
         with _funnel_header_col:
             st.subheader("Application Funnel")
@@ -406,8 +384,7 @@ with _left_col:
             ]
         )
         # Plotly renders horizontal bars bottom-to-top by default. Reverse
-        # so the first visible bucket sits at the top (pipeline reads
-        # top-down — same reasoning as pre-Sub-task-12, just bucket-scoped).
+        # so the first visible bucket sits at the top (pipeline reads top-down).
         _funnel_fig.update_yaxes(autorange="reversed")
         _funnel_fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
@@ -440,24 +417,23 @@ with _left_col:
             key="funnel_chart",
             config={"displayModeBar": False},
         )
-        # The toggle has already been rendered above in the subheader row
-        # (whenever `_show_funnel_toggle` is True); branch (c) does not
-        # render its own button — that's the post-T6 placement contract.
+        # The toggle is already rendered in the subheader row above; branch (c)
+        # does not render its own button.
 
 with _right_col:
-    # ── Materials Readiness (T3) ──────────────────────────────────────────────
+    # ── Materials Readiness ───────────────────────────────────────────────────
     # Two stacked st.progress bars — one for positions whose required docs
     # are all done, one for positions still missing at least one. Readiness
     # is active-pipeline-only by definition (see compute_materials_readiness),
     # so a DB with only terminal-status rows returns 0/0 and we show the
-    # empty state. Denominator guarded via max(..., 1) per locked decision D5;
+    # empty state. Denominator guarded via max(..., 1);
     # strictly speaking unnecessary inside the else-branch (both counts are
     # zero → we take the if-branch), but the explicit guard keeps the
     # contract close to the code for a future reader.
     #
     # Subheader renders in BOTH branches so page height doesn't flicker when
     # the first qualifying position lands (same stability pattern as the
-    # T2-B funnel subheader).
+    # funnel subheader).
     st.subheader("Materials Readiness")
     _readiness = database.compute_materials_readiness()
     _ready = _readiness["ready"]
@@ -523,10 +499,10 @@ with _right_col:
         if st.button("→ Review in Opportunities", key="materials_readiness_cta"):
             st.switch_page("pages/1_Opportunities.py")
 
-# ── Upcoming (T4) ─────────────────────────────────────────────────────────────
+# ── Upcoming ─────────────────────────────────────────────────────────────────
 # Full-width panel BELOW the funnel/readiness st.columns(2) row, surfacing the
-# merged upcoming feed (deadlines + interviews) from database.get_upcoming()
-# (T4-A). DESIGN §8.1 + T4-0/T4-0b lock-down.
+# merged upcoming feed (deadlines + interviews) from database.get_upcoming().
+# DESIGN §8.1.
 #
 # Layout: an st.columns([3, 1]) pair carries the dynamic subheader on the left
 # and the window-width selectbox on the right. Defining selected_window inside
@@ -535,7 +511,7 @@ with _right_col:
 # visual placement, which is determined by column index.
 #
 # Display contract (DESIGN §8.1 "Upcoming-panel column contract"):
-#   - Six columns renamed from T4-A's lowercase storage form:
+#   - Six columns renamed from storage-form names:
 #     date → Date (datetime.date, rendered 'Apr 24' via DateColumn(format="MMM D"))
 #     days_left → Days left ('today' / 'in 1 day' / 'in N days')
 #     label → Label ('{institute}: {position_name}' or bare position_name)
@@ -545,7 +521,7 @@ with _right_col:
 #              status visible rather than producing NaN)
 #     urgency → Urgency ('🔴' / '🟡' / '' / '—' for no deadline)
 #   - Subheader 'Upcoming (next X days)' renders in BOTH branches for
-#     page-height stability (T2/T3 precedent — without this, the layout
+#     page-height stability (without this, the layout
 #     above shifts when the first qualifying row lands).
 #   - Empty-state copy interpolates the selected window so the message
 #     stays coherent under any user choice.
@@ -630,13 +606,13 @@ else:
         },
     )
 
-# ── Recommender Alerts (T5) ───────────────────────────────────────────────────
+# ── Recommender Alerts ───────────────────────────────────────────────────────
 # Full-width panel BELOW the Upcoming row. Surfaces every recommender whose
 # letter is past `RECOMMENDER_ALERT_DAYS` of being asked and still has no
-# `submitted_date`. DESIGN §8.1 + TASKS.md T5-A locked contract:
+# `submitted_date`. DESIGN §8.1:
 #
 #   - Subheader 'Recommender Alerts' renders in BOTH branches for page-height
-#     stability (T2 / T3 / T4 precedent).
+#     stability.
 #   - Empty branch: st.info("No pending recommender follow-ups.").
 #   - Populated branch: one st.container(border=True) per distinct
 #     recommender_name (groupby aggregates a person's multiple-letter cases
@@ -644,11 +620,11 @@ else:
 #       **⚠ {Name}**
 #       - {institute}: {position_name} (asked {N}d ago, due {Mon D})
 #       - ...
-#     Bare {position_name} when institute is empty (T4 Label precedent);
+#     Bare {position_name} when institute is empty;
 #     'due —' (em dash) for NULL deadline (mirrors `config.EM_DASH`).
 #
 # The Compose-reminder-email button + LLM-prompts expander (DESIGN §8.4 D-C)
-# live on the Recommenders PAGE (Phase 5 T6), NOT here — T5 only renders the
+# live on the Recommenders PAGE, NOT here — this panel only renders the
 # alert cards.
 st.divider()
 st.subheader("Recommender Alerts")
@@ -659,7 +635,7 @@ else:
     _today = date.today()
 
     def _format_label(institute: str | None, position_name: str) -> str:
-        """T4 Label precedent — '{institute}: {position_name}' when
+        """Format as '{institute}: {position_name}' when
         institute is non-empty; bare position_name otherwise. _safe-str
         coercion isn't needed here because get_pending_recommenders
         already returns Python strings (or None) from the SQL projection;
@@ -670,19 +646,16 @@ else:
         return position_name
 
     def _format_due(deadline_iso: str | None) -> str:
-        """Due-date in 'Mon D' form (T4 DateColumn precedent — no year,
-        since alerts surface near-future deadlines). ``config.EM_DASH``
-        for NULL — pd.isna catches both None and NaN-from-pandas
-        (dev-notes gotcha #13)."""
+        """Due-date in 'Mon D' form (no year, since alerts surface
+        near-future deadlines). ``config.EM_DASH`` for NULL —
+        pd.isna catches both None and NaN-from-pandas."""
         if deadline_iso is None or pd.isna(deadline_iso) or deadline_iso == "":
             return config.EM_DASH
         d = date.fromisoformat(deadline_iso)
         return f"{d.strftime('%b')} {d.day}"
 
-    # Stable iteration order: get_pending_recommenders() already sorts by
-    # recommender_name ASC, deadline_date ASC NULLS LAST, so a plain groupby
-    # preserves both within-group order (deadline-asc) and across-group
-    # alphabetical order without any extra sort.
+    # groupby preserves the sort order of get_pending_recommenders()
+    # (recommender_name ASC, deadline_date ASC NULLS LAST).
     for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
         with st.container(border=True):
             _rel = str(_group.iloc[0]["relationship"] or "")

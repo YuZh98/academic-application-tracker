@@ -1,24 +1,5 @@
 # pages/4_Export.py
-# Streamlit page — Export.
-#
-# Phase 6 T4: page shell + manual regenerate button + per-file mtimes
-# panel (DESIGN §8.5; docs/ui/wireframes.md#export).
-#   - set_page_config(layout="wide"), database.init_db(),
-#     st.title("Export & Download")
-#   - One-line intro (wireframe-pinned).
-#   - st.button("Regenerate all markdown files", key="export_regenerate",
-#     type="primary") calls database.regenerate_exports() per
-#     GUIDELINES §8 (friendly error, no re-raise) and DESIGN §2
-#     (DESIGN §2: pages may not use the exports module directly).
-#   - Per-file mtimes block: one st.markdown line per locked filename,
-#     either "**FILENAME.md** — last generated: {Mon D, YYYY at H:MM AM/PM}"
-#     or "**FILENAME.md** — not yet generated. Use **Regenerate** above ..."
-#     when the file is absent.
-# Phase 6 T5: download_button per file + "── Download Files ───" wireframe
-# section header (rendered as st.divider() + st.subheader("Download Files")).
-# Each per-file row now carries (download_button, mtime line, caption)
-# stacked vertically; the button is enabled when the file exists with
-# data=Path.read_bytes(), disabled with data=b"" when absent.
+# Export page — manual regenerate trigger and per-file download buttons.
 
 from datetime import datetime
 

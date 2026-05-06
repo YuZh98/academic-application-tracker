@@ -222,14 +222,14 @@ if submitted:
             fields["deadline_date"] = deadline_date.isoformat()
         # F1: wrap database write per GUIDELINES.md §8 — show a clear message on
         # failure rather than exposing a raw traceback to the user.
-        # F1 (Tier-4 full review): the previous version re-raised after
+        #  the previous version re-raised after
         # st.error, which made Streamlit render the very traceback this
         # handler exists to prevent. Swallow the exception here — the
         # friendly message is the intended user-facing behaviour.
         try:
             database.add_position(fields)
             st.toast(f'Added "{position_name}" to your list.')
-            # F1 (Tier-4 review): get_all_positions() orders
+            #  get_all_positions() orders
             # deadline_date ASC NULLS LAST. A quick-added position's
             # positional index depends on its deadline relative to existing
             # rows — it can land anywhere, shifting the index of the
@@ -290,7 +290,7 @@ with col_field:
 # ── TIER 3: Positions table ───────────────────────────────────────────────────
 df = database.get_all_positions()
 
-# T2-B: apply filters sequentially; each active filter narrows df_filtered further.
+# apply filters sequentially; each active filter narrows df_filtered further.
 # PR #22 / CL1 type-clean: pandas-stubs widens `df[bool_mask]` to
 # `Series | DataFrame`, so chaining filter steps loses the DataFrame
 # type and downstream `.str` / `.apply` / `.iloc` accesses fail
@@ -328,16 +328,16 @@ if search_filter.strip():
     )
 
 if df.empty:
-    # T4-A: table not rendered → clear any stale selection from a prior rerun
+    # table not rendered → clear any stale selection from a prior rerun
     # so Tier-4 edit panels do not show for a position the user can't see.
-    # F4 (Tier-4 review): pop the sentinel alongside selected_position_id so
+    #  pop the sentinel alongside selected_position_id so
     # the pair stays in sync — otherwise a later sid that happens to equal
     # the stale sentinel would skip the pre-seed.
     st.session_state.pop("selected_position_id", None)
     st.session_state.pop("_edit_form_sid", None)
     st.info(config.EMPTY_NO_POSITIONS)
 elif df_filtered.empty:
-    st.session_state.pop("selected_position_id", None)  # T4-A: same reason
+    st.session_state.pop("selected_position_id", None)  # same reason
     st.session_state.pop("_edit_form_sid", None)  # F4: same pairing
     st.info(config.EMPTY_FILTERED_POSITIONS)
 else:
@@ -368,16 +368,12 @@ else:
         "deadline_urgency",
         "link",
     ]
-    # T4-A: enable single-row selection. AppTest drives this by writing to
-    # session_state["positions_table"] directly (no click-a-row API exists),
-    # so the key is part of the page's public test contract — do not rename
+    # Single-row selection — key is part of the test contract; do not rename
     # without updating TABLE_KEY in tests/test_opportunities_page.py.
     event = st.dataframe(
         df_display,
-        # F2 (Tier-4 full review): use_container_width=True is deprecated in
-        # Streamlit 1.56 (removal after 2025-12-31) — replaced with the
-        # documented `width="stretch"` equivalent. Silences ~60 warnings
-        # per test run.
+        # use_container_width=True is deprecated; width="stretch" is the
+        # documented equivalent.
         width="stretch",
         hide_index=True,
         column_order=display_cols,
@@ -397,9 +393,8 @@ else:
                 width="small",
                 help="Your personal priority for this position",
             ),
-            # DESIGN §8.0 + §8.2: header reads "Status" (the UI-facing
-            # concept); the underlying df column is `status_label` so the
-            # cell values go through the STATUS_LABELS map.
+            # DESIGN §8.0 + §8.2: header reads "Status"; the underlying
+            # column is `status_label` (mapped through STATUS_LABELS).
             "status_label": st.column_config.TextColumn(
                 "Status",
                 width="medium",
@@ -427,8 +422,8 @@ else:
         selection_mode="single-row",
     )
 
-    # T4-A: map the selected positional row index back to its DB id so later
-    # tiers (tabs, edit fields, Save/Delete) can load the right position.
+    # Map the selected positional row index back to its DB id so the
+    # edit panel can load the right position.
     # `event.selection.rows` is the documented runtime form (Streamlit
     # 1.56), but pandas-stubs / streamlit-stubs declare DataframeState
     # as a TypedDict so attribute access fails pyright. AppTest writes
@@ -439,17 +434,11 @@ else:
     selected_rows = list(event.selection.rows) if event is not None else []  # type: ignore[attr-defined]
     if selected_rows and 0 <= selected_rows[0] < len(df_display):
         new_sid = int(df_display.iloc[selected_rows[0]]["id"])
-        # Review Fix #2 (phase-3-tier5-review.md): clear any stale
-        # pending-delete target when the selected row *changes*. Without
-        # this, a user who dismisses the delete dialog via the X/Escape
-        # (neither fires a button click, neither runs our Cancel handler)
-        # leaves _delete_target_id in session_state. If they then select
-        # a different row and later return to the original row, the
-        # elif-reopen branch in the Overview tab would fire a *phantom
-        # dialog* — no user click, no user intent. Clearing on row-change
-        # contains the leak to the original row. The X-dismiss-then-same-
-        # row case remains a known Streamlit limitation (no dialog-close
-        # event in 1.56); documented at the elif-reopen site.
+        # Clear any stale pending-delete target when the selected row changes.
+        # Without this, dismissing the delete dialog via X/Escape (which fires
+        # no button click) leaves _delete_target_id set; a return to the same
+        # row would then re-open the dialog unexpectedly. The X-dismiss-then-
+        # same-row case remains a known Streamlit limitation.
         prev_sid = st.session_state.get("selected_position_id")
         if prev_sid is not None and prev_sid != new_sid:
             st.session_state.pop("_delete_target_id", None)
@@ -458,13 +447,10 @@ else:
     elif (
         st.session_state.pop("_skip_table_reset", False) or "_delete_target_id" in st.session_state
     ):
-        # T5-A: one-shot bypass consumed here. The save handler sets
-        # _skip_table_reset=True before its st.rerun() so this branch
-        # preserves selected_position_id across the save cycle — otherwise
-        # st.dataframe resets its event (same protective behaviour pinned
-        # by test_filter_change_after_selection_clears_selection) and the
-        # edit panel would collapse right after the user hit Save.
-        # T5-E: while a delete dialog is pending (_delete_target_id set),
+        # One-shot bypass: the save handler sets _skip_table_reset=True so
+        # this branch preserves selected_position_id across the save rerun
+        # (st.dataframe resets its selection event on data-change reruns).
+        # While a delete dialog is pending (_delete_target_id set),
         # the Confirm/Cancel click fires an internal rerun that resets the
         # dataframe event. Without this guard, selected_position_id would
         # be popped, the edit panel would collapse, and the elif
@@ -474,7 +460,7 @@ else:
         pass
     else:
         # Empty selection, or index out-of-bounds after filter/data change.
-        # F4 (Tier-4 review): keep the sentinel paired with the sid.
+        #  keep the sentinel paired with the sid.
         st.session_state.pop("selected_position_id", None)
         st.session_state.pop("_edit_form_sid", None)
 
@@ -499,7 +485,7 @@ if "selected_position_id" in st.session_state:
         _status_label = config.STATUS_LABELS.get(r["status"], r["status"])
         st.subheader(f"{r['position_name']} · {_status_label}")
 
-        # T4-C: widget-value trap — once session_state[key] is set, Streamlit
+        # widget-value trap — once session_state[key] is set, Streamlit
         # ignores the `value=` argument on later reruns, so the form would
         # "stick" on the first selected row. Pre-seed widget state whenever
         # the selection changes, tracked via the internal _edit_form_sid
@@ -536,7 +522,7 @@ if "selected_position_id" in st.session_state:
         # cost is microseconds and it absorbs any future Streamlit
         # behaviour change or accidental re-introduction of
         # conditional rendering.
-        # F2 (Tier-4 review): a DB row can legitimately hold priority=NULL
+        #  a DB row can legitimately hold priority=NULL
         # (no DEFAULT in schema) and could theoretically hold an unknown
         # status value (sqlite CLI, future migration). Coerce both to
         # in-vocabulary values so the selectboxes never get an
@@ -561,7 +547,7 @@ if "selected_position_id" in st.session_state:
             if raw_work_auth in config.WORK_AUTH_OPTIONS
             else config.WORK_AUTH_OPTIONS[0]
         )
-        # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
+        #  mirror the try/except in _deadline_urgency —
         # one malformed deadline row should render an empty date input,
         # not crash the whole page.
         try:
@@ -595,7 +581,7 @@ if "selected_position_id" in st.session_state:
             "edit_work_auth_note": (
                 _safe_str(r["work_auth_note"]) if "work_auth_note" in r.index else ""
             ),
-            # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
+            # pre-seed the Notes text_area. positions.notes is TEXT
             # NULL-able (schema: database.py ~line 84), so coerce None/NaN → ""
             # before it reaches st.text_area — the widget expects str, and
             # pandas hands back float('nan') for NULL cells on mixed-dtype
@@ -705,7 +691,7 @@ if "selected_position_id" in st.session_state:
                     key="edit_overview_submit",
                 )
 
-            # T5-A: submit handler lives OUTSIDE the form (mirrors the
+            # submit handler lives OUTSIDE the form (mirrors the
             # quick-add pattern above) so st.error / st.toast render in the
             # page body rather than nested inside the form, which would
             # re-render on every form interaction.
@@ -825,7 +811,7 @@ if "selected_position_id" in st.session_state:
                     key="edit_requirements_submit",
                 )
 
-            # T5-B: critical contract — the payload is built from req_col
+            # critical contract — the payload is built from req_col
             # keys ONLY. done_* columns are NEVER written by this save path,
             # so the user's prepared-documents state (done_cv, done_transcripts,
             # ...) is preserved across any req_* flip Yes↔Optional↔No. If the
@@ -872,7 +858,7 @@ if "selected_position_id" in st.session_state:
                         key="edit_materials_submit",
                     )
 
-                # T5-C: critical contract — the payload contains done_* keys
+                # critical contract — the payload contains done_* keys
                 # ONLY for docs currently visible (req_* == 'Yes'). done_* for
                 # hidden docs are never written, so prior prepared-doc state
                 # survives any req_* Yes↔No flip — mirrors T5-B's preservation
@@ -919,7 +905,7 @@ if "selected_position_id" in st.session_state:
                     key="edit_notes_submit",
                 )
 
-            # T5-D: notes column is TEXT NULL-able, but the storage contract
+            # notes column is TEXT NULL-able, but the storage contract
             # (DESIGN.md §6 + CLAUDE.md 'Key Design Decisions') is that empty
             # input is persisted as "" — not None / NULL. Pre-seed coerces
             # NULL → "" on load so a no-op save leaves the DB stable at "".
@@ -939,7 +925,7 @@ if "selected_position_id" in st.session_state:
                     st.error(f"Could not save notes: {exc}")
 
     else:
-        # F3 (Tier-4 review): the selected position vanished from df
+        #  the selected position vanished from df
         # (deleted elsewhere, DB wiped, etc.). Clear both keys so later
         # reruns don't keep re-checking an absent row, and the sentinel
         # can't alias with a future sid.
