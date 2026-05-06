@@ -12,7 +12,7 @@ PhD, faculty, and fellowship** applications — anywhere you're
 juggling deadlines, materials readiness, and follow-ups across many
 institutions in parallel.
 
-![Dashboard — empty state on first run](docs/ui/screenshots/v0.10.0/dashboard-1280.png)
+![Dashboard — empty state on first run](docs/ui/screenshots/v0.11.0/dashboard-1280.png)
 
 Built as a personal tool while job-hunting — and as a portfolio
 piece demonstrating disciplined software engineering on a
