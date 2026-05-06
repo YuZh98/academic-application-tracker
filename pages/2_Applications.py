@@ -46,13 +46,12 @@ import database
 # in-file site reads it; ruff won't flag F401).
 from config import EM_DASH
 
-
 # DESIGN §8.0 — first executable Streamlit call on every page. Streamlit
 # raises if anything else runs before this. Re-executed on every page
 # switch; layout="wide" is required because the app is data-heavy
 # (filter bar + multi-column applications table + future detail card).
 st.set_page_config(
-    page_title="Academic Application Tracker",
+    page_title="Applications — Academic Application Tracker",
     page_icon="📋",
     layout="wide",
 )
@@ -198,12 +197,8 @@ def _confirm_interview_delete_dialog() -> None:
       failure-preserves-state precedent — there is no DB rollback to
       undo, the user just gets to try again.
     """
-    iid: int | None = st.session_state.get(
-        "_apps_interview_delete_target_id"
-    )
-    seq: int | None = st.session_state.get(
-        "_apps_interview_delete_target_seq"
-    )
+    iid: int | None = st.session_state.get("_apps_interview_delete_target_id")
+    seq: int | None = st.session_state.get("_apps_interview_delete_target_seq")
     if iid is None:
         # Defensive: the post-loop guard already filters by
         # `pending_id in current_ids`, so this branch should be
@@ -292,6 +287,7 @@ selected_filter = st.selectbox(
     # no-op — every option value is already a `str`.
     format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
     key="apps_filter_status",
+    help="'Active' shows Applied through Offer stages; excludes Saved and Closed.",
 )
 
 
@@ -359,7 +355,7 @@ else:
         "Position":  df_filtered["position_name"].apply(_safe_str_or_em),
         "Institute": df_filtered["institute"].apply(_safe_str_or_em),
         "Applied":   df_filtered["applied_date"].apply(_format_date_or_em),
-        "Recs": df_filtered["position_id"].apply(
+        "Letters": df_filtered["position_id"].apply(
             lambda pid: "✓" if database.is_all_recs_submitted(pid) else EM_DASH
         ),
         "Confirmation": df_filtered.apply(
@@ -390,7 +386,8 @@ else:
             "Position":     st.column_config.TextColumn("Position",     width="large"),
             "Institute":    st.column_config.TextColumn("Institute",    width="medium"),
             "Applied":      st.column_config.TextColumn("Applied",      width="small"),
-            "Recs":         st.column_config.TextColumn("Recs",         width="small"),
+            "Letters":      st.column_config.TextColumn("Letters",      width="small",
+                                help="✓ = all recommendation letters submitted"),
             "Confirmation": st.column_config.TextColumn("Confirmation", width="medium"),
             "Response":     st.column_config.TextColumn("Response",     width="small"),
             "Result":       st.column_config.TextColumn("Result",       width="small"),
@@ -473,14 +470,12 @@ if "applications_selected_position_id" in st.session_state:
             status_label = config.STATUS_LABELS.get(r["status"], r["status"])
             st.subheader(f"{label} · {status_label}")
 
-            # Inline "All recs submitted" line — surfaces
-            # `database.is_all_recs_submitted(sid)` (vacuous-true for
-            # zero recs per D23). Uses the same ✓ / em-dash glyph pair
-            # as the table's Recs column so the two stay coherent.
-            recs_glyph = (
-                "✓" if database.is_all_recs_submitted(sid) else EM_DASH
-            )
-            st.markdown(f"All recs submitted: {recs_glyph}")
+            # Inline "All recommendation letters submitted" line —
+            # surfaces `database.is_all_recs_submitted(sid)` (vacuous-
+            # true for zero recs per D23).
+            recs_submitted = database.is_all_recs_submitted(sid)
+            _recs_label = "✓ Yes" if recs_submitted else "✗ No"
+            st.markdown(f"All recommendation letters submitted: {_recs_label}")
 
             # ── Pre-seed widget state via the _applications_edit_form_sid
             # sentinel. Two-phase apply (gotcha #2 — once
@@ -555,13 +550,13 @@ if "applications_selected_position_id" in st.session_state:
                 resp_cols = st.columns(2)
                 with resp_cols[0]:
                     # Nullable selectbox: None is the explicit "no
-                    # response yet" option, rendered as EM_DASH via
-                    # format_func. Real RESPONSE_TYPES entries render
-                    # as themselves.
+                    # response yet" option, rendered with a readable
+                    # label via format_func. Real RESPONSE_TYPES entries
+                    # render as themselves.
                     st.selectbox(
                         "Response type",
                         options=[None, *config.RESPONSE_TYPES],
-                        format_func=lambda v: EM_DASH if v is None else v,
+                        format_func=lambda v: "— No response yet" if v is None else v,
                         key="apps_response_type",
                     )
                 with resp_cols[1]:
@@ -580,7 +575,7 @@ if "applications_selected_position_id" in st.session_state:
                     )
                 with result_cols[1]:
                     st.date_input(
-                        "Result notify date",
+                        "Result notification date",
                         value=None,
                         key="apps_result_notify_date",
                     )
@@ -609,7 +604,7 @@ if "applications_selected_position_id" in st.session_state:
             # the detail form ends (still inside the same bordered
             # container per "under app detail card"). Wireframes are
             # intent-only for layout (wireframes.md line 3).
-            st.markdown("**Interviews**")
+            st.markdown("#### Interviews")
 
             # ── Pre-seed sentinel: per-row, frozenset of seeded ids ──
             #
@@ -702,7 +697,7 @@ if "applications_selected_position_id" in st.session_state:
                     _cols = st.columns([2, 2, 4])
                     with _cols[0]:
                         st.date_input(
-                            "Date",
+                            "Interview date",
                             value=None,
                             key=f"apps_interview_{_iid}_date",
                         )
@@ -710,11 +705,11 @@ if "applications_selected_position_id" in st.session_state:
                         # Mirror of T2-A's response_type selectbox:
                         # leading None makes "no format chosen" a
                         # legal pre-seed value; format_func renders
-                        # None as the em-dash glyph.
+                        # None as a readable label.
                         st.selectbox(
                             "Format",
                             options=[None, *config.INTERVIEW_FORMATS],
-                            format_func=lambda v: EM_DASH if v is None else v,
+                            format_func=lambda v: "— No format set" if v is None else v,
                             key=f"apps_interview_{_iid}_format",
                         )
                     with _cols[2]:
@@ -783,9 +778,10 @@ if "applications_selected_position_id" in st.session_state:
             # newly-Added id (current_ids - seeded_ids = {new_id}), so
             # existing widget session_state values survive the rerun
             # untouched.
-            add_clicked = st.button(
-                "Add another interview", key="apps_add_interview",
+            _add_label = (
+                "Add interview" if interviews_df.empty else "Add another interview"
             )
+            add_clicked = st.button(_add_label, key="apps_add_interview")
 
         if detail_submitted:
             # Build the dirty diff against the persisted application row
