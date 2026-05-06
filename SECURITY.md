@@ -12,8 +12,8 @@ versions are not patched; please upgrade.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 0.10.x   | Yes                |
-| < 0.10   | No                 |
+| 0.11.x   | Yes                |
+| < 0.11   | No                 |
 
 ## Reporting a Vulnerability
 

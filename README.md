@@ -64,7 +64,7 @@ pages/*.py    display only — no raw SQL, no direct exports import
 ```
 Layer contracts are enforced by cohesion tests that fail CI if any rule drifts.
 
-**879 tests, 97% coverage.** Integration tests use the official `streamlit.testing.v1.AppTest` harness against real page files; unit tests run against per-test temp SQLite files via a `db` fixture. A second test pass with `-W error::DeprecationWarning` catches Streamlit-API drift before it surfaces on upgrades.
+**889 tests, 97% coverage.** Integration tests use the official `streamlit.testing.v1.AppTest` harness against real page files; unit tests run against per-test temp SQLite files via a `db` fixture. A second test pass with `-W error::DeprecationWarning` catches Streamlit-API drift before it surfaces on upgrades.
 
 **CI on every PR:** ruff lint · pyright strict-basic (zero errors required) · pytest (two passes) · status-literal grep (no hardcoded `[SAVED]` / `[APPLIED]` / `[INTERVIEW]` strings in page code — all vocabulary routed through `config.py`).
 
