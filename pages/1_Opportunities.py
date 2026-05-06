@@ -23,7 +23,6 @@ import database
 # rest of the project.
 
 
-
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
 
@@ -92,15 +91,15 @@ def _confirm_delete_dialog() -> None:
 
     st.warning(
         f'Delete **"{position_name}"**? This also removes its '
-        f'application, interview, and recommender rows (FK cascade) '
-        f'and **cannot be undone**.'
+        f"application, interview, and recommender rows (FK cascade) "
+        f"and **cannot be undone**."
     )
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
         if st.button(
             "Confirm Delete",
             type="primary",
-            key="delete_confirm",
+            key="edit_delete_confirm",
             width="stretch",
         ):
             # Review Fix #1 (phase-3-tier5-review.md): defend against a
@@ -111,9 +110,7 @@ def _confirm_delete_dialog() -> None:
             # still fires — the user reads "Deleted" but the row is intact.
             # Surface a clear error and keep state untouched for retry.
             if position_id is None:
-                st.error(
-                    "Delete target was lost — please re-open the dialog."
-                )
+                st.error("Delete target was lost — please re-open the dialog.")
                 return
             try:
                 database.delete_position(position_id)
@@ -129,7 +126,7 @@ def _confirm_delete_dialog() -> None:
             except Exception as exc:
                 st.error(f"Could not delete: {exc}")
     with col_cancel:
-        if st.button("Cancel", key="delete_cancel", width="stretch"):
+        if st.button("Cancel", key="edit_delete_cancel", width="stretch"):
             # Cancel contract: close the dialog, no data-state change.
             # Clear only the pending-delete pair; selected_position_id /
             # _edit_form_sid stay intact so the user returns to the same
@@ -173,6 +170,7 @@ def _deadline_urgency(date_str: Any) -> str:
         return config.urgency_glyph(None)
     return config.urgency_glyph(days)
 
+
 database.init_db()
 
 # DESIGN §8.0 / D14: page-wide layout is mandatory — positions table + edit
@@ -210,19 +208,19 @@ if submitted:
     # F3: strip all text inputs before validation and storage so whitespace-only
     # values (e.g., "   ") do not bypass the required-field check.
     position_name = position_name.strip()
-    institute     = institute.strip()
-    field         = field.strip()
-    link          = link.strip()
+    institute = institute.strip()
+    field = field.strip()
+    link = link.strip()
 
     if not position_name:
         st.error("Position Name is required.")
     else:
-        fields: dict[str, Any] = {      # F5: dict[str, Any] per project standard
+        fields: dict[str, Any] = {  # F5: dict[str, Any] per project standard
             "position_name": position_name,
-            "institute":     institute,
-            "field":         field,
-            "priority":      priority,
-            "link":          link,
+            "institute": institute,
+            "field": field,
+            "priority": priority,
+            "link": link,
         }
         if deadline_date is not None:
             fields["deadline_date"] = deadline_date.isoformat()
@@ -291,9 +289,7 @@ with col_priority:
         "Priority", [config.FILTER_ALL] + config.PRIORITY_VALUES, index=0, key="filter_priority"
     )
 with col_field:
-    field_filter = st.text_input(
-        "Field", placeholder="Filter by field…", key="filter_field"
-    )
+    field_filter = st.text_input("Field", placeholder="Filter by field…", key="filter_field")
 
 # ── TIER 3: Positions table ───────────────────────────────────────────────────
 df = database.get_all_positions()
@@ -307,13 +303,9 @@ df = database.get_all_positions()
 # in practice; the cast just pins the type for the next step.
 df_filtered: pd.DataFrame = df
 if status_filter != config.FILTER_ALL:
-    df_filtered = cast(
-        pd.DataFrame, df_filtered[df_filtered["status"] == status_filter]
-    )
+    df_filtered = cast(pd.DataFrame, df_filtered[df_filtered["status"] == status_filter])
 if priority_filter != config.FILTER_ALL:
-    df_filtered = cast(
-        pd.DataFrame, df_filtered[df_filtered["priority"] == priority_filter]
-    )
+    df_filtered = cast(pd.DataFrame, df_filtered[df_filtered["priority"] == priority_filter])
 if field_filter.strip():
     # F1: regex=False treats the search term as a literal string, not a regex
     # pattern. Without it, "C++" raises re.error and crashes the page.
@@ -349,17 +341,15 @@ if df.empty:
     st.session_state.pop("_edit_form_sid", None)
     st.info(config.EMPTY_NO_POSITIONS)
 elif df_filtered.empty:
-    st.session_state.pop("selected_position_id", None)   # T4-A: same reason
-    st.session_state.pop("_edit_form_sid", None)         # F4: same pairing
+    st.session_state.pop("selected_position_id", None)  # T4-A: same reason
+    st.session_state.pop("_edit_form_sid", None)  # F4: same pairing
     st.info(config.EMPTY_FILTERED_POSITIONS)
 else:
     st.caption(f"{len(df_filtered)} position(s) tracked.")
 
     # T3-A / T3-B: build display DataFrame with urgency flag, then render table.
     df_display = df_filtered.copy()
-    df_display["deadline_urgency"] = df_display["deadline_date"].apply(
-        _deadline_urgency
-    )
+    df_display["deadline_urgency"] = df_display["deadline_date"].apply(_deadline_urgency)
     # DESIGN §8.0 + §8.2 Status label convention: the table's Status column
     # displays the human-readable label (`config.STATUS_LABELS[raw]`), never
     # the bracketed storage value. Derive a `status_label` column from the
@@ -370,13 +360,15 @@ else:
     # but the dict overload is missing in the stubs; wrap as a lambda
     # so pyright accepts the callable form (runtime semantics identical
     # since every status row already has a STATUS_LABELS entry).
-    df_display["status_label"] = df_display["status"].map(
-        lambda v: config.STATUS_LABELS.get(v, v)
-    )
+    df_display["status_label"] = df_display["status"].map(lambda v: config.STATUS_LABELS.get(v, v))
 
     display_cols = [
-        "position_name", "institute", "priority", "status_label",
-        "deadline_date", "deadline_urgency",
+        "position_name",
+        "institute",
+        "priority",
+        "status_label",
+        "deadline_date",
+        "deadline_urgency",
     ]
     # T4-A: enable single-row selection. AppTest drives this by writing to
     # session_state["positions_table"] directly (no click-a-row API exists),
@@ -392,15 +384,15 @@ else:
         hide_index=True,
         column_order=display_cols,
         column_config={
-            "position_name":    st.column_config.TextColumn("Position",  width="large"),
-            "institute":        st.column_config.TextColumn("Institute", width="medium"),
-            "priority":         st.column_config.TextColumn("Priority",  width="small"),
+            "position_name": st.column_config.TextColumn("Position", width="large"),
+            "institute": st.column_config.TextColumn("Institute", width="medium"),
+            "priority": st.column_config.TextColumn("Priority", width="small"),
             # DESIGN §8.0 + §8.2: header reads "Status" (the UI-facing
             # concept); the underlying df column is `status_label` so the
             # cell values go through the STATUS_LABELS map.
-            "status_label":     st.column_config.TextColumn("Status",    width="medium"),
-            "deadline_date":    st.column_config.TextColumn("Due",       width="small"),
-            "deadline_urgency": st.column_config.TextColumn("Urgency",   width="small"),
+            "status_label": st.column_config.TextColumn("Status", width="medium"),
+            "deadline_date": st.column_config.TextColumn("Due", width="small"),
+            "deadline_urgency": st.column_config.TextColumn("Urgency", width="small"),
         },
         key="positions_table",
         on_select="rerun",
@@ -436,8 +428,7 @@ else:
             st.session_state.pop("_delete_target_name", None)
         st.session_state["selected_position_id"] = new_sid
     elif (
-        st.session_state.pop("_skip_table_reset", False)
-        or "_delete_target_id" in st.session_state
+        st.session_state.pop("_skip_table_reset", False) or "_delete_target_id" in st.session_state
     ):
         # T5-A: one-shot bypass consumed here. The save handler sets
         # _skip_table_reset=True before its st.rerun() so this branch
@@ -477,7 +468,7 @@ if "selected_position_id" in st.session_state:
         # in practice — we still use .get(..., raw) as a last-resort
         # passthrough to avoid a KeyError surfacing as an uncaught
         # exception if a row ever carries an un-labelled status.
-        _status_label = config.STATUS_LABELS.get(r['status'], r['status'])
+        _status_label = config.STATUS_LABELS.get(r["status"], r["status"])
         st.subheader(f"{r['position_name']} · {_status_label}")
 
         # T4-C: widget-value trap — once session_state[key] is set, Streamlit
@@ -524,12 +515,10 @@ if "selected_position_id" in st.session_state:
         # out-of-options session_state value — today Streamlit tolerates
         # it silently, but the tolerance is undocumented.
         safe_priority = (
-            r["priority"] if r["priority"] in config.PRIORITY_VALUES
-            else config.PRIORITY_VALUES[0]
+            r["priority"] if r["priority"] in config.PRIORITY_VALUES else config.PRIORITY_VALUES[0]
         )
         safe_status = (
-            r["status"] if r["status"] in config.STATUS_VALUES
-            else config.STATUS_VALUES[0]
+            r["status"] if r["status"] in config.STATUS_VALUES else config.STATUS_VALUES[0]
         )
         # Sub-task 7 / DESIGN §8.2: work_auth is the categorical
         # three-value enum. Same F2-style coercion as priority /
@@ -540,7 +529,8 @@ if "selected_position_id" in st.session_state:
         # reads a valid in-vocab value.
         raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
         safe_work_auth = (
-            raw_work_auth if raw_work_auth in config.WORK_AUTH_OPTIONS
+            raw_work_auth
+            if raw_work_auth in config.WORK_AUTH_OPTIONS
             else config.WORK_AUTH_OPTIONS[0]
         )
         # F5 (Tier-4 review): mirror the try/except in _deadline_urgency —
@@ -548,8 +538,7 @@ if "selected_position_id" in st.session_state:
         # not crash the whole page.
         try:
             safe_deadline = (
-                datetime.date.fromisoformat(r["deadline_date"])
-                if r["deadline_date"] else None
+                datetime.date.fromisoformat(r["deadline_date"]) if r["deadline_date"] else None
             )
         except (ValueError, TypeError):
             safe_deadline = None
@@ -560,13 +549,13 @@ if "selected_position_id" in st.session_state:
         # blows up st.text_input/text_area's protobuf str check with a
         # bare "TypeError: bad argument type for built-in operation".
         canonical: dict[str, Any] = {
-            "edit_position_name":  _safe_str(r["position_name"]),
-            "edit_institute":      _safe_str(r["institute"]),
-            "edit_field":          _safe_str(r["field"]),
-            "edit_priority":       safe_priority,
-            "edit_status":         safe_status,
-            "edit_deadline_date":  safe_deadline,
-            "edit_link":           _safe_str(r["link"]),
+            "edit_position_name": _safe_str(r["position_name"]),
+            "edit_institute": _safe_str(r["institute"]),
+            "edit_field": _safe_str(r["field"]),
+            "edit_priority": safe_priority,
+            "edit_status": safe_status,
+            "edit_deadline_date": safe_deadline,
+            "edit_link": _safe_str(r["link"]),
             # Sub-task 7: work_auth selectbox + work_auth_note text_area.
             # _safe_str on work_auth_note handles both None (fresh row)
             # and pandas float('nan') (NULL cell in a mixed-dtype TEXT
@@ -574,17 +563,16 @@ if "selected_position_id" in st.session_state:
             # link pre-seeds). Without it, st.text_area's protobuf
             # serialisation raises "bad argument type for built-in
             # operation".
-            "edit_work_auth":      safe_work_auth,
+            "edit_work_auth": safe_work_auth,
             "edit_work_auth_note": (
-                _safe_str(r["work_auth_note"])
-                if "work_auth_note" in r.index else ""
+                _safe_str(r["work_auth_note"]) if "work_auth_note" in r.index else ""
             ),
             # T4-F: pre-seed the Notes text_area. positions.notes is TEXT
             # NULL-able (schema: database.py ~line 84), so coerce None/NaN → ""
             # before it reaches st.text_area — the widget expects str, and
             # pandas hands back float('nan') for NULL cells on mixed-dtype
             # object columns (see _safe_str docstring for the TypeError).
-            "edit_notes":          _safe_str(r["notes"]),
+            "edit_notes": _safe_str(r["notes"]),
         }
         # T4-D / T4-E: one slot per req_* column for the Requirements radios
         # and one slot per done_* column for the Materials checkboxes.
@@ -599,10 +587,10 @@ if "selected_position_id" in st.session_state:
         for req_col, done_col, _label in config.REQUIREMENT_DOCS:
             v = r[req_col] if req_col in r.index else None
             canonical[f"edit_{req_col}"] = (
-                v if v in config.REQUIREMENT_VALUES else "No"
+                v if v in config.REQUIREMENT_VALUES else config.REQUIREMENT_VALUES[-1]
             )
             d = r[done_col] if done_col in r.index else 0
-            canonical[f"edit_{done_col}"] = (d == 1)
+            canonical[f"edit_{done_col}"] = d == 1
 
         # Two-phase apply (see Bug 1 / Bug 2 fix block above):
         #   (a) Row CHANGE → force-overwrite every key so a fresh row's
@@ -635,7 +623,7 @@ if "selected_position_id" in st.session_state:
         # the other tabs naturally.
         tabs = st.tabs(config.EDIT_PANEL_TABS)
 
-        with tabs[0]:   # Overview — T4-C + T5-A
+        with tabs[0]:  # Overview — T4-C + T5-A
             # st.form batches edits so nothing writes on keystroke; the
             # submit button below is the only trigger that commits the
             # changes via database.update_position (T5-A).
@@ -645,12 +633,11 @@ if "selected_position_id" in st.session_state:
             # name, e.g. edit_position_name); st.form registers the id with
             # writes_allowed=False, so collision would raise
             # StreamlitValueAssignmentNotAllowedError at render.
-            with st.form("edit_overview"):
+            with st.form("edit_overview_form"):
                 st.text_input("Position Name", key="edit_position_name")
-                st.text_input("Institute",     key="edit_institute")
-                st.text_input("Field",         key="edit_field")
-                st.selectbox("Priority", config.PRIORITY_VALUES,
-                             key="edit_priority")
+                st.text_input("Institute", key="edit_institute")
+                st.text_input("Field", key="edit_field")
+                st.selectbox("Priority", config.PRIORITY_VALUES, key="edit_priority")
                 # DESIGN §8.0 Status label convention: UI shows labels
                 # (`config.STATUS_LABELS`), storage holds raw bracketed
                 # values. The Overview form only shows real pipeline
@@ -662,11 +649,14 @@ if "selected_position_id" in st.session_state:
                 # Wrap in `str(...)` (CL1 type-clean — runtime no-op
                 # because every value of v is already a key in
                 # STATUS_LABELS).
-                st.selectbox("Status",   config.STATUS_VALUES,
-                             format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
-                             key="edit_status")
-                st.date_input("Deadline",      key="edit_deadline_date")
-                st.text_input("Link",          key="edit_link")
+                st.selectbox(
+                    "Status",
+                    config.STATUS_VALUES,
+                    format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
+                    key="edit_status",
+                )
+                st.date_input("Deadline", key="edit_deadline_date")
+                st.text_input("Link", key="edit_link")
                 # Sub-task 7 / DESIGN §8.2 + D22: work_auth categorical
                 # (Yes/No/Unknown) pinned as a selectbox over
                 # config.WORK_AUTH_OPTIONS; work_auth_note is the
@@ -675,10 +665,8 @@ if "selected_position_id" in st.session_state:
                 # specific nuance — "green card required", "J-1 OK
                 # with a waiver"). Keys do not collide with the form
                 # id "edit_overview" per DESIGN §8.0.
-                st.selectbox("Work Authorization", config.WORK_AUTH_OPTIONS,
-                             key="edit_work_auth")
-                st.text_area("Work Authorization Note",
-                             key="edit_work_auth_note")
+                st.selectbox("Work Authorization", config.WORK_AUTH_OPTIONS, key="edit_work_auth")
+                st.text_area("Work Authorization Note", key="edit_work_auth_note")
                 overview_submitted = st.form_submit_button(
                     "Save Changes",
                     key="edit_overview_submit",
@@ -689,9 +677,7 @@ if "selected_position_id" in st.session_state:
             # page body rather than nested inside the form, which would
             # re-render on every form interaction.
             if overview_submitted:
-                new_name = (
-                    st.session_state.get("edit_position_name") or ""
-                ).strip()
+                new_name = (st.session_state.get("edit_position_name") or "").strip()
                 if not new_name:
                     # Mirror quick-add F3: whitespace-only is treated as
                     # empty. No DB write, no toast.
@@ -700,20 +686,18 @@ if "selected_position_id" in st.session_state:
                     new_deadline = st.session_state.get("edit_deadline_date")
                     payload: dict[str, Any] = {
                         "position_name": new_name,
-                        "institute":     st.session_state.get("edit_institute", ""),
-                        "field":         st.session_state.get("edit_field", ""),
-                        "priority":      st.session_state["edit_priority"],
-                        "status":        st.session_state["edit_status"],
+                        "institute": st.session_state.get("edit_institute", ""),
+                        "field": st.session_state.get("edit_field", ""),
+                        "priority": st.session_state["edit_priority"],
+                        "status": st.session_state["edit_status"],
                         "deadline_date": (
                             new_deadline.isoformat()
                             if isinstance(new_deadline, datetime.date)
                             else None
                         ),
-                        "link":          st.session_state.get("edit_link", ""),
-                        "work_auth":      st.session_state["edit_work_auth"],
-                        "work_auth_note": st.session_state.get(
-                            "edit_work_auth_note", ""
-                        ),
+                        "link": st.session_state.get("edit_link", ""),
+                        "work_auth": st.session_state["edit_work_auth"],
+                        "work_auth_note": st.session_state.get("edit_work_auth_note", ""),
                     }
                     # Mirror F1 (Tier-4 review) on the save path: surface a
                     # friendly st.error on failure and DO NOT re-raise —
@@ -780,13 +764,13 @@ if "selected_position_id" in st.session_state:
             # 1.56 does not expose an on_close event for @st.dialog.
             # Users can always click Cancel to dismiss cleanly.
             if st.button("Delete", type="primary", key="edit_delete"):
-                st.session_state["_delete_target_id"]   = sid
+                st.session_state["_delete_target_id"] = sid
                 st.session_state["_delete_target_name"] = r["position_name"]
                 _confirm_delete_dialog()
             elif st.session_state.get("_delete_target_id") == sid:
                 _confirm_delete_dialog()
 
-        with tabs[1]:   # Requirements — T4-D + T5-B
+        with tabs[1]:  # Requirements — T4-D + T5-B
             # One st.radio per entry in config.REQUIREMENT_DOCS. The options
             # are the canonical DB values (REQUIREMENT_VALUES) so
             # session_state holds exactly what will go into the TEXT column
@@ -794,7 +778,7 @@ if "selected_position_id" in st.session_state:
             # REQUIREMENT_LABELS. Per GUIDELINES §6 the page never hardcodes
             # vocabulary — everything comes from config, which is what
             # makes test_config_driven_new_doc_renders_new_widget green.
-            with st.form("edit_requirements"):
+            with st.form("edit_requirements_form"):
                 for req_col, _done_col, label in config.REQUIREMENT_DOCS:
                     st.radio(
                         label,
@@ -831,7 +815,7 @@ if "selected_position_id" in st.session_state:
                 except Exception as exc:
                     st.error(f"Could not save requirements: {exc}")
 
-        with tabs[2]:   # Materials — T4-E + T5-C
+        with tabs[2]:  # Materials — T4-E + T5-C
             # State-driven: the visible checkbox list is built from the LIVE
             # session_state["edit_{req_col}"] values (not the DB row), so
             # toggling a radio on the Requirements tab updates this tab on
@@ -844,11 +828,10 @@ if "selected_position_id" in st.session_state:
             ]
             if not visible:
                 st.info(
-                    "No required documents yet — mark docs as required on "
-                    "the Requirements tab."
+                    "No required documents yet — mark docs as required on the Requirements tab."
                 )
             else:
-                with st.form("edit_materials"):
+                with st.form("edit_materials_form"):
                     for _req_col, done_col, label in visible:
                         st.checkbox(label, key=f"edit_{done_col}")
                     materials_submitted = st.form_submit_button(
@@ -866,9 +849,7 @@ if "selected_position_id" in st.session_state:
                 # explicit cast matches how done_* is read elsewhere).
                 if materials_submitted:
                     payload: dict[str, Any] = {
-                        done_col: int(
-                            bool(st.session_state.get(f"edit_{done_col}"))
-                        )
+                        done_col: int(bool(st.session_state.get(f"edit_{done_col}")))
                         for _req_col, done_col, _label in visible
                     }
                     try:
@@ -883,7 +864,7 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save materials: {exc}")
 
-        with tabs[3]:   # Notes — T4-F + T5-D
+        with tabs[3]:  # Notes — T4-F + T5-D
             # Single free-form text_area for miscellaneous context (contact
             # details, interview prep hints, follow-up reminders). Pre-seeded
             # from the row's notes column via the _edit_form_sid block above,
