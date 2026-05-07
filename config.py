@@ -255,7 +255,16 @@ REQUIREMENT_DOCS: list[tuple[str, str, str]] = [
     ("req_writing_sample", "done_writing_sample", "Writing Sample"),
     ("req_teaching_statement", "done_teaching_statement", "Teaching Statement"),
     ("req_diversity_statement", "done_diversity_statement", "Diversity Statement"),
+    ("req_rec_letters", "done_rec_letters", "Letters of Recommendation"),
 ]
+
+# Column name for the LOR-specific divisor: number of recommendation letters
+# the position requires. Used by the Materials tab + database sync helper to
+# decide when done_rec_letters flips. Single source of truth so a future
+# rename does not silently desync the Materials UI from the sync logic.
+REC_LETTERS_REQ_COL: str = "req_rec_letters"
+REC_LETTERS_DONE_COL: str = "done_rec_letters"
+REC_LETTERS_COUNT_COL: str = "num_rec_letters"
 
 # ── Quick-add form fields ─────────────────────────────────────────────────────
 QUICK_ADD_FIELDS: list[str] = [
