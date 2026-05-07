@@ -358,6 +358,23 @@ if "selected_position_id" in st.session_state:
             safe_deadline = None
 
 
+        raw_num_rec_letters = (
+            r[config.REC_LETTERS_COUNT_COL]
+            if config.REC_LETTERS_COUNT_COL in r.index
+            else None
+        )
+        try:
+            safe_num_rec_letters = (
+                int(raw_num_rec_letters)
+                if raw_num_rec_letters is not None
+                and not (
+                    isinstance(raw_num_rec_letters, float) and math.isnan(raw_num_rec_letters)
+                )
+                else 0
+            )
+        except (TypeError, ValueError):
+            safe_num_rec_letters = 0
+
         canonical: dict[str, Any] = {
             "edit_position_name": _safe_str(r["position_name"]),
             "edit_institute": _safe_str(r["institute"]),
@@ -371,6 +388,7 @@ if "selected_position_id" in st.session_state:
                 _safe_str(r["work_auth_note"]) if "work_auth_note" in r.index else ""
             ),
             "edit_notes": _safe_str(r["notes"]),
+            "edit_num_rec_letters": safe_num_rec_letters,
         }
         for req_col, done_col, _label in config.REQUIREMENT_DOCS:
             v = r[req_col] if req_col in r.index else None
@@ -498,19 +516,70 @@ if "selected_position_id" in st.session_state:
                     "No required documents yet — mark docs as required on the Requirements tab."
                 )
             else:
+                # Pre-compute the LOR submitted count outside the form so the
+                # markdown status reflects the live recommenders table without
+                # waiting for a form submit. The recommenders sub-table is the
+                # source of truth — done_rec_letters is auto-computed by
+                # database._sync_rec_letters_done after every recommender write.
+                recs_df = database.get_recommenders(sid)
+                if recs_df.empty:
+                    submitted_count = 0
+                else:
+                    _sd = recs_df["submitted_date"]
+                    submitted_count = int((_sd.notna() & (_sd != "")).sum())
+
+                num_required = int(
+                    r[config.REC_LETTERS_COUNT_COL]
+                    if config.REC_LETTERS_COUNT_COL in r.index
+                    and pd.notna(r[config.REC_LETTERS_COUNT_COL])
+                    else 0
+                )
+
                 with st.form("edit_materials_form"):
-                    for _req_col, done_col, label in visible:
-                        st.checkbox(label, key=f"edit_{done_col}")
+                    for req_col, done_col, label in visible:
+                        if req_col == config.REC_LETTERS_REQ_COL:
+                            if num_required > 0:
+                                st.markdown(
+                                    f"**{label}:** {submitted_count} / "
+                                    f"{num_required} received"
+                                )
+                            else:
+                                st.markdown(
+                                    f"**{label}:** {submitted_count} received "
+                                    f"(no minimum required)"
+                                )
+                            st.number_input(
+                                "How many letters does this position require?",
+                                min_value=0,
+                                step=1,
+                                key="edit_num_rec_letters",
+                                help=(
+                                    "Track per-recommender submission state on "
+                                    "the Recommenders page. The 'received' count "
+                                    "above updates as letters come in."
+                                ),
+                            )
+                        else:
+                            st.checkbox(label, key=f"edit_{done_col}")
                     materials_submitted = st.form_submit_button(
                         "Save Changes",
                         key="edit_materials_submit",
                     )
 
                 if materials_submitted:
-                    payload: dict[str, Any] = {
-                        done_col: int(bool(st.session_state.get(f"edit_{done_col}")))
-                        for _req_col, done_col, _label in visible
-                    }
+                    payload: dict[str, Any] = {}
+                    for req_col, done_col, _label in visible:
+                        if req_col == config.REC_LETTERS_REQ_COL:
+                            # done_rec_letters is owned by
+                            # database._sync_rec_letters_done — the page
+                            # only persists the user-controlled threshold.
+                            payload[config.REC_LETTERS_COUNT_COL] = int(
+                                st.session_state.get("edit_num_rec_letters") or 0
+                            )
+                        else:
+                            payload[done_col] = int(
+                                bool(st.session_state.get(f"edit_{done_col}"))
+                            )
                     try:
                         database.update_position(sid, payload)
                         st.toast(f'Saved materials for "{r["position_name"]}".')

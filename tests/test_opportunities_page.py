@@ -3777,3 +3777,244 @@ class TestTabSwitchWidgetStateSurvival:
             "save rerun, which means edit_req_cv was already drifted by "
             "the time Materials rendered."
         )
+
+
+# ── Materials tab — Letters of Recommendation special case ────────────────────
+# When req_rec_letters == 'Yes', the Materials tab does NOT render a
+# done_rec_letters checkbox (the column is auto-computed by the database
+# sync helper from the recommenders sub-table). Instead it shows:
+#   - a read-only "{submitted} / {num_rec_letters} received" status
+#   - a number_input for `num_rec_letters` so the user can set the threshold
+#
+# Edge case (vacuous truth): num_rec_letters NULL or 0 = "no minimum",
+# the read-only status reflects that and done_rec_letters stays 1.
+
+NUM_REC_LETTERS_KEY = "edit_num_rec_letters"
+
+
+def _number_input_rendered(at: AppTest, key: str) -> bool:
+    """True iff a number_input with the given key is on the page.
+    Mirrors _checkbox_rendered / _text_area_rendered shape."""
+    try:
+        at.number_input(key=key)
+        return True
+    except KeyError:
+        return False
+
+
+def _markdown_contains(at: AppTest, substring: str) -> bool:
+    """True iff any rendered st.markdown element contains `substring`."""
+    return any(substring in (el.value or "") for el in at.markdown)
+
+
+class TestMaterialsTabLorRendering:
+    def test_no_done_rec_letters_checkbox_when_required(self, db):
+        """The done_rec_letters checkbox MUST NOT render when
+        req_rec_letters='Yes' — the column is auto-computed and a
+        user-toggleable checkbox would let it desync from the
+        recommenders table."""
+        database.add_position(
+            {"position_name": "Alpha", "req_rec_letters": "Yes"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert not _checkbox_rendered(at, _done_key("done_rec_letters")), (
+            "done_rec_letters checkbox must not render — the column is "
+            "auto-computed from the recommenders sub-table, not toggled "
+            "by the user."
+        )
+
+    def test_status_shows_submitted_over_required(self, db):
+        """With num_rec_letters=3 and 1 submitted recommender, the
+        Materials tab must surface '1 / 3 received' so the user sees
+        progress at a glance."""
+        pid = database.add_position(
+            {
+                "position_name": "Alpha",
+                "req_rec_letters": "Yes",
+                "num_rec_letters": 3,
+            }
+        )
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert _markdown_contains(at, "1 / 3 received"), (
+            "Materials tab must render '1 / 3 received' when 1 of 3 "
+            "letters have been submitted; rendered markdown was: "
+            f"{[el.value for el in at.markdown]!r}"
+        )
+
+    def test_status_shows_zero_when_no_recommenders(self, db):
+        """With num_rec_letters=2 and zero recommenders, the status
+        must read '0 / 2 received' (no off-by-one, no error)."""
+        database.add_position(
+            {
+                "position_name": "Alpha",
+                "req_rec_letters": "Yes",
+                "num_rec_letters": 2,
+            }
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert _markdown_contains(at, "0 / 2 received"), (
+            "Materials tab must show '0 / 2 received' for a position with "
+            "the threshold set but no recommenders added yet; got: "
+            f"{[el.value for el in at.markdown]!r}"
+        )
+
+    def test_status_uses_no_minimum_phrasing_when_threshold_unset(self, db):
+        """num_rec_letters NULL or 0 → the read-only status uses the
+        'no minimum required' phrasing (matches the vacuous-truth rule
+        in _sync_rec_letters_done — done flips to 1 unconditionally)."""
+        database.add_position(
+            {"position_name": "Alpha", "req_rec_letters": "Yes"}
+        )  # num_rec_letters omitted → NULL
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert _markdown_contains(at, "no minimum"), (
+            "Materials tab must use 'no minimum' phrasing when "
+            "num_rec_letters is NULL/0; got: "
+            f"{[el.value for el in at.markdown]!r}"
+        )
+
+    def test_num_rec_letters_input_renders_when_required(self, db):
+        """An editable number_input keyed edit_num_rec_letters must
+        render so the user can configure the threshold without leaving
+        the Materials tab."""
+        database.add_position(
+            {
+                "position_name": "Alpha",
+                "req_rec_letters": "Yes",
+                "num_rec_letters": 2,
+            }
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert _number_input_rendered(at, NUM_REC_LETTERS_KEY), (
+            "edit_num_rec_letters number_input must render on the "
+            "Materials tab when req_rec_letters='Yes'."
+        )
+
+    def test_num_rec_letters_input_seeded_from_db(self, db):
+        """The number_input's initial value must reflect the current
+        positions.num_rec_letters value — not 0, not the default."""
+        database.add_position(
+            {
+                "position_name": "Alpha",
+                "req_rec_letters": "Yes",
+                "num_rec_letters": 5,
+            }
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert int(at.number_input(key=NUM_REC_LETTERS_KEY).value) == 5
+
+    def test_no_lor_widgets_when_optional_or_no(self, db):
+        """When req_rec_letters is 'Optional' or 'No', the LOR row must
+        be entirely absent — no read-only status, no number_input. This
+        matches the existing Materials filter (Y-only) for other docs."""
+        database.add_position(
+            {"position_name": "Alpha", "req_rec_letters": "Optional"}
+        )
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        assert not _number_input_rendered(at, NUM_REC_LETTERS_KEY), (
+            "edit_num_rec_letters must not render when "
+            "req_rec_letters != 'Yes'."
+        )
+        assert not _markdown_contains(at, "received"), (
+            "LOR read-only status must not render when "
+            "req_rec_letters != 'Yes'."
+        )
+
+    def test_save_persists_num_rec_letters_change(self, db):
+        """Editing the number_input and clicking Save must persist
+        the new num_rec_letters to the DB and trigger
+        _sync_rec_letters_done so done_rec_letters stays consistent."""
+        sid = database.add_position(
+            {
+                "position_name": "Alpha",
+                "req_rec_letters": "Yes",
+                "num_rec_letters": 1,
+            }
+        )
+        # One submitted recommender → done_rec_letters = 1 at the start.
+        database.add_recommender(
+            sid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        assert database.get_position(sid)["done_rec_letters"] == 1
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        # Raise the threshold to 3 — that makes 1/3 letters submitted,
+        # so done_rec_letters must drop back to 0 after save.
+        at.number_input(key=NUM_REC_LETTERS_KEY).set_value(3)
+        at.button(key=MATERIALS_SUBMIT_KEY).click()
+        _keep_selection(at, 0)
+        at.run()
+        assert not at.exception, f"Save raised: {at.exception}"
+
+        row = database.get_position(sid)
+        assert row["num_rec_letters"] == 3, (
+            f"num_rec_letters must persist; got {row['num_rec_letters']!r}"
+        )
+        assert row["done_rec_letters"] == 0, (
+            "done_rec_letters must auto-resync to 0 after raising the "
+            "threshold past the submitted count; got "
+            f"{row['done_rec_letters']!r}"
+        )
+
+    def test_save_does_not_write_done_rec_letters_directly(self, db):
+        """Defensive contract: the Materials save payload must not
+        include done_rec_letters — that column is owned by
+        _sync_rec_letters_done. If a future refactor accidentally
+        adds done_rec_letters to the payload, the column would
+        flicker between user-toggle and sync values."""
+        sid = database.add_position(
+            {
+                "position_name": "Alpha",
+                "req_rec_letters": "Yes",
+                "num_rec_letters": 0,  # vacuous truth — sync sets done = 1
+            }
+        )
+        captured: dict[str, Any] = {}
+        real_update = database.update_position
+
+        def _capture(position_id: int, fields: dict[str, Any]) -> None:
+            captured.update({"fields": dict(fields)})
+            return real_update(position_id, fields)
+
+        import database as _db_module
+
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row_and_tab(at, 0, "Materials")
+        # Patch update_position only after the page rendered (so the
+        # initial read isn't intercepted). Re-render via a save.
+        _db_module.update_position = _capture
+        try:
+            at.button(key=MATERIALS_SUBMIT_KEY).click()
+            _keep_selection(at, 0)
+            at.run()
+        finally:
+            _db_module.update_position = real_update
+
+        assert "fields" in captured, "Save must call update_position"
+        payload = captured["fields"]
+        assert "done_rec_letters" not in payload, (
+            "Materials save payload must not include done_rec_letters — "
+            "that column is auto-computed via _sync_rec_letters_done. "
+            f"Payload was: {payload!r}"
+        )
+        # Confirm DB still trusts the sync (vacuous truth → 1).
+        assert database.get_position(sid)["done_rec_letters"] == 1
