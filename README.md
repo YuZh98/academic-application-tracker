@@ -1,34 +1,23 @@
 # Academic Application Tracker
 
-[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-![Dashboard — empty state on first run](docs/ui/screenshots/v0.11.0/dashboard-1280.png)
-
 A local Streamlit dashboard that answers one question every morning: **"What do I do today?"**
 
----
+Track dozens of postdoc, PhD, faculty, and fellowship applications in parallel — deadlines, recommendation letters, materials checklists, interview rounds — without a single missed follow-up.
 
-## What a spreadsheet can't do
+![Dashboard](docs/ui/screenshots/v0.11.0/dashboard-1280.png)
 
-**Surface urgency automatically.** The dashboard computes what's due, flags it red or yellow by proximity, and surfaces it every session — no manual sorting, no missed deadlines.
-
-**Track recommenders across positions.** One recommender writing letters for seven positions means seven independent asked / confirmed / submitted states. The Recommenders page flags everyone asked more than 7 days ago who hasn't submitted, groups alerts by recommender, and offers a one-click mailto to draft a follow-up.
-
-**Keep materials readiness co-located with status.** Each position carries its own checklist (CV, cover letter, research statement, teaching portfolio, …). The Materials Readiness panel shows how many active applications are ready to submit and how many are still missing something — without opening each position manually.
+[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## Pages
+## Why not a spreadsheet?
 
-**Dashboard** — KPI grid (Tracked / Applied / Interview / Next Interview), application funnel, materials readiness panel, upcoming deadlines, recommender alerts. One screen; one daily answer.
-
-**Opportunities** — Quick-add a position in under 30 seconds. Full edit panel with four tabs (Overview / Requirements / Materials / Notes). Filter bar: status, priority, field, full-text search. Urgency-banded deadline column.
-
-**Applications** — Per-position card: applied date, confirmation, response, result, outcome. Inline multi-round interview log. Pipeline cascades automatically: save → applied → interview → offer.
-
-**Recommenders** — Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) table with inline edit and delete.
-
-**Export** — Manual regenerate + per-file download for `OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`. Every database write also auto-regenerates these — the `exports/` folder is always a fresh plaintext backup of your entire job-search state.
+| Problem | Spreadsheet | This tool |
+|---------|-------------|-----------|
+| Deadline urgency | Manual sorting, easy to miss | Auto-computed, color-coded red/yellow by proximity, surfaced every session |
+| Recommender tracking | One row per person, no per-position state | One recommender × seven positions = seven independent states; flags overdue, offers one-click mailto |
+| Materials readiness | Scattered notes | Per-position checklist (CV, cover letter, research statement, …); dashboard shows ready-to-submit count at a glance |
+| Daily action items | You figure it out | Dashboard tells you |
 
 ---
 
@@ -43,36 +32,81 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Python ≥ 3.11. Open the URL Streamlit prints (default `http://localhost:8501`). The SQLite database is created on first run; the empty-state hero walks you through adding your first position.
+Python ≥ 3.11. Open the URL Streamlit prints (default `http://localhost:8501`).  
+The SQLite database is created on first run — the empty-state screen walks you through adding your first position.
 
-**Stack:** Python · Streamlit 1.57 · SQLite · pandas · Plotly  
-**Dev tooling:** pytest · ruff · pyright
+---
+
+## Features
+
+### Dashboard
+KPI grid (Tracked / Applied / Interview / Next Interview), application funnel, materials readiness panel, upcoming deadlines, and recommender alerts — one screen, one daily answer.
+
+### Opportunities
+Quick-add a position in under 30 seconds. Full edit panel with four tabs (Overview / Requirements / Materials / Notes). Filter by status, priority, field, or full-text search. Urgency-banded deadline column.
+
+![Opportunities](docs/ui/screenshots/v0.11.0/opportunities-1280.png)
+
+### Applications
+Per-position card: applied date, confirmation, response, result, outcome. Inline multi-round interview log. Pipeline cascades automatically: saved → applied → interview → offer.
+
+### Recommenders
+Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) matrix with inline edit. Flags anyone asked more than 7 days ago who hasn't confirmed.
+
+![Recommenders](docs/ui/screenshots/v0.11.0/recommenders-1280.png)
+
+### Export
+Every database write auto-regenerates plaintext markdown files (`OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`) in the `exports/` folder — always a fresh, portable backup of your entire job-search state. Manual regenerate + per-file download also available.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| UI | Streamlit 1.57 · Plotly |
+| Data | SQLite · pandas |
+| Language | Python 3.11+ |
+| Dev tooling | pytest · ruff · pyright |
 
 ---
 
 <details>
-<summary>Engineering notes</summary>
+<summary><strong>Engineering deep-dive</strong></summary>
 
-Built like a small production system, not a personal script.
+### Architecture — four strict layers
 
-**Architecture — four strict layers:**
 ```
 config.py     constants, vocabularies, import-time invariants
 database.py   SQL only — never imports streamlit
 exports.py    markdown writers — called by database, never by pages
 pages/*.py    display only — no raw SQL, no direct exports import
 ```
+
 Layer contracts are enforced by cohesion tests that fail CI if any rule drifts.
+
+### Testing
 
 **889 tests, 97% coverage.** Integration tests use the official `streamlit.testing.v1.AppTest` harness against real page files; unit tests run against per-test temp SQLite files via a `db` fixture. A second test pass with `-W error::DeprecationWarning` catches Streamlit-API drift before it surfaces on upgrades.
 
-**CI on every PR:** ruff lint · pyright strict-basic (zero errors required) · pytest (two passes) · status-literal grep (no hardcoded `[SAVED]` / `[APPLIED]` / `[INTERVIEW]` strings in page code — all vocabulary routed through `config.py`).
+### CI pipeline (every PR)
 
-**Config-driven schema.** Adding a new required document type (e.g. "Portfolio") = one tuple appended to `config.REQUIREMENT_DOCS`. `init_db()` adds the `req_*` / `done_*` columns automatically on next start. No other file changes needed.
+- ruff lint (zero warnings)
+- pyright strict-basic (zero errors)
+- pytest (two passes: normal + deprecation-as-error)
+- Status-literal grep — no hardcoded status strings in page code; all vocabulary routed through `config.py`
 
-**Import-time invariants.** `config.py` asserts structural integrity at module load — every status has a color and a label, urgency thresholds are ordered, funnel buckets cover all statuses exactly once. Misconfiguration aborts startup with a clear traceback before any page renders.
+### Config-driven schema
 
-**Spec-first.** [`DESIGN.md`](DESIGN.md) is the authoritative spec for the schema, page contracts, cascade rules, and export format. Implementation tracks the spec; deviations land as spec amendments with commit references.
+Adding a new required document type (e.g. "Portfolio") = one tuple appended to `config.REQUIREMENT_DOCS`. `init_db()` adds the columns automatically on next start. No other file changes needed.
+
+### Import-time invariants
+
+`config.py` asserts structural integrity at module load — every status has a color and a label, urgency thresholds are ordered, funnel buckets cover all statuses exactly once. Misconfiguration aborts startup with a clear traceback before any page renders.
+
+### Spec-first development
+
+[`DESIGN.md`](DESIGN.md) is the authoritative spec for the schema, page contracts, cascade rules, and export format. Implementation tracks the spec; deviations land as spec amendments with commit references.
 
 </details>
 
@@ -104,21 +138,15 @@ CHANGELOG.md           Per-release narrative log
 
 ## Documentation
 
-- [`DESIGN.md`](DESIGN.md) — schema, page contracts, cascade rules, export format. Start here for "how does this work?"
-- [`GUIDELINES.md`](GUIDELINES.md) — coding conventions, TDD cadence, doc tiering. Start here for "how is this codebase organized?"
-- [`CHANGELOG.md`](CHANGELOG.md) — per-release development log
-- [`docs/dev-notes/`](docs/dev-notes/) — Streamlit-specific gotchas, dev setup, git workflow depth
+| Doc | Start here if… |
+|-----|---------------|
+| [`DESIGN.md`](DESIGN.md) | You want to understand the schema, page contracts, cascade rules, or export format |
+| [`GUIDELINES.md`](GUIDELINES.md) | You want to contribute or understand the coding conventions |
+| [`CHANGELOG.md`](CHANGELOG.md) | You want the per-release development narrative |
+| [`docs/dev-notes/`](docs/dev-notes/) | You hit a Streamlit-specific gotcha or need dev setup details |
 
 ---
-
-## Status
-
-`v0.11.0`. Daily-usage flows stable. Schema may evolve before `v1.0`.
 
 ## License
 
 [MIT](LICENSE)
-
-## Acknowledgments
-
-Built with [Claude Code](https://claude.com/claude-code) using an orchestrator + implementer agent pipeline. Architectural decisions, review judgment, and merge calls remain the author's; the agent pipeline ships the code.
