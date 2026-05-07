@@ -23,15 +23,15 @@
 ## 1. Purpose & Scope
 
 ### Problem
-Postdoc search = track dozens positions parallel, diff institutions, each w/ unique deadlines, requirement checklists, rec letter logistics, outcome timelines. Markdown alone no answer daily question: **"What do I do today?"**
+An academic job search means tracking dozens of positions in parallel across different institutions, each with unique deadlines, document requirements, recommendation letter logistics, and outcome timelines. A spreadsheet or markdown file cannot answer the daily question: **"What do I do today?"**
 
 ### Solution
-Local single-user web app:
-- Capture new positions <30s
-- Auto-compute + surface urgent actions
-- Track rec letter status per recommender, per position
-- Maintain human-readable markdown exports as portable backup
-- Extensible to general job tracker via single config file edit
+A local, single-user web app that:
+- Captures new positions in under 30 seconds
+- Auto-computes and surfaces urgent actions
+- Tracks recommendation letter status per recommender, per position
+- Maintains human-readable markdown exports as a portable backup
+- Extends to a general job tracker via a single config file edit
 
 ### Explicit Non-Goals (v1)
 - No auth
@@ -170,17 +170,17 @@ Postdoc/
 ├── requirements.txt          Pinned versions (committed)
 │
 ├── tests/                    pytest suite (committed)
-├── reviews/                  Pre-merge review docs, one per tier (committed)
+├── reviews/                  Pre-merge review docs (committed)
 ├── docs/                     Supplemental documentation (committed)
 │   ├── adr/                  Architectural Decision Records (forward-only)
 │   ├── dev-notes/            Deep-dive references (git, Streamlit state)
-│   ├── internal/             Agent-handoff + sprint tracker (dev process)
+│   ├── internal/             Development process notes, roadmap, sprint tracker
 │   ├── ui/                   Wireframes + responsive screenshots
 │   └── seed-templates/       Pre-app markdown templates (design-history archive)
 │
 ├── DESIGN.md                 This file
 ├── GUIDELINES.md             Coding conventions (read at every session start)
-├── roadmap.md                Phases, v1 ship criteria, backlog (P1/P2/P3)
+├── roadmap.md                Development phases, backlog, and future plans
 ├── CHANGELOG.md              Release history (Keep a Changelog format)
 ├── README.md                 Public entry point
 ├── LICENSE                   MIT
