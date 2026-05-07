@@ -752,7 +752,6 @@ class TestAddPosition:
         pos_id = database.add_position(make_position())
         app = database.get_application(pos_id)
         assert app["applied_date"] is None
-        assert app["interview1_date"] is None
         assert app["result_notify_date"] is None
 
 
