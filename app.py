@@ -178,14 +178,17 @@ st.markdown(
 )
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
-# Cumulative semantics (decided 2026-05-07):
-#   Tracked   = SAVED + APPLIED + INTERVIEW + OFFER (every non-terminal stage)
-#   Applied   = APPLIED + INTERVIEW + OFFER         (you've submitted)
-#   Interview = INTERVIEW + OFFER                   (past interview stage)
-# Promoting a row from APPLIED → INTERVIEW must not decrement the Applied
-# count — the older mutually-exclusive counts conflicted with users'
-# "once applied, always applied" intuition. Terminal statuses
-# (CLOSED / REJECTED / DECLINED) are always excluded.
+# Counting model (decided 2026-05-07):
+#   Tracked    = SAVED + APPLIED + INTERVIEW + OFFER (positions, non-terminal)
+#   Applied    = APPLIED + INTERVIEW + OFFER         (positions where you've submitted)
+#   Interviews = COUNT(interviews WHERE scheduled_date >= today)  ← rows, not positions
+#
+# The first two are cumulative position counts: progressing a position to a
+# later stage must not shrink earlier counts ("once applied, always applied").
+# The third counts interview *events* — a position with phone + committee +
+# chalk-talk contributes 3, matching the user's natural reading of "how many
+# interviews are on my calendar?". `Next Interview` already shows the earliest
+# event, so an event-based count parallels it cleanly.
 _status_counts = database.count_by_status()
 _saved = _status_counts.get(config.STATUS_SAVED, 0)
 _applied_only = _status_counts.get(config.STATUS_APPLIED, 0)
@@ -193,8 +196,9 @@ _interview_only = _status_counts.get(config.STATUS_INTERVIEW, 0)
 _offer_only = _status_counts.get(config.STATUS_OFFER, 0)
 tracked = _saved + _applied_only + _interview_only + _offer_only
 applied = _applied_only + _interview_only + _offer_only
-interview = _interview_only + _offer_only
-next_interview = _next_interview_display(database.get_upcoming_interviews())
+_upcoming_interviews_df = database.get_upcoming_interviews()
+interviews = len(_upcoming_interviews_df)
+next_interview = _next_interview_display(_upcoming_interviews_df)
 
 # ── Empty-DB hero ────────────────────────────────────────────────────────────
 # Under cumulative semantics tracked == 0 already implies applied == 0 and
@@ -235,11 +239,12 @@ with c2:
     )
 with c3:
     st.metric(
-        label="Interview",
-        value=str(interview),
+        label="Interviews",
+        value=str(interviews),
         help=(
-            "Positions that have reached the interview stage or beyond "
-            "(Interview + Offer)."
+            "Interview events scheduled today or later, across all positions. "
+            "A position with multiple upcoming interviews contributes one count "
+            "per interview."
         ),
     )
 with c4:

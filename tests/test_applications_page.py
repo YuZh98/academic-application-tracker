@@ -217,12 +217,13 @@ class TestApplicationsPageShell:
 # ── Filter bar (T1-B) ─────────────────────────────────────────────────────────
 
 class TestApplicationsFilterBar:
-    """DESIGN §8.3: status filter selectbox with a default that
-    excludes STATUS_SAVED + STATUS_CLOSED. The 'Active' sentinel from
-    config.STATUS_FILTER_ACTIVE encodes that exclusion as a single
-    selectbox option, so the user can flip to 'All' or a specific
-    status without losing the canonical default and without the page
-    needing a separate 'show inactive' toggle widget."""
+    """Status filter selectbox: default = FILTER_ALL (show every position),
+    user can narrow to a specific status from STATUS_VALUES.
+
+    The original 'Active' sentinel was dropped 2026-05-07 — its label
+    was misleading (the exclusion set let Rejected / Declined positions
+    through), and a single 'show everything by default + narrow on demand'
+    selectbox is simpler than a three-mode toggle (Active / All / specific)."""
 
     def test_status_filter_selectbox_renders(self, db):
         """Bare-existence pin: the selectbox is on the page with the
@@ -230,34 +231,29 @@ class TestApplicationsFilterBar:
         at = _run_page()
         at.selectbox(key=FILTER_STATUS_KEY)  # raises KeyError if absent
 
-    def test_status_filter_default_is_active(self, db):
-        """Default selection = config.STATUS_FILTER_ACTIVE per
-        DESIGN §8.3. AppTest's .value returns the underlying option
-        value (round-trip through format_func per gotcha #15), not
-        the formatted display string — so this comparison is against
-        the raw sentinel, not 'Active' as a hardcoded literal."""
+    def test_status_filter_default_is_all(self, db):
+        """Default selection = config.FILTER_ALL — surfaces every row
+        regardless of status. Users opt in to narrowing via the
+        selectbox; there is no longer an 'Active' default-exclusion."""
         at = _run_page()
         sb = at.selectbox(key=FILTER_STATUS_KEY)
-        assert sb.value == config.STATUS_FILTER_ACTIVE, (
-            f"Default filter must be {config.STATUS_FILTER_ACTIVE!r}; "
-            f"got {sb.value!r}"
+        assert sb.value == config.FILTER_ALL, (
+            f"Default filter must be {config.FILTER_ALL!r}; got {sb.value!r}"
         )
 
     def test_status_filter_options_match_spec(self, db):
         """Filter options in display order:
-          1. config.STATUS_FILTER_ACTIVE  (sentinel; the default)
-          2. 'All'                         (sentinel; show every status)
-          3. config.STATUS_LABELS[v] for each v in config.STATUS_VALUES
+          1. config.FILTER_ALL  (sentinel; show every status)
+          2. config.STATUS_LABELS[v] for each v in config.STATUS_VALUES
 
         AppTest's .options exposes the post-format_func display strings
-        per gotcha #15 — the sentinels render as themselves because
+        per gotcha #15 — the sentinel renders as itself because
         format_func is the standard `STATUS_LABELS.get(v, v)` pattern,
         which falls back to identity for keys it does not recognise."""
         at = _run_page()
         actual = list(at.selectbox(key=FILTER_STATUS_KEY).options)
         expected = [
-            config.STATUS_FILTER_ACTIVE,
-            "All",
+            config.FILTER_ALL,
             *[config.STATUS_LABELS[v] for v in config.STATUS_VALUES],
         ]
         assert actual == expected, (
@@ -279,9 +275,7 @@ class TestApplicationsPageTable:
       Position / Institute / Applied / Recs / Confirmation / Response / Result
 
     Filter behaviour:
-      - Default = config.STATUS_FILTER_ACTIVE → hides
-        config.STATUS_FILTER_ACTIVE_EXCLUDED ({SAVED, CLOSED}).
-      - "All" sentinel → show every row.
+      - Default = config.FILTER_ALL → show every row.
       - Specific STATUS_VALUES entry → narrow to exactly that status.
 
     Confirmation column inline format (DESIGN §8.3 D-A amendment —
@@ -322,15 +316,10 @@ class TestApplicationsPageTable:
             f"got {list(df.columns)!r}"
         )
 
-    def test_default_filter_active_excludes_saved_and_closed(self, db):
-        """DESIGN §8.3: default filter excludes SAVED + CLOSED. The
-        Active sentinel resolves to
-        STATUS_VALUES \\ STATUS_FILTER_ACTIVE_EXCLUDED at render time —
-        a [SAVED] row (pre-application) and a [CLOSED] row (withdrawn)
-        must not appear, while [APPLIED] / [INTERVIEW] / [REJECTED] /
-        [DECLINED] rows DO appear (only SAVED + CLOSED are excluded)."""
-        # Seed one row per status so the test exercises the FULL exclusion
-        # set (not just SAVED) and the FULL inclusion set.
+    def test_default_filter_shows_every_position(self, db):
+        """The default filter (FILTER_ALL) surfaces every row regardless
+        of status — Saved, Applied, Interview, Closed, Rejected, Declined.
+        Users narrow via the selectbox when they want a specific stage."""
         rows = {
             "Saved Pos":     config.STATUS_SAVED,
             "Applied Pos":   config.STATUS_APPLIED,
@@ -347,19 +336,9 @@ class TestApplicationsPageTable:
         at = _run_page()
         names = list(at.dataframe[0].value["Position"])
 
-        # SAVED + CLOSED must be hidden (they're in
-        # STATUS_FILTER_ACTIVE_EXCLUDED); the four other statuses
-        # must all appear.
-        for name in ("Saved Pos", "Closed Pos"):
-            assert not any(name in n for n in names), (
-                f"Expected {name!r} hidden under default Active filter; "
-                f"got {names!r}"
-            )
-        for name in ("Applied Pos", "Interview Pos",
-                     "Rejected Pos", "Declined Pos"):
+        for name in rows.keys():
             assert any(name in n for n in names), (
-                f"Expected {name!r} visible under default Active filter; "
-                f"got {names!r}"
+                f"Default filter must show every status — {name!r} missing from {names!r}"
             )
 
     def test_filter_all_shows_every_row(self, db):
@@ -528,15 +507,21 @@ class TestApplicationsPageTable:
         surface an `st.info(...)` message — and the table must NOT
         render (an empty st.dataframe with column headers but no rows
         looks like a broken state). Mirrors the
-        Opportunities-page filter empty-state precedent
-        (test_filter_by_status_no_match_shows_info)."""
+        Opportunities-page filter empty-state precedent.
+
+        With default filter = FILTER_ALL, an empty result requires
+        narrowing to a status the DB doesn't have any rows for."""
+        # One [SAVED] row in the DB; user narrows to [INTERVIEW] which
+        # has no matches.
         database.add_position(make_position({"position_name": "Saved Only"}))
-        # Single SAVED row; default Active filter excludes it.
 
         at = _run_page()
+        at.selectbox(key=FILTER_STATUS_KEY).select(config.STATUS_INTERVIEW)
+        at.run()
+
         info_messages = [el.value for el in at.info]
         assert any(self.EMPTY_COPY in m for m in info_messages), (
-            f"Expected info message {self.EMPTY_COPY!r} when default filter "
+            f"Expected info message {self.EMPTY_COPY!r} when filter "
             f"excludes every row; got info={info_messages!r}"
         )
 
