@@ -150,10 +150,10 @@ CHANGELOG.md           Per-release narrative log
 
 ## Roadmap
 
+- [ ] AI auto-fill — paste a job listing URL, get position details pre-populated
 - [ ] Calendar integration (`.ics` export for deadlines and interviews)
 - [ ] Email notifications for approaching deadlines
 - [ ] Bulk import from CSV / existing spreadsheets
-- [ ] Position templates for common application types
 - [ ] Analytics — time-to-response trends, success rates by field
 
 ---
