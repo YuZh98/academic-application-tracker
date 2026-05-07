@@ -43,8 +43,6 @@ if st.button(
 st.divider()
 st.subheader("Download Files")
 
-_EXPORT_FILENAMES = ("OPPORTUNITIES.md", "PROGRESS.md", "RECOMMENDERS.md")
-
 for _filename, _path in database.get_export_paths():
     _file_present = _path.exists()
 

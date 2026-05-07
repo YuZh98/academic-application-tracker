@@ -102,13 +102,10 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS applications (
                 position_id           INTEGER PRIMARY KEY,
                 applied_date          TEXT,
-                all_recs_submitted    TEXT,
                 confirmation_received INTEGER DEFAULT 0,
                 confirmation_date     TEXT,
                 response_date         TEXT,
                 response_type         TEXT,
-                interview1_date       TEXT,
-                interview2_date       TEXT,
                 result_notify_date    TEXT,
                 result                TEXT    DEFAULT '{result_default}',
                 notes                 TEXT,
@@ -193,22 +190,28 @@ def init_db() -> None:
 
 
         if not interviews_existed_pre_create:
-            conn.execute(
-                "INSERT INTO interviews (application_id, sequence, scheduled_date) "
-                "SELECT position_id, 1, interview1_date "
-                "FROM applications WHERE interview1_date IS NOT NULL"
-            )
-            conn.execute(
-                "INSERT INTO interviews (application_id, sequence, scheduled_date) "
-                "SELECT position_id, 2, interview2_date "
-                "FROM applications WHERE interview2_date IS NOT NULL"
-            )
-            conn.execute(
-                "UPDATE applications "
-                "SET interview1_date = NULL, interview2_date = NULL "
-                "WHERE interview1_date IS NOT NULL "
-                "   OR interview2_date IS NOT NULL"
-            )
+            # Only migrate data from legacy flat columns if they exist
+            # (fresh DBs no longer create them per DESIGN D18).
+            app_cols = {
+                row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
+            }
+            if "interview1_date" in app_cols:
+                conn.execute(
+                    "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                    "SELECT position_id, 1, interview1_date "
+                    "FROM applications WHERE interview1_date IS NOT NULL"
+                )
+                conn.execute(
+                    "INSERT INTO interviews (application_id, sequence, scheduled_date) "
+                    "SELECT position_id, 2, interview2_date "
+                    "FROM applications WHERE interview2_date IS NOT NULL"
+                )
+                conn.execute(
+                    "UPDATE applications "
+                    "SET interview1_date = NULL, interview2_date = NULL "
+                    "WHERE interview1_date IS NOT NULL "
+                    "   OR interview2_date IS NOT NULL"
+                )
 
 
         applications_cols = {
@@ -322,8 +325,8 @@ def init_db() -> None:
                 f"WHERE {req_col} IN ('Y', 'N')"
             )
 
-        _legacy_saved = "[OPE" + "N]"  # assembled at runtime to avoid triggering the status-literal lint check in CI
-        _legacy_medium = "M" + "ed"    # same — split to avoid the CI lint check
+        _legacy_saved = "[OPEN]"
+        _legacy_medium = "Med"
         conn.execute(
             "UPDATE positions SET status = ? WHERE status = ?",
             (config.STATUS_VALUES[0], _legacy_saved),
