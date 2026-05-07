@@ -212,15 +212,11 @@ def _confirm_interview_delete_dialog() -> None:
 
 selected_filter = st.selectbox(
     "Status",
-    options=[
-        config.STATUS_FILTER_ACTIVE,
-        config.FILTER_ALL,
-        *config.STATUS_VALUES,
-    ],
+    options=[config.FILTER_ALL, *config.STATUS_VALUES],
     index=0,
     format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
     key="apps_filter_status",
-    help="'Active' shows Applied through Offer stages; excludes Saved and Closed.",
+    help="Pick a specific status to narrow the table; 'All' shows every position.",
 )
 
 
@@ -229,12 +225,7 @@ selected_filter = st.selectbox(
 
 df = database.get_applications_table()
 
-if selected_filter == config.STATUS_FILTER_ACTIVE:
-    df_filtered = cast(
-        pd.DataFrame,
-        df[~df["status"].isin(list(config.STATUS_FILTER_ACTIVE_EXCLUDED))],
-    )
-elif selected_filter == config.FILTER_ALL:
+if selected_filter == config.FILTER_ALL:
     df_filtered = df
 else:
     df_filtered = cast(pd.DataFrame, df[df["status"] == selected_filter])

@@ -606,96 +606,13 @@ def test_invariant_11_fires_on_drift():
     )
 
 
-# ── STATUS_FILTER_ACTIVE + invariant #12 (DESIGN §5.1, §5.2 #12) ──────────────
-# Phase 5 T1-B: the Applications page filter selectbox offers an "Active"
-# sentinel as its default — semantically "every status that is still
-# actionable" (excludes [SAVED] = pre-application and [CLOSED] = withdrawn).
-# Both the sentinel value and the exclusion set live in config so any
-# future surface (e.g. a "Tracked: Active" KPI variant on the dashboard)
-# can reference them without hardcoding.
-
-
-def test_status_filter_active_is_non_empty_string():
-    assert isinstance(config.STATUS_FILTER_ACTIVE, str) and config.STATUS_FILTER_ACTIVE, (
-        f"STATUS_FILTER_ACTIVE must be a non-empty str; got {config.STATUS_FILTER_ACTIVE!r}"
-    )
-
-
-def test_status_filter_active_is_active_literal():
-    """Spec value pin (DESIGN §8.3 + project Q3 from the 2026-04-30
-    plan): the sentinel string is 'Active' — the displayed default
-    for the Applications page filter selectbox. A rename here is a
-    UI copy change; the test catches drift against the wireframe."""
-    assert config.STATUS_FILTER_ACTIVE == "Active", (
-        f"STATUS_FILTER_ACTIVE must be 'Active' (DESIGN §8.3 / Q3); "
-        f"got {config.STATUS_FILTER_ACTIVE!r}"
-    )
-
-
-def test_status_filter_active_does_not_collide_with_status_values():
-    """The 'Active' sentinel is a UI-only filter option — it must NOT
-    accidentally equal any real STATUS_VALUES entry. A collision would
-    make the selectbox ambiguous: clicking 'Active' could mean either
-    'select the Active status' or 'apply the Active-sentinel filter'.
-    Defensive guard against a future status rename landing on 'Active'."""
-    assert config.STATUS_FILTER_ACTIVE not in config.STATUS_VALUES, (
-        f"STATUS_FILTER_ACTIVE={config.STATUS_FILTER_ACTIVE!r} must not "
-        f"collide with any STATUS_VALUES entry; got STATUS_VALUES="
-        f"{config.STATUS_VALUES!r}"
-    )
-
-
-def test_status_filter_active_excluded_is_frozenset():
-    """STATUS_FILTER_ACTIVE_EXCLUDED is a frozenset so a page can't
-    accidentally mutate it via .add() / .remove() and silently broaden
-    the page's default filter at runtime."""
-    assert isinstance(config.STATUS_FILTER_ACTIVE_EXCLUDED, frozenset), (
-        f"STATUS_FILTER_ACTIVE_EXCLUDED must be a frozenset; got "
-        f"{type(config.STATUS_FILTER_ACTIVE_EXCLUDED).__name__}"
-    )
-
-
-def test_invariant_12_excluded_subset_of_status_values():
-    """DESIGN §5.2 invariant #12: STATUS_FILTER_ACTIVE_EXCLUDED <=
-    set(STATUS_VALUES). Catches a typo in the exclusion list or a
-    rename of a STATUS_VALUES entry that doesn't propagate. Positive
-    case; pairs with `test_invariant_12_fires_on_drift` below."""
-    assert config.STATUS_FILTER_ACTIVE_EXCLUDED <= set(config.STATUS_VALUES), (
-        f"Drift: STATUS_FILTER_ACTIVE_EXCLUDED entries not in "
-        f"STATUS_VALUES: "
-        f"{config.STATUS_FILTER_ACTIVE_EXCLUDED - set(config.STATUS_VALUES)!r}"
-    )
-
-
-def test_status_filter_active_excluded_contains_saved_and_closed():
-    """DESIGN §8.3: the Applications page default filter excludes
-    `STATUS_SAVED` (pre-application) and `STATUS_CLOSED` (withdrawn).
-    Pin the membership so a future tweak can't silently broaden the
-    exclusion (e.g., to also exclude [REJECTED] / [DECLINED]) without
-    a deliberate spec amendment."""
-    assert config.STATUS_FILTER_ACTIVE_EXCLUDED == frozenset(
-        {
-            config.STATUS_SAVED,
-            config.STATUS_CLOSED,
-        }
-    ), (
-        f"STATUS_FILTER_ACTIVE_EXCLUDED drifted from spec. "
-        f"Got: {config.STATUS_FILTER_ACTIVE_EXCLUDED!r}; "
-        f"expected frozenset({{STATUS_SAVED, STATUS_CLOSED}})"
-    )
-
-
-def test_invariant_12_fires_on_drift():
-    """Replicate DESIGN §5.2 invariant #12 on a synthetic broken set
-    containing a non-STATUS_VALUES entry — the import-time assertion
-    in config.py would catch this as an AssertionError rather than
-    surfacing as a silent filter no-op at page render time (an unknown
-    status would simply never match a row)."""
-    broken_excluded = config.STATUS_FILTER_ACTIVE_EXCLUDED | {"[NOT_A_STATUS]"}
-    assert not (broken_excluded <= set(config.STATUS_VALUES)), (
-        "Guard should fire: synthetic broken_excluded contains "
-        "'[NOT_A_STATUS]' (deliberately not a real STATUS_VALUES entry)."
-    )
+# ── STATUS_FILTER_ACTIVE removed 2026-05-07 ────────────────────────────────────
+# The "Active" sentinel and its exclusion set used to live here as the
+# default filter on the Applications page. The label was misleading —
+# "Active" still included Rejected and Declined positions because they
+# weren't in STATUS_FILTER_ACTIVE_EXCLUDED — and the page now defaults
+# to FILTER_ALL with per-status narrowing instead. Tests for the old
+# constants were removed alongside the constants themselves.
 
 
 # ── Fresh import exercises every module-level assertion ──────────────────────

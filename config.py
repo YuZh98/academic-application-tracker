@@ -73,27 +73,11 @@ STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
 # Applications-page filter sentinel + exclusion set (DESIGN §8.3).
-STATUS_FILTER_ACTIVE: str = "Active"
-
 # Universal "no narrowing applied" sentinel for filter selectboxes
 # (Opportunities, Applications, Recommenders). The filter selectbox is
 # rendered as `[FILTER_ALL] + <real options>` and the page checks
 # `if selected != config.FILTER_ALL: ...narrow...`.
-# Lives alongside STATUS_FILTER_ACTIVE because the two are the
-# Applications page's two sentinel options on its single status filter.
 FILTER_ALL: str = "All"
-
-# Statuses removed by the "Active" filter sentinel above. Frozen so a
-# page can't accidentally mutate it via .add()/.remove() and silently
-# broaden the page's default filter at runtime. The selectbox stores
-# the sentinel STATUS_FILTER_ACTIVE; the page resolves it to
-# `set(STATUS_VALUES) - STATUS_FILTER_ACTIVE_EXCLUDED` at render time.
-STATUS_FILTER_ACTIVE_EXCLUDED: frozenset[str] = frozenset(
-    {
-        STATUS_SAVED,
-        STATUS_CLOSED,
-    }
-)
 
 
 assert set(STATUS_VALUES) == set(STATUS_COLORS), (
@@ -302,11 +286,6 @@ assert set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}, (
     f"FUNNEL_TOGGLE_LABELS must have exactly the keys {{True, False}}. "
     f"Got: {sorted(FUNNEL_TOGGLE_LABELS.keys())!r}. The page indexes "
     f"this dict by the bool value of st.session_state['_funnel_expanded']."
-)
-assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
-    f"STATUS_FILTER_ACTIVE_EXCLUDED must be a subset of STATUS_VALUES. "
-    f"Unknown entries: "
-    f"{STATUS_FILTER_ACTIVE_EXCLUDED - set(STATUS_VALUES)!r}"
 )
 assert set(CONFIRMED_LABELS.keys()) == {1, 0, None}, (
     "CONFIRMED_LABELS must have exactly keys {1, 0, None}."
