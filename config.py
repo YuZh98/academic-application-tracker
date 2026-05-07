@@ -72,6 +72,21 @@ STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 # Terminal statuses — positions in these states are done and excluded from actionable views (upcoming deadlines, materials readiness, etc.).
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
+# Statuses the user can manually pick in the Opportunities edit-panel
+# Status selectbox. [INTERVIEW] and [OFFER] are auto-promoted by the
+# pipeline cascade (R2 fires on add_interview, R3 on a recorded Offer
+# response); exposing them in the manual picker invites desync between
+# the position's status and the underlying interview / response data.
+# Filter selectboxes (Opportunities and Applications pages) keep using
+# STATUS_VALUES so users can still narrow by INTERVIEW / OFFER.
+MANUAL_STATUS_VALUES: list[str] = [
+    STATUS_SAVED,
+    STATUS_APPLIED,
+    STATUS_CLOSED,
+    STATUS_REJECTED,
+    STATUS_DECLINED,
+]
+
 # Applications-page filter sentinel + exclusion set (DESIGN §8.3).
 # Universal "no narrowing applied" sentinel for filter selectboxes
 # (Opportunities, Applications, Recommenders). The filter selectbox is
@@ -92,6 +107,18 @@ assert set(STATUS_VALUES) == set(STATUS_LABELS), (
 assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
     "TERMINAL_STATUSES must only contain values defined in STATUS_VALUES. "
     f"Unknown: {set(TERMINAL_STATUSES) - set(STATUS_VALUES)}"
+)
+assert set(MANUAL_STATUS_VALUES) <= set(STATUS_VALUES), (
+    "MANUAL_STATUS_VALUES must only contain values defined in STATUS_VALUES. "
+    f"Unknown: {set(MANUAL_STATUS_VALUES) - set(STATUS_VALUES)}"
+)
+assert STATUS_INTERVIEW not in MANUAL_STATUS_VALUES, (
+    "STATUS_INTERVIEW must NOT be in MANUAL_STATUS_VALUES — it is set by "
+    "the R2 cascade on add_interview, not by manual edit."
+)
+assert STATUS_OFFER not in MANUAL_STATUS_VALUES, (
+    "STATUS_OFFER must NOT be in MANUAL_STATUS_VALUES — it is set by the "
+    "R3 cascade on a recorded Offer response, not by manual edit."
 )
 
 # ── Funnel buckets (dashboard presentation layer) ─────────────────────────────

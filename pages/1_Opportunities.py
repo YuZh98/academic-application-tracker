@@ -343,6 +343,16 @@ if "selected_position_id" in st.session_state:
             r["status"] if r["status"] in config.STATUS_VALUES else config.STATUS_VALUES[0]
         )
 
+        # Manual-pick options exclude the auto-promoted statuses
+        # ([INTERVIEW], [OFFER]). When the current row is already at one
+        # of those statuses, prepend it so the form loads with the
+        # correct value — the user can move away from it but cannot
+        # move back via this picker.
+        if safe_status in config.MANUAL_STATUS_VALUES:
+            edit_status_options = config.MANUAL_STATUS_VALUES
+        else:
+            edit_status_options = [safe_status, *config.MANUAL_STATUS_VALUES]
+
         raw_work_auth = r["work_auth"] if "work_auth" in r.index else None
         safe_work_auth = (
             raw_work_auth
@@ -415,9 +425,14 @@ if "selected_position_id" in st.session_state:
                 st.selectbox("Priority", config.PRIORITY_VALUES, key="edit_priority")
                 st.selectbox(
                     "Status",
-                    config.STATUS_VALUES,
+                    edit_status_options,
                     format_func=lambda v: str(config.STATUS_LABELS.get(v, v)),
                     key="edit_status",
+                    help=(
+                        "Interview and Offer are set automatically — log an "
+                        "interview or record an Offer response on the "
+                        "Applications page to promote a position."
+                    ),
                 )
                 st.date_input("Deadline", key="edit_deadline_date")
                 st.text_input("Link", key="edit_link")
