@@ -70,7 +70,7 @@ Every database write auto-regenerates plaintext markdown files (`OPPORTUNITIES.m
 
 ## Built to last
 
-889 tests · 97% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
+800+ tests · 97% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
 
 <details>
 <summary><strong>Engineering deep-dive</strong></summary>
@@ -136,7 +136,7 @@ pages/
   2_Applications.py    Application + interview tracking
   3_Recommenders.py    Recommender tracker + reminder helpers
   4_Export.py          Manual export trigger + per-file download buttons
-tests/                 889-test suite (AppTest + unit + cohesion)
+tests/                 Full test suite (AppTest + unit + cohesion)
 docs/
   adr/                 Architecture decision records
   dev-notes/           Streamlit gotchas, dev setup, git workflow notes
@@ -160,7 +160,7 @@ CHANGELOG.md           Per-release narrative log
 
 ## Contributing
 
-Contributions welcome! Read [`GUIDELINES.md`](GUIDELINES.md) for coding conventions and TDD workflow, then check the [issue tracker](https://github.com/YuZh98/academic-application-tracker/issues) for open tasks. Every PR runs the full CI pipeline — lint, type-check, and 889 tests must pass.
+Contributions welcome! Read [`GUIDELINES.md`](GUIDELINES.md) for coding conventions and TDD workflow, then check the [issue tracker](https://github.com/YuZh98/academic-application-tracker/issues) for open tasks. Every PR runs the full CI pipeline — lint, type-check, and all tests must pass.
 
 ---
 
