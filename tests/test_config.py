@@ -159,6 +159,57 @@ def test_terminal_statuses_non_empty():
     assert len(config.TERMINAL_STATUSES) > 0
 
 
+# ── MANUAL_STATUS_VALUES ──────────────────────────────────────────────────────
+# The Opportunities edit panel offers MANUAL_STATUS_VALUES (not STATUS_VALUES)
+# so users can't manually pick the auto-promoted statuses [INTERVIEW] / [OFFER].
+# Filter selectboxes (Opportunities + Applications pages) keep using the full
+# STATUS_VALUES so a user can still narrow by interview / offer.
+
+
+def test_manual_status_values_are_subset_of_status_values():
+    """Every manually-pickable status must be a known STATUS_VALUES entry —
+    the page renders them through `STATUS_LABELS.get`, which would fall back
+    to the raw bracketed form if a value drifted off the map."""
+    assert set(config.MANUAL_STATUS_VALUES) <= set(config.STATUS_VALUES), (
+        f"Unknown manual statuses: "
+        f"{set(config.MANUAL_STATUS_VALUES) - set(config.STATUS_VALUES)}"
+    )
+
+
+def test_manual_status_values_excludes_auto_promoted_statuses():
+    """[INTERVIEW] and [OFFER] are set by the R2/R3 cascades; exposing
+    them in the manual picker invites desync between status and the
+    underlying interview / response data."""
+    assert config.STATUS_INTERVIEW not in config.MANUAL_STATUS_VALUES, (
+        f"STATUS_INTERVIEW must not be in MANUAL_STATUS_VALUES; "
+        f"got {config.MANUAL_STATUS_VALUES!r}"
+    )
+    assert config.STATUS_OFFER not in config.MANUAL_STATUS_VALUES, (
+        f"STATUS_OFFER must not be in MANUAL_STATUS_VALUES; "
+        f"got {config.MANUAL_STATUS_VALUES!r}"
+    )
+
+
+def test_manual_status_values_includes_saved_and_applied():
+    """Saved and Applied are the two manual-pick anchors users land on
+    most often (initial capture + post-submission). Pin their presence
+    so a future trim doesn't accidentally drop them."""
+    assert config.STATUS_SAVED in config.MANUAL_STATUS_VALUES
+    assert config.STATUS_APPLIED in config.MANUAL_STATUS_VALUES
+
+
+def test_manual_status_values_includes_all_terminals():
+    """All three terminal statuses (CLOSED / REJECTED / DECLINED) live
+    in the manual picker so a user can record an outcome without
+    going through the response-recording flow on the Applications
+    page (e.g., a position they walked away from before any response)."""
+    for term in config.TERMINAL_STATUSES:
+        assert term in config.MANUAL_STATUS_VALUES, (
+            f"Terminal status {term!r} must be in MANUAL_STATUS_VALUES; "
+            f"got {config.MANUAL_STATUS_VALUES!r}"
+        )
+
+
 # ── Module-level assertion guard is live ─────────────────────────────────────
 
 

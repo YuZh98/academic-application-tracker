@@ -1276,19 +1276,20 @@ class TestOverviewTabWidgets:
         assert at.text_input(key=EDIT_KEYS["link"]).value == "https://example.org/apply"
 
     def test_status_selectbox_options_match_config(self, db):
-        """Status selectbox must expose one option per config.STATUS_VALUES,
-        same order. Options render as display labels via
-        format_func=STATUS_LABELS.get (Sub-task 13 / DESIGN §8.0): AppTest's
-        `.options` returns the post-format_func strings, so the expected
-        list is the STATUS_LABELS lookup over STATUS_VALUES."""
+        """Status selectbox exposes one option per config.MANUAL_STATUS_VALUES
+        (Saved/Applied/Closed/Rejected/Declined) — Interview and Offer are
+        excluded because those statuses are set by the auto-promotion
+        cascades, not by manual edit. Options render as display labels via
+        format_func=STATUS_LABELS.get."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
-        expected = [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        expected = [config.STATUS_LABELS[v] for v in config.MANUAL_STATUS_VALUES]
         assert options == expected, (
-            f"Status options must match [STATUS_LABELS[v] for v in STATUS_VALUES].\n"
+            "Status options must match [STATUS_LABELS[v] for v in "
+            "MANUAL_STATUS_VALUES] (Interview / Offer excluded).\n"
             f"  Expected: {expected}\n"
             f"  Got:      {options}"
         )
@@ -3312,20 +3313,95 @@ class TestEditStatusFormatFunc:
     """DESIGN §8.0 + §8.2: the Overview form's Status selectbox shows display
     labels (format_func=config.STATUS_LABELS.get) while storing raw bracketed
     values — mirrors the filter_status contract, minus the "All" sentinel.
+
+    Manual-pick scope: the picker offers config.MANUAL_STATUS_VALUES
+    (Saved / Applied / Closed / Rejected / Declined). The two
+    auto-promoted statuses [INTERVIEW] and [OFFER] are excluded
+    because their canonical entry points are R2 (add_interview) and
+    R3 (Offer response), respectively. A position already at an
+    auto-promoted status keeps that status visible in the picker so
+    the form loads correctly, but the user can only move away from it.
     """
 
-    def test_edit_status_options_display_labels(self, db):
-        """The edit_status selectbox's .options must be the ordered
-        config.STATUS_LABELS[v] for each v in config.STATUS_VALUES — NOT
-        the raw bracketed values."""
+    def test_edit_status_options_match_manual_status_values(self, db):
+        """For a row at a manual status (here [SAVED]), the edit_status
+        selectbox options must be the ordered MANUAL_STATUS_VALUES
+        rendered through format_func — no [INTERVIEW] / [OFFER]."""
         database.add_position({"position_name": "Alpha"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
-        expected = [config.STATUS_LABELS[v] for v in config.STATUS_VALUES]
+        expected = [config.STATUS_LABELS[v] for v in config.MANUAL_STATUS_VALUES]
         assert options == expected, (
-            f"edit_status options must be display labels via format_func.\n"
+            f"edit_status options must be display labels for MANUAL_STATUS_VALUES.\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {options}"
+        )
+
+    def test_edit_status_options_exclude_interview_and_offer(self, db):
+        """Negative pin: the auto-promoted statuses must NOT appear in
+        the manual picker for a row at a manual status. Catches a
+        regression that swaps MANUAL_STATUS_VALUES back to STATUS_VALUES."""
+        database.add_position({"position_name": "Alpha"})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        forbidden = {
+            config.STATUS_LABELS[config.STATUS_INTERVIEW],
+            config.STATUS_LABELS[config.STATUS_OFFER],
+        }
+        assert forbidden.isdisjoint(set(options)), (
+            f"edit_status must not expose Interview/Offer for manual edit; "
+            f"got {options!r}"
+        )
+
+    def test_edit_status_keeps_interview_visible_when_current(self, db):
+        """A row already at [INTERVIEW] must load with [INTERVIEW] still
+        visible in the picker (so the form doesn't lie about its current
+        state). The augmented options list prepends the current status
+        when it's outside MANUAL_STATUS_VALUES; the user can step away
+        from it but not back."""
+        pid = database.add_position({"position_name": "Alpha"})
+        database.update_position(pid, {"status": config.STATUS_INTERVIEW})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        expected = [config.STATUS_LABELS[config.STATUS_INTERVIEW]] + [
+            config.STATUS_LABELS[v] for v in config.MANUAL_STATUS_VALUES
+        ]
+        assert options == expected, (
+            f"A position at [INTERVIEW] must keep its current status "
+            f"visible at the head of the picker.\n"
+            f"  Expected: {expected}\n"
+            f"  Got:      {options}"
+        )
+        # The current selection is the row's actual status.
+        assert (
+            at.selectbox(key=EDIT_KEYS["status"]).value == config.STATUS_INTERVIEW
+        ), (
+            f"Initial selection must be the row's current status; got "
+            f"{at.selectbox(key=EDIT_KEYS['status']).value!r}"
+        )
+
+    def test_edit_status_keeps_offer_visible_when_current(self, db):
+        """Same shape as the [INTERVIEW] case, but for [OFFER] — pinned
+        separately so a fix that handles only one of the two surfaces
+        as a clear failure here."""
+        pid = database.add_position({"position_name": "Alpha"})
+        database.update_position(pid, {"status": config.STATUS_OFFER})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
+        expected = [config.STATUS_LABELS[config.STATUS_OFFER]] + [
+            config.STATUS_LABELS[v] for v in config.MANUAL_STATUS_VALUES
+        ]
+        assert options == expected, (
+            f"A position at [OFFER] must keep its current status visible "
+            f"at the head of the picker.\n"
             f"  Expected: {expected}\n"
             f"  Got:      {options}"
         )
@@ -3349,6 +3425,28 @@ class TestEditStatusFormatFunc:
             f"edit_status must store the raw status value (brackets included) "
             f"so Save writes the storage key; got "
             f"{at.selectbox(key=EDIT_KEYS['status']).value!r}"
+        )
+
+    def test_edit_status_can_revert_interview_back_to_applied(self, db):
+        """Edge-case the handoff calls out: a user at [INTERVIEW] who
+        deleted all interviews (or got there in error) must be able to
+        revert via the picker. Selecting [APPLIED] and saving must
+        persist the new status."""
+        pid = database.add_position({"position_name": "Alpha"})
+        database.update_position(pid, {"status": config.STATUS_INTERVIEW})
+        at = AppTest.from_file(PAGE)
+        at.run()
+        _select_row(at, 0)
+        at.selectbox(key=EDIT_KEYS["status"]).select(config.STATUS_APPLIED)
+        _keep_selection(at, 0)
+        at.run()
+        # Save the form.
+        at.button(key="edit_overview_submit").click()
+        _keep_selection(at, 0)
+        at.run()
+        assert not at.exception, f"Save raised: {at.exception}"
+        assert database.get_position(pid)["status"] == config.STATUS_APPLIED, (
+            "Manual revert from [INTERVIEW] to [APPLIED] must persist."
         )
 
 
