@@ -239,7 +239,7 @@ elif df_filtered.empty:
     st.info(config.EMPTY_FILTERED_POSITIONS)
 else:
     _n = len(df_filtered)
-    st.caption(f"{_n} " + ("position" if _n == 1 else "positions") + " tracked.")
+    st.caption(f"{_n} " + ("position" if _n == 1 else "positions") + " shown.")
 
     df_display = df_filtered.copy()
     df_display["deadline_urgency"] = df_display["deadline_date"].apply(_deadline_urgency)

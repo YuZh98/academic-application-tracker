@@ -178,14 +178,30 @@ st.markdown(
 )
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
+# Cumulative semantics (decided 2026-05-07):
+#   Tracked   = SAVED + APPLIED + INTERVIEW + OFFER (every non-terminal stage)
+#   Applied   = APPLIED + INTERVIEW + OFFER         (you've submitted)
+#   Interview = INTERVIEW + OFFER                   (past interview stage)
+# Promoting a row from APPLIED → INTERVIEW must not decrement the Applied
+# count — the older mutually-exclusive counts conflicted with users'
+# "once applied, always applied" intuition. Terminal statuses
+# (CLOSED / REJECTED / DECLINED) are always excluded.
 _status_counts = database.count_by_status()
-tracked = _status_counts.get(config.STATUS_SAVED, 0) + _status_counts.get(config.STATUS_APPLIED, 0)
-applied = _status_counts.get(config.STATUS_APPLIED, 0)
-interview = _status_counts.get(config.STATUS_INTERVIEW, 0)
+_saved = _status_counts.get(config.STATUS_SAVED, 0)
+_applied_only = _status_counts.get(config.STATUS_APPLIED, 0)
+_interview_only = _status_counts.get(config.STATUS_INTERVIEW, 0)
+_offer_only = _status_counts.get(config.STATUS_OFFER, 0)
+tracked = _saved + _applied_only + _interview_only + _offer_only
+applied = _applied_only + _interview_only + _offer_only
+interview = _interview_only + _offer_only
 next_interview = _next_interview_display(database.get_upcoming_interviews())
 
 # ── Empty-DB hero ────────────────────────────────────────────────────────────
-if tracked == 0 and applied == 0 and interview == 0:
+# Under cumulative semantics tracked == 0 already implies applied == 0 and
+# interview == 0 (Interview ⊆ Applied ⊆ Tracked), so a single guard is
+# sufficient. A DB containing only terminal-status rows still satisfies
+# this — terminals don't contribute to tracked.
+if tracked == 0:
     with st.container(border=True):
         st.subheader("Get started")
         st.markdown(
@@ -206,12 +222,26 @@ with c1:
     st.metric(
         label="Tracked",
         value=str(tracked),
-        help="Positions in your active pipeline before interview stage (Saved + Applied)",
+        help=(
+            "All active positions in your pipeline — Saved, Applied, "
+            "Interview, and Offer (excludes Closed / Rejected / Declined)."
+        ),
     )
 with c2:
-    st.metric(label="Applied", value=str(applied))
+    st.metric(
+        label="Applied",
+        value=str(applied),
+        help="Positions where you've submitted an application (Applied + Interview + Offer).",
+    )
 with c3:
-    st.metric(label="Interview", value=str(interview))
+    st.metric(
+        label="Interview",
+        value=str(interview),
+        help=(
+            "Positions that have reached the interview stage or beyond "
+            "(Interview + Offer)."
+        ),
+    )
 with c4:
     st.metric(label="Next Interview", value=next_interview)
 

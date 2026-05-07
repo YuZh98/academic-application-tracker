@@ -95,25 +95,40 @@ class TestT1AppShell:
 
 
 class TestT1CKpiCounts:
-    """T1-C: wire `count_by_status()` into Tracked / Applied / Interview.
+    """T1-C: wire `count_by_status()` into Tracked / Applied / Interview
+    using **cumulative** semantics — see ADR-style note in `app.py` near
+    the KPI block.
 
-    Decision: Tracked = count([SAVED]) + count([APPLIED]) — the pool of
-    positions that 'might still move forward'. Applied and Interview are
-    single-bucket counts of their namesake status. Next Interview stays
-    '—' until T1-D wires get_upcoming_interviews().
+    Cumulative rule (decided 2026-05-07 to fix UX inconsistency):
 
-    Sub-task 12 (DESIGN.md §8.1 + D13) landed two user-visible changes on
-    top of the original T1-C contract:
-      - The top-bar 🔄 Refresh button is GONE (D13 dictates no manual
-        refresh — Streamlit reruns on interaction). Class-level constant
-        and a dedicated `test_refresh_button_absent` keep the regression
-        guard explicit, not just an absence.
-      - The Tracked metric now carries the locked help-tooltip string
-        so hovering explains the arithmetic. AppTest surfaces the tooltip
-        at `metric.proto.help` (probed before writing this test).
+      Tracked   = SAVED + APPLIED + INTERVIEW + OFFER (every non-terminal)
+      Applied   = APPLIED + INTERVIEW + OFFER         (every position
+                                                       you've submitted)
+      Interview = INTERVIEW + OFFER                   (every position
+                                                       past interview)
+
+    Promoting a row from APPLIED → INTERVIEW now leaves the Applied count
+    unchanged (the older single-stage semantics let counts shrink on
+    promotion, which clashed with users' "once applied, always applied"
+    intuition).
+
+    Sub-task 12 (DESIGN.md §8.1 + D13) also landed two user-visible
+    changes that survive the cumulative rewrite:
+      - The top-bar 🔄 Refresh button is GONE (D13).
+      - The Tracked metric carries a locked help-tooltip string. Help
+        copy was rewritten alongside the cumulative change.
     """
 
-    TRACKED_HELP = "Positions in your active pipeline before interview stage (Saved + Applied)"
+    TRACKED_HELP = (
+        "All active positions in your pipeline — Saved, Applied, Interview, and Offer "
+        "(excludes Closed / Rejected / Declined)."
+    )
+    APPLIED_HELP = (
+        "Positions where you've submitted an application (Applied + Interview + Offer)."
+    )
+    INTERVIEW_HELP = (
+        "Positions that have reached the interview stage or beyond (Interview + Offer)."
+    )
 
     @staticmethod
     def _kpis(at: AppTest) -> dict[str, str]:
@@ -133,8 +148,10 @@ class TestT1CKpiCounts:
             f"Next Interview is T1-D's to wire; should still be em-dash, got {kpis['Next Interview']!r}"
         )
 
-    def test_tracked_equals_open_plus_applied(self, db):
-        """Tracked = count([SAVED]) + count([APPLIED]); INTERVIEW/OFFER are not 'tracked'."""
+    def test_tracked_counts_every_non_terminal_position(self, db):
+        """Tracked is cumulative: SAVED + APPLIED + INTERVIEW + OFFER —
+        every non-terminal stage. Terminals (CLOSED/REJECTED/DECLINED)
+        are excluded by `test_terminal_statuses_are_not_tracked`."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "B", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
@@ -143,30 +160,72 @@ class TestT1CKpiCounts:
 
         at = _run_page()
         kpis = self._kpis(at)
-        assert kpis["Tracked"] == "3", (
-            f"Tracked should count 2 OPEN + 1 APPLIED = 3, got {kpis['Tracked']!r}"
+        assert kpis["Tracked"] == "5", (
+            "Tracked should sum every non-terminal stage "
+            f"(2 SAVED + 1 APPLIED + 1 INTERVIEW + 1 OFFER = 5); got {kpis['Tracked']!r}"
         )
 
-    def test_applied_count_excludes_other_statuses(self, db):
-        """Applied reflects the [APPLIED] bucket only — not OPEN, INTERVIEW, OFFER."""
+    def test_applied_is_cumulative_through_offer(self, db):
+        """Applied counts every position where the application has been
+        submitted — APPLIED + INTERVIEW + OFFER. SAVED is excluded
+        (no application yet); terminals (REJECTED / DECLINED / CLOSED)
+        are excluded so a finished search clears the active count."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
         database.add_position(make_position({"position_name": "B", "status": "[APPLIED]"}))
         database.add_position(make_position({"position_name": "C", "status": "[APPLIED]"}))
         database.add_position(make_position({"position_name": "D", "status": "[INTERVIEW]"}))
+        database.add_position(make_position({"position_name": "E", "status": "[OFFER]"}))
 
         at = _run_page()
         kpis = self._kpis(at)
-        assert kpis["Applied"] == "2", f"Applied should be 2, got {kpis['Applied']!r}"
+        assert kpis["Applied"] == "4", (
+            "Applied should count every position past SAVED that's not "
+            f"terminal (2 APPLIED + 1 INTERVIEW + 1 OFFER = 4); got {kpis['Applied']!r}"
+        )
 
-    def test_interview_count_excludes_other_statuses(self, db):
-        """Interview reflects the [INTERVIEW] bucket only."""
+    def test_interview_is_cumulative_through_offer(self, db):
+        """Interview counts every position that has reached the
+        interview stage or further — INTERVIEW + OFFER."""
         database.add_position(make_position({"position_name": "A", "status": "[SAVED]"}))
-        database.add_position(make_position({"position_name": "B", "status": "[INTERVIEW]"}))
-        database.add_position(make_position({"position_name": "C", "status": "[OFFER]"}))
+        database.add_position(make_position({"position_name": "B", "status": "[APPLIED]"}))
+        database.add_position(make_position({"position_name": "C", "status": "[INTERVIEW]"}))
+        database.add_position(make_position({"position_name": "D", "status": "[OFFER]"}))
 
         at = _run_page()
         kpis = self._kpis(at)
-        assert kpis["Interview"] == "1", f"Interview should be 1, got {kpis['Interview']!r}"
+        assert kpis["Interview"] == "2", (
+            "Interview should count INTERVIEW + OFFER positions "
+            f"(1 INTERVIEW + 1 OFFER = 2); got {kpis['Interview']!r}"
+        )
+
+    def test_promoting_applied_to_interview_does_not_drop_applied(self, db):
+        """Regression guard for the original UX bug: promoting a position
+        from APPLIED → INTERVIEW must NOT decrement the Applied KPI.
+        Under the previous single-stage semantics the count visibly
+        dropped, which conflicted with users' intuition that once a
+        position has been applied to it stays counted as applied."""
+        pid = database.add_position(
+            make_position({"position_name": "A", "status": "[APPLIED]"})
+        )
+
+        at = _run_page()
+        before = self._kpis(at)
+
+        database.update_position(pid, {"status": "[INTERVIEW]"})
+
+        at = _run_page()
+        after = self._kpis(at)
+        assert after["Applied"] == before["Applied"], (
+            "Promoting APPLIED → INTERVIEW must leave the Applied KPI "
+            f"unchanged (was {before['Applied']!r}, now {after['Applied']!r})."
+        )
+        assert after["Tracked"] == before["Tracked"], (
+            "Promoting APPLIED → INTERVIEW must leave the Tracked KPI "
+            f"unchanged (was {before['Tracked']!r}, now {after['Tracked']!r})."
+        )
+        assert after["Interview"] == "1", (
+            f"Interview must reflect the promotion; got {after['Interview']!r}"
+        )
 
     def test_terminal_statuses_are_not_tracked(self, db):
         """Positions in TERMINAL_STATUSES are neither tracked nor applied nor interviewing."""
@@ -197,20 +256,30 @@ class TestT1CKpiCounts:
             f"Got labels: {[b.label for b in at.button]}"
         )
 
-    def test_tracked_kpi_help_tooltip(self, db):
-        """DESIGN §8.1 locks the Tracked KPI's hover-tooltip copy.
+    def test_kpi_help_tooltips(self, db):
+        """All three counted KPIs (Tracked / Applied / Interview) carry
+        locked help-tooltip strings that name the cumulative arithmetic.
+        AppTest surfaces the tooltip at `metric.proto.help`.
 
-        AppTest surfaces the tooltip at `metric.proto.help` (confirmed via
-        the Streamlit 1.56 protobuf descriptor). Exact-match pin — a
-        rephrase requires an explicit user decision, same discipline as
-        the funnel / readiness empty-state copy pins.
+        Exact-match pin — rephrasing requires an explicit user decision,
+        same discipline as the funnel / readiness empty-state copy pins.
+        Pinning all three (not just Tracked) guards against the original
+        bug, where the labels were generic enough that users had to guess
+        whether 'Applied' was the cumulative or the single-stage count.
         """
         at = _run_page()
-        tracked = next(m for m in at.metric if m.label == "Tracked")
-        assert tracked.proto.help == self.TRACKED_HELP, (
-            f"Tracked KPI must carry the locked help tooltip. "
-            f"expected: {self.TRACKED_HELP!r}\n"
-            f"got:      {tracked.proto.help!r}"
+        helps = {m.label: m.proto.help for m in at.metric}
+        assert helps["Tracked"] == self.TRACKED_HELP, (
+            f"Tracked KPI tooltip mismatch.\n  expected: {self.TRACKED_HELP!r}\n"
+            f"  got:      {helps['Tracked']!r}"
+        )
+        assert helps["Applied"] == self.APPLIED_HELP, (
+            f"Applied KPI tooltip mismatch.\n  expected: {self.APPLIED_HELP!r}\n"
+            f"  got:      {helps['Applied']!r}"
+        )
+        assert helps["Interview"] == self.INTERVIEW_HELP, (
+            f"Interview KPI tooltip mismatch.\n  expected: {self.INTERVIEW_HELP!r}\n"
+            f"  got:      {helps['Interview']!r}"
         )
 
 
