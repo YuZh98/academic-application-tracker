@@ -4544,3 +4544,171 @@ class TestGetApplicationsTable:
         statuses = dict(zip(df["position_name"], df["status"]))
         assert statuses["Open"] == config.STATUS_SAVED
         assert statuses["Closed-out"] == config.STATUS_CLOSED
+
+
+# ── done_rec_letters auto-sync (LOR materials integration) ───────────────────
+# Background: positions.num_rec_letters declares how many letters a posting
+# requires; the recommenders sub-table tracks per-recommender submission
+# state. The LOR feature wires those two into the materials pipeline by
+# auto-computing done_rec_letters whenever a recommender row changes:
+#
+#   submitted = COUNT(*) WHERE submitted_date IS NOT NULL AND != ''
+#   done_rec_letters = 1 IFF submitted >= num_rec_letters
+#
+# Edge case (vacuous truth): num_rec_letters NULL or 0 → "no minimum",
+# so done_rec_letters = 1 unconditionally — same shape as
+# is_all_recs_submitted's zero-recommender branch.
+
+
+def _get_done_rec_letters(position_id: int) -> int:
+    """Read positions.done_rec_letters as a Python int."""
+    pos = database.get_position(position_id)
+    return int(pos["done_rec_letters"] or 0)
+
+
+class TestDoneRecLettersAutoSync:
+    def test_starts_zero_with_minimum_and_no_recs(self, db):
+        """num_rec_letters=2 + zero recommenders → done_rec_letters=0
+        on add_position (only the schema default fires, since
+        add_position never inserts recommender rows)."""
+        pid = database.add_position(make_position({"num_rec_letters": 2}))
+        assert _get_done_rec_letters(pid) == 0
+
+    def test_flips_on_when_submitted_count_meets_minimum(self, db):
+        """Adding the Nth submitted recommender for a position with
+        num_rec_letters=N must flip done_rec_letters from 0 to 1."""
+        pid = database.add_position(make_position({"num_rec_letters": 2}))
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        assert _get_done_rec_letters(pid) == 0  # 1 / 2 — not yet
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"}
+        )
+        assert _get_done_rec_letters(pid) == 1  # 2 / 2 — flips
+
+    def test_flips_off_when_recommender_unsubmitted(self, db):
+        """Clearing a recommender's submitted_date must drop the
+        position back below its minimum and flip done_rec_letters off."""
+        pid = database.add_position(make_position({"num_rec_letters": 1}))
+        rec_id = database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        assert _get_done_rec_letters(pid) == 1
+        database.update_recommender(rec_id, {"submitted_date": None})
+        assert _get_done_rec_letters(pid) == 0
+
+    def test_empty_string_submitted_date_treated_as_unsubmitted(self, db):
+        """The page may write '' for a cleared date (Notes-tab contract).
+        '' must count as unsubmitted, mirroring is_all_recs_submitted."""
+        pid = database.add_position(make_position({"num_rec_letters": 1}))
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": ""}
+        )
+        assert _get_done_rec_letters(pid) == 0
+
+    def test_flips_off_when_recommender_deleted(self, db):
+        """Deleting a submitted recommender must recompute done_rec_letters
+        from the surviving rows."""
+        pid = database.add_position(make_position({"num_rec_letters": 2}))
+        rec_a = database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"}
+        )
+        assert _get_done_rec_letters(pid) == 1
+        database.delete_recommender(rec_a)
+        assert _get_done_rec_letters(pid) == 0  # 1 / 2 left
+
+    def test_null_num_rec_letters_is_vacuous_truth(self, db):
+        """num_rec_letters NULL → 'no minimum' → done_rec_letters=1 even
+        with zero recommenders (matches is_all_recs_submitted's zero-rec
+        branch). Sync must run on add_recommender even with NULL minimum."""
+        pid = database.add_position(make_position())  # num_rec_letters omitted → NULL
+        # First, trigger a sync via a recommender write so done_rec_letters
+        # gets recomputed (the schema default 0 from add_position is fine
+        # at insert time; the sync's job is to keep things consistent
+        # after writes).
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        assert _get_done_rec_letters(pid) == 1, (
+            "NULL num_rec_letters must vacuously satisfy the threshold"
+        )
+
+    def test_zero_num_rec_letters_is_vacuous_truth(self, db):
+        """num_rec_letters = 0 must behave the same as NULL — 'no minimum'."""
+        pid = database.add_position(make_position({"num_rec_letters": 0}))
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A"}
+        )
+        assert _get_done_rec_letters(pid) == 1
+
+    def test_sync_scoped_to_position_id(self, db):
+        """A recommender update on one position must not touch
+        done_rec_letters on another."""
+        pid_a = database.add_position(
+            make_position({"position_name": "A", "num_rec_letters": 1})
+        )
+        pid_b = database.add_position(
+            make_position({"position_name": "B", "num_rec_letters": 1})
+        )
+        # B already satisfied
+        database.add_recommender(
+            pid_b, {"recommender_name": "Dr. B", "submitted_date": "2026-04-10"}
+        )
+        assert _get_done_rec_letters(pid_a) == 0
+        assert _get_done_rec_letters(pid_b) == 1
+        # Adding to A must not regress B
+        database.add_recommender(
+            pid_a, {"recommender_name": "Dr. A"}  # unsubmitted
+        )
+        assert _get_done_rec_letters(pid_a) == 0
+        assert _get_done_rec_letters(pid_b) == 1
+
+    def test_sync_resyncs_after_num_rec_letters_change_via_update_position(self, db):
+        """Raising num_rec_letters above the current submitted count
+        must drop done_rec_letters back to 0; lowering it back must
+        bring done_rec_letters back to 1. Without this branch, a user
+        who corrects 'I need 2 letters' to 'I need 3 letters' would
+        keep an outdated done flag."""
+        pid = database.add_position(make_position({"num_rec_letters": 1}))
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        assert _get_done_rec_letters(pid) == 1
+        database.update_position(pid, {"num_rec_letters": 3})
+        assert _get_done_rec_letters(pid) == 0
+        database.update_position(pid, {"num_rec_letters": 1})
+        assert _get_done_rec_letters(pid) == 1
+
+    def test_compute_materials_readiness_counts_lor(self, db):
+        """End-to-end: a position with req_rec_letters='Yes',
+        num_rec_letters=2, and 2 submitted recommenders must count as
+        'ready' in compute_materials_readiness — proving the sync wires
+        cleanly into the existing readiness query without changes to it."""
+        pid = database.add_position(
+            make_position(
+                {
+                    "num_rec_letters": 2,
+                    "req_rec_letters": "Yes",
+                }
+            )
+        )
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
+        )
+        # Half-met — pending
+        result = database.compute_materials_readiness()
+        assert result == {"ready": 0, "pending": 1}, (
+            f"With 1/2 letters submitted, position must be pending; got {result!r}"
+        )
+        database.add_recommender(
+            pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"}
+        )
+        # Threshold met — ready
+        result = database.compute_materials_readiness()
+        assert result == {"ready": 1, "pending": 0}, (
+            f"With 2/2 letters submitted, position must be ready; got {result!r}"
+        )

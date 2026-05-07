@@ -183,6 +183,14 @@ def init_db() -> None:
         if "work_auth_note" not in existing_cols:
             conn.execute("ALTER TABLE positions ADD COLUMN work_auth_note TEXT")
 
+        # num_rec_letters has always been declared in the canonical DDL,
+        # but pre-v1.3 migration test fixtures (and any hand-rolled
+        # legacy DBs) may have a slimmed-down positions table without it.
+        # Guard the helper that reads this column from a missing-column
+        # OperationalError by ALTER-adding it on first sight.
+        if "num_rec_letters" not in existing_cols:
+            conn.execute("ALTER TABLE positions ADD COLUMN num_rec_letters INTEGER")
+
 
         if not interviews_existed_pre_create:
             conn.execute(
@@ -390,6 +398,11 @@ def update_position(position_id: int, fields: dict[str, Any]) -> None:
             f"UPDATE positions SET {set_clause} WHERE id = ?",
             vals,
         )
+        # Re-sync done_rec_letters when the LOR threshold changes —
+        # raising num_rec_letters above the current submitted count
+        # must drop the done flag, lowering it back must restore it.
+        if "num_rec_letters" in fields:
+            _sync_rec_letters_done(conn, position_id)
 
     import exports as _exports  # deferred: avoids circular import
 
@@ -724,6 +737,56 @@ def delete_interview(interview_id: int) -> None:
 # ── Recommenders ──────────────────────────────────────────────────────────────
 
 
+def _sync_rec_letters_done(conn: sqlite3.Connection, position_id: int) -> None:
+    """Recompute ``positions.done_rec_letters`` for a single position
+    inside an open transaction.
+
+    Called after every recommender write (add / update / delete) and
+    after any ``update_position`` that touches ``num_rec_letters`` so
+    the ``done_*`` flag stays in lockstep with the live recommenders
+    table. ``compute_materials_readiness`` reads ``done_rec_letters``
+    directly — keeping that column accurate is what wires LOR into the
+    dashboard's "ready to submit" count.
+
+    Rule (matches DESIGN D23 + ``is_all_recs_submitted`` vacuous-truth):
+        submitted = COUNT(*) WHERE submitted_date IS NOT NULL AND != ''
+        done_rec_letters = 1 IFF
+            num_rec_letters IS NULL OR num_rec_letters <= 0   (no minimum)
+            OR submitted >= num_rec_letters
+
+    Takes an open ``conn`` rather than calling ``_connect()`` itself so
+    the recompute runs inside the same transaction as the primary
+    write — a recommender INSERT and the matching done_rec_letters
+    update either both commit or both roll back."""
+    cur = conn.execute(
+        "SELECT num_rec_letters FROM positions WHERE id = ?",
+        (position_id,),
+    )
+    row = cur.fetchone()
+    if row is None:
+        return
+    num_required = row["num_rec_letters"]
+
+    cur = conn.execute(
+        "SELECT COUNT(*) AS submitted FROM recommenders "
+        "WHERE position_id = ? "
+        "  AND submitted_date IS NOT NULL "
+        "  AND submitted_date != ''",
+        (position_id,),
+    )
+    submitted = cur.fetchone()["submitted"]
+
+    if num_required is None or num_required <= 0:
+        done = 1
+    else:
+        done = 1 if submitted >= num_required else 0
+
+    conn.execute(
+        "UPDATE positions SET done_rec_letters = ? WHERE id = ?",
+        (done, position_id),
+    )
+
+
 def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
     """Insert a new recommender row. Returns new id. Calls exports.write_all()."""
     cols = ", ".join(["position_id"] + list(fields.keys()))
@@ -736,6 +799,7 @@ def add_recommender(position_id: int, fields: dict[str, Any]) -> int:
             vals,
         )
         new_id: int = cur.lastrowid or 0
+        _sync_rec_letters_done(conn, position_id)
 
     import exports as _exports  # deferred: avoids circular import
 
@@ -781,10 +845,19 @@ def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
     vals = list(fields.values()) + [rec_id]
 
     with _connect() as conn:
+        cur = conn.execute(
+            "SELECT position_id FROM recommenders WHERE id = ?",
+            (rec_id,),
+        )
+        row = cur.fetchone()
+        position_id = row["position_id"] if row else None
+
         conn.execute(
             f"UPDATE recommenders SET {set_clause} WHERE id = ?",
             vals,
         )
+        if position_id is not None:
+            _sync_rec_letters_done(conn, position_id)
 
     import exports as _exports  # deferred: avoids circular import
 
@@ -799,7 +872,16 @@ def update_recommender(rec_id: int, fields: dict[str, Any]) -> None:
 def delete_recommender(rec_id: int) -> None:
     """Delete a single recommender row. Calls exports.write_all()."""
     with _connect() as conn:
+        cur = conn.execute(
+            "SELECT position_id FROM recommenders WHERE id = ?",
+            (rec_id,),
+        )
+        row = cur.fetchone()
+        position_id = row["position_id"] if row else None
+
         conn.execute("DELETE FROM recommenders WHERE id = ?", (rec_id,))
+        if position_id is not None:
+            _sync_rec_letters_done(conn, position_id)
 
     import exports as _exports  # deferred: avoids circular import
 
