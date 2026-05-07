@@ -10,6 +10,12 @@ Track dozens of postdoc, PhD, faculty, and fellowship applications in parallel �
 
 ---
 
+## Who is this for?
+
+Anyone juggling academic job applications at scale — postdocs, PhD candidates approaching graduation, faculty applicants, fellowship seekers. If you're tracking 5–100+ positions with overlapping deadlines, different document requirements, and multiple recommenders, this replaces the spreadsheet you've outgrown.
+
+---
+
 ## Why not a spreadsheet?
 
 | Problem | Spreadsheet | This tool |
@@ -50,6 +56,8 @@ Quick-add a position in under 30 seconds. Full edit panel with four tabs (Overvi
 ### Applications
 Per-position card: applied date, confirmation, response, result, outcome. Inline multi-round interview log. Pipeline cascades automatically: saved → applied → interview → offer.
 
+![Applications](docs/ui/screenshots/v0.11.0/applications-1280.png)
+
 ### Recommenders
 Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) matrix with inline edit. Flags anyone asked more than 7 days ago who hasn't confirmed.
 
@@ -60,16 +68,9 @@ Every database write auto-regenerates plaintext markdown files (`OPPORTUNITIES.m
 
 ---
 
-## Stack
+## Built to last
 
-| Layer | Technology |
-|-------|-----------|
-| UI | Streamlit 1.57 · Plotly |
-| Data | SQLite · pandas |
-| Language | Python 3.11+ |
-| Dev tooling | pytest · ruff · pyright |
-
----
+889 tests · 97% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
 
 <details>
 <summary><strong>Engineering deep-dive</strong></summary>
@@ -87,7 +88,7 @@ Layer contracts are enforced by cohesion tests that fail CI if any rule drifts.
 
 ### Testing
 
-**889 tests, 97% coverage.** Integration tests use the official `streamlit.testing.v1.AppTest` harness against real page files; unit tests run against per-test temp SQLite files via a `db` fixture. A second test pass with `-W error::DeprecationWarning` catches Streamlit-API drift before it surfaces on upgrades.
+Integration tests use the official `streamlit.testing.v1.AppTest` harness against real page files; unit tests run against per-test temp SQLite files via a `db` fixture. A second test pass with `-W error::DeprecationWarning` catches Streamlit-API drift before it surfaces on upgrades.
 
 ### CI pipeline (every PR)
 
@@ -112,6 +113,17 @@ Adding a new required document type (e.g. "Portfolio") = one tuple appended to `
 
 ---
 
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| UI | Streamlit 1.57 · Plotly |
+| Data | SQLite · pandas |
+| Language | Python 3.11+ |
+| Dev tooling | pytest · ruff · pyright |
+
+---
+
 ## Project structure
 
 ```
@@ -133,6 +145,22 @@ DESIGN.md              Authoritative spec
 GUIDELINES.md          Coding conventions
 CHANGELOG.md           Per-release narrative log
 ```
+
+---
+
+## Roadmap
+
+- [ ] Calendar integration (`.ics` export for deadlines and interviews)
+- [ ] Email notifications for approaching deadlines
+- [ ] Bulk import from CSV / existing spreadsheets
+- [ ] Position templates for common application types
+- [ ] Analytics — time-to-response trends, success rates by field
+
+---
+
+## Contributing
+
+Contributions welcome! Read [`GUIDELINES.md`](GUIDELINES.md) for coding conventions and TDD workflow, then check the [issue tracker](https://github.com/YuZh98/academic-application-tracker/issues) for open tasks. Every PR runs the full CI pipeline — lint, type-check, and 889 tests must pass.
 
 ---
 
