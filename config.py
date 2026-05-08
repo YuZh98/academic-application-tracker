@@ -72,28 +72,27 @@ STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 # Terminal statuses — positions in these states are done and excluded from actionable views (upcoming deadlines, materials readiness, etc.).
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
-# Applications-page filter sentinel + exclusion set (DESIGN §8.3).
-STATUS_FILTER_ACTIVE: str = "Active"
+# Statuses the user can manually pick in the Opportunities edit-panel
+# Status selectbox. [INTERVIEW] and [OFFER] are auto-promoted by the
+# pipeline cascade (R2 fires on add_interview, R3 on a recorded Offer
+# response); exposing them in the manual picker invites desync between
+# the position's status and the underlying interview / response data.
+# Filter selectboxes (Opportunities and Applications pages) keep using
+# STATUS_VALUES so users can still narrow by INTERVIEW / OFFER.
+MANUAL_STATUS_VALUES: list[str] = [
+    STATUS_SAVED,
+    STATUS_APPLIED,
+    STATUS_CLOSED,
+    STATUS_REJECTED,
+    STATUS_DECLINED,
+]
 
+# Applications-page filter sentinel + exclusion set (DESIGN §8.3).
 # Universal "no narrowing applied" sentinel for filter selectboxes
 # (Opportunities, Applications, Recommenders). The filter selectbox is
 # rendered as `[FILTER_ALL] + <real options>` and the page checks
 # `if selected != config.FILTER_ALL: ...narrow...`.
-# Lives alongside STATUS_FILTER_ACTIVE because the two are the
-# Applications page's two sentinel options on its single status filter.
 FILTER_ALL: str = "All"
-
-# Statuses removed by the "Active" filter sentinel above. Frozen so a
-# page can't accidentally mutate it via .add()/.remove() and silently
-# broaden the page's default filter at runtime. The selectbox stores
-# the sentinel STATUS_FILTER_ACTIVE; the page resolves it to
-# `set(STATUS_VALUES) - STATUS_FILTER_ACTIVE_EXCLUDED` at render time.
-STATUS_FILTER_ACTIVE_EXCLUDED: frozenset[str] = frozenset(
-    {
-        STATUS_SAVED,
-        STATUS_CLOSED,
-    }
-)
 
 
 assert set(STATUS_VALUES) == set(STATUS_COLORS), (
@@ -108,6 +107,18 @@ assert set(STATUS_VALUES) == set(STATUS_LABELS), (
 assert set(TERMINAL_STATUSES) <= set(STATUS_VALUES), (
     "TERMINAL_STATUSES must only contain values defined in STATUS_VALUES. "
     f"Unknown: {set(TERMINAL_STATUSES) - set(STATUS_VALUES)}"
+)
+assert set(MANUAL_STATUS_VALUES) <= set(STATUS_VALUES), (
+    "MANUAL_STATUS_VALUES must only contain values defined in STATUS_VALUES. "
+    f"Unknown: {set(MANUAL_STATUS_VALUES) - set(STATUS_VALUES)}"
+)
+assert STATUS_INTERVIEW not in MANUAL_STATUS_VALUES, (
+    "STATUS_INTERVIEW must NOT be in MANUAL_STATUS_VALUES — it is set by "
+    "the R2 cascade on add_interview, not by manual edit."
+)
+assert STATUS_OFFER not in MANUAL_STATUS_VALUES, (
+    "STATUS_OFFER must NOT be in MANUAL_STATUS_VALUES — it is set by the "
+    "R3 cascade on a recorded Offer response, not by manual edit."
 )
 
 # ── Funnel buckets (dashboard presentation layer) ─────────────────────────────
@@ -302,11 +313,6 @@ assert set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}, (
     f"FUNNEL_TOGGLE_LABELS must have exactly the keys {{True, False}}. "
     f"Got: {sorted(FUNNEL_TOGGLE_LABELS.keys())!r}. The page indexes "
     f"this dict by the bool value of st.session_state['_funnel_expanded']."
-)
-assert STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES), (
-    f"STATUS_FILTER_ACTIVE_EXCLUDED must be a subset of STATUS_VALUES. "
-    f"Unknown entries: "
-    f"{STATUS_FILTER_ACTIVE_EXCLUDED - set(STATUS_VALUES)!r}"
 )
 assert set(CONFIRMED_LABELS.keys()) == {1, 0, None}, (
     "CONFIRMED_LABELS must have exactly keys {1, 0, None}."

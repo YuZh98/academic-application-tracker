@@ -178,14 +178,34 @@ st.markdown(
 )
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
+# Counting model (decided 2026-05-07):
+#   Tracked    = SAVED + APPLIED + INTERVIEW + OFFER (positions, non-terminal)
+#   Applied    = APPLIED + INTERVIEW + OFFER         (positions where you've submitted)
+#   Interviews = COUNT(interviews WHERE scheduled_date >= today)  ← rows, not positions
+#
+# The first two are cumulative position counts: progressing a position to a
+# later stage must not shrink earlier counts ("once applied, always applied").
+# The third counts interview *events* — a position with phone + committee +
+# chalk-talk contributes 3, matching the user's natural reading of "how many
+# interviews are on my calendar?". `Next Interview` already shows the earliest
+# event, so an event-based count parallels it cleanly.
 _status_counts = database.count_by_status()
-tracked = _status_counts.get(config.STATUS_SAVED, 0) + _status_counts.get(config.STATUS_APPLIED, 0)
-applied = _status_counts.get(config.STATUS_APPLIED, 0)
-interview = _status_counts.get(config.STATUS_INTERVIEW, 0)
-next_interview = _next_interview_display(database.get_upcoming_interviews())
+_saved = _status_counts.get(config.STATUS_SAVED, 0)
+_applied_only = _status_counts.get(config.STATUS_APPLIED, 0)
+_interview_only = _status_counts.get(config.STATUS_INTERVIEW, 0)
+_offer_only = _status_counts.get(config.STATUS_OFFER, 0)
+tracked = _saved + _applied_only + _interview_only + _offer_only
+applied = _applied_only + _interview_only + _offer_only
+_upcoming_interviews_df = database.get_upcoming_interviews()
+interviews = len(_upcoming_interviews_df)
+next_interview = _next_interview_display(_upcoming_interviews_df)
 
 # ── Empty-DB hero ────────────────────────────────────────────────────────────
-if tracked == 0 and applied == 0 and interview == 0:
+# Under cumulative semantics tracked == 0 already implies applied == 0 and
+# interview == 0 (Interview ⊆ Applied ⊆ Tracked), so a single guard is
+# sufficient. A DB containing only terminal-status rows still satisfies
+# this — terminals don't contribute to tracked.
+if tracked == 0:
     with st.container(border=True):
         st.subheader("Get started")
         st.markdown(
@@ -206,12 +226,27 @@ with c1:
     st.metric(
         label="Tracked",
         value=str(tracked),
-        help="Positions in your active pipeline before interview stage (Saved + Applied)",
+        help=(
+            "All active positions in your pipeline — Saved, Applied, "
+            "Interview, and Offer (excludes Closed / Rejected / Declined)."
+        ),
     )
 with c2:
-    st.metric(label="Applied", value=str(applied))
+    st.metric(
+        label="Applied",
+        value=str(applied),
+        help="Positions where you've submitted an application (Applied + Interview + Offer).",
+    )
 with c3:
-    st.metric(label="Interview", value=str(interview))
+    st.metric(
+        label="Interviews",
+        value=str(interviews),
+        help=(
+            "Interview events scheduled today or later, across all positions. "
+            "A position with multiple upcoming interviews contributes one count "
+            "per interview."
+        ),
+    )
 with c4:
     st.metric(label="Next Interview", value=next_interview)
 

@@ -4356,9 +4356,10 @@ class TestGetApplicationsTable:
     """get_applications_table() returns the joined positions × applications
     view that backs the Applications page table (DESIGN §8.3, Phase 5 T1-A).
 
-    The reader is filter-agnostic — it returns every position; the page
-    layer applies the default 'exclude SAVED + CLOSED' filter
-    (DESIGN §8.3 + config.STATUS_FILTER_ACTIVE_EXCLUDED, added in T1-B).
+    The reader is filter-agnostic — it returns every position; any
+    narrowing is applied by the page's status selectbox, which now
+    defaults to FILTER_ALL (the original 'Active' sentinel was dropped
+    2026-05-07; see tests/test_config.py for the removal note).
 
     Contract:
       - Columns (in order): position_id, position_name, institute,
