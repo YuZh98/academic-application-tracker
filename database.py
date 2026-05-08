@@ -1130,6 +1130,13 @@ def compute_materials_readiness() -> dict[str, int]:
     Active = status in (STATUS_SAVED, STATUS_APPLIED, STATUS_INTERVIEW) —
     the tuple is sourced from config aliases at call time.
 
+    Note: this "active" set deliberately differs from the dashboard's
+    Tracked KPI (which also includes OFFER). The readiness panel is
+    action-oriented — once a position is at OFFER the application is
+    in the institution's hands and missing materials no longer require
+    user action — so OFFER positions don't belong in a "what's left to
+    finish?" count even though they are still active overall.
+
     Empty `config.REQUIREMENT_DOCS` returns `{"ready": 0, "pending": 0}`
     without touching SQL — a valid future profile-expansion state per
     DESIGN §12.1 (e.g. a casual-tracker profile that ships without
@@ -1192,8 +1199,7 @@ def get_applications_table() -> pd.DataFrame:
     so an INNER JOIN would also work in practice; LEFT JOIN keeps the
     reader robust against a future migration that could leave an orphan
     position. The reader is filter-agnostic — every position is in the
-    result; the page layer applies the default 'exclude SAVED + CLOSED'
-    filter via config.STATUS_FILTER_ACTIVE_EXCLUDED."""
+    result; the page layer applies any narrowing via its own selectbox."""
     sql = """
         SELECT
             p.id                    AS position_id,
