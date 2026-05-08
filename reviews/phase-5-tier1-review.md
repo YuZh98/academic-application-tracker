@@ -171,7 +171,7 @@ The project_state memory documents this:
 
 > "preview-tool macOS sandbox blocks headless capture on this setup; boot smoke ran via Bash `streamlit run` (HTTP 200)"
 
-Reproduced 2026-04-30 — the preview tool fails on `Operation not permitted: '/Users/zhengyu/.../.venv/pyvenv.cfg'`. The macOS sandbox restricts the tool's process from reading `.venv/`. The Bash + curl path bypasses the sandbox entirely (the user's shell session has full access).
+Reproduced 2026-04-30 — the preview tool fails on `Operation not permitted: '<repo>/.venv/pyvenv.cfg'`. The macOS sandbox restricts the tool's process from reading `.venv/`. The Bash + curl path bypasses the sandbox entirely (the user's shell session has full access).
 
 For the Phase 5 demo deliverable (Q7 from the v1 plan: live Streamlit Cloud demo + recorded GIF), this constraint will need a different solution — but for in-CI-feeling boot smokes during development, Bash + curl is fine.
 
