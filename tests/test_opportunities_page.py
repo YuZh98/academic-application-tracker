@@ -3915,7 +3915,11 @@ class TestMaterialsTabLorRendering:
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
-        assert int(at.number_input(key=NUM_REC_LETTERS_KEY).value) == 5
+        # `.value` is typed `Number | None`; `int(None)` would crash, so
+        # fall back to 0 to satisfy pyright. The seeded num_rec_letters=5
+        # path never produces None at runtime — this is a type-contract
+        # alignment, not a behavioural change.
+        assert int(at.number_input(key=NUM_REC_LETTERS_KEY).value or 0) == 5
 
     def test_no_lor_widgets_when_optional_or_no(self, db):
         """When req_rec_letters is 'Optional' or 'No', the LOR row must
