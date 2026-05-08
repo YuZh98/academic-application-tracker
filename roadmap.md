@@ -82,35 +82,35 @@ ordering, not a commitment.
 
 ### P1 — soon after v1
 
-| Item | Source | Notes |
-|------|--------|-------|
-| Soft-delete with undo toast | UX | Requires `archived_at` column + FK cascade adjustment |
-| Interactive funnel (click → filtered Opportunities) | Friend #3 | Plotly click events + `st.session_state` filter handoff |
-| Clickable `link` column via `st.column_config.LinkColumn` | UX | 10-line change |
-| Pyright `strict` mode (incremental, module-by-module) | Engineering polish | `config.py` first; widens to `database.py`, `exports.py`, then pages |
-| Coverage report in README | Engineering polish | `pytest-cov` + badge; surfaces real gaps |
+| Item | Notes |
+|------|-------|
+| Soft-delete with undo toast | Requires `archived_at` column + FK cascade adjustment |
+| Interactive funnel (click → filtered Opportunities) | Plotly click events + `st.session_state` filter handoff |
+| Clickable `link` column via `st.column_config.LinkColumn` | 10-line change |
+| Pyright `strict` mode (incremental, module-by-module) | `config.py` first; widens to `database.py`, `exports.py`, then pages |
+| Coverage report in README | `pytest-cov` + badge; surfaces real gaps |
 
 ### P2 — medium term
 
-| Item | Source | Notes |
-|------|--------|-------|
-| AI-populate quick-add from listing URL | Friend #4 | New **Phase 8**; new dep (anthropic / openai SDK); `prefill: dict` hook in quick-add keeps v1 forward-compatible |
-| Cloud backup of `postdoc.db` (periodic upload to S3 / iCloud / Dropbox) | Friend #6 | Simplest today: drop the project folder into an iCloud/Dropbox-synced location |
-| File attachments on Materials panel (PDF/MD/TeX) | DESIGN §11 | New `attachments` table + FK cascade + `shutil.rmtree` on delete |
-| Recommender edit inline within Opportunities edit panel | UX | Rather than only on separate Recommenders page |
-| Offer details sub-table (start date, salary notes, decision deadline) | ADR-001 legacy | New `offers` table linked from `applications` |
-| Funding source field | ADR-001 legacy | Append to `QUICK_ADD_FIELDS` + schema |
-| Interview prep notes (format, interviewer, retrospective) | ADR-001 legacy | Extend `applications` table |
+| Item | Notes |
+|------|-------|
+| AI-populate quick-add from listing URL | New **Phase 8**; new dep (anthropic / openai SDK); `prefill: dict` hook in quick-add keeps v1 forward-compatible |
+| Cloud backup of `postdoc.db` (periodic upload to S3 / iCloud / Dropbox) | Simplest today: drop the project folder into an iCloud/Dropbox-synced location |
+| File attachments on Materials panel (PDF/MD/TeX) | New `attachments` table + FK cascade + `shutil.rmtree` on delete |
+| Recommender edit inline within Opportunities edit panel | Rather than only on separate Recommenders page |
+| Offer details sub-table (start date, salary notes, decision deadline) | New `offers` table linked from `applications` |
+| Funding source field | Append to `QUICK_ADD_FIELDS` + schema |
+| Interview prep notes (format, interviewer, retrospective) | Extend `applications` table |
 
 ### P3 — eventually
 
-| Item | Source | Notes |
-|------|--------|-------|
-| Application goal setting + progress bar on dashboard | ADR-001 legacy | New `settings` table |
-| Source effectiveness chart (sources → interviews conversion) | ADR-001 legacy | Derived; no new columns |
-| Application timeline chart (cluster around deadlines) | ADR-001 legacy | Derived from `applied_date` |
-| Keyboard shortcuts (N = new, / = search) | UX | Streamlit keyboard support limited |
-| Markdown rendering in notes | UX | `st.markdown` alongside `st.text_area` |
+| Item | Notes |
+|------|-------|
+| Application goal setting + progress bar on dashboard | New `settings` table |
+| Source effectiveness chart (sources → interviews conversion) | Derived; no new columns |
+| Application timeline chart (cluster around deadlines) | Derived from `applied_date` |
+| Keyboard shortcuts (N = new, / = search) | Streamlit keyboard support limited |
+| Markdown rendering in notes | `st.markdown` alongside `st.text_area` |
 
 ---
 

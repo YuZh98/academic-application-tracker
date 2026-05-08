@@ -482,7 +482,7 @@ title. Required fields by doc class:
 | Review (`reviews/*`) | **Branch:** · **Scope:** · **Stats:** (optional) · **Verdict:** |
 | ADR (`docs/adr/ADR-*.md`) | **Status:** · **Date:** · **Deciders:** (per `docs/adr/README.md` template) |
 
-Tracker docs (`TASKS.md`, `roadmap.md`, `CHANGELOG.md`) are not authoring-class; their conventions live in §14.4 and §14.5.
+Tracker docs (`roadmap.md`, `CHANGELOG.md`) are not authoring-class; their conventions live in §14.4.
 
 ### 14.2 Cross-reference canonical form
 
@@ -551,17 +551,6 @@ the SQL or manual steps. One block per version.
 - Forensic detail — rationale, alternatives considered, file:line refs,
   test counts. Those live in the commit message body or the review doc.
 
-### 14.5 TASKS.md scope rules
-
-`TASKS.md` is a sprint tracker, not a project history. The
-`Recently done` section caps at the **10 most recent items**; items
-older than the last shipped version tag are trimmed and live in
-`CHANGELOG.md` under their version block.
-
-`Current sprint` uses `- [ ]` / `- [x]` checkboxes — top-level boxes
-are tiers; sub-task boxes nest. When all sub-tasks under a tier check,
-the tier rolls up to `Recently done` on the next `chore:` commit.
-
 ### 14.6 Wireframe scope
 
 `docs/ui/wireframes.md` is "intent-only — not pixel-exact" for visual
@@ -592,7 +581,6 @@ Pick the home for decision-class content in this order:
 | Config-extension procedural recipes | `docs/dev-notes/extending.md` | "How": step-by-step walkthrough |
 | Config-extension architectural index | `DESIGN §5.3` | "What changes where": one row per goal |
 | User-facing release narrative | `CHANGELOG.md` | Keep-a-Changelog formatted |
-| Sprint state | `TASKS.md` | Hand-maintained per §14.5 |
 | Phase planning | `roadmap.md` | Phases + ship criteria + post-v1 backlog |
 
 Content placed in a lower-priority home when a higher one applies is
