@@ -1,9 +1,8 @@
 # tests/test_app_page.py
 # Integration tests for app.py (dashboard home) using Streamlit AppTest.
 #
-# One test file covers every Phase 4 tier (per PHASE_4_GUIDELINES.md §C8 —
-# "One test file for the whole dashboard"). Classes are named TestT<N><Tier>
-# and grow as each tier lands.
+# One test file covers every Phase 4 tier ("One test file for the whole
+# dashboard"). Classes are named TestT<N><Tier> and grow as each tier lands.
 #
 # Uses the shared `db` fixture from tests/conftest.py so each test runs
 # against a fresh temp SQLite DB. Never touches postdoc.db.
@@ -443,7 +442,7 @@ class TestT1DNextInterviewKpi:
 class TestT1EEmptyDbHero:
     """T1-E: hero panel above the KPI grid when Tracked + Applied + Interview
     are all zero, with a CTA that `st.switch_page()`s to the Opportunities
-    page. Per locked decision U5 (PHASE_4_GUIDELINES.md).
+    page. Per locked decision U5.
 
     Trigger semantics: all three counted-KPI buckets read zero. A DB that
     contains only terminal-status rows ([CLOSED]/[REJECTED]/[DECLINED])
@@ -959,7 +958,7 @@ class TestT2BFunnelEmptyState:
 class TestT2CFunnelLayout:
     """T2-C: place the funnel inside the LEFT half of an `st.columns(2)` so
     the right half can host T3's Materials Readiness panel (locked user
-    decision U2 — PHASE_4_GUIDELINES.md §Locked decisions).
+    decision U2).
 
     Layout-detection strategy:
       AppTest exposes each column as `Column` objects in `at.columns`. Each

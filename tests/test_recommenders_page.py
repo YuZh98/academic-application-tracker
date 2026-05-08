@@ -31,8 +31,8 @@ from tests.helpers import decode_mailto, link_buttons
 
 PAGE = "pages/3_Recommenders.py"
 
-# T5 widget keys / sentinels — pinned in AGENTS.md "Immediate task" + DESIGN
-# §8.4. Names follow the project's `recs_` widget-key prefix (GUIDELINES §13).
+# T5 widget keys / sentinels — pinned in DESIGN §8.4. Names follow the
+# project's `recs_` widget-key prefix (GUIDELINES §13).
 TABLE_KEY = "recs_table"
 FILTER_POSITION_KEY = "recs_filter_position"
 FILTER_RECOMMENDER_KEY = "recs_filter_recommender"

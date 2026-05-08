@@ -1,7 +1,7 @@
 # Roadmap
 
 _Phase tracker, ship criteria, and backlog. Update phase status on completion;
-push deep detail to `CHANGELOG.md`. Live sprint tracker is `docs/internal/TASKS.md`._
+push deep detail to `CHANGELOG.md`._
 
 ---
 
@@ -161,4 +161,3 @@ Architectural decisions, technical specification, and coding conventions:
   state gotchas
 - [`CHANGELOG.md`](CHANGELOG.md) — release history
 - [`reviews/`](reviews/) — pre-merge review docs, one per tier
-- [`docs/internal/TASKS.md`](docs/internal/TASKS.md) — live sprint tracker
