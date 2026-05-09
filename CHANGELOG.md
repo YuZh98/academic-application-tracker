@@ -19,6 +19,28 @@ manual steps to run against a pre-existing database.
 
 _(empty)_
 
+## [v0.12.0] — 2026-05-09
+
+### Added
+- Integrate letters of recommendation into the materials/requirements system — LOR status on the Materials tab is now derived from recommender data (#88)
+- Coverage gate in CI — `pytest-cov` enforces 95% minimum line coverage on the Python 3.14 matrix entry (#93)
+
+### Changed
+- Dashboard KPIs use cumulative semantics (e.g., "Applied" counts applied + interview + offer)
+- Interviews KPI is event-based (counts positions with at least one interview, not status-derived)
+- Hide auto-promoted statuses (`[APPLIED]`, `[INTERVIEW]`) from the manual status picker in Opportunities edit panel
+
+### Fixed
+- Quick Add form fields now clear visually after successful save (nonce-based form re-mount) (#89, #90)
+- Drop misleading "Active" filter from Applications page
+
+### Removed
+- Dead schema columns and unused code (F1, F2, F5, F8 cleanup)
+
+### Chores
+- Pre-public privacy scrub — remove references to internal dev-process docs and redact local paths (#92)
+- Repo flipped to public visibility
+
 ## [v0.11.0] - 2026-05-06
 
 ### Added
