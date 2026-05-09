@@ -49,6 +49,10 @@ jobs:
       - name: Pytest
         run: pytest tests/ -q
 
+      - name: Coverage check
+        if: matrix.python-version == '3.14'
+        run: pytest tests/ --cov=. --cov-report=term-missing --cov-fail-under=95 -q
+
       - name: Pytest (deprecation gate)
         run: pytest tests/ -W error::DeprecationWarning -q
 
