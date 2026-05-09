@@ -86,9 +86,7 @@ ordering, not a commitment.
 |------|-------|
 | Soft-delete with undo toast | Requires `archived_at` column + FK cascade adjustment |
 | Interactive funnel (click → filtered Opportunities) | Plotly click events + `st.session_state` filter handoff |
-| Clickable `link` column via `st.column_config.LinkColumn` | 10-line change |
 | Pyright `strict` mode (incremental, module-by-module) | `config.py` first; widens to `database.py`, `exports.py`, then pages |
-| Coverage report in README | `pytest-cov` + badge; surfaces real gaps |
 
 ### P2 — medium term
 
