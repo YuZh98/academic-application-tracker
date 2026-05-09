@@ -35,7 +35,7 @@ from tests.helpers import download_button, download_buttons
 PAGE = "pages/4_Export.py"
 
 # Locked-copy strings — pinning the verbatim text catches any drift from
-# the AGENTS.md / wireframe contract.
+# the wireframe contract.
 EXPECTED_TITLE = "Export & Download"
 EXPECTED_INTRO = (
     "Markdown files are auto-exported after every data change and saved to the "

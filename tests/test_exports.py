@@ -22,8 +22,8 @@ def isolated_exports_dir(tmp_path, monkeypatch):
     the project's real ``exports/`` directory AND its real ``postdoc.db``.
 
     Why the DB leg of isolation matters (added 2026-05-04 post-mortem on
-    PRs #32 / #33 / #34 — see AGENTS.md "CI-mirror local check"):
-    post-Phase 6 the writers ``write_opportunities`` / ``write_progress``
+    PRs #32 / #33 / #34): post-Phase 6 the writers
+    ``write_opportunities`` / ``write_progress``
     / ``write_recommenders`` all read the DB. Without ``DB_PATH``
     monkeypatching here, a smoke test calling a writer falls through
     to the project's real ``postdoc.db`` locally (passes silently
@@ -198,8 +198,7 @@ def test_write_all_swallows_mkdir_failure(monkeypatch, caplog):
 # Sort order:
 #   `deadline_date ASC NULLS LAST, position_id ASC` — mirror of
 #   `database.get_applications_table()` precedent so equal-deadline rows
-#   have a stable order across reruns. AGENTS.md "Immediate task" pins
-#   this explicitly.
+#   have a stable order across reruns.
 
 
 @pytest.fixture
@@ -253,7 +252,7 @@ class TestWriteOpportunities:
         # spec; everything after is a data row.
         return table_lines[2:]
 
-    # ── AGENTS.md spec'd six ──────────────────────────────────────────
+    # ── Six core writer contracts ─────────────────────────────────────
 
     def test_writes_file_at_expected_path(self, db_and_exports):
         """Call writer → file exists at `EXPORTS_DIR/OPPORTUNITIES.md`.
@@ -498,7 +497,7 @@ class TestWriteProgress:
         table_lines = [ln for ln in content.splitlines() if ln.startswith("|")]
         return table_lines[2:]
 
-    # ── AGENTS.md spec'd nine ─────────────────────────────────────────
+    # ── Nine core writer contracts ────────────────────────────────────
 
     def test_writes_file_at_expected_path(self, db_and_exports):
         database.add_position(make_position({"position_name": "P1"}))
@@ -829,7 +828,7 @@ class TestWriteRecommenders:
         table_lines = [ln for ln in content.splitlines() if ln.startswith("|")]
         return table_lines[2:]
 
-    # ── AGENTS.md spec'd nine ─────────────────────────────────────────
+    # ── Nine core writer contracts ────────────────────────────────────
 
     def test_writes_file_at_expected_path(self, db_and_exports):
         pid = database.add_position(make_position())

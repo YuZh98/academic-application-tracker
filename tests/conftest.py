@@ -18,7 +18,7 @@ def db(tmp_path, monkeypatch):
     pytest's ``tmp_path`` fixture.
 
     Why both monkeypatches in one fixture (Phase 6 T2 "Mandatory ride-
-    along" lift, AGENTS.md): every ``database.add_position`` /
+    along" lift): every ``database.add_position`` /
     ``update_position`` / ``add_recommender`` etc. fires
     ``exports.write_all()`` via deferred import, which now (post-Phase
     6 T1) writes a real markdown file at ``EXPORTS_DIR / 'OPPORTUNITIES.md'``.

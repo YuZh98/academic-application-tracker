@@ -59,7 +59,7 @@ _(empty)_
 - Fix dashboard — restore Material Icons CDN link dropped during CSS refactor; unify Plotly charts to `graph_objects` (#77)
 
 ### Removed
-- Remove `docs/internal/` from git index (`AGENTS.md`, `ORCHESTRATOR_HANDOFF.md`, `TASKS.md`) — dev-process metadata kept locally, not tracked in the public repo (#85)
+- Remove `docs/internal/` from git index — dev-process metadata kept locally, not tracked in the public repo (#85)
 
 ## [v0.10.0] — 2026-05-06 — Public-launch polish + publish-readiness final layer
 
@@ -75,10 +75,10 @@ _v0.10.0 is the final pre-public-flip release. No new features, no schema change
 
 ### Changed
 - Expand CI Python matrix from `["3.14"]` to `["3.11", "3.12", "3.13", "3.14"]` in `.github/workflows/ci.yml`. Adds `fail-fast: false` so one version's failure doesn't cancel the others. Job name parametrised: `Tests + Lint` → `Tests + Lint (${{ matrix.python-version }})`. Closes the gap between declared `requires-python = ">=3.11"` and actual CI coverage. PR #51 (`f24a1e8`).
-- Document zero-orphan `requirements.txt` direct-dep audit result in TASKS P3 (`1275a08`); rebrand `CHANGELOG.md` framing line `Postdoc Tracker` → `Academic Application Tracker` to match the v0.9.0 rebrand (`5809e68`).
+- Verify zero-orphan `requirements.txt` (direct-dep audit; `1275a08`); rebrand `CHANGELOG.md` framing line `Postdoc Tracker` → `Academic Application Tracker` to match the v0.9.0 rebrand (`5809e68`).
 
 ### Fixed
-- Repair four cross-doc relative paths broken by the `docs/internal/` reorg in PR #46 (`8ab7d3d`).
+- Repair four cross-doc relative paths broken by the doc-tier reorg in PR #46 (`8ab7d3d`).
 
 ## [v0.9.0] — 2026-05-05 — v1.0-rc: schema cleanup + publish-readiness scaffolding
 
@@ -105,13 +105,13 @@ _v0.9.0 ships the v1.0-rc work that clears the path to `v1.0.0`. The long-runnin
 - Add `docs/seed-templates/` directory with brief `README.md` explaining the role — three pre-app hand-maintained markdown templates archived there as design-history artifacts for future schema revisions. PR #46 (`3915536`).
 
 ### Changed
-- Rebrand `Postdoc Tracker` → `Academic Application Tracker` across 18 files (5 `page_title=` bindings + `app.py` `st.title` + empty-DB hero subheader + DESIGN/GUIDELINES §8.0 pins + wireframes ASCII art + ADR/dev-setup prose + README hero + clone URL + 5 test files' assertions). Broadens the framing to cover the multi-stage application flow shared by postdoc / PhD / faculty / fellowship apps — the codebase already serves this audience. History preserved verbatim in `CHANGELOG.md` / `reviews/` / `docs/internal/` / `docs/seed-templates/`. PR #46 (`3915536`).
-- Move `AGENTS.md`, `ORCHESTRATOR_HANDOFF.md`, `TASKS.md` to `docs/internal/`. Pre-public-flip readability — these are dev-process artifacts that overwhelm a casual visitor at root. `DESIGN.md`, `GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md` stay at root (public-readable). Path-stable: cross-references use logical names, not relative-path links (verified by grep). PR #46 (`3915536`).
+- Rebrand `Postdoc Tracker` → `Academic Application Tracker` across 18 files (5 `page_title=` bindings + `app.py` `st.title` + empty-DB hero subheader + DESIGN/GUIDELINES §8.0 pins + wireframes ASCII art + ADR/dev-setup prose + README hero + clone URL + 5 test files' assertions). Broadens the framing to cover the multi-stage application flow shared by postdoc / PhD / faculty / fellowship apps — the codebase already serves this audience. History preserved verbatim in `CHANGELOG.md` / `reviews/` / `docs/seed-templates/`. PR #46 (`3915536`).
+- Move dev-process internal docs to `docs/internal/`. Pre-public-flip readability — keeps the repo root focused on public-readable docs (`DESIGN.md`, `GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md`). Path-stable: cross-references use logical names, not relative-path links (verified by grep). PR #46 (`3915536`).
 - Lower `[tool.ruff] target-version` and `[tool.pyright] pythonVersion` from `"3.14"` to `"3.11"` matching the declared Python floor. Suite + ruff + pyright stay 0/0. PR #46 (`3915536`).
 
 ### Removed
 - Drop `dashboard.html` (87KB legacy HTML prototype, unreferenced) and `.coverage` (binary pytest-cov artifact that should never have been tracked); add `.coverage*` + `htmlcov/` patterns to `.gitignore` to prevent re-tracking. PR #46 (`3915536`).
-- Redact personal email + OPT visa-status detail from `docs/internal/ORCHESTRATOR_HANDOFF.md` user profile; name + GitHub handle stay (already public via commit author + repo URL). PR #46 (`3915536`).
+- Redact personal details from internal dev-process docs ahead of public flip; name + GitHub handle stay (already public via commit author + repo URL). PR #46 (`3915536`).
 
 ### Process
 - Repo renamed `hugs_application_tracker` → `academic-application-tracker` via `gh repo rename`. GitHub auto-redirects the old URL forever. Description + 8 topics (`streamlit`, `python`, `sqlite`, `job-tracker`, `application-tracker`, `phd`, `postdoc`, `academic`) set via `gh repo edit` for discoverability.
@@ -131,8 +131,7 @@ _v0.8.0 closes Phase 7 — UX polish across the four existing pages (T1 urgency 
 - Add 🔴/🟡 urgency glyphs to Opportunities deadline column; `_deadline_urgency` now returns inline glyphs (was: `'urgent'`/`'alert'` literal flags) with new `—` state for NULL deadlines. PR #37 (`e5316fd`) · [review](reviews/phase-7-tier1-review.md)
 
 ### Changed
-- Pre-tag doc-drift trim: drop history-as-guidance leak in `DESIGN.md` §6 schema DDL comment + §7 contract #2 amendment preamble; drop "(Phase 7 cleanup CL1 fence — ...)" parenthetical on `GUIDELINES.md` pre-commit checklist; bump `TASKS.md` footer HEAD hash to current; replace bare `[drift audit]` placard with `5f1d0f3` commit ref. Surfaced by pre-`v0.8.0` comprehensive audit. (CL6c)
-- Codify `gh pr merge --delete-branch` in `ORCHESTRATOR_HANDOFF.md` "Recurring post-merge ritual" — 5 consecutive proven uses across CL1-CL5 (PRs #41 / #42 / #43 / #44 / #45). (`04fa7a3`)
+- Pre-tag doc-drift trim: drop history-as-guidance leak in `DESIGN.md` §6 schema DDL comment + §7 contract #2 amendment preamble; drop "(Phase 7 cleanup CL1 fence — ...)" parenthetical on `GUIDELINES.md` pre-commit checklist; replace bare `[drift audit]` placard with `5f1d0f3` commit ref. Surfaced by pre-`v0.8.0` comprehensive audit. (CL6c)
 - Strip `Kept by design` rows from Phase 6 T2 / T3 / T4 review-doc Findings tables per `GUIDELINES §10` — kept-by-design coverage routed to existing Q&A entries (T2: 4→1 row, T3: 4→2 rows, T4: 4→2 rows + new Q7 covering wireframe-pinned `── Download ───` section-header omission). Add forensic-preservation framing paragraphs to CHANGELOG `[v0.4.0]` / `[v0.3.0]` / `[v0.2.0]` / `[v0.1.0]` matching the existing `[v0.7.0]` / `[v0.6.0]` / `[v0.5.0]` pattern (pre-§14.4 entries preserved as forensic record). (`bc1017e`)
 - Branch save-toast wording on dirty diff in `pages/2_Applications.py` apps_detail_form (now computes per-field dirty diff against persisted `app_row`; was previously unconditional `upsert_application`) + per-row `apps_interview_{id}_form` + `pages/3_Recommenders.py` recs_edit_form: no-op clicks fire `st.toast("No changes to save.")` instead of misleading `Saved "<name>"`. apps_detail_form no-op skips DB write AND R1/R3 cascade (pinned by spy test). PR #44 (`9a5eded`) · [review](reviews/phase-7-CL4-review.md)
 - Branch `_build_compose_mailto` subject on `n_positions`: N=1 → singular `letter for 1 postdoc application`; N≥2 → plural `letters for {n} postdoc applications` (unchanged). DESIGN §8.4 line 631 amended in same commit. PR #44 (`9a5eded`)
@@ -160,7 +159,6 @@ _v0.7.0 closes Phase 6 — three markdown generators in `exports.py` (`write_opp
 
 ### Changed
 - **Breaking:** `.gitignore` `exports/` and amend DESIGN §7 contract #2 from "committed into version control" to "deterministic and idempotent" — markdown carries personal data. (`43b3f3c`)
-- Codify CI-green-conclusion-before-admin-bypass + CI-mirror local check in `ORCHESTRATOR_HANDOFF.md` + `AGENTS.md` (post-mortem on PRs #32–#34 shipping main red while CI was IN_PROGRESS). (`c284c20`)
 - Lift `tests/conftest.py::db` to monkeypatch both `database.DB_PATH` and `exports.EXPORTS_DIR`; add `git status --porcelain exports/` isolation gate to standing pre-PR checklist. PR #33 (`911115a`)
 
 ### Fixed
@@ -171,7 +169,7 @@ _v0.7.0 closes Phase 6 — three markdown generators in `exports.py` (`write_opp
 _v0.6.0 closes Phase 5 — two new working pages: **Applications** (T1–T3 — `pages/2_Applications.py`: shell + status filter + 7-column table + selection-driven detail card with dirty-diff Save + cascade-promotion toasts + per-row inline interview list with `@st.dialog`-gated Delete) and **Recommenders** (T4–T6 — `pages/3_Recommenders.py`: page shell + Pending Alerts cards grouped by recommender; T5 All-Recommenders table + position/recommender filters + Add expander + inline edit card with dirty-diff Save + dialog Delete; T6 per-card Compose-reminder-email `st.link_button` mailto + `LLM prompts (2 tones)` expander). Six pre-merge tier reviews + the close-out cohesion-smoke at [`reviews/phase-5-finish-cohesion-smoke.md`](reviews/phase-5-finish-cohesion-smoke.md) verified every architectural choice and pinned cross-page consistency. Suite climbed 553 → 777 (+224 tests, 1 xfail unchanged) across the phase. Detailed entries below preserve the original forensic record from when each item shipped._
 
 ### Changed
-- GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, TASKS.md scope rules, wireframe-drift severity, reviews folder index, content-routing table). (`b148dd5`)
+- GUIDELINES.md: add §14 Documentation Conventions (file-header schema, cross-references, doc tiering, CHANGELOG discipline per Keep a Changelog 1.1.0, wireframe-drift severity, reviews folder index, content-routing table). (`b148dd5`)
 - GUIDELINES §10: extend severity legend with `ℹ️ Observation`; codify Status column values; tighten Q&A range to 5–8 (per §14.3 tiering). (`b148dd5`)
 - `docs/adr/README.md`: clarify post-v1.1 decision deferral policy; update D1–D10 references to acknowledge the D11–D25 additions in `DESIGN §10` as candidate ADR backfills. (`196fc0b`)
 - `reviews/*.md` (all 20 files): harmonize front-matter to the new §14.1 schema — add missing `**Branch:**` / `**Scope:**` / `**Verdict:**` fields; preserve all existing fields. Pre-branch-workflow reviews (Phase 1–3 Tier 1–3) get `Branch: _(direct-to-main; pre-branch-workflow)_`. (`e0da6e0`)
@@ -181,7 +179,6 @@ _v0.6.0 closes Phase 5 — two new working pages: **Applications** (T1–T3 — 
 - `docs/dev-notes/streamlit-state-gotchas.md` gotcha #14: drop the obsolete 🔄 Refresh-button reference (button was deleted in Sub-task 12 per DESIGN D13); rewrite workaround to point at the surviving Save / Delete-handler use sites. (`5487418`)
 
 ### Changed
-- `TASKS.md` `Recently done`: trim per the new §14.5 cap rule — drop pre-v0.5.0 entries (Phase 4 T5-A, T6 cohesion-smoke, T6 funnel-toggle polish, v1 plan-locking commit, PRs #8/#9/#10, v0.2.0/v0.3.0/v0.4.0 tag entries); items survive in CHANGELOG version blocks. (`30ad6fd`)
 
 ### Added
 - `reviews/README.md`: new index file per `GUIDELINES §14.7` — reverse-chronological table of all 20 review docs with columns `(date, scope, branch, verdict, link)`; brief preamble cross-linking the §14.1 / §14.7 conventions; "How to add a new entry" footer. (`12c60e4`)
@@ -192,8 +189,6 @@ _v0.6.0 closes Phase 5 — two new working pages: **Applications** (T1–T3 — 
 - Phase 5 T3-B: per-row Delete via `@st.dialog` on the Applications-page interview list — module-level `_confirm_interview_delete_dialog` helper (Confirm + Cancel buttons, irreversibility warning embedding the row's sequence number), per-row Delete buttons rendered in a horizontal `st.columns(N)` row below `apps_interviews_form` (Streamlit 1.56 forbids `st.button` inside `st.form`) and keyed `apps_interview_{id}_delete`. Single dialog call site post-loop with a `pending_id in current_ids` guard implements gotcha #3's re-open trick AND doubles as automatic stale-target cleanup when the user navigates to a different position. Confirm path calls `database.delete_interview(id)`, pops paired sentinels, sets `_applications_skip_table_reset=True` (gotcha #11 — preserves position selection), fires `Deleted interview {seq}.` toast. Failure path uses `st.error` per GUIDELINES §8 with sentinels surviving so the dialog re-opens for retry (Opportunities-page failure-preserves-state precedent). (`b3a307c`)
 - Phase 5 T4: Add `pages/3_Recommenders.py` — page shell (`set_page_config`, `st.title`, `database.init_db()`) + Pending Alerts panel: `get_pending_recommenders()` grouped by `recommender_name`, one `st.container(border=True)` per person with relationship in header and per-position bullets (institute-prefixed label, asked-Nd-ago, due Mon-D; em-dash for NULL deadline). Empty branch: `st.info("No pending recommenders.")`. 18 new tests in `tests/test_recommenders_page.py`. Merged via PR #28 (`a491be3`). ([`reviews/phase-5-tier4-review.md`](reviews/phase-5-tier4-review.md))
 - Phase 5 T5: All Recommenders surface on `pages/3_Recommenders.py` — read-only `st.dataframe` (`recs_table`) backed by `database.get_all_recommenders()` with the locked six-column display contract (Position · Recommender · Relationship · Asked · Confirmed · Submitted) + position/recommender filter selectboxes (`recs_filter_position`, `recs_filter_recommender`) defaulting to `"All"` (recommender filter dedupes repeat names). `st.form("recs_add_form")` inside an "Add Recommender" expander with label-as-value position selectbox (`_position_label_to_id` reverse lookup keeps `position_id` off the rendered UI per DESIGN §8.4); whitespace-only name → `st.error`. Single-row selection captures `recs_selected_id`; inline edit card with `st.form("recs_edit_form")` over asked_date / confirmed (`[None, 0, 1]` → `—`/`No`/`Yes`) / submitted_date / reminder_sent + reminder_sent_date / notes; Save writes ONLY the dirty diff via `database.update_recommender`. Delete button outside the form opens an `@st.dialog` confirm gate (`recs_delete_confirm` / `recs_delete_cancel`) that cascades via `database.delete_recommender` on Confirm and preserves selection on Cancel via the `_recs_skip_table_reset` one-shot — single dialog call site post-loop with `_recs_delete_target_id == _rec_id` guard (gotcha #3 re-open trick + automatic stale-target cleanup on row-change). 56 new tests in `tests/test_recommenders_page.py`; suite 700 → 756 under both pytest gates. Merged via PR #29 (`2293ebd`). ([`reviews/phase-5-tier5-review.md`](reviews/phase-5-tier5-review.md))
-- `AGENTS.md`: agent-handoff document at repo root — replaces the need to read every spec doc on first contact for new implementer agents; orchestrator maintains the `Current state` table + `Immediate task` block after each merged PR. Merged via PR — `b56c553`.
-- `ORCHESTRATOR_HANDOFF.md`: orchestrator-role transition document — pasted into a fresh Claude session when the orchestrator role moves; points at on-disk source-of-truth files rather than carrying mutable state. Merged via PR #30 (`6c1fc5b`).
 - Phase 5 T6: Recommender reminder helpers wired into each Pending Alerts card on `pages/3_Recommenders.py` (T4 surface). T6-A: per-card `st.link_button("Compose reminder email", url=mailto:?…)` opening the user's default mail client with the verbatim DESIGN §8.4 subject (`Following up: letters for {N} postdoc applications`) + body (`Hi {recommender_name}, just a quick check-in on the letters of recommendation you offered. Thank you so much!`); no `to:` field (recommenders schema doesn't store emails); per-card unique key `recs_compose_{idx}` from `enumerate` over the groupby prevents `DuplicateWidgetID`. T6-B: per-card `st.expander(f"LLM prompts ({len(_REMINDER_TONES)} tones)")` with one `st.code(prompt, language="text")` block per locked tone — `_REMINDER_TONES = ("gentle", "urgent")` per DESIGN §8.4; each prompt embeds recommender name + relationship + every owed position (name / institute / deadline) + days-since-asked (max across the group) + tone keyword + an instruction asking the LLM to return BOTH subject and body. Two pure helpers (`_build_compose_mailto`, `_build_llm_prompt`); existing T4 `_bullets`-building loop extended by one line for `_per_row_days` collection. 21 new tests across `TestT6ComposeButton` (9) + `TestT6LLMPromptsExpander` (12); suite 756 → 777 under both pytest gates. Merged via PR #31 (`6993ea9`). ([`reviews/phase-5-tier6-review.md`](reviews/phase-5-tier6-review.md))
 
 ### Changed
@@ -213,18 +208,16 @@ _v0.6.0 closes Phase 5 — two new working pages: **Applications** (T1–T3 — 
 - `docs/ui/wireframes.md` Dashboard panel column order: the Upcoming-table example rows showed `Date · Label · Status · Kind · Days left · Urgency` but DESIGN §8.1 + the actual `app.py` render use `Date · Days left · Label · Kind · Status · Urgency`. Reordered the 3 example rows to match the spec; added a column-header row for clarity. Closes the column-order drift originally flagged in `reviews/phase-4-finish-cohesion-smoke.md` (re-classified as 🟠 under §14.6).
 
 ### Removed
-- `docs/ui/wireframes.md` Applications section: drop the three prose blocks beneath the ASCII (Filter selectbox details, Confirmation column 3-state table, Phase 5 status note). Per §14.8 routing, widget contracts belong in DESIGN §8.x and implementation status belongs in TASKS / CHANGELOG — not in a wireframes file. Filter-selectbox option-order + `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule MOVED to DESIGN §8.3 (one expanded bullet on the existing Default filter row); Confirmation 3-state table was already redundant with DESIGN §8.3 lines 832-836; Phase 5 status note dropped (TASKS.md is the durable record). (`6beaac9`)
+- `docs/ui/wireframes.md` Applications section: drop the three prose blocks beneath the ASCII (Filter selectbox details, Confirmation column 3-state table, Phase 5 status note). Per §14.8 routing, widget contracts belong in DESIGN §8.x and implementation status belongs in CHANGELOG — not in a wireframes file. Filter-selectbox option-order + `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule MOVED to DESIGN §8.3 (one expanded bullet on the existing Default filter row); Confirmation 3-state table was already redundant with DESIGN §8.3 lines 832-836; Phase 5 status note dropped (CHANGELOG is the durable record). (`6beaac9`)
 
 ### Added
 - `docs/dev-notes/streamlit-state-gotchas.md`: index/TOC at the top. 16 numbered one-line summaries of the gotchas; references like "see gotcha #16" can now navigate by number rather than by full-text search.
 - `docs/dev-notes/{dev-setup, extending, git-workflow-depth, streamlit-state-gotchas}.md`: one-sentence italicized "what this is" header under each title — folder-scan readability per the post-PR-#17 audit. The existing intro prose is preserved beneath; the new line is purpose-only.
 
 ### Changed
-- `TASKS.md` + `roadmap.md`: chore tracker update to reflect post-PR-#16 state. PR #16 (Phase 5 T2, `b9a2c82`) merged 2026-04-30; main HEAD now at `b9a2c82`. TASKS current sprint shows Branch (T2) merged + Branch (T3) as next functional work; Recently done collapses the per-sub-task T2-A/T2-B essays into a single PR #16 bullet (per §14.4 spirit). roadmap "In flight" → `docs/guidelineupdate`; "Next up" → Phase 5 T3 (inline interview list per DESIGN §8.3 D-B); Phase 5 detail table marks T1 + T2 ✅ via their PR numbers.
 - DESIGN.md: bump `**Version:** 1.3` → `1.4`; align header to §14.1 schema (`Updated:` → `Last updated:`); date 2026-04-30. v1.4 captures the structural amendments since v1.3: T4 column-contract (Upcoming-panel six-column lock), T6 funnel-toggle bidirectional + tertiary, §8.3 D-A inline-cell-text amendment, §8.4 D-C mailto + LLM-prompts pattern, §8.3 D-B inline interview list spec, §6.3 D-D pending-column-drops paragraph, §8.3 Status filter selectbox bullet expansion (cleanup C of this branch).
 - GUIDELINES.md: bump `**Version:** v1.1` → `v1.2`; replace `Applies from:` field with `Last updated:` + `Status:` per §14.1 header schema. v1.2 content delta vs v1.1 is the §14 Documentation Conventions block + §10 ℹ️ Observation row + Status column codification + §13 page-authoring procedure (all landed in earlier commits on `docs/v1-planning-pins` and `docs/guidelineupdate`).
 - GUIDELINES.md: remove **history-as-guidance** from forward-looking sections — 14 instances across §1, §3, §7, §9, §10, §11, §12, §13, §14.1, §14.4, §14.7, §14.8 (historical attributions like "From v1.1", one-time-event branch refs, stale snapshots like "Current files: ...", past-tense narratives, and 3 cross-ref drift hits the §14.2 sed pattern missed — `streamlit-state-gotchas.md §N` → `dev-notes gotcha #N`). §14.8 routing table simplified to forward-only (D1–D10 / D11–D25 historical-batch rows dropped); §14.7 legacy-filename carve-out dropped per user direction.
-- GUIDELINES.md §11 + §14: revise to remove descriptive prose and meta-commentary — §11 title (drop "— Summary"), §11 "For depth" listing trimmed; §14 intro descriptive lines dropped, §14.1 "keep existing" reworded forward, §14.3 "Whatever the spec needs" → "(no cap)" + meta-line trimmed, §14.5 "— that's the durable record" justification dropped, §14.6 specific Date/Days-Left example replaced with principle, §14.7 "by author preference" softness + "file timestamps order naturally" meta dropped (rule locked: reverse-chronological, prepend), §14.8 intro and redundant restatement dropped, §14.8 specific extending.md/§5.3 example generalized.
 
 ### Changed
 - `DESIGN §8.3` Status filter selectbox bullet: expand to capture the option list (`[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`), default value, and the `format_func=STATUS_LABELS.get(v, v)` sentinel-fallthrough rule moved from `docs/ui/wireframes.md`. Per §14.8: page-by-page UI contracts live in DESIGN §8.x.
@@ -412,7 +405,6 @@ scaffolding.
   (`dashboard-1280.png`, `dashboard-1440.png`, `dashboard-1680.png`)
   are user-captures from a real desktop browser per the smoke doc's
   capture instructions.
-- **`TASKS.md`** — first T6 checkbox flipped to `[x]`.
 - **No code changes** in `app.py` / `database.py` / `config.py` /
   `pages/*.py` / `tests/*.py`; the audit is the deliverable. Both
   `pytest tests/ -q` and `pytest -W error::DeprecationWarning tests/ -q`
@@ -473,9 +465,8 @@ appears in exactly one card.
         asked-today recommender stays in the empty branch since
         `0d < RECOMMENDER_ALERT_DAYS`).
     C — card content (bold warn-glyph header, T4 Label precedent
-        with bare-position fallback, "asked Nd ago" phrasing per
-        TASKS.md, due-date in `Mon D` form, em-dash for null
-        deadline).
+        with bare-position fallback, "asked Nd ago" phrasing,
+        due-date in `Mon D` form, em-dash for null deadline).
     D — grouping by `recommender_name` (one card per person
         aggregating multiple positions; submitted letters absent
         from the panel).
@@ -987,7 +978,7 @@ migrate in place via two one-shot `UPDATE` loops in `init_db()`.
 - **`database.py compute_materials_readiness`** — `active_statuses`
   hardcoded tuple flips to `('[SAVED]', '[APPLIED]', '[INTERVIEW]')`
   + docstring update. The wider refactor to use `config.STATUS_*`
-  aliases (TASKS.md C1) is still deferred — this commit-group's
+  aliases (carry-over C1) is still deferred — this commit-group's
   scope is literal flip only, preserving a single logical change
   per commit.
 - **`app.py`** — one-line consumer edit: `config.STATUS_SAVED`
@@ -1192,7 +1183,7 @@ Sub-task 9 wires the R1/R2/R3 pipeline auto-promotion cascades across
 `is_all_recs_submitted` query helper, and swaps the hardcoded
 `("[SAVED]", "[APPLIED]", "[INTERVIEW]")` tuple in
 `compute_materials_readiness` for `config.STATUS_*` aliases (closes the
-TASKS.md C1 carry-over that's been open since Sub-task 5). Pure
+C1 carry-over that's been open since Sub-task 5). Pure
 behavioural / refactor change — no schema edit, so no Migration entry.
 DESIGN.md v1.3 §9.3 + §7 + D12 + D23.
 
@@ -1746,8 +1737,7 @@ Sub-task 14 is the v1.3 doc-alignment sweep across the non-DESIGN
 project docs. Closes the last v1.3-alignment item before the branch
 pushes to a PR. Pure docs change — no schema, no new queries, no
 config edit, no test drift. Scope: `GUIDELINES.md`, `CHANGELOG.md`,
-`roadmap.md`, `TASKS.md`, `docs/ui/wireframes.md`,
-`docs/dev-notes/extending.md`.
+`roadmap.md`, `docs/ui/wireframes.md`, `docs/dev-notes/extending.md`.
 
 - **`GUIDELINES.md` §3 (Naming Conventions — widget keys
   sub-section)** — sentinel list gains `_active_edit_tab`
@@ -1788,13 +1778,8 @@ config edit, no test drift. Scope: `GUIDELINES.md`, `CHANGELOG.md`,
 - **`roadmap.md` "In flight" paragraph** — Sub-tasks 1–13 → 1–14
   in the opening clause; a final clause describes the Sub-task 14
   doc-sweep inline (GUIDELINES sentinel list + grep rule + status-
-  selectbox example + CHANGELOG / TASKS / roadmap updates).
+  selectbox example + CHANGELOG / roadmap updates).
   `441 tests green` count preserved — no tests added, none removed.
-- **`TASKS.md`** — new `[x] Sub-task 14` entry inserted between
-  Sub-task 13 and the remaining `[ ] Push branch; open PR; merge
-  to main` bullet; `_Updated:` footer bumped from "Sub-tasks
-  1–13 shipped" to "Sub-tasks 1–14 shipped". Matches the cadence
-  of every prior sub-task entry on this sprint.
 - **`CHANGELOG.md`** — this entry. Placed in `[Unreleased]`
   immediately after the Sub-task 13 `Changed` block, mirroring
   the per-sub-task cadence of the rest of the section. Migration
@@ -2000,7 +1985,6 @@ sides with the table.
 - **`CHANGELOG.md` Sub-task 13 / Sub-task 14 entries** — LEFT
   unchanged (historical record of what shipped at the time). This
   block is the canonical post-rename record.
-- **`TASKS.md` done-item entries** — LEFT unchanged, same rationale.
 
 469/469 pytest green (default + `-W error::DeprecationWarning`) —
 +0 new tests, 41 tab-related tests rebound to the new constant.
@@ -2511,9 +2495,9 @@ to `"Overview"` (the first `EDIT_PANEL_TABS` entry) via st.radio's
 to disk, no "migration" of prior sessions needed.
 
 **Sub-task 14** requires no migration — the entire change is docs
-(`GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md`, `TASKS.md`; no
-edits needed in `docs/ui/wireframes.md` / `docs/dev-notes/
-extending.md` after audit). No schema edit, no new database
+(`GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md`; no edits needed
+in `docs/ui/wireframes.md` / `docs/dev-notes/extending.md` after
+audit). No schema edit, no new database
 queries, no config rename, no code touched. A user upgrading
 reads more v1.3-accurate conventions in GUIDELINES (status-
 selectbox examples matching the live `pages/1_Opportunities.py`,
@@ -2543,9 +2527,6 @@ nothing about the running app or its database changes.
   `git-workflow-depth.md` (254 lines, extracted from old GUIDELINES §9)
   and `streamlit-state-gotchas.md` (308 lines, 14 Streamlit 1.56 quirks
   consolidated from scattered comments)
-- **TASKS.md** — trimmed from ~90 lines to ~40 lines; personal postdoc
-  tasks (CV prep, research statement, recommender outreach) removed per
-  scope decision (one scope per file)
 - **roadmap.md** — restructured: added explicit v1 Ship Criteria;
   backlog split into P1/P2/P3; v2 Vision moved above Out-of-scope
 - **CHANGELOG.md** — this file, created; v0.1.0–v0.4.0 backfilled from
