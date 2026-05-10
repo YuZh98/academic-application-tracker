@@ -13,13 +13,13 @@
 
 import datetime
 import pathlib
+
 import pytest
-
-import database
-import config
 from streamlit.testing.v1 import AppTest
-from tests.conftest import make_position
 
+import config
+import database
+from tests.conftest import make_position
 
 PAGE = "pages/2_Applications.py"
 
@@ -36,23 +36,23 @@ TABLE_KEY = "apps_table"
 DETAIL_FORM_ID = "apps_detail_form"
 DETAIL_SUBMIT_KEY = "apps_detail_submit"
 
-W_APPLIED_DATE        = "apps_applied_date"
-W_CONFIRMATION_RCVD   = "apps_confirmation_received"
-W_CONFIRMATION_DATE   = "apps_confirmation_date"
-W_RESPONSE_TYPE       = "apps_response_type"
-W_RESPONSE_DATE       = "apps_response_date"
-W_RESULT              = "apps_result"
-W_RESULT_NOTIFY_DATE  = "apps_result_notify_date"
-W_NOTES               = "apps_notes"
+W_APPLIED_DATE = "apps_applied_date"
+W_CONFIRMATION_RCVD = "apps_confirmation_received"
+W_CONFIRMATION_DATE = "apps_confirmation_date"
+W_RESPONSE_TYPE = "apps_response_type"
+W_RESPONSE_DATE = "apps_response_date"
+W_RESULT = "apps_result"
+W_RESULT_NOTIFY_DATE = "apps_result_notify_date"
+W_NOTES = "apps_notes"
 
 # T2-A: page-prefixed internal sentinels so cross-page session_state on
 # Opportunities (`_edit_form_sid`, `_skip_table_reset`) doesn't collide
 # with Applications-page state. Leading underscore = internal sentinel
 # (GUIDELINES §3); the long-form `applications` prefix avoids confusion
 # with the dashboard page (`app.py`).
-SELECTED_PID_KEY      = "applications_selected_position_id"
-EDIT_FORM_SID_KEY     = "_applications_edit_form_sid"
-SKIP_TABLE_RESET_KEY  = "_applications_skip_table_reset"
+SELECTED_PID_KEY = "applications_selected_position_id"
+EDIT_FORM_SID_KEY = "_applications_edit_form_sid"
+SKIP_TABLE_RESET_KEY = "_applications_skip_table_reset"
 
 # T3-A / T3-rev-B: Interview list widgets and sentinels (DESIGN §8.3
 # D-B). Per-row widget keys scope to the interview's primary key for
@@ -63,8 +63,8 @@ SKIP_TABLE_RESET_KEY  = "_applications_skip_table_reset"
 # is a self-contained block). Pre-seed sentinel tracks which interview
 # ids have been seeded so a freshly-Added row gets pre-seeded without
 # disturbing sibling rows mid-edit.
-ADD_INTERVIEW_KEY          = "apps_add_interview"
-INTERVIEWS_SEEDED_IDS_KEY  = "_apps_interviews_seeded_ids"
+ADD_INTERVIEW_KEY = "apps_add_interview"
+INTERVIEWS_SEEDED_IDS_KEY = "_apps_interviews_seeded_ids"
 
 # Em-dash glyph the page uses as a None-placeholder via format_func.
 # Hardcoded here (not imported from the page) because the page module
@@ -96,10 +96,10 @@ def _w_interview_save(iid: int) -> str:
 # pending-target sentinels (id + seq); a single dialog call site
 # post-loop opens the dialog while the sentinels are set, which
 # satisfies gotcha #3's re-open trick across AppTest reruns.
-INTERVIEW_DELETE_TARGET_ID_KEY  = "_apps_interview_delete_target_id"
+INTERVIEW_DELETE_TARGET_ID_KEY = "_apps_interview_delete_target_id"
 INTERVIEW_DELETE_TARGET_SEQ_KEY = "_apps_interview_delete_target_seq"
-INTERVIEW_DELETE_CONFIRM_KEY    = "apps_interview_delete_confirm"
-INTERVIEW_DELETE_CANCEL_KEY     = "apps_interview_delete_cancel"
+INTERVIEW_DELETE_CONFIRM_KEY = "apps_interview_delete_confirm"
+INTERVIEW_DELETE_CANCEL_KEY = "apps_interview_delete_cancel"
 
 
 def _w_interview_delete(iid: int) -> str:
@@ -121,17 +121,13 @@ def _select_row(at: AppTest, row_index: int) -> None:
     helper in tests/test_opportunities_page.py — the shape matches what
     Streamlit 1.56 produces for ``on_select='rerun'`` +
     ``selection_mode='single-row'``."""
-    at.session_state[TABLE_KEY] = {
-        "selection": {"rows": [row_index], "columns": []}
-    }
+    at.session_state[TABLE_KEY] = {"selection": {"rows": [row_index], "columns": []}}
     at.run()
 
 
 def _deselect_row(at: AppTest) -> None:
     """Inject empty-selection state + rerun (the user clicked away)."""
-    at.session_state[TABLE_KEY] = {
-        "selection": {"rows": [], "columns": []}
-    }
+    at.session_state[TABLE_KEY] = {"selection": {"rows": [], "columns": []}}
     at.run()
 
 
@@ -143,9 +139,7 @@ def _keep_selection(at: AppTest, row_index: int) -> None:
     #11). Multi-step flows that span an internal rerun (e.g., a Save
     handler that calls ``st.rerun()``) need this to mimic the
     browser-side selection persistence."""
-    at.session_state[TABLE_KEY] = {
-        "selection": {"rows": [row_index], "columns": []}
-    }
+    at.session_state[TABLE_KEY] = {"selection": {"rows": [row_index], "columns": []}}
 
 
 def _ss_or_none(at: AppTest, key: str):
@@ -159,6 +153,7 @@ def _ss_or_none(at: AppTest, key: str):
 
 
 # ── Page config (source-grep pin) ─────────────────────────────────────────────
+
 
 class TestPageConfigSetsWideLayout:
     """Source-grep pin for DESIGN §8.0 + D14. AppTest does not surface
@@ -178,17 +173,16 @@ class TestPageConfigSetsWideLayout:
         )
         assert 'page_title="Applications — Academic Application Tracker"' in src, (
             'set_page_config must bind page_title="Applications — Academic Application Tracker" '
-            'per DESIGN §8.0.'
+            "per DESIGN §8.0."
         )
-        assert 'page_icon="📋"' in src, (
-            'set_page_config must bind page_icon="📋" per DESIGN §8.0.'
-        )
+        assert 'page_icon="📋"' in src, 'set_page_config must bind page_icon="📋" per DESIGN §8.0.'
         assert 'layout="wide"' in src, (
             'set_page_config must bind layout="wide" per DESIGN §8.0 / D14.'
         )
 
 
 # ── Page shell ────────────────────────────────────────────────────────────────
+
 
 class TestApplicationsPageShell:
     """T1-B: page renders without exception and surfaces the canonical
@@ -200,21 +194,18 @@ class TestApplicationsPageShell:
         """Sanity: the page renders without raising. Foundational —
         every other test in this module assumes this passes."""
         at = _run_page()
-        assert not at.exception, (
-            f"Page must render without exception; got {at.exception}"
-        )
+        assert not at.exception, f"Page must render without exception; got {at.exception}"
 
     def test_title_is_applications(self, db):
         """st.title('Applications') — per DESIGN §8.3 page heading
         contract."""
         at = _run_page()
         titles = [t.value for t in at.title]
-        assert self.PAGE_TITLE in titles, (
-            f"Expected '{self.PAGE_TITLE}' in {titles!r}"
-        )
+        assert self.PAGE_TITLE in titles, f"Expected '{self.PAGE_TITLE}' in {titles!r}"
 
 
 # ── Filter bar (T1-B) ─────────────────────────────────────────────────────────
+
 
 class TestApplicationsFilterBar:
     """Status filter selectbox: default = FILTER_ALL (show every position),
@@ -257,9 +248,7 @@ class TestApplicationsFilterBar:
             *[config.STATUS_LABELS[v] for v in config.STATUS_VALUES],
         ]
         assert actual == expected, (
-            f"Status filter option mismatch.\n"
-            f"  Expected: {expected}\n"
-            f"  Got:      {actual}"
+            f"Status filter option mismatch.\n  Expected: {expected}\n  Got:      {actual}"
         )
 
 
@@ -292,8 +281,13 @@ class TestApplicationsPageTable:
     EM_DASH = "—"
 
     DISPLAY_COLUMNS = [
-        "Position", "Institute", "Applied", "Letters",
-        "Confirmation", "Response", "Result",
+        "Position",
+        "Institute",
+        "Applied",
+        "Letters",
+        "Confirmation",
+        "Response",
+        "Result",
     ]
 
     # Pin against the constant by name so a future wording edit in
@@ -321,12 +315,12 @@ class TestApplicationsPageTable:
         of status — Saved, Applied, Interview, Closed, Rejected, Declined.
         Users narrow via the selectbox when they want a specific stage."""
         rows = {
-            "Saved Pos":     config.STATUS_SAVED,
-            "Applied Pos":   config.STATUS_APPLIED,
+            "Saved Pos": config.STATUS_SAVED,
+            "Applied Pos": config.STATUS_APPLIED,
             "Interview Pos": config.STATUS_INTERVIEW,
-            "Closed Pos":    config.STATUS_CLOSED,
-            "Rejected Pos":  config.STATUS_REJECTED,
-            "Declined Pos":  config.STATUS_DECLINED,
+            "Closed Pos": config.STATUS_CLOSED,
+            "Rejected Pos": config.STATUS_REJECTED,
+            "Declined Pos": config.STATUS_DECLINED,
         }
         for name, status in rows.items():
             pid = database.add_position(make_position({"position_name": name}))
@@ -347,9 +341,9 @@ class TestApplicationsPageTable:
         primary recovery path for a user who needs to revisit a
         pre-application or withdrawn position."""
         for name, status in [
-            ("Saved Pos",   config.STATUS_SAVED),
+            ("Saved Pos", config.STATUS_SAVED),
             ("Applied Pos", config.STATUS_APPLIED),
-            ("Closed Pos",  config.STATUS_CLOSED),
+            ("Closed Pos", config.STATUS_CLOSED),
         ]:
             pid = database.add_position(make_position({"position_name": name}))
             if status != config.STATUS_SAVED:
@@ -393,10 +387,14 @@ class TestApplicationsPageTable:
         Institute column (see `test_institute_column_*` below). Pinned
         across the three NULL/empty/populated institute cases so a
         regression that re-introduces the prefix surfaces here."""
-        pid = database.add_position(make_position({
-            "position_name": "Title One",
-            "institute":     institute,
-        }))
+        pid = database.add_position(
+            make_position(
+                {
+                    "position_name": "Title One",
+                    "institute": institute,
+                }
+            )
+        )
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
         at = _run_page()
@@ -406,21 +404,28 @@ class TestApplicationsPageTable:
             f"of institute={institute!r}; got {labels!r}."
         )
 
-    @pytest.mark.parametrize("institute,expected_cell", [
-        ("Stanford", "Stanford"),
-        ("",         "—"),
-        (None,       "—"),
-    ])
+    @pytest.mark.parametrize(
+        "institute,expected_cell",
+        [
+            ("Stanford", "Stanford"),
+            ("", "—"),
+            (None, "—"),
+        ],
+    )
     def test_institute_column_format(self, db, institute, expected_cell):
         """T3-rev-A: DESIGN §8.3 column contract — Institute column
         carries the bare institute string, EM_DASH when empty / NULL.
         Same _safe_str / _safe_str_or_em coercion path the existing
         Response and Result columns use; pinning the three cases here
         catches a regression that pre-seeds NaN into the cell."""
-        pid = database.add_position(make_position({
-            "position_name": "Title One",
-            "institute":     institute,
-        }))
+        pid = database.add_position(
+            make_position(
+                {
+                    "position_name": "Title One",
+                    "institute": institute,
+                }
+            )
+        )
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
         at = _run_page()
@@ -430,13 +435,20 @@ class TestApplicationsPageTable:
             f"expected [{expected_cell!r}]; got {cells!r}."
         )
 
-    @pytest.mark.parametrize("received,date,expected_cell", [
-        (0, None,         "—"),
-        (1, "2026-04-19", "✓ Apr 19"),
-        (1, None,         "✓ (no date)"),
-    ])
+    @pytest.mark.parametrize(
+        "received,date,expected_cell",
+        [
+            (0, None, "—"),
+            (1, "2026-04-19", "✓ Apr 19"),
+            (1, None, "✓ (no date)"),
+        ],
+    )
     def test_confirmation_column_inline_format(
-        self, db, received, date, expected_cell,
+        self,
+        db,
+        received,
+        date,
+        expected_cell,
     ):
         """DESIGN §8.3 D-A amendment (Phase 5 T1-C): Streamlit 1.56's
         st.dataframe does not expose a per-cell tooltip API, so the
@@ -452,9 +464,9 @@ class TestApplicationsPageTable:
         database.upsert_application(
             pid,
             {
-                "applied_date":          "2026-04-15",
+                "applied_date": "2026-04-15",
                 "confirmation_received": received,
-                "confirmation_date":     date,
+                "confirmation_date": date,
             },
             propagate_status=False,
         )
@@ -474,18 +486,30 @@ class TestApplicationsPageTable:
         (deadline_date ASC NULLS LAST, position_id ASC). The page
         must NOT re-sort or apply its own ordering — the database
         contract is the contract."""
-        pid_a = database.add_position(make_position({
-            "position_name": "Late Applicant",
-            "deadline_date": "2026-08-30",
-        }))
-        pid_b = database.add_position(make_position({
-            "position_name": "No Deadline",
-            "deadline_date": None,
-        }))
-        pid_c = database.add_position(make_position({
-            "position_name": "Soon Applicant",
-            "deadline_date": "2026-05-05",
-        }))
+        pid_a = database.add_position(
+            make_position(
+                {
+                    "position_name": "Late Applicant",
+                    "deadline_date": "2026-08-30",
+                }
+            )
+        )
+        pid_b = database.add_position(
+            make_position(
+                {
+                    "position_name": "No Deadline",
+                    "deadline_date": None,
+                }
+            )
+        )
+        pid_c = database.add_position(
+            make_position(
+                {
+                    "position_name": "Soon Applicant",
+                    "deadline_date": "2026-05-05",
+                }
+            )
+        )
         for pid in (pid_a, pid_b, pid_c):
             database.update_position(pid, {"status": config.STATUS_APPLIED})
 
@@ -498,9 +522,7 @@ class TestApplicationsPageTable:
             "Soon Applicant",
             "Late Applicant",
             "No Deadline",
-        ], (
-            f"Sort must be deadline ASC NULLS LAST; got {names!r}"
-        )
+        ], f"Sort must be deadline ASC NULLS LAST; got {names!r}"
 
     def test_empty_state_info_when_filter_excludes_all(self, db):
         """When the post-filter DataFrame is empty, the page must
@@ -527,6 +549,7 @@ class TestApplicationsPageTable:
 
 
 # ── Column widths (T2-A, source-grep) ─────────────────────────────────────────
+
 
 class TestApplicationsTableColumnConfig:
     """T2-A / T3-rev-A: when the table becomes selectable
@@ -558,9 +581,7 @@ class TestApplicationsTableColumnConfig:
         Biostatistics'); a regression that drops the wide allocation
         would crush the most read-heavy cell."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
-        assert (
-            ('"Position"' in src and 'width="large"' in src)
-        ), (
+        assert '"Position"' in src and 'width="large"' in src, (
             "Position column must be configured with width='large' "
             "via st.column_config.TextColumn(...)."
         )
@@ -572,15 +593,14 @@ class TestApplicationsTableColumnConfig:
         in 'small' but rarely need 'large') against the seven-column
         layout's overall width budget."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
-        assert (
-            ('"Institute"' in src and 'width="medium"' in src)
-        ), (
+        assert '"Institute"' in src and 'width="medium"' in src, (
             "Institute column must be configured with width='medium' "
             "via st.column_config.TextColumn(...)."
         )
 
 
 # ── Selection plumbing (T2-A) ─────────────────────────────────────────────────
+
 
 class TestApplicationsTableSelection:
     """T2-A: the Applications table is selectable. Selecting a row
@@ -606,8 +626,7 @@ class TestApplicationsTableSelection:
             f"detail card can resolve which position to render."
         )
         assert at.session_state[SELECTED_PID_KEY] == pid, (
-            f"Expected selected pid = {pid!r}; got "
-            f"{at.session_state[SELECTED_PID_KEY]!r}."
+            f"Expected selected pid = {pid!r}; got {at.session_state[SELECTED_PID_KEY]!r}."
         )
 
     def test_deselecting_clears_position_id(self, db):
@@ -687,6 +706,7 @@ class TestApplicationsTableSelection:
 
 # ── Detail card render (T2-A) ─────────────────────────────────────────────────
 
+
 class TestApplicationsDetailCardRender:
     """T2-A: the detail card renders below the table when (and only
     when) a row is selected. The card is wrapped in
@@ -712,18 +732,21 @@ class TestApplicationsDetailCardRender:
         # if it appears here, the page is rendering the card unprompted.
         sub_values = [el.value for el in at.subheader]
         assert not any("Ghost" in v for v in sub_values), (
-            f"No row selected must mean no detail card; got "
-            f"subheaders={sub_values!r}."
+            f"No row selected must mean no detail card; got subheaders={sub_values!r}."
         )
 
     def test_card_header_includes_position_and_status(self, db):
         """Subheader shows ``f'{institute}: {position_name} · {label}'``
         — `institute` from the Position-cell formatter, `label` via
         `STATUS_LABELS[raw]` per DESIGN §8.0 + §8.3."""
-        pid = database.add_position(make_position({
-            "position_name": "Postdoc Slot",
-            "institute":     "MIT",
-        }))
+        pid = database.add_position(
+            make_position(
+                {
+                    "position_name": "Postdoc Slot",
+                    "institute": "MIT",
+                }
+            )
+        )
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
         at = _run_page()
@@ -731,10 +754,7 @@ class TestApplicationsDetailCardRender:
 
         sub_values = [el.value for el in at.subheader]
         applied_label = config.STATUS_LABELS[config.STATUS_APPLIED]
-        assert any(
-            "MIT" in v and "Postdoc Slot" in v and applied_label in v
-            for v in sub_values
-        ), (
+        assert any("MIT" in v and "Postdoc Slot" in v and applied_label in v for v in sub_values), (
             f"Detail-card subheader must include institute, "
             f"position_name, and STATUS_LABELS[status]; got "
             f"subheaders={sub_values!r}."
@@ -757,10 +777,7 @@ class TestApplicationsDetailCardRender:
             f"Subheader must not expose the raw bracketed status "
             f"{config.STATUS_APPLIED!r}; got {sub_values!r}."
         )
-        assert any(
-            config.STATUS_LABELS[config.STATUS_APPLIED] in v
-            for v in sub_values
-        ), (
+        assert any(config.STATUS_LABELS[config.STATUS_APPLIED] in v for v in sub_values), (
             f"Subheader must contain "
             f"{config.STATUS_LABELS[config.STATUS_APPLIED]!r}; "
             f"got {sub_values!r}."
@@ -773,20 +790,20 @@ class TestApplicationsDetailCardRender:
         column from T1-C."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. A",
-            "submitted_date":   "2026-04-25",
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. A",
+                "submitted_date": "2026-04-25",
+            },
+        )
 
         at = _run_page()
         _select_row(at, 0)
 
         # Card carries an inline 'All recs submitted: ✓' line. Look in
         # both markdown and write content — Streamlit can render either.
-        haystack = " ".join(
-            [el.value for el in at.markdown]
-            + [el.value for el in at.caption]
-        )
+        haystack = " ".join([el.value for el in at.markdown] + [el.value for el in at.caption])
         assert "All recommendation letters submitted" in haystack, (
             f"Expected 'All recommendation letters submitted: ...' line in card; "
             f"got md/caption={haystack!r}."
@@ -802,22 +819,25 @@ class TestApplicationsDetailCardRender:
         is_all_recs_submitted call shows up as a per-row glyph drift."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. A",
-            "submitted_date":   "2026-04-25",
-        })
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. B",
-            "submitted_date":   None,  # pending
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. A",
+                "submitted_date": "2026-04-25",
+            },
+        )
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. B",
+                "submitted_date": None,  # pending
+            },
+        )
 
         at = _run_page()
         _select_row(at, 0)
 
-        haystack = " ".join(
-            [el.value for el in at.markdown]
-            + [el.value for el in at.caption]
-        )
+        haystack = " ".join([el.value for el in at.markdown] + [el.value for el in at.caption])
         assert "All recommendation letters submitted" in haystack, (
             f"Expected 'All recommendation letters submitted: ...' line; "
             f"got md/caption={haystack!r}."
@@ -837,10 +857,7 @@ class TestApplicationsDetailCardRender:
         at = _run_page()
         _select_row(at, 0)
 
-        haystack = " ".join(
-            [el.value for el in at.markdown]
-            + [el.value for el in at.caption]
-        )
+        haystack = " ".join([el.value for el in at.markdown] + [el.value for el in at.caption])
         assert "All recommendation letters submitted" in haystack, (
             f"Expected 'All recommendation letters submitted: ...' line; "
             f"got md/caption={haystack!r}."
@@ -851,6 +868,7 @@ class TestApplicationsDetailCardRender:
 
 
 # ── Detail card form: widget existence + pre-seed (T2-A) ──────────────────────
+
 
 class TestApplicationsDetailCardForm:
     """T2-A: 8 widgets inside `st.form('apps_detail_form')`. All
@@ -869,23 +887,25 @@ class TestApplicationsDetailCardForm:
         the contract for collision-avoidance with the inside widgets
         per gotcha #4."""
         src = pathlib.Path(PAGE).read_text(encoding="utf-8")
-        assert f'st.form("{DETAIL_FORM_ID}")' in src \
-            or f"st.form('{DETAIL_FORM_ID}')" in src \
-            or f"st.form(key=\"{DETAIL_FORM_ID}\")" in src, (
-            f"Detail card must wrap its widgets in "
-            f"st.form('{DETAIL_FORM_ID}')."
-        )
+        assert (
+            f'st.form("{DETAIL_FORM_ID}")' in src
+            or f"st.form('{DETAIL_FORM_ID}')" in src
+            or f'st.form(key="{DETAIL_FORM_ID}")' in src
+        ), f"Detail card must wrap its widgets in st.form('{DETAIL_FORM_ID}')."
 
-    @pytest.mark.parametrize("key", [
-        W_APPLIED_DATE,
-        W_CONFIRMATION_RCVD,
-        W_CONFIRMATION_DATE,
-        W_RESPONSE_TYPE,
-        W_RESPONSE_DATE,
-        W_RESULT,
-        W_RESULT_NOTIFY_DATE,
-        W_NOTES,
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            W_APPLIED_DATE,
+            W_CONFIRMATION_RCVD,
+            W_CONFIRMATION_DATE,
+            W_RESPONSE_TYPE,
+            W_RESPONSE_DATE,
+            W_RESULT,
+            W_RESULT_NOTIFY_DATE,
+            W_NOTES,
+        ],
+    )
     def test_widget_renders_when_row_selected(self, db, key):
         """Each of the 8 editable widgets must exist after row
         selection. AppTest's KeyError on missing-key is the failure
@@ -920,8 +940,7 @@ class TestApplicationsDetailCardForm:
         _select_row(at, 0)
 
         assert at.session_state[W_APPLIED_DATE] is None, (
-            f"NULL applied_date must pre-seed as None; got "
-            f"{at.session_state[W_APPLIED_DATE]!r}."
+            f"NULL applied_date must pre-seed as None; got {at.session_state[W_APPLIED_DATE]!r}."
         )
 
     def test_preseed_applied_date_set(self, db):
@@ -1020,14 +1039,12 @@ class TestApplicationsDetailCardForm:
         _select_row(at, 0)
 
         assert not at.exception, (
-            f"NaN-from-NULL pre-seed must not raise; got "
-            f"exception={at.exception!r}."
+            f"NaN-from-NULL pre-seed must not raise; got exception={at.exception!r}."
         )
         # Type check + value: real str, empty, never NaN.
         v = at.session_state[W_NOTES]
         assert isinstance(v, str) and v == "", (
-            f"NULL notes must pre-seed as empty str; got {v!r} "
-            f"(type={type(v).__name__})."
+            f"NULL notes must pre-seed as empty str; got {v!r} (type={type(v).__name__})."
         )
 
     def test_edit_form_sid_set_after_first_seed(self, db):
@@ -1054,19 +1071,31 @@ class TestApplicationsDetailCardForm:
         ignores the `value=` argument once `session_state[key]` is
         set, so the pre-seed must be done explicitly via direct
         session_state assignment, gated by the sid sentinel)."""
-        pid_a = database.add_position(make_position({
-            "position_name": "Alpha",
-            "deadline_date": "2026-05-01",
-        }))
-        pid_b = database.add_position(make_position({
-            "position_name": "Bravo",
-            "deadline_date": "2026-06-01",
-        }))
-        database.upsert_application(
-            pid_a, {"notes": "alpha-notes"}, propagate_status=False,
+        pid_a = database.add_position(
+            make_position(
+                {
+                    "position_name": "Alpha",
+                    "deadline_date": "2026-05-01",
+                }
+            )
+        )
+        pid_b = database.add_position(
+            make_position(
+                {
+                    "position_name": "Bravo",
+                    "deadline_date": "2026-06-01",
+                }
+            )
         )
         database.upsert_application(
-            pid_b, {"notes": "bravo-notes"}, propagate_status=False,
+            pid_a,
+            {"notes": "alpha-notes"},
+            propagate_status=False,
+        )
+        database.upsert_application(
+            pid_b,
+            {"notes": "bravo-notes"},
+            propagate_status=False,
         )
         database.update_position(pid_a, {"status": config.STATUS_APPLIED})
         database.update_position(pid_b, {"status": config.STATUS_APPLIED})
@@ -1090,6 +1119,7 @@ class TestApplicationsDetailCardForm:
 
 # ── Detail card save (T2-A) ───────────────────────────────────────────────────
 
+
 class TestApplicationsDetailCardSave:
     """T2-A: Save handler builds a `fields` dict from the 8 widgets,
     calls `database.upsert_application(pid, fields, propagate_status=
@@ -1103,9 +1133,7 @@ class TestApplicationsDetailCardSave:
     (`status_changed=True` returns ⇒ second toast) lands in T2-B —
     these tests pin only the basic Save path."""
 
-    def _select_and_set_widget(
-        self, at: AppTest, widget_key: str, value
-    ) -> None:
+    def _select_and_set_widget(self, at: AppTest, widget_key: str, value) -> None:
         """Inject a widget value via session_state so the form picks
         it up on the next at.run() (which fires the form_submit click).
         AppTest's per-widget `.set_value` / `.select` methods also
@@ -1113,16 +1141,24 @@ class TestApplicationsDetailCardSave:
         tests parametrize-friendly across widget types."""
         at.session_state[widget_key] = value
 
-    @pytest.mark.parametrize("widget_key,db_field,widget_value,db_expected", [
-        (W_APPLIED_DATE,       "applied_date",          datetime.date(2026, 4, 18), "2026-04-18"),
-        (W_CONFIRMATION_RCVD,  "confirmation_received", True,                       1),
-        (W_CONFIRMATION_DATE,  "confirmation_date",     datetime.date(2026, 4, 19), "2026-04-19"),
-        (W_RESPONSE_DATE,      "response_date",         datetime.date(2026, 4, 22), "2026-04-22"),
-        (W_RESULT_NOTIFY_DATE, "result_notify_date",    datetime.date(2026, 5, 1),  "2026-05-01"),
-        (W_NOTES,              "notes",                 "interview prep",            "interview prep"),
-    ])
+    @pytest.mark.parametrize(
+        "widget_key,db_field,widget_value,db_expected",
+        [
+            (W_APPLIED_DATE, "applied_date", datetime.date(2026, 4, 18), "2026-04-18"),
+            (W_CONFIRMATION_RCVD, "confirmation_received", True, 1),
+            (W_CONFIRMATION_DATE, "confirmation_date", datetime.date(2026, 4, 19), "2026-04-19"),
+            (W_RESPONSE_DATE, "response_date", datetime.date(2026, 4, 22), "2026-04-22"),
+            (W_RESULT_NOTIFY_DATE, "result_notify_date", datetime.date(2026, 5, 1), "2026-05-01"),
+            (W_NOTES, "notes", "interview prep", "interview prep"),
+        ],
+    )
     def test_save_persists_field(
-        self, db, widget_key, db_field, widget_value, db_expected,
+        self,
+        db,
+        widget_key,
+        db_field,
+        widget_value,
+        db_expected,
     ):
         """Per-widget round-trip: set widget → click Save → assert DB
         row reflects the new value. Coverage MUST equal the form's
@@ -1164,9 +1200,7 @@ class TestApplicationsDetailCardSave:
         _select_row(at, 0)
 
         # Pick a non-Offer response so R3 doesn't fire (T2-B's territory).
-        non_offer = next(
-            v for v in config.RESPONSE_TYPES if v != config.RESPONSE_TYPE_OFFER
-        )
+        non_offer = next(v for v in config.RESPONSE_TYPES if v != config.RESPONSE_TYPE_OFFER)
         at.selectbox(key=W_RESPONSE_TYPE).select(non_offer)
         _keep_selection(at, 0)
         at.button(key=DETAIL_SUBMIT_KEY).click()
@@ -1188,9 +1222,7 @@ class TestApplicationsDetailCardSave:
 
         # Pick something other than RESULT_DEFAULT so the test exercises
         # a real change rather than a no-op self-write.
-        new_result = next(
-            v for v in config.RESULT_VALUES if v != config.RESULT_DEFAULT
-        )
+        new_result = next(v for v in config.RESULT_VALUES if v != config.RESULT_DEFAULT)
         at.selectbox(key=W_RESULT).select(new_result)
         _keep_selection(at, 0)
         at.button(key=DETAIL_SUBMIT_KEY).click()
@@ -1199,8 +1231,7 @@ class TestApplicationsDetailCardSave:
         assert not at.exception, f"Save raised: {at.exception!r}"
         row = database.get_application(pid)
         assert row["result"] == new_result, (
-            f"Save must persist result; expected {new_result!r}, "
-            f"got {row['result']!r}."
+            f"Save must persist result; expected {new_result!r}, got {row['result']!r}."
         )
 
     def test_save_fires_saved_toast(self, db):
@@ -1221,8 +1252,7 @@ class TestApplicationsDetailCardSave:
         assert not at.exception, f"Save raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
         assert any("Saved" in v and "Toasty" in v for v in toast_values), (
-            f"Successful save must fire st.toast(\"Saved …Toasty…\"); "
-            f"got toasts={toast_values!r}."
+            f'Successful save must fire st.toast("Saved …Toasty…"); got toasts={toast_values!r}.'
         )
 
     def test_save_preserves_selection(self, db):
@@ -1325,9 +1355,7 @@ class TestApplicationsDetailCardSave:
         persisted row fires ``st.toast("No changes to save.")`` —
         the ``Saved "<name>"`` toast must NOT appear in this branch
         (that signal is reserved for actual writes)."""
-        pid = database.add_position(make_position(
-            {"position_name": "NoOpPos"}
-        ))
+        pid = database.add_position(make_position({"position_name": "NoOpPos"}))
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
         at = _run_page()
@@ -1342,8 +1370,7 @@ class TestApplicationsDetailCardSave:
         assert not at.exception, f"Save raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
         assert any("No changes to save." in v for v in toast_values), (
-            f"No-op Save must fire st.toast(\"No changes to save.\"); "
-            f"got toasts={toast_values!r}."
+            f'No-op Save must fire st.toast("No changes to save."); got toasts={toast_values!r}.'
         )
         assert not any("Saved" in v for v in toast_values), (
             f"No-op Save must NOT fire the Saved toast (it is dishonest "
@@ -1367,6 +1394,7 @@ class TestApplicationsDetailCardSave:
         def _spy(position_id, fields, **kwargs):
             calls.append((position_id, dict(fields)))
             return original(position_id, fields, **kwargs)
+
         monkeypatch.setattr(database, "upsert_application", _spy)
 
         at = _run_page()
@@ -1376,10 +1404,7 @@ class TestApplicationsDetailCardSave:
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
-        assert calls == [], (
-            f"No-op Save must make zero upsert_application calls; "
-            f"got {calls!r}."
-        )
+        assert calls == [], f"No-op Save must make zero upsert_application calls; got {calls!r}."
 
     def test_save_db_failure_shows_error_no_toast(self, db, monkeypatch):
         """`upsert_application` raises → page surfaces `st.error(...)`,
@@ -1401,6 +1426,7 @@ class TestApplicationsDetailCardSave:
         # version without modifying the test's import.
         def _boom(*args, **kwargs):
             raise RuntimeError("database is on fire")
+
         monkeypatch.setattr(database, "upsert_application", _boom)
 
         at.session_state[W_NOTES] = "this won't save"
@@ -1415,16 +1441,16 @@ class TestApplicationsDetailCardSave:
         )
         # st.error message contains the failure copy.
         error_values = [el.value for el in at.error]
-        assert any("database is on fire" in v for v in error_values) \
-            or any("Could not save" in v for v in error_values), (
+        assert any("database is on fire" in v for v in error_values) or any(
+            "Could not save" in v for v in error_values
+        ), (
             f"Save failure must surface via st.error containing the "
             f"underlying message; got errors={error_values!r}."
         )
         # No Saved toast.
         toast_values = [el.value for el in at.toast]
         assert not any("Saved" in v for v in toast_values), (
-            f"Failed save must NOT fire the Saved toast; got "
-            f"toasts={toast_values!r}."
+            f"Failed save must NOT fire the Saved toast; got toasts={toast_values!r}."
         )
         # Sentinel survives so the form stays seeded with dirty input.
         assert _ss_or_none(at, EDIT_FORM_SID_KEY) == sid_before, (
@@ -1436,6 +1462,7 @@ class TestApplicationsDetailCardSave:
 
 
 # ── Cascade-promotion toast (T2-B) ────────────────────────────────────────────
+
 
 class TestApplicationsCascadePromotionToast:
     """T2-B: when ``database.upsert_application(propagate_status=True)``
@@ -1496,13 +1523,11 @@ class TestApplicationsCascadePromotionToast:
         toast_values = [el.value for el in at.toast]
         # Both toasts must be present.
         assert any(self._saved_toast_text("R1Pos") in v for v in toast_values), (
-            f"Saved toast must fire on every successful save; "
-            f"got toasts={toast_values!r}."
+            f"Saved toast must fire on every successful save; got toasts={toast_values!r}."
         )
         expected_promo = self._promo_toast_text(config.STATUS_APPLIED)
         assert any(expected_promo in v for v in toast_values), (
-            f"R1 cascade must fire promotion toast {expected_promo!r}; "
-            f"got toasts={toast_values!r}."
+            f"R1 cascade must fire promotion toast {expected_promo!r}; got toasts={toast_values!r}."
         )
         # And the position actually moved.
         assert database.get_position(pid)["status"] == config.STATUS_APPLIED
@@ -1516,7 +1541,9 @@ class TestApplicationsCascadePromotionToast:
         # propagate_status=False on this seeding upsert so we don't
         # spuriously fire R1 / R3 during setup.
         database.upsert_application(
-            pid, {"applied_date": "2026-04-15"}, propagate_status=False,
+            pid,
+            {"applied_date": "2026-04-15"},
+            propagate_status=False,
         )
         database.update_position(pid, {"status": config.STATUS_APPLIED})
 
@@ -1536,8 +1563,7 @@ class TestApplicationsCascadePromotionToast:
         assert any(self._saved_toast_text("R3Pos") in v for v in toast_values)
         expected_promo = self._promo_toast_text(config.STATUS_OFFER)
         assert any(expected_promo in v for v in toast_values), (
-            f"R3 cascade must fire promotion toast {expected_promo!r}; "
-            f"got toasts={toast_values!r}."
+            f"R3 cascade must fire promotion toast {expected_promo!r}; got toasts={toast_values!r}."
         )
         assert database.get_position(pid)["status"] == config.STATUS_OFFER
 
@@ -1585,10 +1611,7 @@ class TestApplicationsCascadePromotionToast:
         # toast), which is true even when an intermediate "Promoted to
         # Applied" IS present. `all` requires every toast to lack it,
         # which is the actual no-intermediate-toast contract.
-        assert all(
-            self._promo_toast_text(config.STATUS_APPLIED) not in v
-            for v in toast_values
-        ), (
+        assert all(self._promo_toast_text(config.STATUS_APPLIED) not in v for v in toast_values), (
             "Chained cascade must NOT surface an intermediate "
             "'Promoted to Applied' toast — only the post-state."
         )
@@ -1625,9 +1648,7 @@ class TestApplicationsCascadePromotionToast:
         assert not at.exception, f"Save raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
         # Saved toast fires (the Save itself succeeded).
-        assert any(
-            self._saved_toast_text("ClosedPos") in v for v in toast_values
-        ), (
+        assert any(self._saved_toast_text("ClosedPos") in v for v in toast_values), (
             f"Save on a CLOSED position must still fire the Saved "
             f"toast (the application row was updated); got "
             f"toasts={toast_values!r}."
@@ -1651,6 +1672,7 @@ class TestApplicationsCascadePromotionToast:
 
 # ── Cohesion sweep (T2-B) ─────────────────────────────────────────────────────
 
+
 class TestApplicationsCohesionSweep:
     """T2-B cohesion bar: a small set of integration smoke tests
     catching combination-level regressions that the per-feature tests
@@ -1662,12 +1684,15 @@ class TestApplicationsCohesionSweep:
     just exercise Streamlit's session_state persistence, not page
     code."""
 
-    @pytest.mark.parametrize("widget_key", [
-        W_APPLIED_DATE,
-        W_CONFIRMATION_DATE,
-        W_RESPONSE_DATE,
-        W_RESULT_NOTIFY_DATE,
-    ])
+    @pytest.mark.parametrize(
+        "widget_key",
+        [
+            W_APPLIED_DATE,
+            W_CONFIRMATION_DATE,
+            W_RESPONSE_DATE,
+            W_RESULT_NOTIFY_DATE,
+        ],
+    )
     def test_null_date_field_preseeds_to_none(self, db, widget_key):
         """All four ``st.date_input`` widgets pre-seed to ``None``
         when the underlying DB cell is NULL. T2-A pinned the
@@ -1687,8 +1712,7 @@ class TestApplicationsCohesionSweep:
         _select_row(at, 0)
 
         assert not at.exception, (
-            f"NULL pre-seed of {widget_key} must not raise; got "
-            f"exception={at.exception!r}."
+            f"NULL pre-seed of {widget_key} must not raise; got exception={at.exception!r}."
         )
         v = at.session_state[widget_key]
         assert v is None, (
@@ -1716,12 +1740,13 @@ class TestApplicationsCohesionSweep:
         # one we typed last).
         dirty_notes = "the save will fail"
         dirty_applied = datetime.date(2026, 4, 18)
-        at.session_state[W_NOTES]        = dirty_notes
+        at.session_state[W_NOTES] = dirty_notes
         at.session_state[W_APPLIED_DATE] = dirty_applied
         at.selectbox(key=W_RESPONSE_TYPE).select(config.RESPONSE_TYPE_OFFER)
 
         def _boom(*args, **kwargs):
             raise RuntimeError("simulated DB failure")
+
         monkeypatch.setattr(database, "upsert_application", _boom)
 
         _keep_selection(at, 0)
@@ -1736,8 +1761,7 @@ class TestApplicationsCohesionSweep:
         # after the failure rerun. Without this guarantee, a save
         # error would silently wipe their work.
         assert at.session_state[W_NOTES] == dirty_notes, (
-            f"Failed save must preserve text_area content; got "
-            f"{at.session_state[W_NOTES]!r}."
+            f"Failed save must preserve text_area content; got {at.session_state[W_NOTES]!r}."
         )
         assert at.session_state[W_APPLIED_DATE] == dirty_applied, (
             f"Failed save must preserve date_input content; got "
@@ -1750,6 +1774,7 @@ class TestApplicationsCohesionSweep:
 
 
 # ── Interview list render (T3-A) ──────────────────────────────────────────────
+
 
 class TestApplicationsInterviewListRender:
     """T3-A: under the existing T2 detail card (inside the same
@@ -1793,8 +1818,7 @@ class TestApplicationsInterviewListRender:
         # Sentinel reflects empty interviews list.
         sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
         assert sentinel == frozenset(), (
-            f"Empty interviews list must yield empty seeded-ids "
-            f"sentinel; got {sentinel!r}."
+            f"Empty interviews list must yield empty seeded-ids sentinel; got {sentinel!r}."
         )
         # Add button renders.
         at.button(key=ADD_INTERVIEW_KEY)  # raises KeyError if absent.
@@ -1803,9 +1827,7 @@ class TestApplicationsInterviewListRender:
         # buttons; 0 rows → 0 save buttons).
         for btn in at.button:
             key = getattr(btn, "key", None) or ""
-            assert not (
-                key.startswith("apps_interview_") and key.endswith("_save")
-            ), (
+            assert not (key.startswith("apps_interview_") and key.endswith("_save")), (
                 f"No per-row Save button should render for an empty "
                 f"interviews list; found unexpected key={key!r}."
             )
@@ -1849,11 +1871,14 @@ class TestApplicationsInterviewListRender:
         the DB-derived value when the widget is constructed)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        iid = database.add_interview(pid, {
-            "scheduled_date": "2026-05-03",
-            "format":         "Video",
-            "notes":          "PI to call in",
-        })["id"]
+        iid = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-03",
+                "format": "Video",
+                "notes": "PI to call in",
+            },
+        )["id"]
 
         at = _run_page()
         _select_row(at, 0)
@@ -1936,6 +1961,7 @@ class TestApplicationsInterviewListRender:
 
 # ── Interview Save handler (T3-A) ─────────────────────────────────────────────
 
+
 class TestApplicationsInterviewSave:
     """T3-A / T3-rev-B: per-row Save handler. Each interview row owns
     its own form `apps_interview_{id}_form` with a per-row Save submit
@@ -1952,20 +1978,25 @@ class TestApplicationsInterviewSave:
         `update_interview` calls (the per-row dirty-diff is empty)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        iid = database.add_interview(pid, {
-            "scheduled_date": "2026-05-03",
-            "format":         "Video",
-            "notes":          "PI to call in",
-        })["id"]
+        iid = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-03",
+                "format": "Video",
+                "notes": "PI to call in",
+            },
+        )["id"]
 
         at = _run_page()
         _select_row(at, 0)
 
         calls: list[tuple[int, dict]] = []
         original = database.update_interview
+
         def _spy(interview_id, fields):
             calls.append((interview_id, dict(fields)))
             return original(interview_id, fields)
+
         monkeypatch.setattr(database, "update_interview", _spy)
 
         _keep_selection(at, 0)
@@ -1973,33 +2004,37 @@ class TestApplicationsInterviewSave:
         at.run()
 
         assert not at.exception, f"Save raised: {at.exception!r}"
-        assert calls == [], (
-            f"Clean row Save must make zero update_interview calls; "
-            f"got {calls!r}."
-        )
+        assert calls == [], f"Clean row Save must make zero update_interview calls; got {calls!r}."
 
     def test_dirty_date_calls_update_interview_with_scheduled_date_only(
-        self, db, monkeypatch,
+        self,
+        db,
+        monkeypatch,
     ):
         """Edit only the date → 1 `update_interview` call carrying ONLY
         the `scheduled_date` field (format and notes unchanged → not
         in dirty_fields)."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        iid = database.add_interview(pid, {
-            "scheduled_date": "2026-05-03",
-            "format":         "Video",
-            "notes":          "x",
-        })["id"]
+        iid = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-03",
+                "format": "Video",
+                "notes": "x",
+            },
+        )["id"]
 
         at = _run_page()
         _select_row(at, 0)
 
         calls: list[tuple[int, dict]] = []
         original = database.update_interview
+
         def _spy(interview_id, fields):
             calls.append((interview_id, dict(fields)))
             return original(interview_id, fields)
+
         monkeypatch.setattr(database, "update_interview", _spy)
 
         at.session_state[_w_interview_date(iid)] = datetime.date(2026, 5, 10)
@@ -2014,26 +2049,33 @@ class TestApplicationsInterviewSave:
         )
 
     def test_dirty_format_calls_update_interview_with_format_only(
-        self, db, monkeypatch,
+        self,
+        db,
+        monkeypatch,
     ):
         """Edit only the format selectbox → 1 `update_interview` call
         carrying ONLY the `format` field."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        iid = database.add_interview(pid, {
-            "scheduled_date": "2026-05-03",
-            "format":         "Video",
-            "notes":          "x",
-        })["id"]
+        iid = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-03",
+                "format": "Video",
+                "notes": "x",
+            },
+        )["id"]
 
         at = _run_page()
         _select_row(at, 0)
 
         calls: list[tuple[int, dict]] = []
         original = database.update_interview
+
         def _spy(interview_id, fields):
             calls.append((interview_id, dict(fields)))
             return original(interview_id, fields)
+
         monkeypatch.setattr(database, "update_interview", _spy)
 
         # Selectbox inside a form needs `.select(...)`, not direct
@@ -2046,31 +2088,37 @@ class TestApplicationsInterviewSave:
 
         assert not at.exception, f"Save raised: {at.exception!r}"
         assert calls == [(iid, {"format": "Onsite"})], (
-            f"Dirty-format Save must call update_interview once with "
-            f"only format; got {calls!r}."
+            f"Dirty-format Save must call update_interview once with only format; got {calls!r}."
         )
 
     def test_dirty_notes_calls_update_interview_with_notes_only(
-        self, db, monkeypatch,
+        self,
+        db,
+        monkeypatch,
     ):
         """Edit only notes → 1 `update_interview` call carrying ONLY
         the `notes` field."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        iid = database.add_interview(pid, {
-            "scheduled_date": "2026-05-03",
-            "format":         "Video",
-            "notes":          "old",
-        })["id"]
+        iid = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-03",
+                "format": "Video",
+                "notes": "old",
+            },
+        )["id"]
 
         at = _run_page()
         _select_row(at, 0)
 
         calls: list[tuple[int, dict]] = []
         original = database.update_interview
+
         def _spy(interview_id, fields):
             calls.append((interview_id, dict(fields)))
             return original(interview_id, fields)
+
         monkeypatch.setattr(database, "update_interview", _spy)
 
         at.session_state[_w_interview_notes(iid)] = "new"
@@ -2080,8 +2128,7 @@ class TestApplicationsInterviewSave:
 
         assert not at.exception, f"Save raised: {at.exception!r}"
         assert calls == [(iid, {"notes": "new"})], (
-            f"Dirty-notes Save must call update_interview once with "
-            f"only notes; got {calls!r}."
+            f"Dirty-notes Save must call update_interview once with only notes; got {calls!r}."
         )
 
     def test_clear_notes_writes_none_not_empty_string(self, db):
@@ -2097,6 +2144,7 @@ class TestApplicationsInterviewSave:
         string) rather than NULL, and the next Save would diff
         `""` vs `""` correctly, hiding the bug from coarser tests."""
         import pandas as pd
+
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         # Start with notes="hello" so we have something to clear.
@@ -2124,6 +2172,7 @@ class TestApplicationsInterviewSave:
         format selectbox: changing the value to None must write NULL
         to DB (not the first INTERVIEW_FORMATS entry)."""
         import pandas as pd
+
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
         iid = database.add_interview(pid, {"format": "Video"})["id"]
@@ -2145,7 +2194,9 @@ class TestApplicationsInterviewSave:
         )
 
     def test_clicking_one_row_save_does_not_persist_sibling_row(
-        self, db, monkeypatch,
+        self,
+        db,
+        monkeypatch,
     ):
         """T3-rev-B: per-row Save commits ONLY the row whose Save was
         clicked. Two rows, both dirty, click row 1's Save → only row 1
@@ -2164,9 +2215,11 @@ class TestApplicationsInterviewSave:
 
         calls: list[int] = []
         original = database.update_interview
+
         def _spy(interview_id, fields):
             calls.append(interview_id)
             return original(interview_id, fields)
+
         monkeypatch.setattr(database, "update_interview", _spy)
 
         at.session_state[_w_interview_notes(i1)] = "a-edited"
@@ -2199,9 +2252,11 @@ class TestApplicationsInterviewSave:
 
         calls: list[int] = []
         original = database.update_interview
+
         def _spy(interview_id, fields):
             calls.append(interview_id)
             return original(interview_id, fields)
+
         monkeypatch.setattr(database, "update_interview", _spy)
 
         # Make the OTHER row dirty in session_state, then click the
@@ -2213,8 +2268,7 @@ class TestApplicationsInterviewSave:
 
         assert not at.exception, f"Save raised: {at.exception!r}"
         assert calls == [], (
-            f"Clean-row Save must skip even when a sibling is dirty; "
-            f"got calls={calls!r}."
+            f"Clean-row Save must skip even when a sibling is dirty; got calls={calls!r}."
         )
 
     def test_save_one_row_preserves_sibling_row_draft(self, db):
@@ -2244,8 +2298,7 @@ class TestApplicationsInterviewSave:
         rows = database.get_interviews(pid)
         target_1 = rows[rows["id"] == i1].iloc[0]
         assert target_1["notes"] == "row1-new", (
-            f"Row 1 must persist its dirty value; got "
-            f"notes={target_1['notes']!r}."
+            f"Row 1 must persist its dirty value; got notes={target_1['notes']!r}."
         )
         # Row 2's draft survives in session_state (NOT saved to DB,
         # NOT clobbered by re-seed).
@@ -2258,8 +2311,7 @@ class TestApplicationsInterviewSave:
         # And the DB still has row 2's old value (the draft is unsaved).
         target_2 = rows[rows["id"] == i2].iloc[0]
         assert target_2["notes"] == "row2-old", (
-            f"Row 2's DB cell must NOT be touched by row 1's Save; "
-            f"got notes={target_2['notes']!r}."
+            f"Row 2's DB cell must NOT be touched by row 1's Save; got notes={target_2['notes']!r}."
         )
 
     def test_clean_row_save_fires_no_changes_toast(self, db):
@@ -2269,11 +2321,14 @@ class TestApplicationsInterviewSave:
         with a non-empty dirty diff."""
         pid = database.add_position(make_position())
         database.update_position(pid, {"status": config.STATUS_APPLIED})
-        iid = database.add_interview(pid, {
-            "scheduled_date": "2026-05-03",
-            "format":         "Video",
-            "notes":          "stays",
-        })["id"]
+        iid = database.add_interview(
+            pid,
+            {
+                "scheduled_date": "2026-05-03",
+                "format": "Video",
+                "notes": "stays",
+            },
+        )["id"]
 
         at = _run_page()
         _select_row(at, 0)
@@ -2285,12 +2340,10 @@ class TestApplicationsInterviewSave:
         assert not at.exception, f"Save raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
         assert any("No changes to save." in v for v in toast_values), (
-            f"Clean per-row Save must fire st.toast(\"No changes to "
-            f"save.\"); got toasts={toast_values!r}."
+            f'Clean per-row Save must fire st.toast("No changes to '
+            f'save."); got toasts={toast_values!r}.'
         )
-        assert not any(
-            "Saved interview" in v for v in toast_values
-        ), (
+        assert not any("Saved interview" in v for v in toast_values), (
             f"Clean per-row Save must NOT fire the per-row Saved "
             f"toast (dishonest when nothing changed); got "
             f"toasts={toast_values!r}."
@@ -2317,9 +2370,7 @@ class TestApplicationsInterviewSave:
 
         assert not at.exception, f"Save raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
-        assert any(
-            "Saved interview" in v and "1" in v for v in toast_values
-        ), (
+        assert any("Saved interview" in v and "1" in v for v in toast_values), (
             f"Save toast must read 'Saved interview {{seq}}.' with the "
             f"row's sequence number; got toasts={toast_values!r}."
         )
@@ -2340,6 +2391,7 @@ class TestApplicationsInterviewSave:
 
         def _boom(*args, **kwargs):
             raise RuntimeError("interview update on fire")
+
         monkeypatch.setattr(database, "update_interview", _boom)
 
         at.session_state[_w_interview_notes(iid)] = "trigger"
@@ -2365,6 +2417,7 @@ class TestApplicationsInterviewSave:
 
 
 # ── Interview Add handler (T3-A) ──────────────────────────────────────────────
+
 
 class TestApplicationsInterviewAdd:
     """T3-A: Add button (`apps_add_interview`) outside the form calls
@@ -2400,7 +2453,9 @@ class TestApplicationsInterviewAdd:
             )
 
     def test_add_calls_add_interview_with_empty_fields(
-        self, db, monkeypatch,
+        self,
+        db,
+        monkeypatch,
     ):
         """Add inserts a blank row via `add_interview(sid, {})`; the
         function auto-assigns sequence and writes NULL date/format/notes
@@ -2413,11 +2468,15 @@ class TestApplicationsInterviewAdd:
 
         calls: list[tuple[int, dict, bool]] = []
         original = database.add_interview
+
         def _spy(application_id, fields, *, propagate_status=True):
             calls.append((application_id, dict(fields), propagate_status))
             return original(
-                application_id, fields, propagate_status=propagate_status,
+                application_id,
+                fields,
+                propagate_status=propagate_status,
             )
+
         monkeypatch.setattr(database, "add_interview", _spy)
 
         _keep_selection(at, 0)
@@ -2448,8 +2507,7 @@ class TestApplicationsInterviewAdd:
         toast_values = [el.value for el in at.toast]
         expected_promo = self._promo_toast_text(config.STATUS_INTERVIEW)
         assert any(expected_promo in v for v in toast_values), (
-            f"R2 cascade must fire promotion toast {expected_promo!r}; "
-            f"got toasts={toast_values!r}."
+            f"R2 cascade must fire promotion toast {expected_promo!r}; got toasts={toast_values!r}."
         )
         # And the position actually moved.
         assert database.get_position(pid)["status"] == config.STATUS_INTERVIEW
@@ -2486,8 +2544,7 @@ class TestApplicationsInterviewAdd:
             None,
         )
         assert added_idx is not None, (
-            f"Add must fire 'Added interview.' toast; got "
-            f"toasts={toast_values!r}."
+            f"Add must fire 'Added interview.' toast; got toasts={toast_values!r}."
         )
         assert promoted_idx is not None, (
             f"Add on STATUS_APPLIED must fire 'Promoted to ...' toast "
@@ -2529,8 +2586,7 @@ class TestApplicationsInterviewAdd:
         assert not at.exception, f"Add raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
         assert any("Added interview" in v for v in toast_values), (
-            f"Add success must fire the 'Added interview' toast; got "
-            f"toasts={toast_values!r}."
+            f"Add success must fire the 'Added interview' toast; got toasts={toast_values!r}."
         )
         # No promotion toast — R2 guard rejected.
         assert not any("Promoted to" in v for v in toast_values), (
@@ -2558,12 +2614,10 @@ class TestApplicationsInterviewAdd:
         assert not at.exception, f"Add raised: {at.exception!r}"
         toast_values = [el.value for el in at.toast]
         assert any("Added interview" in v for v in toast_values), (
-            f"Add success must fire the 'Added interview' toast; got "
-            f"toasts={toast_values!r}."
+            f"Add success must fire the 'Added interview' toast; got toasts={toast_values!r}."
         )
         assert not any("Promoted to" in v for v in toast_values), (
-            f"R2 must NOT re-fire on STATUS_INTERVIEW; got "
-            f"toasts={toast_values!r}."
+            f"R2 must NOT re-fire on STATUS_INTERVIEW; got toasts={toast_values!r}."
         )
 
     def test_add_failure_uses_st_error_no_reraise(self, db, monkeypatch):
@@ -2578,6 +2632,7 @@ class TestApplicationsInterviewAdd:
 
         def _boom(*args, **kwargs):
             raise RuntimeError("interviews insert on fire")
+
         monkeypatch.setattr(database, "add_interview", _boom)
 
         _keep_selection(at, 0)
@@ -2589,25 +2644,23 @@ class TestApplicationsInterviewAdd:
             f"re-raise); got exception={at.exception!r}."
         )
         error_values = [el.value for el in at.error]
-        assert (
-            any("interviews insert on fire" in v for v in error_values)
-            or any("Could not add" in v for v in error_values)
+        assert any("interviews insert on fire" in v for v in error_values) or any(
+            "Could not add" in v for v in error_values
         ), (
             f"Add failure must surface via st.error containing the "
             f"underlying message; got errors={error_values!r}."
         )
         toast_values = [el.value for el in at.toast]
         assert not any("Added interview" in v for v in toast_values), (
-            f"Failed Add must NOT fire the 'Added interview' toast; "
-            f"got toasts={toast_values!r}."
+            f"Failed Add must NOT fire the 'Added interview' toast; got toasts={toast_values!r}."
         )
         assert not any("Promoted to" in v for v in toast_values), (
-            f"Failed Add must NOT fire any promotion toast; got "
-            f"toasts={toast_values!r}."
+            f"Failed Add must NOT fire any promotion toast; got toasts={toast_values!r}."
         )
 
 
 # ── Interview pre-seed sentinel lifecycle (T3-A) ──────────────────────────────
+
 
 class TestApplicationsInterviewSentinelLifecycle:
     """T3-A: the `_apps_interviews_seeded_ids` sentinel (frozenset of
@@ -2662,9 +2715,7 @@ class TestApplicationsInterviewSentinelLifecycle:
         at.run()
 
         assert not at.exception, f"Add raised: {at.exception!r}"
-        new_ids = frozenset(
-            int(i) for i in database.get_interviews(pid)["id"]
-        )
+        new_ids = frozenset(int(i) for i in database.get_interviews(pid)["id"])
         sentinel = at.session_state[INTERVIEWS_SEEDED_IDS_KEY]
         assert sentinel == new_ids, (
             f"After Add, sentinel must include all current interview "
@@ -2708,18 +2759,26 @@ class TestApplicationsInterviewSentinelLifecycle:
         old sentinel with the new ids yields empty → all new ids get
         re-seeded; final sentinel = new ids only."""
         # Two positions, both visible under default Active filter.
-        pid_a = database.add_position(make_position({
-            "position_name": "A",
-            "deadline_date": (
-                datetime.date.today() + datetime.timedelta(days=20)
-            ).isoformat(),
-        }))
-        pid_b = database.add_position(make_position({
-            "position_name": "B",
-            "deadline_date": (
-                datetime.date.today() + datetime.timedelta(days=40)
-            ).isoformat(),
-        }))
+        pid_a = database.add_position(
+            make_position(
+                {
+                    "position_name": "A",
+                    "deadline_date": (
+                        datetime.date.today() + datetime.timedelta(days=20)
+                    ).isoformat(),
+                }
+            )
+        )
+        pid_b = database.add_position(
+            make_position(
+                {
+                    "position_name": "B",
+                    "deadline_date": (
+                        datetime.date.today() + datetime.timedelta(days=40)
+                    ).isoformat(),
+                }
+            )
+        )
         database.update_position(pid_a, {"status": config.STATUS_APPLIED})
         database.update_position(pid_b, {"status": config.STATUS_APPLIED})
         ia = database.add_interview(pid_a, {})["id"]
@@ -2741,6 +2800,7 @@ class TestApplicationsInterviewSentinelLifecycle:
 
 
 # ── Interview Delete button (T3-B) ────────────────────────────────────────────
+
 
 class TestApplicationsInterviewDeleteButton:
     """T3-B: per-row Delete button outside the form (Streamlit 1.56
@@ -2788,9 +2848,7 @@ class TestApplicationsInterviewDeleteButton:
         # interviews are present. Probe by listing button keys.
         for btn in at.button:
             key = getattr(btn, "key", None) or ""
-            assert not (
-                key.startswith("apps_interview_") and key.endswith("_delete")
-            ), (
+            assert not (key.startswith("apps_interview_") and key.endswith("_delete")), (
                 f"No per-row Delete button should render for an "
                 f"empty interviews list; found unexpected key={key!r}."
             )
@@ -2812,12 +2870,10 @@ class TestApplicationsInterviewDeleteButton:
         btn1_label = at.button(key=_w_interview_delete(i1)).label or ""
         btn2_label = at.button(key=_w_interview_delete(i2)).label or ""
         assert "1" in btn1_label, (
-            f"Delete button for interview 1 must include '1' in its "
-            f"label; got {btn1_label!r}."
+            f"Delete button for interview 1 must include '1' in its label; got {btn1_label!r}."
         )
         assert "2" in btn2_label, (
-            f"Delete button for interview 2 must include '2' in its "
-            f"label; got {btn2_label!r}."
+            f"Delete button for interview 2 must include '2' in its label; got {btn2_label!r}."
         )
 
     def test_click_sets_pending_target_sentinels(self, db):
@@ -2876,8 +2932,7 @@ class TestApplicationsInterviewDeleteButton:
         at.button(key=INTERVIEW_DELETE_CANCEL_KEY).click()
         at.run()
         assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state, (
-            "Cancel must clear the pending-target sentinel before the "
-            "second click is exercised."
+            "Cancel must clear the pending-target sentinel before the second click is exercised."
         )
 
         _keep_selection(at, 0)
@@ -2892,6 +2947,7 @@ class TestApplicationsInterviewDeleteButton:
 
 
 # ── Interview Delete dialog (T3-B) ────────────────────────────────────────────
+
 
 class TestApplicationsInterviewDeleteDialog:
     """T3-B: `@st.dialog`-decorated `_confirm_interview_delete_dialog`
@@ -2953,8 +3009,7 @@ class TestApplicationsInterviewDeleteDialog:
         # Irreversibility signal — without it the user has no warning
         # there is no undo path (mirrors the Opportunities-page pin).
         assert "cannot be undone" in warning_text.lower(), (
-            f"Dialog warning must signal irreversibility; got "
-            f"warning={warning_text!r}."
+            f"Dialog warning must signal irreversibility; got warning={warning_text!r}."
         )
 
     def test_confirm_deletes_from_db_and_fires_toast(self, db):
@@ -2984,8 +3039,7 @@ class TestApplicationsInterviewDeleteDialog:
         # Toast fires with sequence in the copy.
         toast_values = [el.value for el in at.toast]
         assert any("Deleted interview" in v and "1" in v for v in toast_values), (
-            f"Confirm must fire a 'Deleted interview {{seq}}.' toast; "
-            f"got toasts={toast_values!r}."
+            f"Confirm must fire a 'Deleted interview {{seq}}.' toast; got toasts={toast_values!r}."
         )
 
     def test_confirm_clears_pending_sentinels(self, db):
@@ -3043,8 +3097,7 @@ class TestApplicationsInterviewDeleteDialog:
 
         assert not at.exception, f"Delete confirm raised: {at.exception!r}"
         assert SELECTED_PID_KEY in at.session_state, (
-            f"Delete confirm must preserve {SELECTED_PID_KEY!r}; got "
-            f"it absent."
+            f"Delete confirm must preserve {SELECTED_PID_KEY!r}; got it absent."
         )
         assert at.session_state[SELECTED_PID_KEY] == pid, (
             f"Delete confirm must preserve "
@@ -3082,8 +3135,7 @@ class TestApplicationsInterviewDeleteDialog:
         # No toast — Cancel is silent.
         toast_values = [el.value for el in at.toast]
         assert not any("Deleted" in v for v in toast_values), (
-            f"Cancel must NOT fire any deletion toast; got "
-            f"toasts={toast_values!r}."
+            f"Cancel must NOT fire any deletion toast; got toasts={toast_values!r}."
         )
 
     def test_dialog_reopens_across_reruns_per_gotcha_3(self, db):
@@ -3129,18 +3181,26 @@ class TestApplicationsInterviewDeleteDialog:
         must silently pop the sentinels — no error, no toast, no
         dialog. This prevents a stale dialog from appearing on
         the new position's view."""
-        pid_a = database.add_position(make_position({
-            "position_name": "A",
-            "deadline_date": (
-                datetime.date.today() + datetime.timedelta(days=20)
-            ).isoformat(),
-        }))
-        pid_b = database.add_position(make_position({
-            "position_name": "B",
-            "deadline_date": (
-                datetime.date.today() + datetime.timedelta(days=40)
-            ).isoformat(),
-        }))
+        pid_a = database.add_position(
+            make_position(
+                {
+                    "position_name": "A",
+                    "deadline_date": (
+                        datetime.date.today() + datetime.timedelta(days=20)
+                    ).isoformat(),
+                }
+            )
+        )
+        pid_b = database.add_position(
+            make_position(
+                {
+                    "position_name": "B",
+                    "deadline_date": (
+                        datetime.date.today() + datetime.timedelta(days=40)
+                    ).isoformat(),
+                }
+            )
+        )
         database.update_position(pid_a, {"status": config.STATUS_APPLIED})
         database.update_position(pid_b, {"status": config.STATUS_APPLIED})
         ia = database.add_interview(pid_a, {})["id"]
@@ -3156,9 +3216,7 @@ class TestApplicationsInterviewDeleteDialog:
         at.session_state[INTERVIEW_DELETE_TARGET_SEQ_KEY] = 1
         _select_row(at, 1)  # pos B — ia is not in current_ids
 
-        assert not at.exception, (
-            f"Stale-target cleanup must not raise; got {at.exception!r}."
-        )
+        assert not at.exception, f"Stale-target cleanup must not raise; got {at.exception!r}."
         # Sentinels silently popped.
         assert INTERVIEW_DELETE_TARGET_ID_KEY not in at.session_state, (
             f"Stale pending-id (id from a different position) must be "
@@ -3172,8 +3230,7 @@ class TestApplicationsInterviewDeleteDialog:
             f"{[el.value for el in at.error]!r}."
         )
         assert [el.value for el in at.toast] == [], (
-            f"Stale-target cleanup must not fire any toast; got "
-            f"{[el.value for el in at.toast]!r}."
+            f"Stale-target cleanup must not fire any toast; got {[el.value for el in at.toast]!r}."
         )
         # Confirm button must NOT be present (no dialog opened).
         with pytest.raises(KeyError):
@@ -3196,6 +3253,7 @@ class TestApplicationsInterviewDeleteDialog:
 
         def _boom(*args, **kwargs):
             raise RuntimeError("delete on fire")
+
         monkeypatch.setattr(database, "delete_interview", _boom)
 
         _keep_selection(at, 0)
@@ -3207,9 +3265,8 @@ class TestApplicationsInterviewDeleteDialog:
             f"re-raise); got exception={at.exception!r}."
         )
         error_values = [el.value for el in at.error]
-        assert (
-            any("delete on fire" in v for v in error_values)
-            or any("Could not delete" in v for v in error_values)
+        assert any("delete on fire" in v for v in error_values) or any(
+            "Could not delete" in v for v in error_values
         ), (
             f"Delete failure must surface via st.error containing "
             f"the underlying message; got errors={error_values!r}."
@@ -3217,8 +3274,7 @@ class TestApplicationsInterviewDeleteDialog:
         # No deletion toast.
         toast_values = [el.value for el in at.toast]
         assert not any("Deleted" in v for v in toast_values), (
-            f"Failed delete must NOT fire a deletion toast; got "
-            f"toasts={toast_values!r}."
+            f"Failed delete must NOT fire a deletion toast; got toasts={toast_values!r}."
         )
         # DB row still present.
         rows = database.get_interviews(pid)

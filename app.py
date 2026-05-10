@@ -447,7 +447,9 @@ else:
             "Days Left": _upcoming["days_left"],
             "Label": _upcoming["label"],
             "Kind": _upcoming["kind"],
-            "Status": _upcoming["status"].map(lambda raw: config.STATUS_LABELS.get(raw, raw) if pd.notna(raw) else raw),
+            "Status": _upcoming["status"].map(
+                lambda raw: config.STATUS_LABELS.get(raw, raw) if pd.notna(raw) else raw
+            ),
             "Urgency": _upcoming["date"].apply(
                 lambda d: max(0, (d - _today).days) if pd.notna(d) else selected_window
             ),

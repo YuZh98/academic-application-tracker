@@ -80,7 +80,9 @@ def test_exports_dir_path_is_correct():
 
 
 def test_write_all_swallows_individual_writer_failure(
-    isolated_exports_dir, monkeypatch, caplog,
+    isolated_exports_dir,
+    monkeypatch,
+    caplog,
 ):
     """DESIGN §9.5: a failure in any write_* is caught at the write_all
     boundary and logged. write_all() itself must not re-raise.
@@ -107,7 +109,8 @@ def test_write_all_swallows_individual_writer_failure(
 
 
 def test_write_all_continues_after_individual_failure(
-    isolated_exports_dir, monkeypatch,
+    isolated_exports_dir,
+    monkeypatch,
 ):
     """Per-call wrapping: write_progress raising must NOT stop
     write_recommenders from running. Pin the §9.5 sequencing contract —
@@ -230,8 +233,7 @@ class TestWriteOpportunities:
     OUTPUT_FILENAME = "OPPORTUNITIES.md"
 
     EXPECTED_HEADER = (
-        "| Position | Institute | Field | Deadline "
-        "| Priority | Status | Created | Updated |"
+        "| Position | Institute | Field | Deadline | Priority | Status | Created | Updated |"
     )
 
     EXPECTED_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- |"
@@ -261,7 +263,9 @@ class TestWriteOpportunities:
         database.add_position(make_position({"position_name": "P1"}))
         exports.write_opportunities()
         out = db_and_exports / self.OUTPUT_FILENAME
-        assert out.exists(), f"Expected file at {out!s}; directory contents: {list(db_and_exports.iterdir()) if db_and_exports.exists() else '(missing)'}"
+        assert out.exists(), (
+            f"Expected file at {out!s}; directory contents: {list(db_and_exports.iterdir()) if db_and_exports.exists() else '(missing)'}"
+        )
 
     def test_table_header_matches_contract(self, db_and_exports):
         """First markdown table row is the locked column header. Pinning
@@ -270,8 +274,7 @@ class TestWriteOpportunities:
         exports.write_opportunities()
         content = self._read_output(db_and_exports)
         assert self.EXPECTED_HEADER in content, (
-            f"Expected header {self.EXPECTED_HEADER!r} in output; "
-            f"got content:\n{content!r}"
+            f"Expected header {self.EXPECTED_HEADER!r} in output; got content:\n{content!r}"
         )
         assert self.EXPECTED_SEPARATOR in content, (
             f"Expected separator {self.EXPECTED_SEPARATOR!r} below header; "
@@ -286,9 +289,7 @@ class TestWriteOpportunities:
         exports.write_opportunities()
         content = self._read_output(db_and_exports)
         rows = self._data_rows(content)
-        assert len(rows) == 3, (
-            f"Expected 3 data rows (one per position); got {len(rows)}: {rows!r}"
-        )
+        assert len(rows) == 3, f"Expected 3 data rows (one per position); got {len(rows)}: {rows!r}"
 
     def test_sort_order_by_deadline_asc_nulls_last(self, db_and_exports):
         """Mixed deadlines (NULL + two distinct dates) → render in
@@ -296,15 +297,30 @@ class TestWriteOpportunities:
         `database.get_applications_table()` precedent so equal-deadline
         rows have a stable order across reruns."""
         # Insert in arbitrary order; expected order is Early → Late → NoDate.
-        database.add_position(make_position({
-            "position_name": "Late", "deadline_date": "2026-12-15",
-        }))
-        database.add_position(make_position({
-            "position_name": "NoDate", "deadline_date": None,
-        }))
-        database.add_position(make_position({
-            "position_name": "Early", "deadline_date": "2026-06-01",
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Late",
+                    "deadline_date": "2026-12-15",
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "NoDate",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Early",
+                    "deadline_date": "2026-06-01",
+                }
+            )
+        )
         exports.write_opportunities()
         content = self._read_output(db_and_exports)
         early_idx = content.find("Early")
@@ -322,30 +338,32 @@ class TestWriteOpportunities:
         emptyness can't slip through as ``""``."""
         # add_position takes a dict; we pass None explicitly for the
         # nullable TEXT columns we want to surface as missing.
-        database.add_position({
-            "position_name": "BareName",
-            "field": None,
-            "institute": None,
-            # deadline_date stays unset (None) too — secondary check.
-        })
+        database.add_position(
+            {
+                "position_name": "BareName",
+                "field": None,
+                "institute": None,
+                # deadline_date stays unset (None) too — secondary check.
+            }
+        )
         exports.write_opportunities()
         content = self._read_output(db_and_exports)
         bare_lines = [ln for ln in content.splitlines() if "BareName" in ln]
-        assert bare_lines, (
-            f"Expected the BareName row in output; got content:\n{content!r}"
-        )
+        assert bare_lines, f"Expected the BareName row in output; got content:\n{content!r}"
         row = bare_lines[0]
-        assert "—" in row, (
-            f"Expected em-dash for missing TEXT cells; got row={row!r}"
-        )
+        assert "—" in row, f"Expected em-dash for missing TEXT cells; got row={row!r}"
 
     def test_iso_format_for_date_cells(self, db_and_exports):
         """Deadline column renders as `YYYY-MM-DD` (passes the schema's
         ISO TEXT through verbatim)."""
-        database.add_position(make_position({
-            "position_name": "DatedPosition",
-            "deadline_date": "2026-06-15",
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "DatedPosition",
+                    "deadline_date": "2026-06-15",
+                }
+            )
+        )
         exports.write_opportunities()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "DatedPosition" in ln]
@@ -401,9 +419,7 @@ class TestWriteOpportunities:
             f"Header must render even on empty DB; got content:\n{content!r}"
         )
         rows = self._data_rows(content)
-        assert rows == [], (
-            f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
-        )
+        assert rows == [], f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
 
 
 # ── Phase 6 T2: write_progress() generator ───────────────────────────────────
@@ -528,20 +544,33 @@ class TestWriteProgress:
         exports.write_progress()
         content = self._read_output(db_and_exports)
         rows = self._data_rows(content)
-        assert len(rows) == 3, (
-            f"Expected 3 data rows (one per position); got {len(rows)}: {rows!r}"
-        )
+        assert len(rows) == 3, f"Expected 3 data rows (one per position); got {len(rows)}: {rows!r}"
 
     def test_sort_order_by_deadline_asc_nulls_last(self, db_and_exports):
-        database.add_position(make_position({
-            "position_name": "Late", "deadline_date": "2026-12-15",
-        }))
-        database.add_position(make_position({
-            "position_name": "NoDate", "deadline_date": None,
-        }))
-        database.add_position(make_position({
-            "position_name": "Early", "deadline_date": "2026-06-01",
-        }))
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Late",
+                    "deadline_date": "2026-12-15",
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "NoDate",
+                    "deadline_date": None,
+                }
+            )
+        )
+        database.add_position(
+            make_position(
+                {
+                    "position_name": "Early",
+                    "deadline_date": "2026-06-01",
+                }
+            )
+        )
         exports.write_progress()
         content = self._read_output(db_and_exports)
         early_idx = content.find("Early")
@@ -558,35 +587,39 @@ class TestWriteProgress:
         result defaults to 'Pending' so those cells are non-empty."""
         # Fresh add_position → applied_date NULL, response_type NULL,
         # institute also NULL here (passed as None).
-        database.add_position({
-            "position_name": "BareName",
-            "institute": None,
-        })
+        database.add_position(
+            {
+                "position_name": "BareName",
+                "institute": None,
+            }
+        )
         exports.write_progress()
         content = self._read_output(db_and_exports)
         bare_lines = [ln for ln in content.splitlines() if "BareName" in ln]
         assert bare_lines, "Expected the BareName row in output"
         row = bare_lines[0]
-        assert "—" in row, (
-            f"Expected em-dash for missing cells; got row={row!r}"
-        )
+        assert "—" in row, f"Expected em-dash for missing cells; got row={row!r}"
 
     def test_iso_format_for_date_cells(self, db_and_exports):
         """Applied column renders as `YYYY-MM-DD` — pass-through of the
         schema's ISO TEXT."""
-        pid = database.add_position(make_position({
-            "position_name": "DatedRow",
-        }))
+        pid = database.add_position(
+            make_position(
+                {
+                    "position_name": "DatedRow",
+                }
+            )
+        )
         database.upsert_application(
-            pid, {"applied_date": "2026-06-15"}, propagate_status=False,
+            pid,
+            {"applied_date": "2026-06-15"},
+            propagate_status=False,
         )
         exports.write_progress()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "DatedRow" in ln]
         assert rows, "Expected DatedRow in output"
-        assert "2026-06-15" in rows[0], (
-            f"Expected ISO Applied date in row; got row={rows[0]!r}"
-        )
+        assert "2026-06-15" in rows[0], f"Expected ISO Applied date in row; got row={rows[0]!r}"
 
     def test_status_renders_as_raw_bracketed_sentinel(self, db_and_exports):
         """Backup format → raw bracketed status sentinel ([APPLIED]),
@@ -624,9 +657,7 @@ class TestWriteProgress:
         content = self._read_output(db_and_exports)
         assert self.EXPECTED_HEADER in content
         rows = self._data_rows(content)
-        assert rows == [], (
-            f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
-        )
+        assert rows == [], f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
 
     # ── Confirmation-cell tri-state pin (DESIGN §8.3 D-A T1-C precedent) ──
 
@@ -691,9 +722,7 @@ class TestWriteProgress:
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "NoInterviews" in ln]
         assert rows
-        assert "—" in rows[0], (
-            f"Zero-interviews row must contain em-dash; got row={rows[0]!r}"
-        )
+        assert "—" in rows[0], f"Zero-interviews row must contain em-dash; got row={rows[0]!r}"
         # Sanity: the row must NOT carry a digit-then-space-(last pattern.
         # Defensive check against a regression that always renders count.
         assert "(last:" not in rows[0], (
@@ -707,13 +736,19 @@ class TestWriteProgress:
         # Seed three interviews with different scheduled_dates, latest
         # last so the sort isn't trivial.
         database.add_interview(
-            pid, {"scheduled_date": "2026-04-15"}, propagate_status=False,
+            pid,
+            {"scheduled_date": "2026-04-15"},
+            propagate_status=False,
         )
         database.add_interview(
-            pid, {"scheduled_date": "2026-05-01"}, propagate_status=False,
+            pid,
+            {"scheduled_date": "2026-05-01"},
+            propagate_status=False,
         )
         database.add_interview(
-            pid, {"scheduled_date": "2026-06-20"}, propagate_status=False,
+            pid,
+            {"scheduled_date": "2026-06-20"},
+            propagate_status=False,
         )
         exports.write_progress()
         content = self._read_output(db_and_exports)
@@ -721,8 +756,7 @@ class TestWriteProgress:
         assert rows
         # Pin the exact summary substring — count + last ISO date.
         assert "3 (last: 2026-06-20)" in rows[0], (
-            f"Expected '3 (last: 2026-06-20)' in Interviews cell; "
-            f"got row={rows[0]!r}"
+            f"Expected '3 (last: 2026-06-20)' in Interviews cell; got row={rows[0]!r}"
         )
 
     def test_interviews_summary_uses_max_scheduled_date_as_last(self, db_and_exports):
@@ -732,10 +766,14 @@ class TestWriteProgress:
         pid = database.add_position(make_position({"position_name": "OutOfOrder"}))
         # Insert latest first so a bug that picks .iloc[-1] would surface.
         database.add_interview(
-            pid, {"scheduled_date": "2026-09-01"}, propagate_status=False,
+            pid,
+            {"scheduled_date": "2026-09-01"},
+            propagate_status=False,
         )
         database.add_interview(
-            pid, {"scheduled_date": "2026-04-01"}, propagate_status=False,
+            pid,
+            {"scheduled_date": "2026-04-01"},
+            propagate_status=False,
         )
         exports.write_progress()
         content = self._read_output(db_and_exports)
@@ -867,23 +905,37 @@ class TestWriteRecommenders:
         content = self._read_output(db_and_exports)
         rows = self._data_rows(content)
         assert len(rows) == 3, (
-            f"Expected 3 rows (2 for Dr. Smith + 1 for Dr. Jones); "
-            f"got {len(rows)}: {rows!r}"
+            f"Expected 3 rows (2 for Dr. Smith + 1 for Dr. Jones); got {len(rows)}: {rows!r}"
         )
 
     def test_sort_order_groups_by_recommender_then_deadline(self, db_and_exports):
         """Two recommenders with overlapping positions render with all
         of person A's rows before any of person B's; within each
         recommender, rows order by deadline ASC NULLS LAST."""
-        pid_early = database.add_position(make_position({
-            "position_name": "Early Pos", "deadline_date": "2026-06-01",
-        }))
-        pid_late = database.add_position(make_position({
-            "position_name": "Late Pos", "deadline_date": "2026-12-15",
-        }))
-        pid_nodate = database.add_position(make_position({
-            "position_name": "NoDate Pos", "deadline_date": None,
-        }))
+        pid_early = database.add_position(
+            make_position(
+                {
+                    "position_name": "Early Pos",
+                    "deadline_date": "2026-06-01",
+                }
+            )
+        )
+        pid_late = database.add_position(
+            make_position(
+                {
+                    "position_name": "Late Pos",
+                    "deadline_date": "2026-12-15",
+                }
+            )
+        )
+        pid_nodate = database.add_position(
+            make_position(
+                {
+                    "position_name": "NoDate Pos",
+                    "deadline_date": None,
+                }
+            )
+        )
         # Insert recommenders in non-sorted order — Dr. Beta first, then
         # Dr. Alpha — so any sort bug that relies on insertion order
         # surfaces.
@@ -920,42 +972,47 @@ class TestWriteRecommenders:
 
     def test_em_dash_for_missing_text_cells(self, db_and_exports):
         """NULL relationship / NULL asked_date / etc. surface as '—'."""
-        pid = database.add_position(make_position({
-            "position_name": "BarePos", "institute": None,
-        }))
+        pid = database.add_position(
+            make_position(
+                {
+                    "position_name": "BarePos",
+                    "institute": None,
+                }
+            )
+        )
         # Insert a recommender with NULL relationship + NULL asked_date.
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Bare",
-            "relationship": None,
-            "asked_date": None,
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Bare",
+                "relationship": None,
+                "asked_date": None,
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         bare_lines = [ln for ln in content.splitlines() if "Dr. Bare" in ln]
         assert bare_lines, f"Expected the Dr. Bare row; got content:\n{content!r}"
         row = bare_lines[0]
-        assert "—" in row, (
-            f"Expected em-dash for missing TEXT cells; got row={row!r}"
-        )
+        assert "—" in row, f"Expected em-dash for missing TEXT cells; got row={row!r}"
 
     def test_iso_format_for_date_cells(self, db_and_exports):
         """Asked + Submitted columns render as `YYYY-MM-DD`."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. Dated",
-            "asked_date": "2026-04-15",
-            "submitted_date": "2026-05-01",
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. Dated",
+                "asked_date": "2026-04-15",
+                "submitted_date": "2026-05-01",
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. Dated" in ln]
         assert rows
-        assert "2026-04-15" in rows[0], (
-            f"Expected ISO Asked date in row; got {rows[0]!r}"
-        )
-        assert "2026-05-01" in rows[0], (
-            f"Expected ISO Submitted date in row; got {rows[0]!r}"
-        )
+        assert "2026-04-15" in rows[0], f"Expected ISO Asked date in row; got {rows[0]!r}"
+        assert "2026-05-01" in rows[0], f"Expected ISO Submitted date in row; got {rows[0]!r}"
 
     def test_idempotent_across_two_calls(self, db_and_exports):
         """DESIGN §7 contract #2: byte-identical output across two calls
@@ -979,9 +1036,7 @@ class TestWriteRecommenders:
         content = self._read_output(db_and_exports)
         assert self.EXPECTED_HEADER in content
         rows = self._data_rows(content)
-        assert rows == [], (
-            f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
-        )
+        assert rows == [], f"Empty DB → zero data rows; got {len(rows)}: {rows!r}"
 
     # ── Confirmed-cell tri-state pin (Yes/No/em-dash) ─────────────────
 
@@ -990,10 +1045,13 @@ class TestWriteRecommenders:
         `_format_confirmed` convention but rendered into the export."""
         pid = database.add_position(make_position())
         # Default add → confirmed NULL.
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. NullConf",
-            "confirmed": None,
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. NullConf",
+                "confirmed": None,
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. NullConf" in ln]
@@ -1012,10 +1070,13 @@ class TestWriteRecommenders:
     def test_confirmed_renders_no_when_zero(self, db_and_exports):
         """`confirmed=0` → 'No'."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. NoConf",
-            "confirmed": 0,
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. NoConf",
+                "confirmed": 0,
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. NoConf" in ln]
@@ -1029,10 +1090,13 @@ class TestWriteRecommenders:
     def test_confirmed_renders_yes_when_one(self, db_and_exports):
         """`confirmed=1` → 'Yes'."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. YesConf",
-            "confirmed": 1,
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. YesConf",
+                "confirmed": 1,
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. YesConf" in ln]
@@ -1050,11 +1114,14 @@ class TestWriteRecommenders:
         `_format_confirmation` because the (flag, date) shape is
         identical to the Applications-page Confirmation pattern."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. NoReminder",
-            "reminder_sent": 0,
-            "reminder_sent_date": None,
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. NoReminder",
+                "reminder_sent": 0,
+                "reminder_sent_date": None,
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. NoReminder" in ln]
@@ -1069,11 +1136,14 @@ class TestWriteRecommenders:
     def test_reminder_check_with_iso_date(self, db_and_exports):
         """`reminder_sent=1, reminder_sent_date set` → '✓ {YYYY-MM-DD}'."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. DatedReminder",
-            "reminder_sent": 1,
-            "reminder_sent_date": "2026-04-19",
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. DatedReminder",
+                "reminder_sent": 1,
+                "reminder_sent_date": "2026-04-19",
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. DatedReminder" in ln]
@@ -1087,11 +1157,14 @@ class TestWriteRecommenders:
     def test_reminder_check_no_date_when_date_null(self, db_and_exports):
         """`reminder_sent=1, reminder_sent_date NULL` → '✓ (no date)'."""
         pid = database.add_position(make_position())
-        database.add_recommender(pid, {
-            "recommender_name": "Dr. NoDateReminder",
-            "reminder_sent": 1,
-            "reminder_sent_date": None,
-        })
+        database.add_recommender(
+            pid,
+            {
+                "recommender_name": "Dr. NoDateReminder",
+                "reminder_sent": 1,
+                "reminder_sent_date": None,
+            },
+        )
         exports.write_recommenders()
         content = self._read_output(db_and_exports)
         rows = [ln for ln in content.splitlines() if "Dr. NoDateReminder" in ln]

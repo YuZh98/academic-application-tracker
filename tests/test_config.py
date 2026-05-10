@@ -171,8 +171,7 @@ def test_manual_status_values_are_subset_of_status_values():
     the page renders them through `STATUS_LABELS.get`, which would fall back
     to the raw bracketed form if a value drifted off the map."""
     assert set(config.MANUAL_STATUS_VALUES) <= set(config.STATUS_VALUES), (
-        f"Unknown manual statuses: "
-        f"{set(config.MANUAL_STATUS_VALUES) - set(config.STATUS_VALUES)}"
+        f"Unknown manual statuses: {set(config.MANUAL_STATUS_VALUES) - set(config.STATUS_VALUES)}"
     )
 
 
@@ -181,12 +180,10 @@ def test_manual_status_values_excludes_auto_promoted_statuses():
     them in the manual picker invites desync between status and the
     underlying interview / response data."""
     assert config.STATUS_INTERVIEW not in config.MANUAL_STATUS_VALUES, (
-        f"STATUS_INTERVIEW must not be in MANUAL_STATUS_VALUES; "
-        f"got {config.MANUAL_STATUS_VALUES!r}"
+        f"STATUS_INTERVIEW must not be in MANUAL_STATUS_VALUES; got {config.MANUAL_STATUS_VALUES!r}"
     )
     assert config.STATUS_OFFER not in config.MANUAL_STATUS_VALUES, (
-        f"STATUS_OFFER must not be in MANUAL_STATUS_VALUES; "
-        f"got {config.MANUAL_STATUS_VALUES!r}"
+        f"STATUS_OFFER must not be in MANUAL_STATUS_VALUES; got {config.MANUAL_STATUS_VALUES!r}"
     )
 
 

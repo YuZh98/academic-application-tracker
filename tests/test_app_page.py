@@ -121,9 +121,7 @@ class TestT1CKpiCounts:
         "All active positions in your pipeline — Saved, Applied, Interview, and Offer "
         "(excludes Closed / Rejected / Declined)."
     )
-    APPLIED_HELP = (
-        "Positions where you've submitted an application (Applied + Interview + Offer)."
-    )
+    APPLIED_HELP = "Positions where you've submitted an application (Applied + Interview + Offer)."
     INTERVIEWS_HELP = (
         "Interview events scheduled today or later, across all positions. "
         "A position with multiple upcoming interviews contributes one count per interview."
@@ -232,9 +230,7 @@ class TestT1CKpiCounts:
         Under the previous single-stage semantics the count visibly
         dropped, which conflicted with users' intuition that once a
         position has been applied to it stays counted as applied."""
-        pid = database.add_position(
-            make_position({"position_name": "A", "status": "[APPLIED]"})
-        )
+        pid = database.add_position(make_position({"position_name": "A", "status": "[APPLIED]"}))
 
         at = _run_page()
         before = self._kpis(at)

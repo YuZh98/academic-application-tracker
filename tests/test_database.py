@@ -2740,9 +2740,7 @@ class TestV1RcConfirmationEmailDrop:
                     FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE
                 )
             """)
-            conn.execute(
-                "INSERT INTO positions (position_name) VALUES ('PostSplitPosition')"
-            )
+            conn.execute("INSERT INTO positions (position_name) VALUES ('PostSplitPosition')")
             conn.execute(
                 "INSERT INTO applications "
                 "(position_id, applied_date, confirmation_email, "
@@ -2758,7 +2756,9 @@ class TestV1RcConfirmationEmailDrop:
         self._seed_post_split_applications(tmp_path, monkeypatch)
         database.init_db()
         with database._connect() as conn:
-            cols = {row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()}
+            cols = {
+                row["name"] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
+            }
         assert "confirmation_email" not in cols, (
             "v1.0-rc rebuild must drop applications.confirmation_email — "
             f"it remains in the table after init_db(). Column list: {sorted(cols)!r}"
@@ -2812,8 +2812,7 @@ class TestV1RcConfirmationEmailDrop:
         database.init_db()
         with database._connect() as conn:
             cols_first = {
-                r["name"]
-                for r in conn.execute("PRAGMA table_info(applications)").fetchall()
+                r["name"] for r in conn.execute("PRAGMA table_info(applications)").fetchall()
             }
             row_first = conn.execute(
                 "SELECT applied_date, confirmation_received, confirmation_date "
@@ -2825,8 +2824,7 @@ class TestV1RcConfirmationEmailDrop:
 
         with database._connect() as conn:
             cols_second = {
-                r["name"]
-                for r in conn.execute("PRAGMA table_info(applications)").fetchall()
+                r["name"] for r in conn.execute("PRAGMA table_info(applications)").fetchall()
             }
             row_second = conn.execute(
                 "SELECT applied_date, confirmation_received, confirmation_date "
@@ -2841,9 +2839,7 @@ class TestV1RcConfirmationEmailDrop:
         assert row_second["confirmation_received"] == row_first["confirmation_received"]
         assert row_second["confirmation_date"] == row_first["confirmation_date"]
 
-    def test_rebuild_runs_after_pre_v1_3_split_in_one_init_db(
-        self, tmp_path, monkeypatch
-    ):
+    def test_rebuild_runs_after_pre_v1_3_split_in_one_init_db(self, tmp_path, monkeypatch):
         """End-to-end: a genuine pre-v1.3 DB (carries confirmation_email
         with a date-shaped value, no confirmation_received / _date) goes
         through BOTH the split migration AND the v1.0-rc rebuild in a
@@ -2886,10 +2882,7 @@ class TestV1RcConfirmationEmailDrop:
             )
         database.init_db()
         with database._connect() as conn:
-            cols = {
-                r["name"]
-                for r in conn.execute("PRAGMA table_info(applications)").fetchall()
-            }
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)").fetchall()}
             row = conn.execute(
                 "SELECT confirmation_received, confirmation_date "
                 "FROM applications WHERE position_id = 1"
@@ -4578,13 +4571,9 @@ class TestDoneRecLettersAutoSync:
         """Adding the Nth submitted recommender for a position with
         num_rec_letters=N must flip done_rec_letters from 0 to 1."""
         pid = database.add_position(make_position({"num_rec_letters": 2}))
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         assert _get_done_rec_letters(pid) == 0  # 1 / 2 — not yet
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"})
         assert _get_done_rec_letters(pid) == 1  # 2 / 2 — flips
 
     def test_flips_off_when_recommender_unsubmitted(self, db):
@@ -4602,9 +4591,7 @@ class TestDoneRecLettersAutoSync:
         """The page may write '' for a cleared date (Notes-tab contract).
         '' must count as unsubmitted, mirroring is_all_recs_submitted."""
         pid = database.add_position(make_position({"num_rec_letters": 1}))
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A", "submitted_date": ""}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": ""})
         assert _get_done_rec_letters(pid) == 0
 
     def test_flips_off_when_recommender_deleted(self, db):
@@ -4614,9 +4601,7 @@ class TestDoneRecLettersAutoSync:
         rec_a = database.add_recommender(
             pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
         )
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"})
         assert _get_done_rec_letters(pid) == 1
         database.delete_recommender(rec_a)
         assert _get_done_rec_letters(pid) == 0  # 1 / 2 left
@@ -4630,9 +4615,7 @@ class TestDoneRecLettersAutoSync:
         # gets recomputed (the schema default 0 from add_position is fine
         # at insert time; the sync's job is to keep things consistent
         # after writes).
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         assert _get_done_rec_letters(pid) == 1, (
             "NULL num_rec_letters must vacuously satisfy the threshold"
         )
@@ -4640,20 +4623,14 @@ class TestDoneRecLettersAutoSync:
     def test_zero_num_rec_letters_is_vacuous_truth(self, db):
         """num_rec_letters = 0 must behave the same as NULL — 'no minimum'."""
         pid = database.add_position(make_position({"num_rec_letters": 0}))
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A"})
         assert _get_done_rec_letters(pid) == 1
 
     def test_sync_scoped_to_position_id(self, db):
         """A recommender update on one position must not touch
         done_rec_letters on another."""
-        pid_a = database.add_position(
-            make_position({"position_name": "A", "num_rec_letters": 1})
-        )
-        pid_b = database.add_position(
-            make_position({"position_name": "B", "num_rec_letters": 1})
-        )
+        pid_a = database.add_position(make_position({"position_name": "A", "num_rec_letters": 1}))
+        pid_b = database.add_position(make_position({"position_name": "B", "num_rec_letters": 1}))
         # B already satisfied
         database.add_recommender(
             pid_b, {"recommender_name": "Dr. B", "submitted_date": "2026-04-10"}
@@ -4662,7 +4639,8 @@ class TestDoneRecLettersAutoSync:
         assert _get_done_rec_letters(pid_b) == 1
         # Adding to A must not regress B
         database.add_recommender(
-            pid_a, {"recommender_name": "Dr. A"}  # unsubmitted
+            pid_a,
+            {"recommender_name": "Dr. A"},  # unsubmitted
         )
         assert _get_done_rec_letters(pid_a) == 0
         assert _get_done_rec_letters(pid_b) == 1
@@ -4674,9 +4652,7 @@ class TestDoneRecLettersAutoSync:
         who corrects 'I need 2 letters' to 'I need 3 letters' would
         keep an outdated done flag."""
         pid = database.add_position(make_position({"num_rec_letters": 1}))
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         assert _get_done_rec_letters(pid) == 1
         database.update_position(pid, {"num_rec_letters": 3})
         assert _get_done_rec_letters(pid) == 0
@@ -4696,17 +4672,13 @@ class TestDoneRecLettersAutoSync:
                 }
             )
         )
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         # Half-met — pending
         result = database.compute_materials_readiness()
         assert result == {"ready": 0, "pending": 1}, (
             f"With 1/2 letters submitted, position must be pending; got {result!r}"
         )
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. B", "submitted_date": "2026-04-12"})
         # Threshold met — ready
         result = database.compute_materials_readiness()
         assert result == {"ready": 1, "pending": 0}, (

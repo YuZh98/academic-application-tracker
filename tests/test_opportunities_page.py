@@ -3353,8 +3353,7 @@ class TestEditStatusFormatFunc:
             config.STATUS_LABELS[config.STATUS_OFFER],
         }
         assert forbidden.isdisjoint(set(options)), (
-            f"edit_status must not expose Interview/Offer for manual edit; "
-            f"got {options!r}"
+            f"edit_status must not expose Interview/Offer for manual edit; got {options!r}"
         )
 
     def test_edit_status_keeps_interview_visible_when_current(self, db):
@@ -3379,9 +3378,7 @@ class TestEditStatusFormatFunc:
             f"  Got:      {options}"
         )
         # The current selection is the row's actual status.
-        assert (
-            at.selectbox(key=EDIT_KEYS["status"]).value == config.STATUS_INTERVIEW
-        ), (
+        assert at.selectbox(key=EDIT_KEYS["status"]).value == config.STATUS_INTERVIEW, (
             f"Initial selection must be the row's current status; got "
             f"{at.selectbox(key=EDIT_KEYS['status']).value!r}"
         )
@@ -3911,9 +3908,7 @@ class TestMaterialsTabLorRendering:
         req_rec_letters='Yes' — the column is auto-computed and a
         user-toggleable checkbox would let it desync from the
         recommenders table."""
-        database.add_position(
-            {"position_name": "Alpha", "req_rec_letters": "Yes"}
-        )
+        database.add_position({"position_name": "Alpha", "req_rec_letters": "Yes"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
@@ -3934,9 +3929,7 @@ class TestMaterialsTabLorRendering:
                 "num_rec_letters": 3,
             }
         )
-        database.add_recommender(
-            pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
-        )
+        database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
@@ -4023,19 +4016,15 @@ class TestMaterialsTabLorRendering:
         """When req_rec_letters is 'Optional' or 'No', the LOR row must
         be entirely absent — no read-only status, no number_input. This
         matches the existing Materials filter (Y-only) for other docs."""
-        database.add_position(
-            {"position_name": "Alpha", "req_rec_letters": "Optional"}
-        )
+        database.add_position({"position_name": "Alpha", "req_rec_letters": "Optional"})
         at = AppTest.from_file(PAGE)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert not _number_input_rendered(at, NUM_REC_LETTERS_KEY), (
-            "edit_num_rec_letters must not render when "
-            "req_rec_letters != 'Yes'."
+            "edit_num_rec_letters must not render when req_rec_letters != 'Yes'."
         )
         assert not _markdown_contains(at, "received"), (
-            "LOR read-only status must not render when "
-            "req_rec_letters != 'Yes'."
+            "LOR read-only status must not render when req_rec_letters != 'Yes'."
         )
 
     def test_save_persists_num_rec_letters_change(self, db):
@@ -4050,9 +4039,7 @@ class TestMaterialsTabLorRendering:
             }
         )
         # One submitted recommender → done_rec_letters = 1 at the start.
-        database.add_recommender(
-            sid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"}
-        )
+        database.add_recommender(sid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         assert database.get_position(sid)["done_rec_letters"] == 1
 
         at = AppTest.from_file(PAGE)
