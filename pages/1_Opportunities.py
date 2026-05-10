@@ -12,7 +12,6 @@ import config
 import database
 
 
-
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
 
@@ -98,9 +97,7 @@ def _confirm_delete_dialog() -> None:
 
 
 def _deadline_urgency(date_str: Any) -> str:
-    """Return the at-a-glance urgency glyph for a position's deadline.
-
-    """
+    """Return the at-a-glance urgency glyph for a position's deadline."""
     if date_str is None or date_str == "":
         return config.urgency_glyph(None)
     if isinstance(date_str, float) and math.isnan(date_str):
@@ -134,10 +131,14 @@ with st.expander("Quick Add", expanded=False):
         col1, col2, col3 = st.columns(3)
         with col1:
             position_name = st.text_input("Position Name *", key=f"qa_position_name_{qa_nonce}")
-            deadline_date = st.date_input("Deadline", value=None, key=f"qa_deadline_date_{qa_nonce}")
+            deadline_date = st.date_input(
+                "Deadline", value=None, key=f"qa_deadline_date_{qa_nonce}"
+            )
         with col2:
             institute = st.text_input("Institute", key=f"qa_institute_{qa_nonce}")
-            priority = st.selectbox("Priority", config.PRIORITY_VALUES, key=f"qa_priority_{qa_nonce}")
+            priority = st.selectbox(
+                "Priority", config.PRIORITY_VALUES, key=f"qa_priority_{qa_nonce}"
+            )
         with col3:
             field = st.text_input("Field", key=f"qa_field_{qa_nonce}")
             link = st.text_input("Link", key=f"qa_link_{qa_nonce}", placeholder="https://…")
@@ -304,7 +305,6 @@ else:
         selection_mode="single-row",
     )
 
-
     selected_rows = list(event.selection.rows) if event is not None else []  # type: ignore[attr-defined]
     if selected_rows and 0 <= selected_rows[0] < len(df_display):
         new_sid = int(df_display.iloc[selected_rows[0]]["id"])
@@ -333,8 +333,6 @@ if "selected_position_id" in st.session_state:
 
         _status_label = config.STATUS_LABELS.get(r["status"], r["status"])
         st.subheader(f"{r['position_name']} · {_status_label}")
-
-
 
         safe_priority = (
             r["priority"] if r["priority"] in config.PRIORITY_VALUES else config.PRIORITY_VALUES[0]
@@ -367,19 +365,14 @@ if "selected_position_id" in st.session_state:
         except (ValueError, TypeError):
             safe_deadline = None
 
-
         raw_num_rec_letters = (
-            r[config.REC_LETTERS_COUNT_COL]
-            if config.REC_LETTERS_COUNT_COL in r.index
-            else None
+            r[config.REC_LETTERS_COUNT_COL] if config.REC_LETTERS_COUNT_COL in r.index else None
         )
         try:
             safe_num_rec_letters = (
                 int(raw_num_rec_letters)
                 if raw_num_rec_letters is not None
-                and not (
-                    isinstance(raw_num_rec_letters, float) and math.isnan(raw_num_rec_letters)
-                )
+                and not (isinstance(raw_num_rec_letters, float) and math.isnan(raw_num_rec_letters))
                 else 0
             )
         except (TypeError, ValueError):
@@ -414,7 +407,6 @@ if "selected_position_id" in st.session_state:
                 st.session_state[_key] = _value
         st.session_state["_edit_form_sid"] = sid
 
-
         tabs = st.tabs(config.EDIT_PANEL_TABS)
 
         with tabs[0]:
@@ -448,7 +440,6 @@ if "selected_position_id" in st.session_state:
                     key="edit_overview_submit",
                 )
 
-
             if overview_submitted:
                 new_name = (st.session_state.get("edit_position_name") or "").strip()
                 if not new_name:
@@ -479,7 +470,6 @@ if "selected_position_id" in st.session_state:
                     except Exception as exc:
                         st.error(f"Could not save changes: {exc}")
 
-
             if st.button("Delete", type="primary", key="edit_delete"):
                 st.session_state["_delete_target_id"] = sid
                 st.session_state["_delete_target_name"] = r["position_name"]
@@ -501,7 +491,6 @@ if "selected_position_id" in st.session_state:
                     "Save Changes",
                     key="edit_requirements_submit",
                 )
-
 
             if requirements_submitted:
                 payload: dict[str, Any] = {
@@ -555,13 +544,11 @@ if "selected_position_id" in st.session_state:
                         if req_col == config.REC_LETTERS_REQ_COL:
                             if num_required > 0:
                                 st.markdown(
-                                    f"**{label}:** {submitted_count} / "
-                                    f"{num_required} received"
+                                    f"**{label}:** {submitted_count} / {num_required} received"
                                 )
                             else:
                                 st.markdown(
-                                    f"**{label}:** {submitted_count} received "
-                                    f"(no minimum required)"
+                                    f"**{label}:** {submitted_count} received (no minimum required)"
                                 )
                             st.number_input(
                                 "How many letters does this position require?",
@@ -592,9 +579,7 @@ if "selected_position_id" in st.session_state:
                                 st.session_state.get("edit_num_rec_letters") or 0
                             )
                         else:
-                            payload[done_col] = int(
-                                bool(st.session_state.get(f"edit_{done_col}"))
-                            )
+                            payload[done_col] = int(bool(st.session_state.get(f"edit_{done_col}")))
                     try:
                         database.update_position(sid, payload)
                         st.toast(f'Saved materials for "{r["position_name"]}".')
@@ -617,7 +602,6 @@ if "selected_position_id" in st.session_state:
                     key="edit_notes_submit",
                 )
 
-
             if notes_submitted:
                 payload: dict[str, Any] = {
                     "notes": st.session_state.get("edit_notes", "") or "",
@@ -634,4 +618,3 @@ if "selected_position_id" in st.session_state:
     else:
         st.session_state.pop("selected_position_id", None)
         st.session_state.pop("_edit_form_sid", None)
-

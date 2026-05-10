@@ -45,12 +45,11 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# Pyflakes (F), pycodestyle errors (E) and warnings (W). A deliberately
-# tight starter set — extend in a follow-up once the cadence is comfortable.
-# `I` (isort) is intentionally excluded for now: enabling it would reformat
-# 9 import blocks across the codebase, scope creep for this PR. Add it
-# alongside the format-the-world reformat in a follow-up.
-select = ["E", "F", "W"]
+# Pyflakes (F), pycodestyle errors (E) and warnings (W), plus isort (I).
+# `I` enforces import ordering across the codebase; applied alongside the
+# format-the-world reformat that landed in the same follow-up PR to PR #20.
+# All future PRs must keep imports sorted — ruff check . enforces this in CI.
+select = ["E", "F", "W", "I"]
 # E501 (line-too-long) is not enforced yet; existing code reaches 224 chars
 # and a format-the-world reformat is a separate PR.
 ignore = ["E501"]

@@ -37,13 +37,11 @@ def decode_mailto(url: str) -> dict[str, str]:
     URL surfaces a clear AssertionError rather than silently returning
     empty values."""
     parsed = urlparse(url)
-    assert parsed.scheme == "mailto", (
-        f"Compose URL must use the mailto: scheme; got {url!r}"
-    )
+    assert parsed.scheme == "mailto", f"Compose URL must use the mailto: scheme; got {url!r}"
     qs = parse_qs(parsed.query, keep_blank_values=True)
     return {
         "subject": qs.get("subject", [""])[0],
-        "body":    qs.get("body",    [""])[0],
+        "body": qs.get("body", [""])[0],
     }
 
 

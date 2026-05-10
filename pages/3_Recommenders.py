@@ -10,7 +10,6 @@ import streamlit as st
 
 import config
 import database
-
 from config import EM_DASH
 
 st.set_page_config(
@@ -592,7 +591,6 @@ if "recs_selected_id" in st.session_state:
                     "Save",
                     key="recs_edit_submit",
                 )
-
 
             if _edit_submitted:
                 _w_asked = st.session_state.get("recs_edit_asked_date")

@@ -10,10 +10,7 @@ import streamlit as st
 
 import config
 import database
-
-
 from config import EM_DASH
-
 
 st.set_page_config(
     page_title="Applications — Academic Application Tracker",
@@ -330,7 +327,6 @@ if "applications_selected_position_id" in st.session_state:
             _recs_label = "✓ Yes" if recs_submitted else "✗ No"
             st.markdown(f"All recommendation letters submitted: {_recs_label}")
 
-
             sid_changed = st.session_state.get("_applications_edit_form_sid") != sid
 
             raw_response_type = app_row.get("response_type")
@@ -410,7 +406,6 @@ if "applications_selected_position_id" in st.session_state:
 
             st.markdown("#### Interviews")
 
-
             current_ids = (
                 frozenset(int(i) for i in interviews_df["id"])
                 if not interviews_df.empty
@@ -476,14 +471,12 @@ if "applications_selected_position_id" in st.session_state:
                     ):
                         saves_clicked.append((_iid, _seq))
 
-
                 if st.button(
                     f"🗑️ Delete Interview {_seq}",
                     key=f"apps_interview_{_iid}_delete",
                 ):
                     st.session_state["_apps_interview_delete_target_id"] = _iid
                     st.session_state["_apps_interview_delete_target_seq"] = _seq
-
 
             _pending_delete_id = st.session_state.get("_apps_interview_delete_target_id")
             if _pending_delete_id is not None:
