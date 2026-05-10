@@ -1,8 +1,9 @@
 # tests/conftest.py
 # Shared pytest fixtures for the academic application tracker test suite.
 
-import pytest
 from datetime import date, timedelta
+
+import pytest
 
 import database
 

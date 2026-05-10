@@ -13,13 +13,13 @@
 
 import datetime
 import pathlib
+
 import pytest
-
-import database
-import config
 from streamlit.testing.v1 import AppTest
-from tests.conftest import make_position
 
+import config
+import database
+from tests.conftest import make_position
 
 PAGE = "pages/2_Applications.py"
 
