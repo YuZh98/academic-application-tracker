@@ -593,7 +593,6 @@ if "recs_selected_id" in st.session_state:
                     key="recs_edit_submit",
                 )
 
-
             if _edit_submitted:
                 _w_asked = st.session_state.get("recs_edit_asked_date")
                 _w_confirmed = st.session_state.get("recs_edit_confirmed")

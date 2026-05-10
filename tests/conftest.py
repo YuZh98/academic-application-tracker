@@ -36,12 +36,14 @@ def db(tmp_path, monkeypatch):
     # fixture activates. Same shape as the deferred imports inside
     # database.py writers.
     import exports as _exports
+
     monkeypatch.setattr(_exports, "EXPORTS_DIR", tmp_path / "exports")
     database.init_db()
     yield
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
 
 def make_position(overrides: dict | None = None) -> dict:
     """Return a minimal valid fields dict for add_position()."""

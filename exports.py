@@ -149,7 +149,6 @@ def write_all() -> None:
         )
         return
 
-
     for name in ("write_opportunities", "write_progress", "write_recommenders"):
         try:
             globals()[name]()
