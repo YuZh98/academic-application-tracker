@@ -2,6 +2,8 @@
 
 Contributions are welcome — bug fixes, new features, documentation improvements, and test coverage. This guide gets you from clone to merged PR.
 
+> Just want to run the app on your own laptop, not contribute code? See [`docs/dev-notes/self-host-setup.md`](docs/dev-notes/self-host-setup.md) instead.
+
 ---
 
 ## Before you start
