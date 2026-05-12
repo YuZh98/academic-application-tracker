@@ -41,6 +41,8 @@ streamlit run app.py
 Python ≥ 3.11. Open the URL Streamlit prints (default `http://localhost:8501`).  
 The SQLite database is created on first run — the empty-state screen walks you through adding your first position.
 
+Your data lives in `postdoc.db` beside the code; back it up by copying that file. To update later, `git pull && pip install -r requirements.txt`. See [`docs/dev-notes/self-host-setup.md`](docs/dev-notes/self-host-setup.md) for backup, troubleshooting, and update details.
+
 ---
 
 ## Features
