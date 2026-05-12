@@ -12,7 +12,7 @@ For **version pins** and environment conventions, see
 
 ## Prerequisites
 
-- Python 3.14 (Homebrew or system install)
+- Python 3.11 or newer (3.14 currently used in development; ≥3.11 is the floor — see [`pyproject.toml`](../../pyproject.toml) `requires-python`)
 - A POSIX shell (`bash` / `zsh`) for the `source` command below
 - `git` (for cloning; not required at runtime)
 
