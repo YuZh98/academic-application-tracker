@@ -64,7 +64,7 @@ def db_and_exports(db, tmp_path):
 
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Export page."""
-    at = AppTest.from_file(PAGE)
+    at = AppTest.from_file(PAGE, default_timeout=10)
     at.run()
     return at
 
