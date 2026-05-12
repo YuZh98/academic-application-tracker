@@ -17,6 +17,8 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+## [v0.13.0] — 2026-05-12 — Self-host setup guide
+
 ### Added
 - Add self-host setup guide for users running the tracker locally — covers install, data persistence, backup/restore, updates, and troubleshooting; linked from README quick start (#97)
 
