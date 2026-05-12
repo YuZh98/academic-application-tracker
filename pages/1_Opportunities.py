@@ -85,7 +85,7 @@ def _confirm_delete_dialog() -> None:
                 st.session_state.pop("_edit_form_sid", None)
                 st.session_state.pop("_delete_target_id", None)
                 st.session_state.pop("_delete_target_name", None)
-                st.rerun()
+                st.rerun()  # pragma: skip-table-reset-check — position deleted; selection intentionally cleared above
             except Exception as exc:
                 st.error(f"Could not delete: {exc}")
     with col_cancel:
