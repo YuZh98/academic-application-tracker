@@ -159,16 +159,44 @@ def _is_skip_table_reset_assign(stmt: ast.AST) -> bool:
     return rhs.value is True
 
 
-def _any_skip_in_block(block: list[ast.stmt], before: list[ast.stmt]) -> bool:
-    """Return True if any statement in ``before`` is a skip-table-reset assign,
-    OR if any sub-statement reachable from ``before`` (via nested if/try bodies)
-    contains such an assign.
+def _walk_unconditional(stmt: ast.stmt) -> Iterator[ast.AST]:
+    """Yield ``stmt`` and statements that ALWAYS execute when ``stmt`` runs.
 
-    We do a full ``ast.walk`` over each preceding statement so that assigns
-    nested inside a try-block or if-branch are counted.
+    Skips conditional / exceptional branches that may not execute in the same
+    control-flow path as a subsequent ``st.rerun()``:
+      - ``If.orelse`` (only one of body/orelse runs; we walk both, since either
+        path may have set the skip flag before falling through)
+      - ``Try.handlers`` (excepts only run on error — different control flow)
+      - ``Try.orelse`` (only runs when try succeeds without raising)
+      - ``Try.finalbody`` (always runs — safe to include)
+
+    Plain ``ast.walk`` is unsafe here: it descends into ExceptHandler bodies
+    and would falsely satisfy G2 if a preceding ``try/except`` set the skip
+    flag in its ``except`` branch but the subsequent code-path didn't error.
+    """
+    yield stmt
+    if isinstance(stmt, ast.If):
+        for child in (*stmt.body, *stmt.orelse):
+            yield from _walk_unconditional(child)
+    elif isinstance(stmt, ast.Try):
+        # Only try.body and try.finalbody always execute together.
+        for child in (*stmt.body, *stmt.finalbody):
+            yield from _walk_unconditional(child)
+    elif isinstance(stmt, (ast.With, ast.For, ast.While)):
+        for child in stmt.body:
+            yield from _walk_unconditional(child)
+
+
+def _any_skip_in_block(block: list[ast.stmt], before: list[ast.stmt]) -> bool:
+    """Return True if any preceding statement (walking only unconditionally
+    executed sub-nodes) is a skip-table-reset assign.
+
+    Uses :func:`_walk_unconditional` instead of :func:`ast.walk` to avoid
+    descending into ExceptHandler bodies / Try.orelse — those branches may
+    not execute in the same code-path as the subsequent ``st.rerun()``.
     """
     for stmt in before:
-        for subnode in ast.walk(stmt):
+        for subnode in _walk_unconditional(stmt):
             if _is_skip_table_reset_assign(subnode):
                 return True
     return False
@@ -366,9 +394,10 @@ class TestAppTestDefaultTimeout:
         strict=False,
         reason=(
             "102 pre-existing AppTest.from_file() calls predate the G14 rule "
-            "(codified in PR #98). Bridge: xfail until follow-on codemod PR "
-            "adds default_timeout=10 to all violating calls, then flip "
-            "strict=True to enforce."
+            "(codified in PR #98). Bridge: xfail with strict=False — partial "
+            "codemods continue to XFAIL; once the codemod fixes ALL violations "
+            "the test auto-promotes to XPASS. At that point, flip the marker "
+            "to strict=True (or remove it entirely) to enforce no regressions."
         ),
     )
     def test_apptest_from_file_uses_default_timeout(self) -> None:
