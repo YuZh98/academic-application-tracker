@@ -8,6 +8,9 @@ each component was chosen, see
 For **version pins** and environment conventions, see
 [GUIDELINES §1 Environment](../../GUIDELINES.md#1-environment).
 
+For a user-facing install / run / backup walkthrough (no dev tooling),
+see [`self-host-setup.md`](self-host-setup.md).
+
 ---
 
 ## Prerequisites
