@@ -447,3 +447,189 @@ class TestAppTestDefaultTimeout:
             f"default_timeout>={self.MIN_TIMEOUT}:\n"
             + "\n".join(f"  {v}" for v in violations)
         )
+
+
+# ── Rule: No print() debug ────────────────────────────────────────────────────
+
+
+class TestNoPrintDebugInProductionCode:
+    """No-print rule (GUIDELINES §11 pre-commit checklist + §12 anti-patterns):
+    ``print()`` calls must not appear in committed production code.
+
+    ``print()`` in production code clutters stdout in the Streamlit runtime
+    (all output appears in the terminal running ``streamlit run``, not in the
+    browser UI), and its presence in a committed file indicates leftover
+    debugging that was never removed.
+
+    Acceptable locations (excluded from this check):
+    - ``tests/``       — test debugging is fine
+    - ``scripts/``     — CLI helper tools may use print intentionally
+    - ``conftest.py``  — test fixture setup is fine
+    - ``.venv/``, ``docs/``, ``__pycache__/``  — non-production trees
+
+    Scanned files:
+    - ``app.py``, ``config.py``, ``database.py``, ``exports.py``
+    - all ``pages/*.py``
+
+    Violation message includes file:line for immediate fix target.
+    Rule references: GUIDELINES §11 (pre-commit checklist), §12 (anti-patterns).
+    """
+
+    _PRODUCTION_FILES = [
+        REPO_ROOT / "app.py",
+        REPO_ROOT / "config.py",
+        REPO_ROOT / "database.py",
+        REPO_ROOT / "exports.py",
+    ]
+
+    def test_no_print_calls_in_production_code(self) -> None:
+        """Assert that no ``print()`` call (bare built-in, not a method) appears
+        in any production source file.
+
+        Walks each file's AST and finds ``ast.Call`` nodes whose ``func`` is an
+        ``ast.Name`` with ``id == "print"``.  Method calls such as
+        ``obj.print()`` are not flagged (those are ``ast.Attribute`` nodes).
+
+        Rule references: GUIDELINES §11, §12.
+        """
+        page_files = sorted(_PAGES_DIR.glob("*.py"))
+        all_files = self._PRODUCTION_FILES + page_files
+
+        violations: list[str] = []
+
+        for file_path in all_files:
+            if not file_path.exists():
+                continue
+            src = file_path.read_text(encoding="utf-8")
+            tree = ast.parse(src)
+
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "print"
+                ):
+                    rel = file_path.relative_to(REPO_ROOT)
+                    violations.append(
+                        f"{rel}:{node.lineno}: print() call found in production "
+                        f"code. Remove before committing. "
+                        f"Per GUIDELINES §11 pre-commit checklist and §12 "
+                        f"anti-patterns, print() must not appear in production code."
+                    )
+
+        assert not violations, (
+            "No-print violation(s) — print() calls found in production code:\n"
+            + "\n".join(f"  {v}" for v in violations)
+        )
+
+
+# ── Rule: Pages call set_page_config first ────────────────────────────────────
+
+
+class TestPagesCallSetPageConfigFirst:
+    """set_page_config-first rule (GUIDELINES §13 step 2 + DESIGN §8.0): every
+    ``pages/N_Title.py`` must call ``st.set_page_config(...)`` as its FIRST
+    non-docstring, non-import top-level statement.
+
+    Streamlit raises a ``StreamlitAPIException`` if any other ``st.*`` call
+    (including ``st.title``, ``st.write``, or ``st.set_page_config`` called a
+    second time) precedes the initial ``st.set_page_config()`` call — even
+    ``st.title()`` on the very next line after imports will trigger the error.
+    Function definitions are permitted before ``st.set_page_config()`` only as
+    long as those functions are not *called* at module level before it; however,
+    defining helper functions before the config call is itself a style violation
+    per GUIDELINES §13 step 2 which mandates the config call as the very first
+    executable statement.
+
+    The check proceeds as follows for each ``pages/*.py``:
+    1. Parse the module body with ``ast``.
+    2. Skip a leading module docstring (``ast.Expr`` wrapping a string constant).
+    3. Skip all leading ``ast.Import`` / ``ast.ImportFrom`` nodes.
+    4. The next statement must be ``ast.Expr`` wrapping ``ast.Call`` whose
+       ``func`` is ``ast.Attribute(value=ast.Name(id="st"), attr="set_page_config")``.
+
+    Any other statement in that position is reported with file:line.
+    Rule references: GUIDELINES §13 (step 2), DESIGN §8.0.
+    """
+
+    def test_pages_call_set_page_config_first(self) -> None:
+        """Assert that every ``pages/*.py`` calls ``st.set_page_config()`` as
+        its first non-docstring, non-import top-level statement.
+
+        Reports file:line of the offending statement and its AST node type when
+        a page fails the check.  Rule references: GUIDELINES §13, DESIGN §8.0.
+        """
+        page_files = sorted(_PAGES_DIR.glob("*.py"))
+        violations: list[str] = []
+
+        for page_path in page_files:
+            src = page_path.read_text(encoding="utf-8")
+            tree = ast.parse(src)
+            body = tree.body
+
+            idx = 0
+
+            # Skip leading module docstring.
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                idx += 1
+
+            # Skip all leading imports.
+            while idx < len(body) and isinstance(
+                body[idx], (ast.Import, ast.ImportFrom)
+            ):
+                idx += 1
+
+            rel = page_path.relative_to(REPO_ROOT)
+
+            if idx >= len(body):
+                violations.append(
+                    f"{rel}: no executable statements found after imports. "
+                    f"Expected st.set_page_config() per GUIDELINES §13 step 2."
+                )
+                continue
+
+            stmt = body[idx]
+
+            # Check that this statement is: st.set_page_config(...)
+            is_set_page_config = (
+                isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Call)
+                and isinstance(stmt.value.func, ast.Attribute)
+                and stmt.value.func.attr == "set_page_config"
+                and isinstance(stmt.value.func.value, ast.Name)
+                and stmt.value.func.value.id == "st"
+            )
+
+            if not is_set_page_config:
+                node_desc = type(stmt).__name__
+                if isinstance(stmt, ast.FunctionDef):
+                    node_desc = f"FunctionDef '{stmt.name}'"
+                elif isinstance(stmt, ast.AsyncFunctionDef):
+                    node_desc = f"AsyncFunctionDef '{stmt.name}'"
+                elif isinstance(stmt, ast.ClassDef):
+                    node_desc = f"ClassDef '{stmt.name}'"
+                elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                    call = stmt.value
+                    if isinstance(call.func, ast.Attribute) and isinstance(
+                        call.func.value, ast.Name
+                    ):
+                        node_desc = f"Call {call.func.value.id}.{call.func.attr}()"
+                    elif isinstance(call.func, ast.Name):
+                        node_desc = f"Call {call.func.id}()"
+                violations.append(
+                    f"{rel}:{stmt.lineno}: first non-import statement is "
+                    f"{node_desc}, expected st.set_page_config(). "
+                    f"Per GUIDELINES §13 step 2 and DESIGN §8.0, "
+                    f"st.set_page_config() must be the first executable "
+                    f"statement after imports."
+                )
+
+        assert not violations, (
+            "set_page_config-first violation(s) — pages missing st.set_page_config() "
+            "as first statement:\n" + "\n".join(f"  {v}" for v in violations)
+        )
