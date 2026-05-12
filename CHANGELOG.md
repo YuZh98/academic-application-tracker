@@ -35,6 +35,8 @@ manual steps to run against a pre-existing database.
 - Dashboard KPIs use cumulative semantics (e.g., "Applied" counts applied + interview + offer)
 - Interviews KPI is event-based (counts positions with at least one interview, not status-derived)
 - Hide auto-promoted statuses (`[APPLIED]`, `[INTERVIEW]`) from the manual status picker in Opportunities edit panel
+- Pre-public privacy scrub — remove references to internal dev-process docs and redact local paths (#92)
+- Repo flipped to public visibility
 
 ### Fixed
 - Quick Add form fields now clear visually after successful save (nonce-based form re-mount) (#89, #90)
@@ -42,10 +44,6 @@ manual steps to run against a pre-existing database.
 
 ### Removed
 - Dead schema columns and unused code (F1, F2, F5, F8 cleanup)
-
-### Chores
-- Pre-public privacy scrub — remove references to internal dev-process docs and redact local paths (#92)
-- Repo flipped to public visibility
 
 ## [v0.11.0] - 2026-05-06
 
@@ -136,13 +134,11 @@ _v0.9.0 ships the v1.0-rc work that clears the path to `v1.0.0`. The long-runnin
 - Rebrand `Postdoc Tracker` → `Academic Application Tracker` across 18 files (5 `page_title=` bindings + `app.py` `st.title` + empty-DB hero subheader + DESIGN/GUIDELINES §8.0 pins + wireframes ASCII art + ADR/dev-setup prose + README hero + clone URL + 5 test files' assertions). Broadens the framing to cover the multi-stage application flow shared by postdoc / PhD / faculty / fellowship apps — the codebase already serves this audience. History preserved verbatim in `CHANGELOG.md` / `reviews/` / `docs/seed-templates/`. PR #46 (`3915536`).
 - Move dev-process internal docs to `docs/internal/`. Pre-public-flip readability — keeps the repo root focused on public-readable docs (`DESIGN.md`, `GUIDELINES.md`, `CHANGELOG.md`, `roadmap.md`). Path-stable: cross-references use logical names, not relative-path links (verified by grep). PR #46 (`3915536`).
 - Lower `[tool.ruff] target-version` and `[tool.pyright] pythonVersion` from `"3.14"` to `"3.11"` matching the declared Python floor. Suite + ruff + pyright stay 0/0. PR #46 (`3915536`).
+- Repo renamed `hugs_application_tracker` → `academic-application-tracker` via `gh repo rename`. GitHub auto-redirects the old URL forever. Description + 8 topics (`streamlit`, `python`, `sqlite`, `job-tracker`, `application-tracker`, `phd`, `postdoc`, `academic`) set via `gh repo edit` for discoverability.
 
 ### Removed
 - Drop `dashboard.html` (87KB legacy HTML prototype, unreferenced) and `.coverage` (binary pytest-cov artifact that should never have been tracked); add `.coverage*` + `htmlcov/` patterns to `.gitignore` to prevent re-tracking. PR #46 (`3915536`).
 - Redact personal details from internal dev-process docs ahead of public flip; name + GitHub handle stay (already public via commit author + repo URL). PR #46 (`3915536`).
-
-### Process
-- Repo renamed `hugs_application_tracker` → `academic-application-tracker` via `gh repo rename`. GitHub auto-redirects the old URL forever. Description + 8 topics (`streamlit`, `python`, `sqlite`, `job-tracker`, `application-tracker`, `phd`, `postdoc`, `academic`) set via `gh repo edit` for discoverability.
 
 ## [v0.8.0] — 2026-05-05 — Phase 7: Polish (UX micro-fixes + 6-CL cleanup sub-tier)
 

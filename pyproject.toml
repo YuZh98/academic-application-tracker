@@ -25,7 +25,7 @@ keywords = [
 # project itself is not a published package (no [build-system] block) —
 # install path is `pip install -r requirements.txt` per GUIDELINES §1.
 # Floor is 3.11 because that's the lowest version pandas 3.0 + numpy 2.4
-# (pinned in requirements.txt) support; the dev environment uses 3.14.
+# (pinned in requirements.txt) support; dev: .venv is Python 3.13 by user choice; CI matrix tests 3.11-3.14
 requires-python = ">=3.11"
 
 [project.urls]

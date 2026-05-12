@@ -252,6 +252,32 @@ See dev-notes gotcha #2.
 Pandas returns `float('nan')` for NULL TEXT cells, which crashes widget
 protobuf serialisation. See dev-notes gotcha #1.
 
+### `_skip_table_reset` flag on Save / Delete handlers that call `st.rerun()`
+```python
+# Inside every Save / Delete handler that calls st.rerun():
+st.session_state["_skip_table_reset"] = True
+st.rerun()
+```
+Without this, `st.dataframe` row selection collapses on the next render and
+the user-visible table position is lost. See dev-notes gotcha #11.
+
+### Nonce-based form re-mount for clear-on-submit forms
+For Quick-Add style forms that must visually clear on success, embed a
+session-state nonce in widget keys and increment it on successful save.
+Streamlit treats the next render as a fresh widget tree and the inputs reset.
+Plain `del st.session_state[key]` does not work — it raises the widget-key
+trap (dev-notes gotcha #2 family).
+
+### `pd.isna(v)` for DataFrame cells — not truthy checks or `is None`
+NaN-from-NULL is truthy. `if v is None`, `if not v`, and `v or ""` all
+silently mishandle missing cells. Use `pd.isna(v)` before any conditional or
+string format that consumes a DataFrame cell. See dev-notes gotcha #13.
+
+### `bool(row[col])` before identity comparison on SQLite INTEGER columns
+pandas returns `numpy.bool_`, and `numpy.True_ is True` evaluates `False`.
+Normalise with `bool(...)` before `is True` / `is False` identity checks.
+See dev-notes gotcha #8.
+
 ---
 
 ## 8. Error Handling
@@ -306,11 +332,25 @@ except Exception as e:
 **AppTest usage**
 
 - Instantiate at method start: `at = AppTest.from_file("app.py", default_timeout=10)`.
+  **`default_timeout=10` is required**, not optional — the AppTest default (3s)
+  flakes on slow CI runners.
 - Seed data via `database.add_position()` / `upsert_application()` —
   **never raw SQL** in tests.
 - Shared DB isolation via the `db` fixture in `conftest.py`.
 - `pytest.ini` has `pythonpath = .` so `pytest` runs without a `PYTHONPATH=.`
   prefix.
+
+**Raw SQL in tests — codified exceptions**
+
+The "no raw SQL — seed via `database.*`" rule has two pinned exceptions:
+
+1. **Migration-state tests** (`tests/test_database.py` migration suites): raw
+   `sqlite3.connect` is permitted to simulate pre-migration legacy state.
+   Document the exception in the test docstring.
+2. **Forced-field test helpers** (e.g. `_force_set_position_field` in
+   `tests/test_opportunities_page.py`): permitted to bypass `database.*`
+   writers when the test is specifically about page behaviour against a forced
+   DB state. Helpers must be `_`-prefixed and locally scoped to the test module.
 
 **Element lookup**
 
@@ -403,6 +443,11 @@ via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 - [ ] `git diff --staged` shows only intended changes
 - [ ] `postdoc.db` is not staged
 
+**`ruff format` is configured but NOT enforced** in CI or pre-commit —
+deliberate deferral (see `pyproject.toml` `[tool.ruff.format]` comment).
+E501 (line-too-long) is also intentionally ignored. Adding either to the gate
+requires a dedicated reformat PR — don't enable mid-stream.
+
 **Local automation:** install dev deps once per clone, then pre-commit
 runs `ruff --fix` and the status-literal grep on every `git commit`:
 
@@ -429,6 +474,9 @@ For branching, commit-granularity, undo levels, and tagging mechanics in depth, 
 | `use_container_width=True` | Deprecated → use `width="stretch"` |
 | `r[col] or ""` for DB text pre-seed | NaN is truthy — use `_safe_str(v)` |
 | Tagging new milestones as `v1-phase-N` | Use `v0.x.y` scheme instead (see §11) |
+| `if v is None` / `if not v` / `v or ""` on a DataFrame cell | NaN-from-NULL is truthy; use `pd.isna(v)` (gotcha #13) |
+| `numpy.True_ is True` / identity check on a SQLite INTEGER column | pandas returns `numpy.bool_`; normalise with `bool(...)` first (gotcha #8) |
+| Save / Delete handler without `_skip_table_reset = True` before `st.rerun()` | Selection collapses on next render (gotcha #11) |
 
 ---
 
@@ -526,6 +574,10 @@ commit messages and review docs; the changelog is an index into them.
   `### Added` · `### Changed` · `### Fixed` · `### Removed` ·
   `### Deprecated` · `### Security`. Headings are plain — `### Changed`,
   never `### Changed — <topic>`.
+  **Deprecated section names** previously used in the project: `### Chores`
+  (use `### Changed`), `### Process` (drop entirely — process narrative does
+  not belong in CHANGELOG). New entries must use only the six headings above.
+  Pre-existing tagged versions are not retroactively edited.
 
 #### What counts as an entry
 - An entry records a notable change — one a future reader needs to
