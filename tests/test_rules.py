@@ -29,8 +29,6 @@ import ast
 from pathlib import Path
 from typing import Iterator
 
-import pytest
-
 REPO_ROOT = Path(__file__).parent.parent
 
 _PAGES_DIR = REPO_ROOT / "pages"
@@ -390,16 +388,6 @@ class TestAppTestDefaultTimeout:
 
     MIN_TIMEOUT = 10
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason=(
-            "102 pre-existing AppTest.from_file() calls predate the G14 rule "
-            "(codified in PR #98). Bridge: xfail with strict=False — partial "
-            "codemods continue to XFAIL; once the codemod fixes ALL violations "
-            "the test auto-promotes to XPASS. At that point, flip the marker "
-            "to strict=True (or remove it entirely) to enforce no regressions."
-        ),
-    )
     def test_apptest_from_file_uses_default_timeout(self) -> None:
         """Assert that every ``AppTest.from_file(...)`` call in the test suite
         has a ``default_timeout`` keyword argument with an integer value >= 10.

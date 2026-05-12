@@ -97,7 +97,7 @@ def _ss_or_none(at: AppTest, key: str):
 
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Recommenders page."""
-    at = AppTest.from_file(PAGE)
+    at = AppTest.from_file(PAGE, default_timeout=10)
     at.run()
     return at
 
