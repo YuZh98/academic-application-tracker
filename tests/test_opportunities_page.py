@@ -49,7 +49,7 @@ def _deselect_row(at: AppTest) -> None:
 def _run_page() -> AppTest:
     """Return a freshly-run AppTest for the Opportunities page.
     Call after the `db` fixture has patched DB_PATH."""
-    at = AppTest.from_file(PAGE)
+    at = AppTest.from_file(PAGE, default_timeout=10)
     at.run()
     assert not at.exception, f"Page raised an exception: {at.exception}"
     return at
@@ -266,7 +266,7 @@ class TestQuickAddFormBehaviour:
     def test_submit_twice_creates_two_separate_rows(self, db):
         """Two sequential quick-add submissions must produce two independent rows."""
         for name in ("Position A", "Position B"):
-            at = AppTest.from_file(PAGE)
+            at = AppTest.from_file(PAGE, default_timeout=10)
             at.run()
             at.text_input(key="qa_position_name_0").input(name)
             at.button(key=SUBMIT_KEY).click()
@@ -902,7 +902,7 @@ class TestRowSelection:
         database.add_position({"position_name": "Alpha"})
         pid_beta = database.add_position({"position_name": "Beta"})
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         assert not at.exception
 
@@ -923,7 +923,7 @@ class TestRowSelection:
     def test_deselecting_clears_selected_position_id(self, db):
         """Setting rows=[] (deselection) must remove selected_position_id from session_state."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert "selected_position_id" in at.session_state, (
@@ -938,7 +938,7 @@ class TestRowSelection:
         """Row 0 of a filtered view must map to the filtered row's id, not an unfiltered row."""
         database.add_position({"position_name": "Applied One", "status": "[APPLIED]"})
         pid_open = database.add_position({"position_name": "Open One", "status": "[SAVED]"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         at.selectbox(key="filter_status").select("[SAVED]")
         at.run()
@@ -955,7 +955,7 @@ class TestRowSelection:
         selection must be cleared so later tiers (tabs, edit panel) don't render
         for a position the user can no longer see."""
         database.add_position({"position_name": "Alpha", "status": "[SAVED]"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert "selected_position_id" in at.session_state  # precondition
@@ -991,7 +991,7 @@ class TestRowSelection:
         anywhere, so a surviving selection index could silently re-bind
         the edit panel to a different position."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert "selected_position_id" in at.session_state  # precondition
@@ -1033,7 +1033,7 @@ class TestRowSelection:
         pid_beta = database.add_position(
             {"position_name": "Beta", "status": "[APPLIED]", "deadline_date": "2026-05-01"}
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         # get_all_positions orders deadline_date ASC NULLS LAST → Beta at row 0.
         _select_row(at, 0)
@@ -1116,7 +1116,7 @@ class TestEditPanelShell:
         AppTest accessor for `st.tabs(...)` and returns a list of Tab
         elements."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page raised after selection: {at.exception}"
@@ -1127,7 +1127,7 @@ class TestEditPanelShell:
         """Tab labels must come from config.EDIT_PANEL_TABS (proves config-drive).
         AppTest's at.tabs returns Tab elements with a `.label` attribute."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         labels = [t.label for t in at.tabs]
@@ -1140,7 +1140,7 @@ class TestEditPanelShell:
     def test_tabs_disappear_when_deselected(self, db):
         """Deselecting the row must unrender the edit panel (tab strip + subheader)."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert _tabs_rendered(at)  # precondition
@@ -1157,7 +1157,7 @@ class TestEditPanelShell:
         because `"Applied"` is a substring of `"[APPLIED]"` — the negative
         `"[APPLIED]" not in text` assertion is the load-bearing pin."""
         database.add_position({"position_name": "Stanford BioStats", "status": "[APPLIED]"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert len(at.subheader) == 1, (
@@ -1181,7 +1181,7 @@ class TestEditPanelShell:
         DB edit), both the sid and the _edit_form_sid sentinel must be
         cleared on the next rerun so state doesn't leak forever."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         # Inject a sid that doesn't exist in the DB.
@@ -1235,7 +1235,7 @@ class TestOverviewTabWidgets:
     def test_all_seven_widgets_present_when_selected(self, db):
         """All seven Overview widgets must render with the correct keys."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         # Text inputs
@@ -1264,7 +1264,7 @@ class TestOverviewTabWidgets:
                 "link": "https://example.org/apply",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
@@ -1282,7 +1282,7 @@ class TestOverviewTabWidgets:
         cascades, not by manual edit. Options render as display labels via
         format_func=STATUS_LABELS.get."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
@@ -1297,7 +1297,7 @@ class TestOverviewTabWidgets:
     def test_priority_selectbox_options_match_config(self, db):
         """Priority selectbox must expose exactly config.PRIORITY_VALUES, same order."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["priority"]).options)
@@ -1315,7 +1315,7 @@ class TestOverviewTabWidgets:
         survive a rerun triggered by a different widget)."""
         database.add_position({"position_name": "Alpha", "field": "Biostatistics"})
         database.add_position({"position_name": "Beta", "field": "Machine Learning"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         # Narrow the filter first so df_filtered has exactly one row (Alpha).
         at.text_input(key="filter_field").input("Bio")
@@ -1332,7 +1332,7 @@ class TestOverviewTabWidgets:
         """A row with NULL optional fields must not crash the form — empty
         strings for text, None for the date."""
         database.add_position({"position_name": "Alpha"})  # everything else default/NULL
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page crashed on row with NULLs: {at.exception}"
@@ -1351,7 +1351,7 @@ class TestOverviewTabWidgets:
         # so the most-recently-added row lands at index 0.
         database.add_position({"position_name": "Alpha", "institute": "A-Inst"})
         database.add_position({"position_name": "Beta", "institute": "B-Inst"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         first_name = at.text_input(key=EDIT_KEYS["position_name"]).value
@@ -1375,7 +1375,7 @@ class TestOverviewTabWidgets:
         undocumented. Coerce to PRIORITY_VALUES[0] so the selectbox always
         gets a valid option."""
         database.add_position({"position_name": "Alpha"})  # priority omitted → NULL
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page raised on NULL priority: {at.exception}"
@@ -1398,7 +1398,7 @@ class TestOverviewWorkAuthWidgets:
 
     def test_work_auth_selectbox_renders_after_selection(self, db):
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert at.selectbox(key=EDIT_KEYS["work_auth"]) is not None, (
@@ -1408,7 +1408,7 @@ class TestOverviewWorkAuthWidgets:
 
     def test_work_auth_note_text_area_renders_after_selection(self, db):
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert at.text_area(key=EDIT_KEYS["work_auth_note"]) is not None, (
@@ -1422,7 +1422,7 @@ class TestOverviewWorkAuthWidgets:
         hardcoded (GUIDELINES §6). Order matters: Sub-task 3 locked
         ['Yes', 'No', 'Unknown'] as the canonical order."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["work_auth"]).options)
@@ -1445,7 +1445,7 @@ class TestOverviewWorkAuthWidgets:
                 "work_auth_note": "green card required",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert at.selectbox(key=EDIT_KEYS["work_auth"]).value == "Yes"
@@ -1458,7 +1458,7 @@ class TestOverviewWorkAuthWidgets:
         existing priority/status fallback for NULL / out-of-vocab
         values. An empty work_auth_note comes back as "" via _safe_str."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert not at.exception, f"Page crashed on row with NULL work_auth: {at.exception}"
@@ -1503,7 +1503,7 @@ class TestRequirementsTabWidgets:
         page belong to the Requirements tab — the page's total radio
         count equals len(REQUIREMENT_DOCS) exactly."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised on selection: {at.exception}"
@@ -1525,7 +1525,7 @@ class TestRequirementsTabWidgets:
                 "req_teaching_statement": "No",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         assert at.radio(key=_req_key("req_cv")).value == "Yes"
@@ -1540,7 +1540,7 @@ class TestRequirementsTabWidgets:
         observable side of the canonical-value contract; the canonical-value
         half is covered by test_radio_values_match_db."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         expected_labels = [config.REQUIREMENT_LABELS[v] for v in config.REQUIREMENT_VALUES]
@@ -1561,7 +1561,7 @@ class TestRequirementsTabWidgets:
         # Manually corrupt one req_* column to simulate an unknown value
         # (e.g. from a future migration or sqlite3 CLI edit).
         _force_set_position_field(database.DB_PATH, "Alpha", "req_cv", "Maybe")
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised on unknown req_* value: {at.exception}"
@@ -1575,7 +1575,7 @@ class TestRequirementsTabWidgets:
         rows must re-seed the req_* widgets, not stick on the first."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
         database.add_position({"position_name": "Beta", "req_cv": "No"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         first = at.radio(key=_req_key("req_cv")).value
@@ -1597,7 +1597,7 @@ class TestRequirementsTabWidgets:
         # init_db is migration-aware: ALTER TABLE ADD COLUMN for the new doc.
         database.init_db()
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         assert not at.exception, f"Page raised with extended config: {at.exception}"
@@ -1665,7 +1665,7 @@ class TestMaterialsTabWidgets:
         show an info hint directing the user to the Requirements tab — rendering
         zero checkboxes would be a silent dead-end UI."""
         database.add_position({"position_name": "Alpha"})  # all req_* default 'No'
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # No done_* checkboxes must render.
@@ -1684,7 +1684,7 @@ class TestMaterialsTabWidgets:
         """With req_cv='Yes' and everything else 'No', exactly one checkbox
         (done_cv) must render — not zero, not len(REQUIREMENT_DOCS)."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # done_cv is the only one required → exactly one checkbox rendered.
@@ -1713,7 +1713,7 @@ class TestMaterialsTabWidgets:
                 # done_transcripts omitted → schema default 0
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # Use == (not `is`) because pandas surfaces numpy booleans
@@ -1733,7 +1733,7 @@ class TestMaterialsTabWidgets:
         — a DB-only update would not re-trigger the pre-seed). This is the
         faithful test of state-driven design."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert _checkbox_rendered(at, _done_key("done_cv"))  # precondition
@@ -1761,7 +1761,7 @@ class TestMaterialsTabWidgets:
         explicit re-evaluation (alongside the matching change in
         database.count_materials_ready / get_positions_missing_docs)."""
         database.add_position({"position_name": "Alpha", "req_cv": "Optional"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert not _checkbox_rendered(at, _done_key("done_cv")), (
@@ -1774,7 +1774,7 @@ class TestMaterialsTabWidgets:
         different row must re-seed the done_* widgets with that row's values."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes", "done_cv": 1})
         database.add_position({"position_name": "Beta", "req_cv": "Yes", "done_cv": 0})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # bool() normalises numpy.bool_ → Python bool so set equality works.
@@ -1831,7 +1831,7 @@ class TestNotesTabWidgets:
         text_area and the Overview work_auth_note text_area render
         every run."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         assert _text_area_rendered(at, NOTES_KEY), (
@@ -1855,7 +1855,7 @@ class TestNotesTabWidgets:
         'edit'."""
         notes = "Follow up with Prof. Smith after SfN. Ref: lab website."
         database.add_position({"position_name": "Alpha", "notes": notes})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         assert at.text_area(key=NOTES_KEY).value == notes, (
@@ -1868,7 +1868,7 @@ class TestNotesTabWidgets:
         must coerce to '' so st.text_area gets a valid str, never a None
         that would crash the widget or render literal 'None'."""
         database.add_position({"position_name": "Alpha"})  # notes omitted → NULL
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         assert at.text_area(key=NOTES_KEY).value == "", (
@@ -1882,7 +1882,7 @@ class TestNotesTabWidgets:
         different row — otherwise row B's notes would show row A's text."""
         database.add_position({"position_name": "Alpha", "notes": "alpha notes"})
         database.add_position({"position_name": "Beta", "notes": "beta notes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         first = at.text_area(key=NOTES_KEY).value
@@ -1909,7 +1909,7 @@ class TestNotesTabWidgets:
         every script run, so all four per-tab save buttons are in the
         DOM after a single row selection — no per-tab loop needed."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         disabled = [b for b in at.button if getattr(b, "disabled", False)]
@@ -1998,7 +1998,7 @@ class TestOverviewSave:
                 "work_auth_note": "original note",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         sid = at.session_state["selected_position_id"]
@@ -2056,7 +2056,7 @@ class TestOverviewSave:
         """Success confirmation uses st.toast (not st.success) so it survives
         the post-save st.rerun() — the same Tier-1 lesson as quick-add."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
@@ -2076,7 +2076,7 @@ class TestOverviewSave:
         still appear. st.success would be gone here — the whole reason we use
         toast on write paths."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.text_input(key=EDIT_KEYS["field"]).set_value("Biostatistics")
@@ -2107,7 +2107,7 @@ class TestOverviewSave:
                 "institute": "Original Inst",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         sid = at.session_state["selected_position_id"]
@@ -2143,7 +2143,7 @@ class TestOverviewSave:
 
         monkeypatch.setattr(database, "update_position", _boom)
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.text_input(key=EDIT_KEYS["institute"]).set_value("MIT")
@@ -2170,7 +2170,7 @@ class TestOverviewSave:
         implementation that accidentally pops the selection (as the
         quick-add path deliberately does, but for a different reason)."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         sid_before = at.session_state["selected_position_id"]
@@ -2205,7 +2205,7 @@ class TestOverviewSave:
         guards against either field being added to the form but forgotten
         in update_position's payload dict."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         sid = at.session_state["selected_position_id"]
@@ -2242,7 +2242,7 @@ class TestRequirementsSave:
         being added to the form but forgotten in the update_position payload.
         Also verifies the success toast fires with the position name."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         sid = at.session_state["selected_position_id"]
@@ -2287,7 +2287,7 @@ class TestRequirementsSave:
                 "done_cv": 1,
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         sid = at.session_state["selected_position_id"]
@@ -2318,7 +2318,7 @@ class TestRequirementsSave:
 
         monkeypatch.setattr(database, "update_position", _boom)
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         at.radio(key=_req_key("req_cv")).set_value("Yes")
@@ -2342,7 +2342,7 @@ class TestRequirementsSave:
         SAME position — selected_position_id must survive the post-save
         st.rerun() (via the T5-A _skip_table_reset one-shot)."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         sid_before = at.session_state["selected_position_id"]
@@ -2368,7 +2368,7 @@ class TestRequirementsSave:
         Requirements path: st.toast must still be in at.toast after the
         post-save rerun completes."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Requirements")
         at.radio(key=_req_key("req_cv")).set_value("Yes")
@@ -2418,7 +2418,7 @@ class TestMaterialsSave:
             seed[req_col] = "Yes"
         sid = database.add_position(seed)
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
 
@@ -2464,7 +2464,7 @@ class TestMaterialsSave:
                 "done_research_statement": 0,
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
 
@@ -2511,7 +2511,7 @@ class TestMaterialsSave:
 
         monkeypatch.setattr(database, "update_position", _boom)
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         at.checkbox(key=_done_key("done_cv")).set_value(True)
@@ -2535,7 +2535,7 @@ class TestMaterialsSave:
         position — selected_position_id must survive the post-save rerun via
         the T5-A _skip_table_reset one-shot."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         sid_before = at.session_state["selected_position_id"]
@@ -2564,7 +2564,7 @@ class TestMaterialsSave:
         Materials path: st.toast must still be in at.toast after the post-save
         rerun completes."""
         database.add_position({"position_name": "Alpha", "req_cv": "Yes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         at.checkbox(key=_done_key("done_cv")).set_value(True)
@@ -2605,7 +2605,7 @@ class TestNotesSave:
         """Round-trip: type text, click Save, assert the DB row reflects it.
         Also verifies the success toast fires with the position name."""
         sid = database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
 
@@ -2635,7 +2635,7 @@ class TestNotesSave:
                 "notes": "something to clear",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
 
@@ -2664,7 +2664,7 @@ class TestNotesSave:
 
         monkeypatch.setattr(database, "update_position", _boom)
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         at.text_area(key=NOTES_KEY).set_value("anything")
@@ -2688,7 +2688,7 @@ class TestNotesSave:
         position — selected_position_id must survive the post-save rerun via
         the T5-A _skip_table_reset one-shot."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         sid_before = at.session_state["selected_position_id"]
@@ -2715,7 +2715,7 @@ class TestNotesSave:
         Notes path: st.toast must still be in at.toast after the post-save
         rerun completes."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Notes")
         at.text_area(key=NOTES_KEY).set_value("context")
@@ -2769,7 +2769,7 @@ class TestDeleteAction:
         parameter. Styling is verified manually / via the code review
         checklist, not automated here."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
 
@@ -2793,7 +2793,7 @@ class TestDeleteAction:
         user was warned about what else goes with it."""
         sid = database.add_position({"position_name": "Stanford BioStats"})
         database.add_recommender(sid, {"recommender_name": "Prof X"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
 
@@ -2831,7 +2831,7 @@ class TestDeleteAction:
         """Click Delete → Confirm → the position is gone from the DB.
         database.get_position(sid) raises KeyError for missing rows."""
         sid = database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
 
@@ -2863,7 +2863,7 @@ class TestDeleteAction:
             f"Should have 1 recommender before delete, got {len(recs_before)}"
         )
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.button(key=DELETE_BUTTON_KEY).click()
@@ -2891,7 +2891,7 @@ class TestDeleteAction:
         leaving one behind would let the next rerun alias with a future sid
         and skip the pre-seed for the fresh selection."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         # Precondition: both keys are set by the row-selection flow.
@@ -2918,7 +2918,7 @@ class TestDeleteAction:
         st.rerun()) and references the deleted position's name so the user
         sees which row went away."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.button(key=DELETE_BUTTON_KEY).click()
@@ -2938,7 +2938,7 @@ class TestDeleteAction:
         dialog and leave state completely untouched — position still in DB,
         selection still active, no toast, no error."""
         sid = database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
 
@@ -2978,7 +2978,7 @@ class TestDeleteAction:
 
         monkeypatch.setattr(database, "delete_position", _boom)
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.button(key=DELETE_BUTTON_KEY).click()
@@ -3020,7 +3020,7 @@ class TestDeleteAction:
         original row, which is a surprise UX."""
         sid_a = database.add_position({"position_name": "Alpha"})
         sid_b = database.add_position({"position_name": "Beta"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
 
         # 1. Select row A and open the delete dialog.
@@ -3114,7 +3114,7 @@ class TestPreSeedNaNCoercion:
         database.add_position({"position_name": "Beta"})
         database.add_position({"position_name": "Gamma"})
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         # Row 0: trigger a Save so the first row gets explicit empty
         # strings in its text columns — this is what upgrades pandas's
@@ -3328,7 +3328,7 @@ class TestEditStatusFormatFunc:
         selectbox options must be the ordered MANUAL_STATUS_VALUES
         rendered through format_func — no [INTERVIEW] / [OFFER]."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
@@ -3344,7 +3344,7 @@ class TestEditStatusFormatFunc:
         the manual picker for a row at a manual status. Catches a
         regression that swaps MANUAL_STATUS_VALUES back to STATUS_VALUES."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
@@ -3364,7 +3364,7 @@ class TestEditStatusFormatFunc:
         from it but not back."""
         pid = database.add_position({"position_name": "Alpha"})
         database.update_position(pid, {"status": config.STATUS_INTERVIEW})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
@@ -3389,7 +3389,7 @@ class TestEditStatusFormatFunc:
         as a clear failure here."""
         pid = database.add_position({"position_name": "Alpha"})
         database.update_position(pid, {"status": config.STATUS_OFFER})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         options = list(at.selectbox(key=EDIT_KEYS["status"]).options)
@@ -3408,7 +3408,7 @@ class TestEditStatusFormatFunc:
         selectbox's .value must be the raw storage string — the Save
         handler writes the raw value into positions.status."""
         database.add_position({"position_name": "Alpha", "status": config.STATUS_SAVED})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.selectbox(key=EDIT_KEYS["status"]).select(config.STATUS_APPLIED)
@@ -3431,7 +3431,7 @@ class TestEditStatusFormatFunc:
         persist the new status."""
         pid = database.add_position({"position_name": "Alpha"})
         database.update_position(pid, {"status": config.STATUS_INTERVIEW})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         at.selectbox(key=EDIT_KEYS["status"]).select(config.STATUS_APPLIED)
@@ -3541,7 +3541,7 @@ class TestMaterialsFilterPredicateIsYes:
                 "req_writing_sample": "Yes",  # visible
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         # Switch to Materials tab so its body renders. _select_row_and_tab
         # handles the two-piece state (row selection + active tab) in one
@@ -3613,7 +3613,7 @@ class TestDeleteButtonPlacement:
         `with tabs[0]:` and is in the DOM regardless of which tab is
         currently visible (CSS hides it on the other tabs)."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert not at.exception
@@ -3655,7 +3655,7 @@ class TestTabSwitchWidgetStateSurvival:
         """Sanity baseline: selecting a row must populate the Overview
         position name on the first script run (no tab switch yet)."""
         database.add_position({"position_name": "Stanford BioStats"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         assert at.text_input(key=EDIT_KEYS["position_name"]).value == "Stanford BioStats"
@@ -3669,7 +3669,7 @@ class TestTabSwitchWidgetStateSurvival:
         only fires on the SECOND open of Requirements (after a round-trip
         causes the widgets to mount-then-unmount)."""
         database.add_position({"position_name": "Alpha"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         _select_row_and_tab(at, 0, "Requirements")
@@ -3691,7 +3691,7 @@ class TestTabSwitchWidgetStateSurvival:
         row's value, not "" (the text_input default after Streamlit
         cleaned up session_state on the Overview tab unmount)."""
         database.add_position({"position_name": "Stanford BioStats"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         # Round-trip: Overview → Requirements → Overview.
@@ -3719,7 +3719,7 @@ class TestTabSwitchWidgetStateSurvival:
                 "work_auth_note": "OPT eligible",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         _select_row_and_tab(at, 0, "Notes")
@@ -3740,7 +3740,7 @@ class TestTabSwitchWidgetStateSurvival:
         (Not needed) for every doc, not the 'Yes' (Required) that
         index=0 would default to."""
         database.add_position({"position_name": "Alpha"})  # all req_* default to 'No'
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         _select_row_and_tab(at, 0, "Requirements")  # First open: widgets mount
@@ -3765,7 +3765,7 @@ class TestTabSwitchWidgetStateSurvival:
                 "notes": "Follow up with Prof. Smith after SfN.",
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         _select_row_and_tab(at, 0, "Notes")
@@ -3793,7 +3793,7 @@ class TestTabSwitchWidgetStateSurvival:
         """
         sid_a = database.add_position({"position_name": "Stanford BioStats"})
         sid_b = database.add_position({"position_name": "MIT CSAIL Postdoc"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
 
         # Step 2: select Alpha (row 0 — both have NULL deadline so the
@@ -3843,7 +3843,7 @@ class TestTabSwitchWidgetStateSurvival:
                 "req_cv": "Yes",  # CV is required by the row
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row(at, 0)
         _select_row_and_tab(at, 0, "Requirements")
@@ -3909,7 +3909,7 @@ class TestMaterialsTabLorRendering:
         user-toggleable checkbox would let it desync from the
         recommenders table."""
         database.add_position({"position_name": "Alpha", "req_rec_letters": "Yes"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert not _checkbox_rendered(at, _done_key("done_rec_letters")), (
@@ -3930,7 +3930,7 @@ class TestMaterialsTabLorRendering:
             }
         )
         database.add_recommender(pid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert _markdown_contains(at, "1 / 3 received"), (
@@ -3949,7 +3949,7 @@ class TestMaterialsTabLorRendering:
                 "num_rec_letters": 2,
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert _markdown_contains(at, "0 / 2 received"), (
@@ -3965,7 +3965,7 @@ class TestMaterialsTabLorRendering:
         database.add_position(
             {"position_name": "Alpha", "req_rec_letters": "Yes"}
         )  # num_rec_letters omitted → NULL
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert _markdown_contains(at, "no minimum"), (
@@ -3985,7 +3985,7 @@ class TestMaterialsTabLorRendering:
                 "num_rec_letters": 2,
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert _number_input_rendered(at, NUM_REC_LETTERS_KEY), (
@@ -4003,7 +4003,7 @@ class TestMaterialsTabLorRendering:
                 "num_rec_letters": 5,
             }
         )
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # `.value` is typed `Number | None`; `int(None)` would crash, so
@@ -4017,7 +4017,7 @@ class TestMaterialsTabLorRendering:
         be entirely absent — no read-only status, no number_input. This
         matches the existing Materials filter (Y-only) for other docs."""
         database.add_position({"position_name": "Alpha", "req_rec_letters": "Optional"})
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         assert not _number_input_rendered(at, NUM_REC_LETTERS_KEY), (
@@ -4042,7 +4042,7 @@ class TestMaterialsTabLorRendering:
         database.add_recommender(sid, {"recommender_name": "Dr. A", "submitted_date": "2026-04-10"})
         assert database.get_position(sid)["done_rec_letters"] == 1
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # Raise the threshold to 3 — that makes 1/3 letters submitted,
@@ -4085,7 +4085,7 @@ class TestMaterialsTabLorRendering:
 
         import database as _db_module
 
-        at = AppTest.from_file(PAGE)
+        at = AppTest.from_file(PAGE, default_timeout=10)
         at.run()
         _select_row_and_tab(at, 0, "Materials")
         # Patch update_position only after the page rendered (so the
