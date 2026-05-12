@@ -11,6 +11,14 @@ import streamlit as st
 import config
 import database
 
+st.set_page_config(
+    page_title="Academic Application Tracker",
+    page_icon="📋",
+    layout="wide",
+)
+
+database.init_db()
+
 
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
@@ -108,15 +116,6 @@ def _deadline_urgency(date_str: Any) -> str:
         return config.urgency_glyph(None)
     return config.urgency_glyph(days)
 
-
-database.init_db()
-
-
-st.set_page_config(
-    page_title="Academic Application Tracker",
-    page_icon="📋",
-    layout="wide",
-)
 
 st.title("Opportunities")
 
