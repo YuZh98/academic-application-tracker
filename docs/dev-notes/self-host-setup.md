@@ -21,10 +21,12 @@ account, no cloud, no telemetry.
   found, install Python from [python.org/downloads](https://www.python.org/downloads/)
   or your system package manager (`brew install python` on macOS;
   `apt install python3 python3-venv` on Debian/Ubuntu).
-- **`git`** for cloning the repo.
-- **A POSIX shell** (`bash` or `zsh`) for the activation commands shown
-  below. Windows users should use WSL or Git Bash; PowerShell equivalents
-  exist but are not covered here.
+- **`git`** for cloning the repo. macOS users will be prompted to
+  install the Xcode Command Line Tools the first time they run `git`;
+  on Debian/Ubuntu, `apt install git`.
+- **A terminal app.** Terminal on macOS, Terminal / GNOME Terminal on
+  Linux, WSL or Git Bash on Windows. PowerShell-only setups are not
+  covered here.
 
 ---
 
@@ -49,7 +51,10 @@ launch commands in the next section.
 
 ## Run and stop
 
+Every session starts from inside the project folder:
+
 ```bash
+cd academic-application-tracker
 source .venv/bin/activate
 streamlit run app.py
 ```
@@ -78,10 +83,14 @@ Three locations matter, all inside the project folder:
 | `exports/*.md` | Plaintext markdown snapshots (`OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`) auto-regenerated on every database write | 🟡 Optional (human-readable backup) |
 | `.venv/` | Python virtual environment with installed packages | ⚪ Disposable — rebuildable from `requirements.txt` |
 
-Both `postdoc.db` and `exports/` are listed in `.gitignore` on purpose:
-your job-search data is private and **must not** be committed or pushed
-to a public fork. If you fork this repo, do not `git add -A` without
-checking what's staged.
+Both `postdoc.db` and `exports/` are listed in `.gitignore` on purpose.
+`postdoc.db` contains every application detail you've entered **and the
+names and emails of every recommender** — third parties who have not
+consented to public disclosure. If you push it to a public fork, every
+position, application status, and recommender contact becomes
+permanently public, and git history rewrites are partial and slow.
+Always run `git status` before staging, and never `git add -A` without
+checking what's about to be committed.
 
 The `exports/` files are **generated** — every successful save in the app
 rewrites them. Editing them by hand has no effect; the next write
@@ -123,7 +132,9 @@ not a primary backup.
 
 ## Updating your installation
 
-When the upstream repo ships a new release, pull the latest code:
+When the upstream repo ships a new release, pull the latest code. The
+command below assumes a clean working tree — if you've edited project
+files yourself, commit or stash them first to avoid a merge conflict.
 
 ```bash
 cd academic-application-tracker
@@ -133,14 +144,14 @@ pip install -r requirements.txt   # in case dependency versions changed
 streamlit run app.py
 ```
 
-Your `postdoc.db` is preserved across updates. Schema changes (such as
-a new required document type) are handled by `database.init_db()`, which
-runs on every app start and adds missing columns automatically — see
-the migration loop in [`database.py`](../../database.py) `init_db()`.
-You do not need to run any migration command manually.
+Your `postdoc.db` is preserved across updates. `database.init_db()`
+runs on every app start and auto-adds any known missing columns —
+notably, any new document-requirement type added to the config. You do
+not need to run a migration command manually. Breaking schema changes
+are called out in [`CHANGELOG.md`](../../CHANGELOG.md) with a
+`**Migration:**` block.
 
-Read [`CHANGELOG.md`](../../CHANGELOG.md) before pulling a new version
-to see what changed and whether any release marks itself `**Breaking:**`.
+Skim `CHANGELOG.md` before pulling a new version to see what changed.
 
 ---
 
@@ -155,8 +166,9 @@ streamlit run app.py --server.port 8502
 ```
 
 **`streamlit: command not found`.**
-The virtual environment is not activated. Re-run `source .venv/bin/activate`
-in the project folder, then retry.
+The virtual environment is not activated, or you're in the wrong folder.
+Run `cd academic-application-tracker && source .venv/bin/activate`, then
+retry.
 
 **`pip install` fails on a fresh clone.**
 Upgrade pip first (`python -m pip install --upgrade pip`), then retry. If
