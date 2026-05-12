@@ -17,7 +17,11 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
-_(empty)_
+### Added
+- Add self-host setup guide for users running the tracker locally — covers install, data persistence, backup/restore, updates, and troubleshooting; linked from README quick start (#97)
+
+### Fixed
+- Fix stale annotations in `DESIGN.md` file tree: `exports/` marked `(committed)` → `(gitignored)`; remove phantom `docs/internal/` line (#97)
 
 ## [v0.12.0] — 2026-05-09
 

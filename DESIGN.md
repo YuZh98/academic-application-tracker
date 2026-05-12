@@ -114,13 +114,12 @@ pages/
   2_Applications.py       Progress tracking + interviews
   3_Recommenders.py       Letter tracking + reminder helpers
   4_Export.py             Manual export + file download
-exports/                  Auto-generated markdown backups (committed)
+exports/                  Auto-generated markdown backups (gitignored)
 postdoc.db                SQLite database (gitignored)
 tests/                    pytest suite
 docs/
   adr/                    Architectural Decision Records
   dev-notes/              Deep-dive references
-  internal/               Development process notes, roadmap, sprint tracker
   ui/                     Wireframes + responsive screenshots
 DESIGN.md                 This file
 GUIDELINES.md             Coding conventions
