@@ -8,11 +8,14 @@ each component was chosen, see
 For **version pins** and environment conventions, see
 [GUIDELINES §1 Environment](../../GUIDELINES.md#1-environment).
 
+For a user-facing install / run / backup walkthrough (no dev tooling),
+see [`self-host-setup.md`](self-host-setup.md).
+
 ---
 
 ## Prerequisites
 
-- Python 3.14 (Homebrew or system install)
+- Python 3.11 or newer (3.14 currently used in development; ≥3.11 is the floor — see [`pyproject.toml`](../../pyproject.toml) `requires-python`)
 - A POSIX shell (`bash` / `zsh`) for the `source` command below
 - `git` (for cloning; not required at runtime)
 
