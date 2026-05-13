@@ -11,6 +11,14 @@ import streamlit as st
 import config
 import database
 
+st.set_page_config(
+    page_title="Academic Application Tracker",
+    page_icon="📋",
+    layout="wide",
+)
+
+database.init_db()
+
 
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
@@ -85,7 +93,7 @@ def _confirm_delete_dialog() -> None:
                 st.session_state.pop("_edit_form_sid", None)
                 st.session_state.pop("_delete_target_id", None)
                 st.session_state.pop("_delete_target_name", None)
-                st.rerun()
+                st.rerun()  # pragma: skip-table-reset-check — position deleted; selection intentionally cleared above
             except Exception as exc:
                 st.error(f"Could not delete: {exc}")
     with col_cancel:
@@ -108,15 +116,6 @@ def _deadline_urgency(date_str: Any) -> str:
         return config.urgency_glyph(None)
     return config.urgency_glyph(days)
 
-
-database.init_db()
-
-
-st.set_page_config(
-    page_title="Academic Application Tracker",
-    page_icon="📋",
-    layout="wide",
-)
 
 st.title("Opportunities")
 

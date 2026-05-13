@@ -486,7 +486,7 @@ def _confirm_delete_recommender_dialog() -> None:
                 st.session_state.pop("_recs_edit_form_sid", None)
                 st.session_state.pop("_recs_delete_target_id", None)
                 st.session_state.pop("_recs_delete_target_name", None)
-                st.rerun()
+                st.rerun()  # pragma: skip-table-reset-check — recommender deleted; selection intentionally cleared above
             except Exception as e:
                 # Friendly error, no re-raise. Sentinels survive so the
                 # dialog re-opens for retry on the next rerun.
