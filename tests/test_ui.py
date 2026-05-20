@@ -1,0 +1,242 @@
+# tests/test_ui.py
+# Unit + static tests for the shared presentation module `ui.py`.
+#
+# ui.py exposes the design system (CSS tokens, dark-mode block) and a
+# small set of pure-string helpers (status_pill, urgency_pill) plus
+# imperative renderers (inject_global_styles, section_header,
+# sidebar_about_block, accent_bar). The helpers are pure functions —
+# tested directly without AppTest. The injection + page-presence checks
+# use AST grep to pin the architectural rule that every Streamlit page
+# must call inject_global_styles().
+
+import ast
+import re
+from pathlib import Path
+from unittest.mock import patch
+
+import config
+import ui
+
+REPO_ROOT = Path(__file__).parent.parent
+_PAGES_DIR = REPO_ROOT / "pages"
+_APP_PY = REPO_ROOT / "app.py"
+
+
+# ── status_pill ───────────────────────────────────────────────────────────────
+
+
+class TestStatusPill:
+    def test_returns_html_span(self) -> None:
+        html = ui.status_pill(config.STATUS_SAVED)
+        assert html.startswith("<span"), f"Pill must be a <span>, got: {html[:30]!r}"
+        assert "</span>" in html
+
+    def test_contains_status_label(self) -> None:
+        for raw in config.STATUS_VALUES:
+            html = ui.status_pill(raw)
+            label = config.STATUS_LABELS[raw]
+            assert label in html, (
+                f"status_pill({raw!r}) must contain its UI label {label!r}; got {html!r}"
+            )
+
+    def test_carries_status_class(self) -> None:
+        # Each pill must carry a class hook the stylesheet can target.
+        # Class names must be stable per status — locked at "aat-pill aat-pill-<lowercase>".
+        for raw in config.STATUS_VALUES:
+            html = ui.status_pill(raw)
+            assert "aat-pill" in html, f"Pill missing aat-pill class for {raw!r}: {html!r}"
+            ui_label_slug = config.STATUS_LABELS[raw].lower()
+            assert f"aat-pill-{ui_label_slug}" in html, (
+                f"Pill must carry aat-pill-{ui_label_slug} for {raw!r}; got {html!r}"
+            )
+
+    def test_unknown_status_falls_back_to_neutral(self) -> None:
+        # An unknown raw value (eg a renamed status the migration missed)
+        # must render without raising and must NOT include a stale class.
+        html = ui.status_pill("[NONEXISTENT]")
+        assert "<span" in html
+        assert "aat-pill" in html
+        assert "aat-pill-" in html  # some neutral class still present
+
+
+# ── urgency_pill ──────────────────────────────────────────────────────────────
+
+
+class TestUrgencyPill:
+    def test_none_returns_em_dash_placeholder(self) -> None:
+        # 'no deadline at all' renders as the em-dash glyph wrapped in
+        # the neutral pill class — distinct from 'far-future deadline'
+        # which renders as an empty/muted band.
+        html = ui.urgency_pill(None)
+        assert config.EM_DASH in html
+
+    def test_urgent_band(self) -> None:
+        # days_away <= DEADLINE_URGENT_DAYS → urgent class.
+        for d in [config.DEADLINE_URGENT_DAYS, 0, -1, -100]:
+            html = ui.urgency_pill(d)
+            assert "aat-urgent" in html, (
+                f"urgency_pill({d}) must carry aat-urgent (≤ {config.DEADLINE_URGENT_DAYS}d band)"
+            )
+
+    def test_warn_band(self) -> None:
+        # past urgent, ≤ DEADLINE_ALERT_DAYS → warn class.
+        d = config.DEADLINE_URGENT_DAYS + 1
+        html = ui.urgency_pill(d)
+        assert "aat-warn" in html
+        assert "aat-urgent" not in html
+
+    def test_calm_band(self) -> None:
+        # beyond alert → muted class, no warn/urgent.
+        d = config.DEADLINE_ALERT_DAYS + 5
+        html = ui.urgency_pill(d)
+        assert "aat-urgent" not in html
+        assert "aat-warn" not in html
+        assert "aat-pill" in html
+
+    def test_negative_is_urgent_invariant(self) -> None:
+        # Mirrors the urgency_glyph negative-day invariant in config.py:
+        # past-due deadlines must remain in the urgent band, not silently
+        # decay to warn/muted.
+        assert "aat-urgent" in ui.urgency_pill(-1)
+        assert "aat-urgent" in ui.urgency_pill(-365)
+
+
+# ── inject_global_styles ──────────────────────────────────────────────────────
+
+
+class TestInjectGlobalStyles:
+    def test_emits_style_block(self) -> None:
+        # The function must call st.markdown with a stylesheet payload.
+        # We capture the call by patching the imported reference inside
+        # the module so we don't depend on AppTest's element tree.
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            assert mock_md.called, "inject_global_styles must call st.markdown"
+            # First positional arg is the CSS string.
+            css = mock_md.call_args.args[0]
+            assert "<style>" in css and "</style>" in css
+
+    def test_defines_design_tokens(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            css = mock_md.call_args.args[0]
+            # Token plumbing (:root vars) must be present — they are the
+            # contract the rest of the stylesheet hangs off.
+            assert ":root" in css
+            assert "--aat-" in css
+
+    def test_includes_dark_mode_block(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            css = mock_md.call_args.args[0]
+            assert "prefers-color-scheme: dark" in css, (
+                "Dark mode block must be present so OS-level appearance is honoured"
+            )
+
+    def test_unsafe_allow_html_kwarg(self) -> None:
+        # Streamlit requires unsafe_allow_html=True for raw CSS injection.
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            kwargs = mock_md.call_args.kwargs
+            assert kwargs.get("unsafe_allow_html") is True
+
+
+# ── Page injection presence (static AST check) ────────────────────────────────
+
+
+def _module_calls_inject(py_path: Path) -> bool:
+    """True if the given .py file contains a call to ui.inject_global_styles().
+
+    AST walk so a string match inside a comment doesn't lie."""
+    tree = ast.parse(py_path.read_text())
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "inject_global_styles":
+            return True
+    return False
+
+
+class TestPagesInjectStyles:
+    """Pin GUIDELINES §UI-1: every Streamlit entrypoint calls
+    ui.inject_global_styles() so the design system is consistent."""
+
+    def test_app_py_injects(self) -> None:
+        assert _module_calls_inject(_APP_PY), (
+            "app.py must call ui.inject_global_styles() at module top"
+        )
+
+    def test_every_page_injects(self) -> None:
+        for page in sorted(_PAGES_DIR.glob("*.py")):
+            assert _module_calls_inject(page), (
+                f"{page.name} must call ui.inject_global_styles()"
+            )
+
+
+# ── accent_bar / section_header (smoke) ───────────────────────────────────────
+
+
+class TestRenderers:
+    def test_accent_bar_renders(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.accent_bar()
+            assert mock_md.called
+
+    def test_section_header_renders(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.section_header("Upcoming", eyebrow="THIS WEEK")
+            assert mock_md.called
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Upcoming" in payload
+            assert "THIS WEEK" in payload
+
+    def test_section_header_no_eyebrow(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.section_header("Recommender Alerts")
+            assert mock_md.called
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Recommender Alerts" in payload
+
+    def test_sidebar_about_block_emits_version(self) -> None:
+        # sidebar_about_block must surface the version it's handed.
+        # We don't care about Streamlit's actual sidebar tree — just that
+        # the version string appears in *some* markdown call.
+        with (
+            patch.object(ui.st, "sidebar") as mock_sidebar,
+            patch.object(ui.st, "markdown") as mock_md,
+        ):
+            # st.sidebar.expander → context manager; we mock loosely.
+            mock_sidebar.expander.return_value.__enter__ = lambda s: s
+            mock_sidebar.expander.return_value.__exit__ = lambda s, *a: False
+            ui.sidebar_about_block("0.14.0")
+            all_md_payload = " ".join(
+                c.args[0] for c in mock_md.call_args_list if c.args
+            )
+            # Either st.markdown or st.sidebar.expander received the version.
+            sidebar_calls_repr = repr(mock_sidebar.method_calls)
+            assert "0.14.0" in all_md_payload + sidebar_calls_repr, (
+                f"sidebar_about_block must surface the version string somewhere; "
+                f"markdown payload: {all_md_payload!r}, sidebar calls: {sidebar_calls_repr!r}"
+            )
+
+
+# ── ui.py module-import contract (static) ─────────────────────────────────────
+
+
+class TestUIImports:
+    """ui.py is the display layer. It must import config (for status
+    colour data) + streamlit, and must NOT import database, exports, or
+    any page module (would create a layer-cycle)."""
+
+    def test_ui_does_not_import_database_or_exports(self) -> None:
+        src = (REPO_ROOT / "ui.py").read_text()
+        # Module-level imports only (regex over the top of the file is
+        # sufficient — lazy imports are an anti-pattern in display code).
+        # We scan all `import X` / `from X import` lines.
+        for m in re.finditer(r"^(?:import|from)\s+([\w.]+)", src, re.MULTILINE):
+            mod = m.group(1).split(".")[0]
+            assert mod not in {"database", "exports"}, (
+                f"ui.py must not import {mod!r} — layer violation. "
+                f"Display code receives data from pages, not directly from the data layer."
+            )
