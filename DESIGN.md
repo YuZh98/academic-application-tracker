@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.5 | **Last updated:** 2026-05-06 | **Status:** authoritative
+**Version:** 1.6 | **Last updated:** 2026-05-20 | **Status:** authoritative
 
 ---
 
@@ -49,16 +49,20 @@ flowchart BT
     config[config.py<br/><small>constants + pure functions</small>]
     database[database.py<br/><small>SQL only</small>]
     exports[exports.py<br/><small>markdown writers</small>]
+    ui[ui.py<br/><small>design system</small>]
     pages[pages/*.py<br/><small>display layer</small>]
     app[app.py<br/><small>Dashboard</small>]
 
     database -->|imports| config
     exports -->|imports| config
     exports -->|imports| database
+    ui -->|imports| config
     app -->|imports| config
     app -->|imports| database
+    app -->|imports| ui
     pages -->|imports| config
     pages -->|imports| database
+    pages -->|imports| ui
 
     database -.->|deferred import<br/>inside writers| exports
 
@@ -67,7 +71,7 @@ flowchart BT
     classDef ui fill:#f3e5f5,stroke:#4a148c
     class config leaf
     class database,exports data
-    class app,pages ui
+    class app,pages,ui ui
 ```
 
 The dotted edge from `database` to `exports` is the deferred-import escape hatch that breaks the otherwise-circular dependency. Solid edges represent module-top imports.
@@ -76,9 +80,10 @@ The dotted edge from `database` to `exports` is the deferred-import escape hatch
 
 | Layer | May import | May NOT import |
 |-------|-----------|----------------|
-| Page files | `database`, `config` | `exports` (directly), each other |
+| Page files | `database`, `config`, `ui` | `exports` (directly), each other |
 | `database.py` | `config`, `sqlite3`, `pandas` | `streamlit`, `exports` (top-level — deferred import only) |
 | `exports.py` | `database`, `config` | `streamlit` |
+| `ui.py` | `config`, `streamlit` | `database`, `exports`, page modules |
 | `config.py` | stdlib only | anything from this project |
 
 ---
@@ -109,6 +114,7 @@ app.py                    Dashboard home page
 config.py                 Single source of truth for constants and vocabulary
 database.py               All SQLite I/O; no Streamlit imports
 exports.py                Markdown generators; called by database.py writers
+ui.py                     Shared design-system stylesheet + pill/header helpers
 pages/
   1_Opportunities.py      Position CRUD
   2_Applications.py       Progress tracking + interviews
@@ -120,6 +126,7 @@ tests/                    pytest suite
 docs/
   adr/                    Architectural Decision Records
   dev-notes/              Deep-dive references
+  superpowers/specs/      Approved design specs (one per major redesign)
   ui/                     Wireframes + responsive screenshots
 DESIGN.md                 This file
 GUIDELINES.md             Coding conventions
@@ -473,6 +480,40 @@ Track every letter across every position; surface who needs a reminder. Layout w
 ### 8.5 `pages/4_Export.py` — Export
 
 Manual export trigger and per-file download. Layout wireframe: [`docs/ui/wireframes.md#export`](docs/ui/wireframes.md#export).
+
+---
+
+### 8.6 Design System (`ui.py`)
+
+Shared presentation layer, introduced in v0.14.0. All visual identity
+lives here so the four pages render with the same shell.
+
+**Aesthetic charter (Apple-tech, restrained):**
+
+- One brand accent (indigo `#4F6BEF`), one accent-2 (violet `#8B5CF6`),
+  one success (`#10B981`), one warn (`#F59E3A`), one danger (`#EF4444`).
+- Slate neutral ramp for surfaces + text; tokens flip via
+  `@media (prefers-color-scheme: dark)` so OS appearance is honoured.
+- One elevation step: 1 px hairline border + soft 6/20 shadow.
+- Motion: 170 ms `cubic-bezier(0.2, 0, 0, 1)` on hover/focus only.
+- Typography: system stack (`-apple-system, SF Pro Text, …`); H1 700,
+  eyebrow `0.7rem` uppercase, body `0.95rem`.
+
+**Public API:**
+
+| Function | Returns | Purpose |
+|---------|---------|---------|
+| `inject_global_styles()` | None | Emits the stylesheet via `st.markdown(..., unsafe_allow_html=True)`. Call once per page after `st.set_page_config`. |
+| `accent_bar()` | None | Three-stop indigo→violet→green hairline; brand mark below page titles. |
+| `section_header(text, eyebrow=None)` | None | Renders an uppercase eyebrow + tight H2 title. |
+| `status_pill(raw_status)` | HTML string | Soft-tint pill rendering `STATUS_LABELS[raw]`. Unknown values fall back to a neutral class. |
+| `urgency_pill(days_left, *, urgent_d, alert_d)` | HTML string | Banded pill (urgent ≤ `DEADLINE_URGENT_DAYS`, warn ≤ `DEADLINE_ALERT_DAYS`, calm beyond). Negative inputs stay urgent. |
+| `sidebar_about_block(version)` | None | Sidebar expander exposing version + repo link. |
+
+**Architectural constraint:** `ui.py` imports `config` + `streamlit`
+only; it never touches `database` or `exports`. The page-injection rule
+is pinned by `tests/test_ui.py::TestPagesInjectStyles` (AST grep over
+`app.py` + every file under `pages/`).
 
 ---
 

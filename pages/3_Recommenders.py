@@ -25,8 +25,7 @@ ui.inject_global_styles()
 st.title("Recommenders")
 ui.accent_bar()
 st.markdown(
-    "<p class='aat-tagline'>Track who's been asked, who's responded, "
-    "and who needs a nudge.</p>",
+    "<p class='aat-tagline'>Track who's been asked, who's responded, and who needs a nudge.</p>",
     unsafe_allow_html=True,
 )
 
