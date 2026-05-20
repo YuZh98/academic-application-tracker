@@ -10,6 +10,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 
 st.set_page_config(
     page_title="Academic Application Tracker",
@@ -18,6 +19,7 @@ st.set_page_config(
 )
 
 database.init_db()
+ui.inject_global_styles()
 
 
 def _safe_str(v: Any) -> str:
@@ -118,6 +120,14 @@ def _deadline_urgency(date_str: Any) -> str:
 
 
 st.title("Opportunities")
+ui.accent_bar()
+# Tagline rendered as plain markdown (not st.caption) so the caption
+# count assertions in tests/test_opportunities_page.py (which pin the
+# filter-results caption as the page's only caption) stay valid.
+st.markdown(
+    "<p class='aat-tagline'>Capture, filter, and edit every position you're tracking.</p>",
+    unsafe_allow_html=True,
+)
 
 # ── Quick-add expander ────────────────────────────────────────────────
 # Nonce in widget keys forces a fresh widget mount after each successful

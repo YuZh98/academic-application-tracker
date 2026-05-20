@@ -6,6 +6,7 @@ from datetime import datetime
 import streamlit as st
 
 import database
+import ui
 
 st.set_page_config(
     page_title="Export — Academic Application Tracker",
@@ -15,8 +16,15 @@ st.set_page_config(
 
 
 database.init_db()
+ui.inject_global_styles()
 
 st.title("Export & Download")
+ui.accent_bar()
+st.markdown(
+    "<p class='aat-tagline'>Plain-text markdown backups of your entire "
+    "job-search state.</p>",
+    unsafe_allow_html=True,
+)
 
 st.markdown(
     "Markdown files are auto-exported after every data change and saved to the "

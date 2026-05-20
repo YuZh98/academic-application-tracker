@@ -10,6 +10,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 
 st.set_page_config(
     page_title="Academic Application Tracker",
@@ -18,107 +19,8 @@ st.set_page_config(
 )
 
 database.init_db()
-
-# ── Visual polish (CSS injection) ─────────────────────────────────────────────
-st.markdown(
-    """
-<style>
-/* ── Typography ─────────────────────────────────────────────────── */
-/* Set font on root elements only — no child wildcard (*). The system font
-   cascades naturally to text nodes. Avoiding * + !important on children
-   preserves Streamlit's Material Symbols Rounded font on icon elements
-   (sidebar collapse arrows, etc.) which use ligature rendering. */
-html, body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text',
-                 'Segoe UI Variable', 'Segoe UI', Helvetica, Arial, sans-serif !important;
-}
-
-/* ── KPI metric cards — elevated card style ───────────────────── */
-[data-testid="stMetric"] {
-    background: #ffffff;
-    border: 1px solid #eef2f7;
-    border-radius: 14px;
-    padding: 1.1rem 1.4rem 0.9rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.04);
-}
-[data-testid="stMetricLabel"] p {
-    font-size: 0.70rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.09em !important;
-    color: #94a3b8 !important;
-    font-weight: 700 !important;
-}
-[data-testid="stMetricValue"] > div {
-    font-size: 2rem !important;
-    font-weight: 800 !important;
-    color: #0f172a !important;
-    line-height: 1.2 !important;
-    overflow-wrap: break-word !important;
-    word-break: break-word !important;
-}
-
-/* ── Hero container — soft indigo gradient ────────────────────── */
-[data-testid="stVerticalBlockBorderWrapper"] > div > div {
-    border-radius: 14px !important;
-    background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%) !important;
-    border-color: #d9e4ff !important;
-}
-
-/* ── Section subheaders ──────────────────────────────────────── */
-[data-testid="stHeadingWithActionElements"] h3 {
-    font-weight: 700 !important;
-    color: #1e293b !important;
-    letter-spacing: -0.01em !important;
-}
-
-/* ── Info / empty-state messages ─────────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 10px;
-    border-left-width: 3px;
-}
-
-/* ── Dataframe / table outer container ────────────────────────── */
-[data-testid="stDataFrame"] {
-    border-radius: 12px;
-    border: 1px solid #eef2f7 !important;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-}
-
-/* ── Primary buttons ─────────────────────────────────────────── */
-[data-testid="stBaseButton-primary"] {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.01em !important;
-}
-
-/* ── Sidebar navigation pills ───────────────────────────────── */
-section[data-testid="stSidebarNav"] a {
-    border-radius: 8px;
-    padding: 0.35rem 0.7rem;
-    margin-bottom: 2px;
-    transition: background 0.15s, color 0.15s;
-    font-weight: 500;
-}
-section[data-testid="stSidebarNav"] a:hover {
-    background: rgba(79, 107, 239, 0.08);
-    color: #4F6BEF;
-}
-section[data-testid="stSidebarNav"] a[aria-current="page"] {
-    background: rgba(79, 107, 239, 0.10);
-    color: #4F6BEF;
-    font-weight: 600;
-}
-
-/* ── Dividers ──────────────────────────────────────────────── */
-hr {
-    border-color: #f0f3f8 !important;
-    margin: 0.5rem 0 !important;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
+ui.inject_global_styles()
+ui.sidebar_about_block(version="0.14.0")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -170,12 +72,7 @@ st.title("Academic Application Tracker")
 st.caption(
     "Your complete academic job search — deadlines, applications, and letters, all in one place."
 )
-# Gradient accent line — brand identity mark below the title.
-st.markdown(
-    "<div style='height:3px;background:linear-gradient(90deg,#4F6BEF 0%,"
-    "#8B5CF6 50%,#10B981 100%);border-radius:2px;margin-bottom:0.25rem;'></div>",
-    unsafe_allow_html=True,
-)
+ui.accent_bar()
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Counting model (decided 2026-05-07):

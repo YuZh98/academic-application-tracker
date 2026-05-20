@@ -10,6 +10,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 from config import EM_DASH
 
 st.set_page_config(
@@ -19,8 +20,15 @@ st.set_page_config(
 )
 
 database.init_db()
+ui.inject_global_styles()
 
 st.title("Recommenders")
+ui.accent_bar()
+st.markdown(
+    "<p class='aat-tagline'>Track who's been asked, who's responded, "
+    "and who needs a nudge.</p>",
+    unsafe_allow_html=True,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 from config import EM_DASH
 
 st.set_page_config(
@@ -20,8 +21,15 @@ st.set_page_config(
 
 
 database.init_db()
+ui.inject_global_styles()
 
 st.title("Applications")
+ui.accent_bar()
+st.markdown(
+    "<p class='aat-tagline'>Submission, response, interviews, and outcomes — "
+    "one position at a time.</p>",
+    unsafe_allow_html=True,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

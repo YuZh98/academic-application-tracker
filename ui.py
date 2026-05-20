@@ -257,6 +257,14 @@ h2.aat-section-title {
         var(--aat-success) 100%);
 }
 
+/* ── Page tagline under the accent bar ─────────────────────────── */
+.aat-tagline {
+    color: var(--aat-text-muted);
+    font-size: 0.95rem;
+    margin: 0.1rem 0 1rem;
+    line-height: 1.4;
+}
+
 /* ── KPI metric cards ──────────────────────────────────────────── */
 [data-testid="stMetric"] {
     background: var(--aat-bg-elevated);
