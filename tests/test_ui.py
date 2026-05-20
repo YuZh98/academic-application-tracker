@@ -58,6 +58,15 @@ class TestStatusPill:
         assert "aat-pill" in html
         assert "aat-pill-" in html  # some neutral class still present
 
+    def test_unknown_status_html_escapes_payload(self) -> None:
+        # Defence in depth — the fallback path interpolates the raw
+        # status into HTML; a value containing '<' must NOT punch
+        # through the markup.
+        html = ui.status_pill("[<script>alert(1)</script>]")
+        assert "<script>" not in html
+        # Browsers see the escaped entity, not a live tag.
+        assert "&lt;script&gt;" in html or "&lt;" in html
+
 
 # ── urgency_pill ──────────────────────────────────────────────────────────────
 
@@ -172,6 +181,76 @@ class TestPagesInjectStyles:
             assert _module_calls_inject(page), f"{page.name} must call ui.inject_global_styles()"
 
 
+def _module_calls(py_path: Path, attr_name: str) -> bool:
+    """True if ``py_path`` contains a call to ``<something>.attr_name(...)``.
+
+    AST walk so a string match inside a comment doesn't lie. Used by the
+    sidebar-block pin tests below."""
+    tree = ast.parse(py_path.read_text())
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == attr_name:
+            return True
+    return False
+
+
+class TestPagesCallSidebarAbout:
+    """Pin the sidebar-cohesion rule: every page (dashboard + 4 pages)
+    must call ``ui.sidebar_about_block`` so the About expander appears
+    in the sidebar regardless of which page the user lands on.
+
+    Streamlit re-renders the entire sidebar on every page rerun, so a
+    page that forgets the call shows an empty About slot — breaking
+    the design-system promise that the shell is the same everywhere."""
+
+    def test_app_py_calls(self) -> None:
+        assert _module_calls(_APP_PY, "sidebar_about_block"), (
+            "app.py must call ui.sidebar_about_block()"
+        )
+
+    def test_every_page_calls(self) -> None:
+        for page in sorted(_PAGES_DIR.glob("*.py")):
+            assert _module_calls(page, "sidebar_about_block"), (
+                f"{page.name} must call ui.sidebar_about_block() — "
+                "otherwise the About expander vanishes on this page"
+            )
+
+
+class TestPagesCallShortcuts:
+    """Pin per-page shortcuts-block consistency for the same reason as
+    the About expander above."""
+
+    def test_app_py_calls(self) -> None:
+        assert _module_calls(_APP_PY, "sidebar_shortcuts_block"), (
+            "app.py must call ui.sidebar_shortcuts_block()"
+        )
+
+    def test_every_page_calls(self) -> None:
+        for page in sorted(_PAGES_DIR.glob("*.py")):
+            assert _module_calls(page, "sidebar_shortcuts_block"), (
+                f"{page.name} must call ui.sidebar_shortcuts_block()"
+            )
+
+
+class TestSidebarShortcutsBlock:
+    def test_renders_keyboard_hints(self) -> None:
+        from unittest.mock import patch
+
+        with (
+            patch.object(ui.st, "sidebar") as mock_sidebar,
+            patch.object(ui.st, "markdown") as mock_md,
+        ):
+            mock_sidebar.expander.return_value.__enter__ = lambda s: s
+            mock_sidebar.expander.return_value.__exit__ = lambda s, *a: False
+            ui.sidebar_shortcuts_block()
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list if c.args)
+            assert "Rerun" in payload or "rerun" in payload, (
+                "Shortcuts block must mention the rerun keybinding"
+            )
+
+
 # ── accent_bar / section_header (smoke) ───────────────────────────────────────
 
 
@@ -195,6 +274,17 @@ class TestRenderers:
             assert mock_md.called
             payload = " ".join(c.args[0] for c in mock_md.call_args_list)
             assert "Recommender Alerts" in payload
+
+    def test_section_header_html_escapes_payload(self) -> None:
+        # The helper interpolates `text` + `eyebrow` into raw HTML; a
+        # future caller passing user-supplied content must not be able
+        # to inject markup.
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.section_header("<script>alert(1)</script>", eyebrow="<b>x</b>")
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "<script>" not in payload
+            assert "<b>" not in payload
+            assert "&lt;" in payload  # entity-encoded angle bracket
 
     def test_sidebar_about_block_emits_version(self) -> None:
         # sidebar_about_block must surface the version it's handed.

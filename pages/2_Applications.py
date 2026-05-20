@@ -22,6 +22,8 @@ st.set_page_config(
 
 database.init_db()
 ui.inject_global_styles()
+ui.sidebar_about_block()
+ui.sidebar_shortcuts_block()
 
 st.title("Applications")
 ui.accent_bar()

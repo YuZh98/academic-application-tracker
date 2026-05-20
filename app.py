@@ -20,7 +20,8 @@ st.set_page_config(
 
 database.init_db()
 ui.inject_global_styles()
-ui.sidebar_about_block(version="0.14.0")
+ui.sidebar_about_block()
+ui.sidebar_shortcuts_block()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -778,3 +778,69 @@ class TestConfirmedLabels:
         assert config.CONFIRMED_LABELS[1] == "Yes"
         assert config.CONFIRMED_LABELS[0] == "No"
         assert config.CONFIRMED_LABELS[None] == config.EM_DASH
+
+
+# ── APP_VERSION (sidebar About expander source of truth) ────────────────────
+
+
+def test_app_version_matches_pyproject() -> None:
+    """``config.APP_VERSION`` is the user-visible version string surfaced
+    by ``ui.sidebar_about_block``. It must stay in sync with the
+    canonical ``pyproject.toml`` ``project.version`` — the release flow
+    bumps pyproject; this test catches a release that forgot to bump
+    APP_VERSION (or vice versa).
+
+    Two acceptance modes:
+      1. Exact match — post-release state. Used for patch hotfixes too:
+         a `0.13.1` pyproject must match `APP_VERSION = "0.13.1"`
+         exactly (no `-dev` suffix permitted on patch bumps; ship the
+         patch and call it done).
+      2. ``X.Y.Z-dev`` next-minor variant — between releases. Allowed
+         for minor and major bumps. Patch hotfixes do NOT get a
+         `-dev` window because they are too short-lived to warrant
+         dual-state docs.
+    """
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).parent.parent / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        data = tomllib.load(f)
+    pyproject_version: str = str(data["project"]["version"])
+
+    stripped = config.APP_VERSION.removesuffix("-dev")
+    is_dev = config.APP_VERSION.endswith("-dev")
+
+    if not is_dev:
+        # Mode 1 — exact match required.
+        assert stripped == pyproject_version, (
+            f"APP_VERSION ({config.APP_VERSION!r}) does not match "
+            f"pyproject.toml version ({pyproject_version!r}). "
+            f"Either bump pyproject or sync config.APP_VERSION."
+        )
+    else:
+        # Mode 2 — must be the next minor or next major after pyproject.
+        assert _is_next_minor_or_major(stripped, pyproject_version), (
+            f"APP_VERSION ({config.APP_VERSION!r}) is a -dev variant "
+            f"that does not align with the next minor or major after "
+            f"pyproject.toml version ({pyproject_version!r}). "
+            f"Patch-only hotfixes should drop the -dev suffix and "
+            f"match pyproject exactly."
+        )
+
+
+def _is_next_minor_or_major(candidate: str, base: str) -> bool:
+    """``candidate`` is ``base`` with the minor bumped by one (patch
+    reset to 0) OR the major bumped by one (minor + patch reset to 0).
+    Patch-only bumps are NOT accepted — patch hotfixes ship without a
+    `-dev` window."""
+    try:
+        c_parts = [int(x) for x in candidate.split(".")]
+        b_parts = [int(x) for x in base.split(".")]
+    except ValueError:
+        return False
+    if len(c_parts) != 3 or len(b_parts) != 3:
+        return False
+    next_minor = c_parts[0] == b_parts[0] and c_parts[1] == b_parts[1] + 1 and c_parts[2] == 0
+    next_major = c_parts[0] == b_parts[0] + 1 and c_parts[1] == 0 and c_parts[2] == 0
+    return next_minor or next_major

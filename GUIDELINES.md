@@ -43,9 +43,15 @@ config.py     ← imports nothing from this project
 database.py   ← imports config; never imports streamlit
 exports.py    ← imports database, config; never imports streamlit
 ui.py         ← imports config, streamlit; never imports database or exports
-app.py        ← imports database, config, ui
-pages/*.py    ← imports database, config, ui; never imports exports directly
+app.py        ← may import from {database, config, ui}
+pages/*.py    ← may import from {database, config, ui}; never imports exports directly
 ```
+
+The "may import" wording on the display tier means the set of allowed
+imports — a page only imports what it needs. `pages/4_Export.py` does
+not currently import `config` because it uses no config constants; this
+is permitted and not a layer violation. Adding `import config` to that
+file when it grows a need for one is also fine.
 
 `exports.write_all()` is called **inside** `database.py` write functions — page
 files never call it directly. The `database ↔ exports` cycle is broken by

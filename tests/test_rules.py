@@ -444,8 +444,7 @@ class TestAppTestDefaultTimeout:
 
         assert not violations, (
             f"G14 violation(s) — AppTest.from_file() without "
-            f"default_timeout>={self.MIN_TIMEOUT}:\n"
-            + "\n".join(f"  {v}" for v in violations)
+            f"default_timeout>={self.MIN_TIMEOUT}:\n" + "\n".join(f"  {v}" for v in violations)
         )
 
 
@@ -480,6 +479,7 @@ class TestNoPrintDebugInProductionCode:
         REPO_ROOT / "config.py",
         REPO_ROOT / "database.py",
         REPO_ROOT / "exports.py",
+        REPO_ROOT / "ui.py",
     ]
 
     def test_no_print_calls_in_production_code(self) -> None:
@@ -579,9 +579,7 @@ class TestPagesCallSetPageConfigFirst:
                 idx += 1
 
             # Skip all leading imports.
-            while idx < len(body) and isinstance(
-                body[idx], (ast.Import, ast.ImportFrom)
-            ):
+            while idx < len(body) and isinstance(body[idx], (ast.Import, ast.ImportFrom)):
                 idx += 1
 
             rel = page_path.relative_to(REPO_ROOT)

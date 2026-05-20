@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 import config
@@ -55,15 +57,25 @@ def status_pill(raw_status: str) -> str:
     instead of raising.
     """
     label = config.STATUS_LABELS.get(raw_status, raw_status.strip("[]").title())
-    slug = label.lower()
-    colour = _PILL_PALETTE.get(slug, _PILL_PALETTE["neutral"])
+    # Escape the label before HTML interpolation — known statuses are
+    # safe constants, but the fallback branch passes user-DB-derived
+    # text and a future caller might not realise the helper renders raw
+    # HTML. Cheap defence in depth.
+    safe_label = html.escape(label)
+    # Slug feeds the CSS class hook. We restrict it to keys in the
+    # known palette so an unknown / malformed raw_status (eg a renamed
+    # DB value, or a payload smuggled through the fallback branch)
+    # cannot inject markup via the class attribute.
+    raw_slug = label.lower()
+    slug = raw_slug if raw_slug in _PILL_PALETTE else "neutral"
+    colour = _PILL_PALETTE[slug]
     klass = f"aat-pill aat-pill-{slug}"
     style = (
         f"background:{colour}1A;"  # 1A == 10% alpha hex suffix → soft tint
         f"color:{colour};"
         f"border:1px solid {colour}33;"  # 20% alpha border
     )
-    return f'<span class="{klass}" style="{style}">{label}</span>'
+    return f'<span class="{klass}" style="{style}">{safe_label}</span>'
 
 
 def urgency_pill(
@@ -121,27 +133,54 @@ def section_header(text: str, *, eyebrow: str | None = None) -> None:
     """
     if eyebrow:
         st.markdown(
-            f"<div class='aat-eyebrow'>{eyebrow}</div>",
+            f"<div class='aat-eyebrow'>{html.escape(eyebrow)}</div>",
             unsafe_allow_html=True,
         )
     st.markdown(
-        f"<h2 class='aat-section-title'>{text}</h2>",
+        f"<h2 class='aat-section-title'>{html.escape(text)}</h2>",
         unsafe_allow_html=True,
     )
 
 
-def sidebar_about_block(version: str) -> None:
+def sidebar_about_block(version: str | None = None) -> None:
     """Render an 'About' expander in the sidebar carrying the app version
     + a one-line tagline + a link to the repo.
 
-    This is the only sidebar customisation in the design system: the
-    sidebar otherwise hosts Streamlit's auto-generated page nav.
+    Default version is ``config.APP_VERSION``; callers may pass an
+    explicit string (eg in tests). This is the only sidebar
+    customisation in the design system; Streamlit's auto-generated page
+    nav owns the rest of the sidebar.
+
+    Must be called from every page entrypoint — Streamlit re-renders
+    the whole page (including the sidebar) on every page switch, so
+    skipping the call on any page leaves the About expander invisible
+    there. Pinned by ``tests/test_ui.py::TestPagesCallSidebarAbout``.
     """
-    with st.sidebar.expander(f"About · v{version}", expanded=False):
+    v = version if version is not None else config.APP_VERSION
+    with st.sidebar.expander(f"About · v{v}", expanded=False):
         st.markdown(
             "**Academic Application Tracker**  \n"
-            f"Version `{version}` — local-first, single-user.  \n"
+            f"Version `{v}` — local-first, single-user.  \n"
             "[GitHub →](https://github.com/YuZh98/academic-application-tracker)"
+        )
+
+
+def sidebar_shortcuts_block() -> None:
+    """Render a 'Shortcuts' expander listing the page-level keyboard
+    affordances. Industry-product polish: a discoverable hint without
+    cluttering the main canvas.
+
+    Streamlit owns its own keybindings (`r` rerun, `s` settings) and we
+    don't override them; the list documents the existing Streamlit
+    shortcuts plus the project's navigation idioms.
+    """
+    with st.sidebar.expander("Shortcuts", expanded=False):
+        st.markdown(
+            "- **R** — rerun the script  \n"
+            "- **Esc** — close any open modal dialog  \n"
+            "- Click a sidebar entry — switch page  \n"
+            "- Click a row in any table — select (edit form appears below)  \n"
+            "- ⚙ menu (top-right) — settings, clear cache, print"
         )
 
 
