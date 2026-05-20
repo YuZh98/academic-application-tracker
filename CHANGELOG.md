@@ -17,6 +17,36 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added
+- Introduce `ui.py` — shared design-system module exposing
+  `inject_global_styles()`, `status_pill()`, `urgency_pill()`,
+  `accent_bar()`, `section_header()`, and `sidebar_about_block()`.
+  Tokens (colour, radius, shadow, motion, typography) live as CSS
+  custom properties on `:root` with a `prefers-color-scheme: dark`
+  block flipping the slate ramp for OS-level dark-mode honouring.
+- Add `tests/test_ui.py` (20 tests) pinning pill output, urgency
+  bands, dark-mode block presence, `unsafe_allow_html` kwarg, and an
+  AST grep that every Streamlit entrypoint calls
+  `ui.inject_global_styles()`.
+- Add brand `accent_bar()` + page tagline below every page title.
+- Add `About / v…` expander in the sidebar with version + repo link.
+- Add `@media print` block that hides sidebar + toolbar so the
+  dashboard prints cleanly.
+- Add visible-only focus ring on every interactive element
+  (`:focus-visible`) for keyboard accessibility.
+
+### Changed
+- Move the design-system stylesheet out of `app.py` (where it only
+  affected the dashboard) into `ui.py`; all four pages now render
+  with the same Apple-tech-flavoured shell — typography, KPI cards,
+  buttons, dataframes, sidebar nav, dividers.
+- Add hover lift + soft-shadow motion (170 ms cubic-bezier) on KPI
+  cards and primary buttons.
+- Update `DESIGN.md` to v1.6: new §8.6 *Design System*, file-tree
+  entry for `ui.py`, mermaid architecture flow now includes the new
+  module, layer rules table lists it explicitly.
+- Update `GUIDELINES.md §2` import contract to cover `ui.py`.
+
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
 ### Added

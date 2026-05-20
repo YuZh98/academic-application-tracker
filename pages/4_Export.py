@@ -21,8 +21,7 @@ ui.inject_global_styles()
 st.title("Export & Download")
 ui.accent_bar()
 st.markdown(
-    "<p class='aat-tagline'>Plain-text markdown backups of your entire "
-    "job-search state.</p>",
+    "<p class='aat-tagline'>Plain-text markdown backups of your entire job-search state.</p>",
     unsafe_allow_html=True,
 )
 

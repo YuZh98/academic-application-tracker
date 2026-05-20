@@ -42,8 +42,9 @@ what CI actually runs.
 config.py     ← imports nothing from this project
 database.py   ← imports config; never imports streamlit
 exports.py    ← imports database, config; never imports streamlit
-app.py        ← imports database, config
-pages/*.py    ← imports database, config; never imports exports directly
+ui.py         ← imports config, streamlit; never imports database or exports
+app.py        ← imports database, config, ui
+pages/*.py    ← imports database, config, ui; never imports exports directly
 ```
 
 `exports.write_all()` is called **inside** `database.py` write functions — page
@@ -54,7 +55,11 @@ importing `exports` lazily inside each write function (not at module top).
 - `database.py` — SQL only. No display logic, no `st.*` calls.
 - `exports.py` — File writing only. No business logic.
 - `config.py` — Constants and pure functions. No I/O, no side effects.
-- Page files — Display only. No raw SQL. No file I/O.
+- `ui.py` — Design-system stylesheet + pill/header helpers. No SQL, no
+  file I/O, no business logic; pinned by `tests/test_ui.py`.
+- Page files — Display only. No raw SQL. No file I/O. Every page calls
+  `ui.inject_global_styles()` immediately after `st.set_page_config`
+  (pinned by `tests/test_ui.py::TestPagesInjectStyles`).
 
 ---
 

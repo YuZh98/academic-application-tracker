@@ -169,9 +169,7 @@ class TestPagesInjectStyles:
 
     def test_every_page_injects(self) -> None:
         for page in sorted(_PAGES_DIR.glob("*.py")):
-            assert _module_calls_inject(page), (
-                f"{page.name} must call ui.inject_global_styles()"
-            )
+            assert _module_calls_inject(page), f"{page.name} must call ui.inject_global_styles()"
 
 
 # ── accent_bar / section_header (smoke) ───────────────────────────────────────
@@ -210,9 +208,7 @@ class TestRenderers:
             mock_sidebar.expander.return_value.__enter__ = lambda s: s
             mock_sidebar.expander.return_value.__exit__ = lambda s, *a: False
             ui.sidebar_about_block("0.14.0")
-            all_md_payload = " ".join(
-                c.args[0] for c in mock_md.call_args_list if c.args
-            )
+            all_md_payload = " ".join(c.args[0] for c in mock_md.call_args_list if c.args)
             # Either st.markdown or st.sidebar.expander received the version.
             sidebar_calls_repr = repr(mock_sidebar.method_calls)
             assert "0.14.0" in all_md_payload + sidebar_calls_repr, (

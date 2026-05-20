@@ -100,9 +100,7 @@ def urgency_pill(
         colour = "#94A3B8"
         label = f"{days_left}d"
 
-    style = (
-        f"background:{colour}1A;color:{colour};border:1px solid {colour}33;"
-    )
+    style = f"background:{colour}1A;color:{colour};border:1px solid {colour}33;"
     return f'<span class="{klass}" style="{style}">{label}</span>'
 
 
