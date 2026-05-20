@@ -53,10 +53,12 @@ class TestStatusPill:
     def test_unknown_status_falls_back_to_neutral(self) -> None:
         # An unknown raw value (eg a renamed status the migration missed)
         # must render without raising and must NOT include a stale class.
+        # The class slug must be exactly "neutral" — pinning this makes
+        # the class-attribute injection guard machine-checkable, not
+        # just a code comment.
         html = ui.status_pill("[NONEXISTENT]")
         assert "<span" in html
-        assert "aat-pill" in html
-        assert "aat-pill-" in html  # some neutral class still present
+        assert "aat-pill aat-pill-neutral" in html
 
     def test_unknown_status_html_escapes_payload(self) -> None:
         # Defence in depth — the fallback path interpolates the raw
