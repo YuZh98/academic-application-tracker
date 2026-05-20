@@ -20,16 +20,23 @@ manual steps to run against a pre-existing database.
 ### Added
 - Introduce `ui.py` — shared design-system module exposing
   `inject_global_styles()`, `status_pill()`, `urgency_pill()`,
-  `accent_bar()`, `section_header()`, and `sidebar_about_block()`.
-  Tokens (colour, radius, shadow, motion, typography) live as CSS
-  custom properties on `:root` with a `prefers-color-scheme: dark`
-  block flipping the slate ramp for OS-level dark-mode honouring.
-- Add `tests/test_ui.py` (20 tests) pinning pill output, urgency
-  bands, dark-mode block presence, `unsafe_allow_html` kwarg, and an
-  AST grep that every Streamlit entrypoint calls
-  `ui.inject_global_styles()`.
+  `accent_bar()`, `section_header()`, `sidebar_about_block()`, and
+  `sidebar_shortcuts_block()`. Tokens (colour, radius, shadow, motion,
+  typography) live as CSS custom properties on `:root` with a
+  `prefers-color-scheme: dark` block flipping the slate ramp for
+  OS-level dark-mode honouring.
+- Add `tests/test_ui.py` pinning pill output, urgency bands, dark-mode
+  block presence, `unsafe_allow_html` kwarg, and AST greps that every
+  Streamlit entrypoint calls `ui.inject_global_styles()`,
+  `ui.sidebar_about_block()`, and `ui.sidebar_shortcuts_block()`.
+- Add `config.APP_VERSION` — single source of truth for the
+  user-visible version string, pinned to ``pyproject.toml`` via
+  `tests/test_config.py::test_app_version_matches_pyproject`.
 - Add brand `accent_bar()` + page tagline below every page title.
-- Add `About / v…` expander in the sidebar with version + repo link.
+- Add `About · v…` expander in the sidebar with version + repo link;
+  rendered on every page so the design-system shell is consistent.
+- Add `Shortcuts` expander in the sidebar listing the Streamlit
+  keyboard affordances (industry-product polish).
 - Add `@media print` block that hides sidebar + toolbar so the
   dashboard prints cleanly.
 - Add visible-only focus ring on every interactive element

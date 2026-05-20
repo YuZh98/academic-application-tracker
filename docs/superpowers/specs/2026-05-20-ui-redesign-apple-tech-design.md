@@ -32,16 +32,16 @@ DESIGN §1). No auth, no cloud.
 
 ## 3. Industry-product criteria addressed
 
-| Criterion | Change |
-|-----------|--------|
-| Consistent shell on every page | New `ui.py` injects the same stylesheet on every page (currently only `app.py`). |
-| Strong empty states | Each major page gets the existing empty-state hero pattern extended (illustration via inline SVG + CTA). |
-| Accessible focus | Visible focus ring on all interactive elements (currently inherits Streamlit default which is faint). |
-| Predictable affordances | Status badges rendered as pills with consistent shape; urgency rendered as coloured dot + text label, not raw emoji. |
-| Sidebar polish | Add an "About / shortcuts" expander with version pulled from `pyproject.toml`. |
-| Error grace | Already present (save-paths catch broadly); no change needed. |
-| Performance | CSS is static; no runtime cost. No new network calls. |
-| Print readability | A `@media print` block hides sidebar + toolbar so users can print their dashboard. |
+| Criterion | Change | Landed in v0.14.0? |
+|-----------|--------|--------------------|
+| Consistent shell on every page | New `ui.py` injects the same stylesheet on every page (currently only `app.py`). | ✅ |
+| Accessible focus | Visible focus ring on all interactive elements via `:focus-visible`. | ✅ |
+| Sidebar polish | About + Shortcuts expanders rendered on every page; version pulled from `config.APP_VERSION`. | ✅ |
+| Error grace | Already present (save-paths catch broadly); no change needed. | ✅ (pre-existing) |
+| Performance | CSS is static; no runtime cost. No new network calls. | ✅ |
+| Print readability | A `@media print` block hides sidebar + toolbar so users can print their dashboard. | ✅ |
+| Strong empty states (SVG illustrations) | Each major page would get the empty-state hero pattern extended (inline SVG + CTA). | ⏳ deferred — conflicts with §6 non-goal "no replacement of Streamlit's native widgets with custom HTML"; the existing `st.info(...)` empty states ship unchanged in v0.14.0. Track in backlog. |
+| Predictable affordances (pill rendering) | Status badges + urgency rendered through `ui.status_pill` / `ui.urgency_pill` instead of raw emoji. | ⏳ partial — helpers + tests landed in `ui.py`; pages still call `config.urgency_glyph` / `st.badge`. Wiring is a follow-up (no schema change required); pages can opt into the helpers individually. |
 
 ## 4. Architecture
 

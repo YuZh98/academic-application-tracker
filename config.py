@@ -10,6 +10,14 @@
 #   - No functions, no I/O, no side effects — constants only.
 #   - All other modules import from here; never hardcode values in page files.
 
+# ── App identity ─────────────────────────────────────────────────────────────
+# User-visible version string surfaced by the sidebar About expander on every
+# page (ui.sidebar_about_block). Kept here so config.py remains the single
+# source of truth for vocabulary; drift against pyproject.toml is pinned by
+# tests/test_config.py::test_app_version_matches_pyproject.
+APP_VERSION: str = "0.14.0-dev"
+
+
 # ── Profile identity ─────────────────────────────────────────────────────────
 # Database filename — rename the file on disk when changing this.
 DB_FILENAME: str = "postdoc.db"
