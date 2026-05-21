@@ -421,6 +421,25 @@ body::before {
 }
 
 /* ── Page title (st.title → h1) — italic serif monumental ─────── */
+[data-testid="stHeading"]:has(h1) {
+    position: relative;
+}
+[data-testid="stHeading"]:has(h1)::after {
+    content: "№";
+    position: absolute;
+    right: -1vw;
+    top: -30%;
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(7rem, 14vw, 11rem);
+    color: var(--aat-vermilion);
+    opacity: 0.07;
+    line-height: 0.85;
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: -0.05em;
+}
 h1, [data-testid="stHeading"] h1 {
     font-family: var(--aat-font-serif) !important;
     font-style: italic !important;
@@ -430,6 +449,8 @@ h1, [data-testid="stHeading"] h1 {
     color: var(--aat-ink) !important;
     margin: 1.2rem 0 0.4rem !important;
     line-height: 1.02 !important;
+    position: relative;
+    z-index: 1;
 }
 
 /* ── Subheaders (st.subheader → h3) — uppercase mono w/ rule ───── */
@@ -587,15 +608,37 @@ h2.aat-section-title {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── KPI metric cards — monumental display numerals ─────────────── */
+/* ── KPI metric cards — monumental display numerals + roman folio ─ */
 [data-testid="stMetric"] {
     background: transparent;
     border: none;
-    border-top: 1px solid var(--aat-rule);
+    border-top: 2px solid var(--aat-ink);
+    border-bottom: 1px solid var(--aat-rule-soft);
     border-radius: 0;
-    padding: 1.2rem 0.4rem 0.6rem;
+    padding: 1.2rem 0.4rem 1.4rem;
     box-shadow: none;
     transition: none;
+    position: relative;
+    counter-increment: aat-exhibit;
+}
+/* CSS-counter exhibit mark (i. ii. iii. iv.) above each metric —
+   gallery-piece treatment turning each KPI into a numbered specimen.
+   The counter resets at the .stHorizontalBlock that contains the row,
+   so multiple metric rows on the same page each start at "i." */
+[data-testid="stHorizontalBlock"] {
+    counter-reset: aat-exhibit;
+}
+[data-testid="stMetric"]::before {
+    content: counter(aat-exhibit, lower-roman) ".";
+    position: absolute;
+    top: 0.45rem;
+    right: 0.4rem;
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-size: 0.85rem;
+    color: var(--aat-vermilion);
+    letter-spacing: -0.01em;
+    line-height: 1;
 }
 [data-testid="stMetric"]:hover { transform: none; box-shadow: none; }
 [data-testid="stMetricLabel"] p {
@@ -907,28 +950,33 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
     letter-spacing: -0.06em;
 }
 
-/* ── Bordered container body — italic serif pull-quote treatment ─ */
-/* The Recommender Alerts page renders each pending recommender as
-   st.container(border=True) wrapping a single st.markdown block. v3
-   styled the container chrome; v4 pushes the typographic treatment
-   *inside* the container so the alert body reads as an editorial
-   call-out, not a bullet list. */
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] p,
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] li {
+/* ── Main-canvas markdown bullets — italic serif pull-quote ─────── */
+/* Streamlit 1.57 dropped the stVerticalBlockBorderWrapper testid the
+   prior CSS targeted. The Recommender Alert card's bullets live
+   inside `section[data-testid="stMain"] [data-testid="stMarkdown"]`;
+   scope the italic-serif treatment to main-canvas markdown lists so
+   the sidebar Shortcuts expander keeps its sans-serif voice. */
+section[data-testid="stMain"] [data-testid="stMarkdown"] ul {
+    border-left: 1px solid var(--aat-rule);
+    padding-left: 1.25rem !important;
+    margin-left: 0.2rem;
+}
+section[data-testid="stMain"] [data-testid="stMarkdown"] ul li {
     font-family: var(--aat-font-serif) !important;
+    font-style: italic !important;
     font-size: 1.02rem !important;
-    line-height: 1.55 !important;
+    line-height: 1.65 !important;
     color: var(--aat-ink) !important;
 }
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] strong {
-    font-family: var(--aat-font-sans) !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.005em;
+section[data-testid="stMain"] [data-testid="stMarkdown"] ul li::marker {
+    color: var(--aat-vermilion) !important;
 }
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] ul {
-    border-left: 1px solid var(--aat-rule);
-    padding-left: 1.1rem;
-    margin-left: 0.2rem;
+section[data-testid="stMain"] [data-testid="stMarkdown"] ul li strong,
+section[data-testid="stMain"] [data-testid="stMarkdown"] p strong {
+    font-family: var(--aat-font-sans) !important;
+    font-style: normal !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.005em !important;
 }
 
 /* ── Dataframe deeper editorial styling ───────────────────────── */
