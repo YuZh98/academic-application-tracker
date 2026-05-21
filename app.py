@@ -1,6 +1,7 @@
 # Streamlit entry point — dashboard home page.
 #
 
+import html
 from datetime import date
 from typing import Any
 
@@ -440,7 +441,7 @@ else:
     for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
         with st.container(border=True):
             _rel = str(_group.iloc[0]["relationship"] or "")
-            _rel_str = f" ({_rel})" if _rel else ""
+            _rel_str = f" ({html.escape(_rel)})" if _rel else ""
             _bullets = []
             for _, _row in _group.iterrows():
                 _inst: Any = _row["institute"]
@@ -450,10 +451,10 @@ else:
                 _days_ago = (_today - date.fromisoformat(_asked_iso)).days
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
-                _bullets.append(f"- {_label} (asked {_days_ago} days ago, due {_due})")
+                _bullets.append(f"- {html.escape(_label)} (asked {_days_ago} days ago, due {_due})")
             _body = (
                 f"<span class='aat-warn-mark'>{config.WARN_GLYPH}</span> "
-                f"**{_name}**{_rel_str}\n" + "\n".join(_bullets)
+                f"**{html.escape(str(_name))}**{_rel_str}\n" + "\n".join(_bullets)
             )
             st.markdown(_body, unsafe_allow_html=True)
 

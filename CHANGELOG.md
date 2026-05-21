@@ -78,6 +78,15 @@ manual steps to run against a pre-existing database.
   (`st.set_page_config` → `database.init_db()` →
   `ui.inject_global_styles()`).
 
+### Fixed
+- HTML-escape every database-derived value rendered into the
+  Recommender-Alerts card (recommender name, relationship,
+  institute, position) before it reaches a `unsafe_allow_html=True`
+  surface, so a stored value containing `<` or `>` is shown as
+  literal text rather than mounted into the canvas. Pinned by two
+  new tests under `TestT5RecommenderAlerts` and
+  `TestPendingAlertsPanel`.
+
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
 ### Added

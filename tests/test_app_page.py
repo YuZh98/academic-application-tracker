@@ -2716,6 +2716,30 @@ class TestT5RecommenderAlerts:
             f"Expected '{config.WARN_GLYPH} ... Dr. Smith' header in some card body. Got: {bodies}"
         )
 
+    def test_card_html_escapes_user_supplied_fields(self, db):
+        """Defence-in-depth: the alert card uses ``unsafe_allow_html=True``,
+        so every DB-derived value rendered into the card body must be
+        HTML-escaped before interpolation. A recommender whose name or
+        institute contains ``<`` / ``>`` must surface as escaped entities,
+        not as raw tags that Streamlit would mount into the canvas."""
+        self._seed_pending(
+            recommender_name="Dr <script>alert(1)</script>",
+            institute="Stanford <b>",
+            position_name="Bio <i>Postdoc</i>",
+        )
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        for body in bodies:
+            assert "<script>" not in body, (
+                f"Recommender name interpolated raw — XSS regression. Body: {body!r}"
+            )
+            assert "<b>" not in body and "<i>" not in body, (
+                f"Institute / position interpolated raw — XSS regression. Body: {body!r}"
+            )
+        assert any("&lt;script&gt;" in body for body in bodies), (
+            f"Expected escaped recommender name (`&lt;script&gt;`) in some card. Got: {bodies}"
+        )
+
     def test_card_bullet_includes_institute_and_position_name(self, db):
         """Bullet uses the T4 Label precedent
         '{institute}: {position_name}' so the user sees which posting
