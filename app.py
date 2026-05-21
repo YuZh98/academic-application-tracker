@@ -76,9 +76,14 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 # stays valid — the hero is the visual lead, the h1 is the legal page
 # name underneath it.
 ui.colophon("Dashboard")
+# v10: page_mark renders BEFORE the hero so the № lands at the same
+# flow position across all pages (immediately under the colophon).
+# Without this unification, Dashboard's mark sits 80vh down the page
+# while other pages' marks sit at the top, and the silent absence on
+# Applications cannot register against a moving anchor.
+ui.page_mark("№")
 ui.hero_greeting()
 ui.accent_bar()
-ui.page_mark("№")
 st.title("Academic Application Tracker")
 st.markdown(
     "<p class='aat-tagline'>Deadlines · Applications · Letters · All on one page.</p>",
