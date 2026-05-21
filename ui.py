@@ -959,25 +959,21 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
 
 /* ── Per-page editorial watermark glyph (§ ※ ¶ ⁂ …) ────────── */
 /* Each page picks a singular typographic mark; the Applications page
-   deliberately omits its glyph (silent Margiela lacuna). For the
-   absence to read as "withheld" rather than "missing", every other
-   page's glyph must land at the *same* coordinate so the empty slot
-   on Applications is a recognisable vacancy, not just whitespace.
-   We pin the mark to the top-right of the main content column via
-   the stMain positioning context (the wrapper carries no positioning
-   so the absolutely-positioned mark resolves against stMain).        */
-section[data-testid="stMain"] {
-    position: relative;
-}
+   deliberately omits its glyph (silent Margiela lacuna). The mark is
+   anchored to a 0-height wrapper inserted immediately after the
+   colophon strip on every page (including Dashboard, where the
+   wrapper precedes the hero greeting) so the mark lands at the same
+   flow position across pages. v9 tried pinning to stMain coords and
+   broke visibility on pages with a hero block — reverted in v10. */
 .aat-page-mark-wrap {
-    position: static;
+    position: relative;
     pointer-events: none;
     height: 0;
 }
 .aat-page-mark {
     position: absolute;
-    top: 7.5rem;
-    right: 2rem;
+    top: -1rem;
+    right: -1vw;
     font-family: var(--aat-font-serif);
     font-style: italic;
     font-weight: 400;
