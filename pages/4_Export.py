@@ -20,6 +20,7 @@ ui.inject_global_styles()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
+ui.colophon("Export")
 st.title("Export & Download")
 ui.accent_bar()
 st.markdown(

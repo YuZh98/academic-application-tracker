@@ -220,6 +220,35 @@ def hero_greeting(*, name: str | None = None, now: datetime | None = None) -> No
     )
 
 
+def colophon(section: str, *, now: datetime | None = None) -> None:
+    """Magazine-style masthead strip at the very top of every page.
+
+    Three-part editorial colophon:
+        ACAD. APPLICATION TRACKER   ·   <section> (vermilion)   ·   ISSUE <year-month>   ·   <weekday date>
+
+    Renders on the dashboard ("DASHBOARD") and on every page (the page
+    name). The visual presence at the top of the canvas gives every page
+    the same editorial signature without competing with the hero
+    greeting underneath.
+
+    `now` is exposed for tests; production reads ``datetime.now()`` so
+    the issue stamp tracks local wall time across reruns.
+    """
+    n = now or datetime.now()
+    safe_section = html.escape(section.upper())
+    issue = n.strftime("ISSUE %Y · %B").upper()
+    stamp = n.strftime("%A · %B %-d").upper()
+    st.markdown(
+        "<div class='aat-colophon'>"
+        "  <strong>Academic Application Tracker</strong>"
+        f"  <span class='aat-col-section'>{safe_section}</span>"
+        f"  <span class='aat-col-issue'>{issue}</span>"
+        f"  <span class='aat-col-stamp'>{stamp}</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def sidebar_about_block(version: str | None = None) -> None:
     """Sidebar 'About' expander. Mono uppercase header reads
     ``ABOUT · V<version>``. Default version is ``config.APP_VERSION``;
@@ -654,6 +683,153 @@ select:focus-visible,
     outline: 2px solid var(--aat-vermilion) !important;
     outline-offset: 3px !important;
     border-radius: 0 !important;
+}
+
+/* ── Editorial warn mark (replaces emoji ⚠️) ───────────────────── */
+.aat-warn-mark {
+    display: inline-block;
+    color: var(--aat-vermilion);
+    font-family: var(--aat-font-serif);
+    font-weight: 700;
+    margin-right: 0.35rem;
+    line-height: 1;
+    transform: translateY(-1px);
+}
+
+/* ── Body typography tuning ─────────────────────────────────────── */
+[data-testid="stAppViewContainer"] p,
+[data-testid="stAppViewContainer"] li {
+    line-height: 1.55 !important;
+    color: var(--aat-ink) !important;
+}
+[data-testid="stAppViewContainer"] li::marker {
+    color: var(--aat-vermilion);
+}
+
+/* ── Inputs — newspaper editorial form fields ──────────────────── */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input {
+    background: var(--aat-paper-soft) !important;
+    color: var(--aat-ink) !important;
+    border: 1px solid var(--aat-rule) !important;
+    border-radius: 0 !important;
+    font-family: var(--aat-font-mono) !important;
+    font-size: 0.85rem !important;
+    box-shadow: none !important;
+    padding: 0.5rem 0.7rem !important;
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus,
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stDateInput"] input:focus {
+    border-color: var(--aat-vermilion) !important;
+    outline: 1px solid var(--aat-vermilion) !important;
+    outline-offset: 0 !important;
+}
+
+/* Field labels — uppercase mono, generous letter-spacing */
+[data-testid="stTextInput"] label p,
+[data-testid="stTextArea"] label p,
+[data-testid="stNumberInput"] label p,
+[data-testid="stDateInput"] label p,
+[data-testid="stSelectbox"] label p,
+[data-testid="stMultiSelect"] label p,
+[data-testid="stRadio"] label p,
+[data-testid="stCheckbox"] label p {
+    font-family: var(--aat-font-mono) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.16em !important;
+    font-size: 0.66rem !important;
+    color: var(--aat-ink-muted) !important;
+    font-weight: 600 !important;
+}
+
+/* ── Selectbox — same editorial chrome as text inputs ───────────── */
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stMultiSelect"] > div > div {
+    background: var(--aat-paper-soft) !important;
+    border: 1px solid var(--aat-rule) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    font-family: var(--aat-font-mono) !important;
+    font-size: 0.85rem !important;
+}
+
+/* ── Expanders — magazine-section divider style ────────────────── */
+[data-testid="stExpander"] details {
+    background: transparent !important;
+    border: none !important;
+    border-top: 1px solid var(--aat-rule) !important;
+    border-bottom: 1px solid var(--aat-rule-soft) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+[data-testid="stExpander"] details summary {
+    font-family: var(--aat-font-mono) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.16em !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    color: var(--aat-ink) !important;
+    padding: 0.8rem 0.2rem !important;
+}
+[data-testid="stExpander"] details[open] summary {
+    border-bottom: 1px solid var(--aat-rule-soft);
+    margin-bottom: 0.5rem;
+}
+
+/* ── Dataframe — editorial gazetteer ───────────────────────────── */
+[data-testid="stDataFrame"] thead tr th {
+    background: var(--aat-ink) !important;
+    color: var(--aat-paper) !important;
+    font-family: var(--aat-font-mono) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    border-right: 1px solid var(--aat-paper-soft) !important;
+}
+[data-testid="stDataFrame"] tbody tr td {
+    background: var(--aat-paper) !important;
+    color: var(--aat-ink) !important;
+    font-family: var(--aat-font-sans) !important;
+    font-size: 0.86rem !important;
+    border-bottom: 1px solid var(--aat-rule-soft) !important;
+}
+[data-testid="stDataFrame"] tbody tr:hover td {
+    background: var(--aat-paper-soft) !important;
+}
+
+/* ── Colophon (issue masthead) ─────────────────────────────────── */
+.aat-colophon {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--aat-rule);
+    padding: 0.5rem 0 0.65rem;
+    margin-bottom: 0.4rem;
+    font-family: var(--aat-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.66rem;
+    color: var(--aat-ink-muted);
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.aat-colophon strong {
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--aat-ink);
+    font-size: 0.92rem;
+    letter-spacing: -0.005em;
+    text-transform: none;
+}
+.aat-colophon .aat-col-section {
+    color: var(--aat-vermilion);
+    font-weight: 700;
 }
 
 /* ── Print ─────────────────────────────────────────────────────── */
