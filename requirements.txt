@@ -6,7 +6,7 @@
 # or their dependents — verified 2026-05-05 via `pip show` reverse-dep
 # audit; zero orphans found):
 #   streamlit==1.57.0  — UI framework (the entire app surface)
-#   pandas==3.0.2      — data tables (st.dataframe + DB→table reads)
+#   pandas==3.0.3      — data tables (st.dataframe + DB→table reads)
 #   plotly==6.7.0      — Application Funnel chart on the dashboard
 # Dev-only direct deps live in requirements-dev.txt (pytest, ruff,
 # pre-commit, pyright).
@@ -18,16 +18,16 @@ certifi==2026.4.22
 charset-normalizer==3.4.7
 click==8.3.3
 gitdb==4.0.12
-GitPython==3.1.49
-idna==3.13
+GitPython==3.1.50
+idna==3.14
 Jinja2==3.1.6
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 MarkupSafe==3.0.3
-narwhals==2.20.0
+narwhals==2.21.0
 numpy==2.4.4
 packaging==26.2
-pandas==3.0.2
+pandas==3.0.3
 pillow==12.2.0
 plotly==6.7.0
 protobuf==7.34.1
@@ -35,7 +35,7 @@ pyarrow==24.0.0
 pydeck==0.9.2
 python-dateutil==2.9.0.post0
 referencing==0.37.0
-requests==2.33.1
+requests==2.34.0
 rpds-py==0.30.0
 six==1.17.0
 smmap==5.0.3
@@ -44,4 +44,4 @@ tenacity==9.1.4
 toml==0.10.2
 tornado==6.5.5
 typing_extensions==4.15.0
-urllib3==2.6.3
+urllib3==2.7.0
