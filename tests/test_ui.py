@@ -419,6 +419,115 @@ class TestPagesCallColophon:
             )
 
 
+_PAGE_MARK_GLYPHS = {"№", "§", "※", "⁂"}
+
+
+def _page_mark_glyphs(py_path: Path) -> list[str]:
+    """Return every literal-string arg passed to ``ui.page_mark(...)`` in
+    ``py_path``. AST-walks so a glyph mentioned in a comment doesn't lie."""
+    tree = ast.parse(py_path.read_text())
+    glyphs: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == "page_mark"):
+            continue
+        if node.args and isinstance(node.args[0], ast.Constant):
+            val = node.args[0].value
+            if isinstance(val, str):
+                glyphs.append(val)
+    return glyphs
+
+
+def _call_lineno(py_path: Path, attr_name: str) -> int | None:
+    """First-encountered line number of ``<something>.attr_name(...)`` in
+    ``py_path``. Returns None if no such call exists. Used to pin call
+    ORDER without coupling to surrounding line counts."""
+    tree = ast.parse(py_path.read_text())
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == attr_name:
+            return node.lineno
+    return None
+
+
+class TestPerPageMarkContract:
+    """Pin the Margiela-blank-label design contract introduced in
+    v0.14.0 (v6–v10): every non-Applications page renders one singular
+    per-page typographic mark in the title gutter via ``ui.page_mark``;
+    the Applications page deliberately omits its mark so the empty slot
+    reads as withheld rather than missing. Without these pins, a
+    future refactor could re-add a glyph to Applications (defanging the
+    central design gesture) or drop a glyph from one of the other
+    pages (breaking the system the absence relies on)."""
+
+    def test_app_py_has_a_page_mark(self) -> None:
+        glyphs = _page_mark_glyphs(_APP_PY)
+        assert len(glyphs) == 1, (
+            f"app.py must call ui.page_mark exactly once, got {len(glyphs)} call(s)"
+        )
+        assert glyphs[0] in _PAGE_MARK_GLYPHS, (
+            f"app.py page_mark glyph {glyphs[0]!r} must be one of {_PAGE_MARK_GLYPHS}"
+        )
+
+    def test_non_applications_pages_each_have_one_mark(self) -> None:
+        for page in sorted(_PAGES_DIR.glob("*.py")):
+            if page.name == "2_Applications.py":
+                continue
+            glyphs = _page_mark_glyphs(page)
+            assert len(glyphs) == 1, (
+                f"{page.name} must call ui.page_mark exactly once, got {len(glyphs)} call(s)"
+            )
+            assert glyphs[0] in _PAGE_MARK_GLYPHS, (
+                f"{page.name} page_mark glyph {glyphs[0]!r} must be one of {_PAGE_MARK_GLYPHS}"
+            )
+
+    def test_applications_page_omits_page_mark(self) -> None:
+        # The Margiela lacuna: Applications carries NO ui.page_mark
+        # call so the slot the other four pages fill stays empty. A
+        # future re-introduction of a glyph here would defang the
+        # central design gesture — block it at the test layer.
+        applications = _PAGES_DIR / "2_Applications.py"
+        glyphs = _page_mark_glyphs(applications)
+        assert glyphs == [], (
+            f"pages/2_Applications.py must NOT call ui.page_mark — the "
+            f"empty gutter slot is the design gesture. Found {glyphs!r}."
+        )
+
+    def test_dashboard_page_mark_renders_before_hero(self) -> None:
+        # The mark must land at the same flow position across pages
+        # (top-right of main column, just under the colophon) so the
+        # Applications absence reads as withheld rather than missing.
+        # On Dashboard that means ui.page_mark MUST run BEFORE
+        # ui.hero_greeting; otherwise the hero pushes the glyph below
+        # the fold and the grid pin breaks (regression caught in v10).
+        mark_line = _call_lineno(_APP_PY, "page_mark")
+        hero_line = _call_lineno(_APP_PY, "hero_greeting")
+        assert mark_line is not None, "app.py must call ui.page_mark"
+        assert hero_line is not None, "app.py must call ui.hero_greeting"
+        assert mark_line < hero_line, (
+            f"app.py: ui.page_mark (line {mark_line}) must run BEFORE "
+            f"ui.hero_greeting (line {hero_line}) so the glyph lands at "
+            "the same coord as on every other page"
+        )
+
+    def test_glyph_uniqueness_across_pages(self) -> None:
+        # Each page picks its OWN glyph (No  for Dashboard, sect for
+        # Opportunities, etc.) — repeating one would flatten the system
+        # into wallpaper. Pin uniqueness across the four marked pages.
+        glyphs: list[str] = list(_page_mark_glyphs(_APP_PY))
+        for page in sorted(_PAGES_DIR.glob("*.py")):
+            if page.name == "2_Applications.py":
+                continue
+            glyphs.extend(_page_mark_glyphs(page))
+        assert len(glyphs) == len(set(glyphs)), (
+            f"Per-page mark glyphs must be unique across pages; got {glyphs!r}"
+        )
+
+
 class TestWarnMarkStyle:
     """The .aat-warn-mark class is the single hook that replaces the
     pre-v0.14.0 emoji ⚠️. Its CSS sets the vermilion colour + serif
@@ -460,8 +569,10 @@ class TestEditorialTokens:
             css = mock_md.call_args.args[0]
             assert "aat-hero-orb" not in css
             assert "@keyframes aat-orb-spin" not in css
+        from datetime import datetime
+
         with patch.object(ui.st, "markdown") as mock_md:
-            ui.hero_greeting()
+            ui.hero_greeting(now=datetime(2026, 1, 1, 10, 0))
             payload = " ".join(c.args[0] for c in mock_md.call_args_list)
             assert "aat-hero-orb" not in payload
 
