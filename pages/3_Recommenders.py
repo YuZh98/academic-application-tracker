@@ -25,6 +25,7 @@ ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
 ui.colophon("Recommenders")
+ui.page_mark("※")
 st.title("Recommenders")
 ui.accent_bar()
 st.markdown(

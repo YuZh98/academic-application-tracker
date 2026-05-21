@@ -78,6 +78,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 ui.colophon("Dashboard")
 ui.hero_greeting()
 ui.accent_bar()
+ui.page_mark("№")
 st.title("Academic Application Tracker")
 st.markdown(
     "<p class='aat-tagline'>Deadlines · Applications · Letters · All on one page.</p>",

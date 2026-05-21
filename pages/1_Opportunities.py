@@ -122,6 +122,7 @@ def _deadline_urgency(date_str: Any) -> str:
 
 
 ui.colophon("Opportunities")
+ui.page_mark("§")
 st.title("Opportunities")
 ui.accent_bar()
 # Tagline rendered as plain markdown (not st.caption) so the caption
