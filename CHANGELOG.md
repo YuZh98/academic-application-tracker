@@ -25,18 +25,40 @@ manual steps to run against a pre-existing database.
   Reference points: Wallpaper\*, 032c, Vignelli MTA, Wim Crouwel.
 - Add `ui.hero_greeting()` — dashboard masthead rendering a
   time-of-day italic-serif greeting (Good morning. / afternoon. /
-  evening.) over a slow-rotating conic-gradient orb, with a mono
-  uppercase date stamp underneath.
+  evening.) with a mono uppercase date stamp underneath.
 - Add `ui.numbered_section(n, title)` — editorial section mark in
   the `01 — TITLE` pattern (zero-padded italic serif numeral +
   vermilion separator + uppercase mono title).
-- Add seven new `tests/test_ui.py` classes pinning the editorial
+- Add `ui.colophon(section)` and `ui.folio_footer()` — magazine
+  masthead strip across the top of every page and a roman-numeral
+  folio footer (`Vol. XIV · № 05 / 2026 · ZHENG · MMXXVI · — fin —`)
+  along the bottom, so every page carries the same editorial signature.
+- Add `ui.page_mark(glyph)` — per-page singular typographic mark
+  rendered as an oversized faint vermilion italic in the top-right
+  gutter of each page: `№` on Dashboard, `§` on Opportunities,
+  `※` on Recommenders, `⁂` on Export. The Applications page
+  deliberately omits its mark (Margiela blank-label silent
+  absence) so the empty slot reads as withholding rather than
+  decoration.
+- Hide Streamlit's element toolbar over data grids and force the
+  canvas background to paper so the data tables sit visually inside
+  the editorial frame rather than floating above it.
+- Restyle selectbox value cells to mono caps + tracked
+  letter-spacing so filter controls stop reading as stock BaseWeb.
+- Add nine `tests/test_ui.py` classes pinning the editorial
   contract: hero band-edges by hour (morning / afternoon / evening
   including the 2am edge), name-prefix injection guard, numbered
   section format, Bauhaus three-block accent bar, palette tokens
   (`--aat-vermilion`, `--aat-cobalt`, `--aat-citron`,
-  `--aat-paper`, `--aat-ink`), conic-gradient orb keyframes, and
-  the serif / mono / sans font stacks.
+  `--aat-paper`, `--aat-ink`), the hero gradient orb's deliberate
+  absence (so a future refactor cannot silently reintroduce it),
+  the serif / mono / sans font stacks, the per-page-mark glyph
+  contract (each non-Applications page calls `ui.page_mark` with a
+  glyph drawn from the issue / section / asterism / reference
+  vocabulary; Applications calls it zero times), and the
+  Dashboard-specific ordering rule that `ui.page_mark` runs before
+  `ui.hero_greeting` so the glyph lands at the same flow position
+  as on every other page.
 
 ### Added
 - Introduce `ui.py` — shared design-system module exposing
