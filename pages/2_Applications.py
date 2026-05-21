@@ -26,7 +26,11 @@ ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
 ui.colophon("Applications")
-ui.page_mark("¶")
+# v7: deliberate absence — the Applications page intentionally skips
+# its per-page glyph and emits an italic "(without mark)" lacuna in
+# its place. Margiela-blank-label move: the broken rule is the
+# louder gesture than another well-placed §/※/¶ would be.
+ui.lacuna_note()
 st.title("Applications")
 ui.accent_bar()
 st.markdown(
