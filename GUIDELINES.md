@@ -64,8 +64,9 @@ importing `exports` lazily inside each write function (not at module top).
 - `ui.py` — Design-system stylesheet + pill/header helpers. No SQL, no
   file I/O, no business logic; pinned by `tests/test_ui.py`.
 - Page files — Display only. No raw SQL. No file I/O. Every page calls
-  `ui.inject_global_styles()` immediately after `st.set_page_config`
-  (pinned by `tests/test_ui.py::TestPagesInjectStyles`).
+  `st.set_page_config` first, then `database.init_db()`, then
+  `ui.inject_global_styles()` (pinned by
+  `tests/test_ui.py::TestPagesInjectStyles`).
 
 ---
 

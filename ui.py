@@ -8,12 +8,11 @@
 #     into the data tier).
 #   - all CSS lives in this one module; pages never inject raw <style>.
 #
-# Aesthetic charter (v0.14.0 editorial-brutalist refresh):
+# Aesthetic charter (editorial-brutalist, v0.14.0):
 #   - Three typographic voices: serif italic (display), mono (labels),
-#     sans (body). The contrast is the point — Apple-tech sans-only is
-#     out, magazine-confident hierarchy is in.
+#     sans (body). Magazine-confident hierarchy, not sans-only minimalism.
 #   - Warm cream paper + ink ramp. Vermilion + cobalt + citron as
-#     editorial accents (Bauhaus / Vignelli, not Memphis camp).
+#     editorial accents (Bauhaus / Vignelli).
 #   - No drop shadows. Surfaces sit on the paper; depth comes from
 #     hairlines and typographic mass.
 #   - Sharp geometry: 0px section radii, 2px input radii, 999px on pills
@@ -227,9 +226,8 @@ def folio_footer(*, now: datetime | None = None) -> None:
                                                         — fin —
 
     The Roman numeral volume + lowercase serif issue mark + the
-    final "— fin —" together set this apart from every other
-    Streamlit surface; it is the deliberate "couldn't-have-been-
-    generated" gesture the aesthetic reviewers asked for.
+    closing "— fin —" form the deliberate signature mark that sets
+    every page apart from the default Streamlit chrome.
     """
     n = now or datetime.now()
 

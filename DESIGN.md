@@ -126,7 +126,6 @@ tests/                    pytest suite
 docs/
   adr/                    Architectural Decision Records
   dev-notes/              Deep-dive references
-  superpowers/specs/      Approved design specs (one per major redesign)
   ui/                     Wireframes + responsive screenshots
 DESIGN.md                 This file
 GUIDELINES.md             Coding conventions
@@ -488,32 +487,37 @@ Manual export trigger and per-file download. Layout wireframe: [`docs/ui/wirefra
 Shared presentation layer, introduced in v0.14.0. All visual identity
 lives here so the four pages render with the same shell.
 
-**Aesthetic charter (Apple-tech, restrained):**
+**Aesthetic charter (editorial-brutalist):**
 
-- One brand accent (indigo `#4F6BEF`), one accent-2 (violet `#8B5CF6`),
-  one success (`#10B981`), one warn (`#F59E3A`), one danger (`#EF4444`).
-- Slate neutral ramp for surfaces + text; tokens flip via
-  `@media (prefers-color-scheme: dark)` so OS appearance is honoured.
-- One elevation step: 1 px hairline border + soft 6/20 shadow.
-- Motion: 170 ms `cubic-bezier(0.2, 0, 0, 1)` on hover/focus only.
-- Typography: system stack (`-apple-system, SF Pro Text, …`); H1 700,
-  eyebrow `0.7rem` uppercase, body `0.95rem`.
+- Three typographic voices — italic-serif display (`'New York', ui-serif, Georgia`), uppercase mono labels (`ui-monospace, 'SF Mono', Menlo`), system sans body. Display tightened to `-0.02em`; mono tracked to `+0.12em`.
+- Palette — warm-cream paper (`--aat-paper #F4EDE0`) over ink (`--aat-ink #0A0A0A`), with vermilion (`--aat-vermilion #E63946`), cobalt (`--aat-cobalt #2541B2`), and citron (`--aat-citron #F4D35E`) as the editorial accents; sage and oxblood reserved for success / danger signalling.
+- Tokens flip under `@media (prefers-color-scheme: dark)` so OS appearance is honoured (cream↔ink invert; vermilion / citron hold; cobalt brightens).
+- Geometry — sharp. `0px` radius on sections, `2px` on inputs, `999px` on pills only. Hairlines (`1px solid var(--aat-rule)`) replace boxed cards. No drop shadows; depth comes from typographic mass and negative space.
+- Motion — slow, deliberate. Hover / focus on `cubic-bezier(0.2, 0, 0, 1)`; the hero conic gradient rotates one full turn every 120s.
 
 **Public API:**
 
 | Function | Returns | Purpose |
-|---------|---------|---------|
-| `inject_global_styles()` | None | Emits the stylesheet via `st.markdown(..., unsafe_allow_html=True)`. Call once per page after `st.set_page_config`. |
-| `accent_bar()` | None | Three-stop indigo→violet→green hairline; brand mark below page titles. |
-| `section_header(text, eyebrow=None)` | None | Renders an uppercase eyebrow + tight H2 title. |
-| `status_pill(raw_status)` | HTML string | Soft-tint pill rendering `STATUS_LABELS[raw]`. Unknown values fall back to a neutral class. |
-| `urgency_pill(days_left, *, urgent_d, alert_d)` | HTML string | Banded pill (urgent ≤ `DEADLINE_URGENT_DAYS`, warn ≤ `DEADLINE_ALERT_DAYS`, calm beyond). Negative inputs stay urgent. |
-| `sidebar_about_block(version)` | None | Sidebar expander exposing version + repo link. |
+|---|---|---|
+| `inject_global_styles()` | None | Emits the full stylesheet via `st.markdown(..., unsafe_allow_html=True)`. Call once per page after `st.set_page_config` (and after `database.init_db()`). |
+| `accent_bar()` | None | Vermilion + cobalt + citron Bauhaus block trio, butted edge-to-edge under page titles. |
+| `section_header(text, *, eyebrow=None)` | None | Uppercase mono eyebrow + tight italic-serif H2 title. |
+| `numbered_section(n, title)` | None | Editorial `01 — TITLE` mark — zero-padded italic-serif numeral, vermilion separator, uppercase mono title. |
+| `hero_greeting(*, name=None, now=None)` | None | Dashboard masthead — time-of-day italic-serif greeting + uppercase mono date stamp. |
+| `colophon(section, *, now=None)` | None | Magazine masthead strip rendered at the top of every page. |
+| `folio_footer(*, now=None)` | None | Roman-numeral folio at the bottom of every page (`Vol. XIV · № 05 / 2026 · — fin —`). |
+| `page_mark(glyph)` | None | Oversized faint vermilion italic mark in the top-right gutter; one glyph per page (Dashboard `№`, Opportunities `§`, Recommenders `※`, Export `⁂`). Applications deliberately omits this mark. |
+| `status_pill(raw_status)` | HTML string | Ticket-stub pill rendering `STATUS_LABELS[raw]`. Unknown values fall back to a neutral class; label content is HTML-escaped. |
+| `urgency_pill(days_left, *, urgent_d, alert_d)` | HTML string | Banded pill (urgent ≤ `DEADLINE_URGENT_DAYS`, alert ≤ `DEADLINE_ALERT_DAYS`, calm beyond). Negative inputs stay urgent. |
+| `sidebar_about_block(version=None)` | None | Sidebar expander exposing version + repo link. `version` defaults to `config.APP_VERSION`. |
+| `sidebar_shortcuts_block()` | None | Sidebar expander listing the Streamlit keyboard affordances. |
 
 **Architectural constraint:** `ui.py` imports `config` + `streamlit`
-only; it never touches `database` or `exports`. The page-injection rule
-is pinned by `tests/test_ui.py::TestPagesInjectStyles` (AST grep over
-`app.py` + every file under `pages/`).
+only; it never touches `database` or `exports`. Every page calls
+`ui.inject_global_styles()`, `ui.sidebar_about_block()`, and
+`ui.sidebar_shortcuts_block()`; the contract is pinned by
+`tests/test_ui.py` (AST grep over `app.py` + every file under
+`pages/`).
 
 ---
 

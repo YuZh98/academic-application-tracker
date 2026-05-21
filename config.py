@@ -17,13 +17,12 @@
 # tests/test_config.py::test_app_version_matches_pyproject.
 APP_VERSION: str = "0.14.0-dev"
 
-# Editorial warning glyph — replaces the emoji ⚠️ that broke the
-# typographic register in the v0.14.0 editorial refresh (all three
-# aesthetic reviewers flagged it). U+25B2 black up-pointing triangle:
-# Bauhaus shape, monochrome, renders identically across platforms
-# (no emoji fallback), pairs with the vermilion accent. Surfaces in
-# dashboard + Recommenders page alert headers; CSS wraps it in a
-# .aat-warn-mark span so the colour is uniform.
+# Editorial warning glyph — U+25B2 black up-pointing triangle. Replaces
+# the emoji ⚠️ which broke the typographic register of the editorial
+# refresh. Bauhaus shape, monochrome, renders identically across
+# platforms (no emoji fallback), pairs with the vermilion accent.
+# Surfaces in dashboard + Recommenders page alert headers; CSS wraps
+# it in a .aat-warn-mark span so the colour stays uniform.
 WARN_GLYPH: str = "▲"
 
 
