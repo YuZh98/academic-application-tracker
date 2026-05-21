@@ -2535,7 +2535,7 @@ class TestT5RecommenderAlerts:
     # copy updates.
     EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDER_FOLLOWUPS
     BORDER_SOURCE = "st.container(border=True)"
-    WARN_GLYPH = "⚠️"
+    WARN_GLYPH = config.WARN_GLYPH
 
     @staticmethod
     def _has_subheader(at: AppTest, value: str) -> bool:
@@ -2704,13 +2704,16 @@ class TestT5RecommenderAlerts:
     # ── Group C: card content contract ────────────────────────────────────
 
     def test_card_header_uses_warn_glyph_and_bold_name(self, db):
-        """`⚠️ **{Name}**` header — glyph outside bold, bold name stands apart
-        from the bullets visually; emoji variant for consistent rendering."""
+        """`<span class='aat-warn-mark'>{WARN_GLYPH}</span> **{Name}**` header —
+        glyph wrapped in the editorial warn-mark span (vermilion ▲), bold
+        name follows. v0.14.0 swapped the legacy ⚠️ emoji for a
+        typographic mark so the alert card stays inside the editorial
+        type register."""
         self._seed_pending(recommender_name="Dr. Smith")
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        assert any("⚠️ **Dr. Smith**" in body for body in bodies), (
-            f"Expected '⚠️ **Dr. Smith**' header in some card body. Got: {bodies}"
+        assert any(f"{config.WARN_GLYPH}</span> **Dr. Smith**" in body for body in bodies), (
+            f"Expected '{config.WARN_GLYPH} ... Dr. Smith' header in some card body. Got: {bodies}"
         )
 
     def test_card_bullet_includes_institute_and_position_name(self, db):
@@ -2812,7 +2815,7 @@ class TestT5RecommenderAlerts:
 
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        smith_cards = [b for b in bodies if "⚠️ **Dr. Smith**" in b]
+        smith_cards = [b for b in bodies if f"{config.WARN_GLYPH}</span> **Dr. Smith**" in b]
         assert len(smith_cards) == 1, (
             f"Two pending letters for Dr. Smith should produce ONE "
             f"card (grouped by recommender_name). Got {len(smith_cards)} "
@@ -2859,8 +2862,8 @@ class TestT5RecommenderAlerts:
 
         at = _run_page()
         bodies = self._alert_markdowns(at)
-        smith_cards = [b for b in bodies if "⚠️ **Dr. Smith**" in b]
-        jones_cards = [b for b in bodies if "⚠️ **Dr. Jones**" in b]
+        smith_cards = [b for b in bodies if f"{config.WARN_GLYPH}</span> **Dr. Smith**" in b]
+        jones_cards = [b for b in bodies if f"{config.WARN_GLYPH}</span> **Dr. Jones**" in b]
         assert len(smith_cards) == 1, (
             f"Expected exactly one Dr. Smith card. Got {len(smith_cards)}: {smith_cards}"
         )

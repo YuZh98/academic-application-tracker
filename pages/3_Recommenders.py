@@ -24,6 +24,7 @@ ui.inject_global_styles()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
+ui.colophon("Recommenders")
 st.title("Recommenders")
 ui.accent_bar()
 st.markdown(
@@ -217,8 +218,11 @@ else:
                 _due = _format_due(_due_raw)
                 _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
 
-            _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
-            st.markdown(_body)
+            _body = (
+                f"<span class='aat-warn-mark'>{config.WARN_GLYPH}</span> "
+                f"**{_name}**{_rel_str}\n" + "\n".join(_bullets)
+            )
+            st.markdown(_body, unsafe_allow_html=True)
 
             # ──  Compose reminder email ────────────────────────────
 

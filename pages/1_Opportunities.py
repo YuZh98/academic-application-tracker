@@ -121,6 +121,7 @@ def _deadline_urgency(date_str: Any) -> str:
     return config.urgency_glyph(days)
 
 
+ui.colophon("Opportunities")
 st.title("Opportunities")
 ui.accent_bar()
 # Tagline rendered as plain markdown (not st.caption) so the caption

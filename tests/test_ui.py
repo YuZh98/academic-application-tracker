@@ -365,6 +365,73 @@ class TestAccentBarShape:
             assert "aat-accent-block-3" in payload
 
 
+class TestColophon:
+    """Editorial masthead strip at the very top of every page."""
+
+    def test_carries_section_name(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.colophon("Dashboard", now=datetime(2026, 5, 20))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "DASHBOARD" in payload
+
+    def test_carries_app_name(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.colophon("Opportunities", now=datetime(2026, 5, 20))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Academic Application Tracker" in payload
+
+    def test_issue_stamp_includes_month_year(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.colophon("Dashboard", now=datetime(2026, 5, 20))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "MAY" in payload
+            assert "2026" in payload
+
+    def test_html_escapes_section(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.colophon("<script>x</script>", now=datetime(2026, 5, 20))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "<script>" not in payload
+            assert "&lt;" in payload
+
+
+class TestPagesCallColophon:
+    """Every entrypoint must call ui.colophon() so the editorial
+    masthead is present on every screen — this is the move that
+    carries the design system below the fold (no more "header
+    editorial, interior Streamlit-default")."""
+
+    def test_app_py_calls(self) -> None:
+        assert _module_calls(_APP_PY, "colophon"), "app.py must call ui.colophon()"
+
+    def test_every_page_calls(self) -> None:
+        for page in sorted(_PAGES_DIR.glob("*.py")):
+            assert _module_calls(page, "colophon"), (
+                f"{page.name} must call ui.colophon() at the top of the page"
+            )
+
+
+class TestWarnMarkStyle:
+    """The .aat-warn-mark class is the single hook that replaces the
+    pre-v0.14.0 emoji ⚠️. Its CSS sets the vermilion colour + serif
+    voice so the typographic register doesn't break."""
+
+    def test_class_styled_in_stylesheet(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            css = mock_md.call_args.args[0]
+            assert ".aat-warn-mark" in css
+            assert "var(--aat-vermilion)" in css
+
+
 class TestEditorialTokens:
     """Pin the editorial palette tokens in the global stylesheet. A
     regression that quietly dropped the vermilion / cobalt / citron

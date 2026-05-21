@@ -75,6 +75,7 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 # `at.title` contract pinned by tests/test_app_page.py::TestT1AppShell
 # stays valid — the hero is the visual lead, the h1 is the legal page
 # name underneath it.
+ui.colophon("Dashboard")
 ui.hero_greeting()
 ui.accent_bar()
 st.title("Academic Application Tracker")
@@ -444,5 +445,8 @@ else:
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
                 _bullets.append(f"- {_label} (asked {_days_ago} days ago, due {_due})")
-            _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
-            st.markdown(_body)
+            _body = (
+                f"<span class='aat-warn-mark'>{config.WARN_GLYPH}</span> "
+                f"**{_name}**{_rel_str}\n" + "\n".join(_bullets)
+            )
+            st.markdown(_body, unsafe_allow_html=True)

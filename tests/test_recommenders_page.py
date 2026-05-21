@@ -152,7 +152,9 @@ class TestPendingAlertsPanel:
     # copy updates.
     EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDERS
     BORDER_SOURCE = "st.container(border=True)"
-    WARN_GLYPH = "⚠️"
+    # Sourced from config so swapping the editorial warn mark (⚠️ → ▲
+    # in v0.14.0) doesn't require a test edit.
+    WARN_GLYPH = config.WARN_GLYPH
 
     @classmethod
     def _alert_markdowns(cls, at: AppTest) -> list[str]:
