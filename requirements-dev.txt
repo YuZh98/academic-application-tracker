@@ -3,7 +3,7 @@
 # Pinned to keep CI and local environments byte-identical.
 
 pytest==9.0.3
-pytest-cov==6.1.0
+pytest-cov==7.1.0
 ruff==0.15.12
 pre-commit==4.6.0
 pyright==1.1.409
