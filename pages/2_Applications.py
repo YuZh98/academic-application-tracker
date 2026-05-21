@@ -26,6 +26,7 @@ ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
 ui.colophon("Applications")
+ui.page_mark("¶")
 st.title("Applications")
 ui.accent_bar()
 st.markdown(

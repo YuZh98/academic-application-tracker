@@ -21,6 +21,7 @@ ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
 ui.colophon("Export")
+ui.page_mark("⁂")
 st.title("Export & Download")
 ui.accent_bar()
 st.markdown(

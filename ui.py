@@ -280,6 +280,25 @@ def folio_footer(*, now: datetime | None = None) -> None:
     )
 
 
+def page_mark(glyph: str) -> None:
+    """Render a singular oversized editorial mark in the page-title
+    gutter. Each page picks its own glyph (§, ※, ¶, ⁂, № …) so the
+    watermark stays "an intrusion" rather than a repeated decoration
+    — addresses the v5 critique that a universal № flattens into
+    wallpaper.
+
+    The mark is absolutely positioned in a 0-height wrapper so it
+    paints behind the next element (the page title) without
+    consuming vertical space.
+    """
+    st.markdown(
+        f"<div class='aat-page-mark-wrap'>"
+        f"<span class='aat-page-mark'>{html.escape(glyph)}</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def colophon(section: str, *, now: datetime | None = None) -> None:
     """Magazine-style masthead strip at the very top of every page.
 
@@ -421,25 +440,10 @@ body::before {
 }
 
 /* ── Page title (st.title → h1) — italic serif monumental ─────── */
-[data-testid="stHeading"]:has(h1) {
-    position: relative;
-}
-[data-testid="stHeading"]:has(h1)::after {
-    content: "№";
-    position: absolute;
-    right: -1vw;
-    top: -30%;
-    font-family: var(--aat-font-serif);
-    font-style: italic;
-    font-weight: 400;
-    font-size: clamp(7rem, 14vw, 11rem);
-    color: var(--aat-vermilion);
-    opacity: 0.07;
-    line-height: 0.85;
-    pointer-events: none;
-    z-index: 0;
-    letter-spacing: -0.05em;
-}
+/* (Per-page editorial mark is now rendered as an explicit
+   ui.page_mark(glyph) element so each page gets a unique typographic
+   intrusion — §, ※, ¶, ⁂ — rather than the same № repeated as
+   wallpaper across the system.) */
 h1, [data-testid="stHeading"] h1 {
     font-family: var(--aat-font-serif) !important;
     font-style: italic !important;
@@ -685,9 +689,15 @@ h2.aat-section-title {
 }
 
 /* ── Dataframes ────────────────────────────────────────────────── */
+/* No surrounding cage — Brutalist hard ink shadow only, with a 2 px
+   ink top rule and a 2 px ink bottom rule. The shadow implies the
+   frame; the box border is what made v5 read as a Streamlit widget
+   default. */
 [data-testid="stDataFrame"] {
     border-radius: 0;
-    border: 1px solid var(--aat-rule) !important;
+    border: none !important;
+    border-top: 2px solid var(--aat-ink) !important;
+    border-bottom: 2px solid var(--aat-ink) !important;
     overflow: hidden;
     box-shadow: none;
 }
@@ -716,11 +726,36 @@ h2.aat-section-title {
 }
 
 /* ── Sidebar — editorial table of contents ─────────────────────── */
-section[data-testid="stSidebar"] {
+section[data-testid="stSidebar"],
+[data-testid="stSidebarContent"],
+[data-testid="stSidebarUserContent"] {
     background: var(--aat-paper-soft) !important;
     border-right: 1px solid var(--aat-rule);
 }
-section[data-testid="stSidebarNav"] a {
+[data-testid="stSidebarContent"] {
+    padding-top: 2rem !important;
+}
+/* Sidebar masthead — typeset like a contents-page heading. */
+[data-testid="stSidebarNav"]::before {
+    content: "Contents";
+    display: block;
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-size: 1.4rem;
+    color: var(--aat-ink);
+    margin: 0 0 0.6rem 0.6rem;
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+[data-testid="stSidebarNav"]::after {
+    content: "";
+    display: block;
+    height: 2px;
+    background: var(--aat-vermilion);
+    width: 32px;
+    margin: 0.2rem 0 0.6rem 0.6rem;
+}
+[data-testid="stSidebarNav"] a {
     border-radius: 0;
     padding: 0.5rem 0.6rem 0.5rem 0.9rem;
     margin-bottom: 0;
@@ -735,12 +770,12 @@ section[data-testid="stSidebarNav"] a {
     font-weight: 500;
     color: var(--aat-ink) !important;
 }
-section[data-testid="stSidebarNav"] a:hover {
+[data-testid="stSidebarNav"] a:hover {
     border-left-color: var(--aat-cobalt);
     padding-left: 1.1rem;
     color: var(--aat-cobalt) !important;
 }
-section[data-testid="stSidebarNav"] a[aria-current="page"] {
+[data-testid="stSidebarNav"] a[aria-current="page"] {
     border-left-color: var(--aat-vermilion);
     color: var(--aat-vermilion) !important;
     font-weight: 700;
@@ -927,28 +962,35 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
     color: var(--aat-vermilion);
 }
 
-/* ── Editorial watermark — ghosted issue mark behind the hero ──── */
-/* References-devour-themselves move: a monumental italic-serif issue
-   numeral occupies the hero zone at very low opacity, deliberately
-   too big for the frame so the cropping reads as intentional. The
-   number is the same volume Roman numeral used in the folio footer —
-   it ties the masthead and the sign-off into one closed loop. */
-.aat-hero::after {
-    content: "№";
+/* ── Per-page editorial watermark glyph (§ ※ ¶ ⁂ …) ────────── */
+/* Each page picks a singular typographic mark — issue, section,
+   reference, paragraph, asterism — so the gesture stays "an
+   intrusion" rather than a repeated decoration. Position is anchored
+   to the right gutter of the page-title block via a wrapper. */
+.aat-page-mark-wrap {
+    position: relative;
+    pointer-events: none;
+    height: 0;
+}
+.aat-page-mark {
     position: absolute;
-    right: -2vw;
-    bottom: -4vw;
+    top: -2.5rem;
+    right: -1vw;
     font-family: var(--aat-font-serif);
     font-style: italic;
     font-weight: 400;
-    font-size: clamp(12rem, 28vw, 22rem);
+    font-size: clamp(7rem, 14vw, 11rem);
     color: var(--aat-vermilion);
     opacity: 0.08;
     line-height: 0.85;
-    pointer-events: none;
     z-index: 0;
-    letter-spacing: -0.06em;
+    letter-spacing: -0.05em;
+    user-select: none;
 }
+
+/* Hero watermark removed in v6 — the per-page ui.page_mark() helper
+   handles the editorial mark singly per page (different glyph each
+   page) so the gesture stays an intrusion rather than wallpaper. */
 
 /* ── Main-canvas markdown bullets — italic serif pull-quote ─────── */
 /* Streamlit 1.57 dropped the stVerticalBlockBorderWrapper testid the
@@ -984,7 +1026,6 @@ section[data-testid="stMain"] [data-testid="stMarkdown"] p strong {
    chrome is HTML — push the wrapper to match the editorial system
    and lean on tabular-nums for any numeric columns. */
 [data-testid="stDataFrame"] {
-    box-shadow: 4px 4px 0 var(--aat-ink) !important;
     border-radius: 0 !important;
 }
 [data-testid="stDataFrame"] thead tr th,
