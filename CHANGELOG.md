@@ -17,13 +17,35 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added (editorial-brutalist refresh)
+- Pivot the v0.14.0 visual identity from Apple-tech minimalism to
+  **editorial brutalism** — warm-cream paper background, italic-serif
+  display headlines, mono uppercase labels, Bauhaus accent blocks
+  (vermilion + cobalt + citron), hairline rules instead of soft cards.
+  Reference points: Wallpaper\*, 032c, Vignelli MTA, Wim Crouwel.
+- Add `ui.hero_greeting()` — dashboard masthead rendering a
+  time-of-day italic-serif greeting (Good morning. / afternoon. /
+  evening.) over a slow-rotating conic-gradient orb, with a mono
+  uppercase date stamp underneath.
+- Add `ui.numbered_section(n, title)` — editorial section mark in
+  the `01 — TITLE` pattern (zero-padded italic serif numeral +
+  vermilion separator + uppercase mono title).
+- Add seven new `tests/test_ui.py` classes pinning the editorial
+  contract: hero band-edges by hour (morning / afternoon / evening
+  including the 2am edge), name-prefix injection guard, numbered
+  section format, Bauhaus three-block accent bar, palette tokens
+  (`--aat-vermilion`, `--aat-cobalt`, `--aat-citron`,
+  `--aat-paper`, `--aat-ink`), conic-gradient orb keyframes, and
+  the serif / mono / sans font stacks.
+
 ### Added
 - Introduce `ui.py` — shared design-system module exposing
   `inject_global_styles()`, `status_pill()`, `urgency_pill()`,
   `accent_bar()`, `section_header()`, `sidebar_about_block()`, and
-  `sidebar_shortcuts_block()`. Tokens (colour, radius, shadow, motion,
+  `sidebar_shortcuts_block()`. Tokens (colour, radius, motion,
   typography) live as CSS custom properties on `:root` with a
-  `prefers-color-scheme: dark` block flipping the slate ramp for
+  `prefers-color-scheme: dark` block flipping the warm-cream / ink
+  pair for
   OS-level dark-mode honouring.
 - Add `tests/test_ui.py` pinning pill output, urgency bands, dark-mode
   block presence, `unsafe_allow_html` kwarg, and AST greps that every
