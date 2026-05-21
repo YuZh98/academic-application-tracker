@@ -212,7 +212,6 @@ def hero_greeting(*, name: str | None = None, now: datetime | None = None) -> No
 
     st.markdown(
         "<div class='aat-hero'>"
-        "  <div class='aat-hero-orb'></div>"
         f"  <h1 class='aat-hero-greeting'>{html.escape(greeting)}</h1>"
         f"  <div class='aat-hero-stamp'>{stamp}</div>"
         "</div>",
@@ -276,22 +275,6 @@ def folio_footer(*, now: datetime | None = None) -> None:
         f"  <span>Zheng · {year_roman}</span>"
         "  <span class='aat-folio-end'>— fin —</span>"
         "</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def lacuna_note() -> None:
-    """Margiela-blank-label move: an explicit *absence* in place of the
-    per-page editorial glyph. Renders a small italic-serif printer's
-    note "(without mark)" in the title gutter so the missing glyph is
-    a designed gesture, not an oversight.
-
-    Specifically intended for ONE page in the system (Applications) so
-    the absence breaks the otherwise-legible per-page glyph rule —
-    addresses the "completeness is the enemy of haunting" critique.
-    """
-    st.markdown(
-        "<div class='aat-page-mark-wrap'><span class='aat-lacuna'>(without mark)</span></div>",
         unsafe_allow_html=True,
     )
 
@@ -574,31 +557,6 @@ h2.aat-section-title {
     border-bottom: 1px solid var(--aat-rule);
     overflow: hidden;
 }
-.aat-hero-orb {
-    position: absolute;
-    top: -10%;
-    right: -8%;
-    width: 360px;
-    height: 360px;
-    border-radius: 50%;
-    background: conic-gradient(
-        from 0deg,
-        var(--aat-vermilion),
-        var(--aat-citron),
-        var(--aat-cobalt),
-        var(--aat-sage),
-        var(--aat-vermilion)
-    );
-    filter: blur(70px);
-    opacity: 0.32;
-    z-index: 0;
-    animation: aat-orb-spin 120s linear infinite;
-    pointer-events: none;
-}
-@keyframes aat-orb-spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-}
 .aat-hero-greeting {
     position: relative;
     z-index: 1;
@@ -704,18 +662,30 @@ h2.aat-section-title {
     font-size: 0.85rem;
 }
 
-/* ── Dataframes ────────────────────────────────────────────────── */
-/* No surrounding cage — Brutalist hard ink shadow only, with a 2 px
-   ink top rule and a 2 px ink bottom rule. The shadow implies the
-   frame; the box border is what made v5 read as a Streamlit widget
-   default. */
+/* ── Dataframes — editorial exhibit frame ──────────────────────── */
+/* Glide-data-grid is canvas-rendered so the cell internals cannot be
+   restyled via CSS; the editorial gesture is therefore entirely in
+   the frame around the canvas:
+     - 2 px ink rule top and bottom (the masthead/footer of the table)
+     - paper background so the canvas blends with the page paper
+     - Streamlit's hover toolbar (download / search / fullscreen) hidden
+       — it is the loudest piece of default-Streamlit chrome and the
+       v7 critics caught it. */
 [data-testid="stDataFrame"] {
-    border-radius: 0;
+    border-radius: 0 !important;
     border: none !important;
     border-top: 2px solid var(--aat-ink) !important;
     border-bottom: 2px solid var(--aat-ink) !important;
+    background: var(--aat-paper) !important;
     overflow: hidden;
-    box-shadow: none;
+    box-shadow: none !important;
+}
+[data-testid="stDataFrame"] [data-testid="stElementToolbar"],
+[data-testid="stDataFrame"] [data-testid="stToolbar"] {
+    display: none !important;
+}
+[data-testid="stDataFrame"] canvas {
+    background: var(--aat-paper) !important;
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
@@ -978,25 +948,6 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
     color: var(--aat-vermilion);
 }
 
-/* ── Lacuna note — Margiela blank-label move ────────────────────── */
-/* Sits in the same gutter as .aat-page-mark but reads tiny + italic
-   instead of monumental. The absence-of-glyph IS the glyph on one
-   page in the system. */
-.aat-lacuna {
-    position: absolute;
-    top: -1.6rem;
-    right: -1vw;
-    font-family: var(--aat-font-serif);
-    font-style: italic;
-    font-weight: 400;
-    font-size: 0.95rem;
-    color: var(--aat-vermilion);
-    opacity: 0.55;
-    line-height: 1;
-    letter-spacing: 0.01em;
-    user-select: none;
-}
-
 /* ── Per-page editorial watermark glyph (§ ※ ¶ ⁂ …) ────────── */
 /* Each page picks a singular typographic mark — issue, section,
    reference, paragraph, asterism — so the gesture stays "an
@@ -1239,7 +1190,6 @@ section[data-testid="stMain"] [data-testid="stMarkdown"] p strong {
     section[data-testid="stSidebar"],
     [data-testid="stToolbar"],
     [data-testid="stStatusWidget"],
-    .aat-hero-orb,
     body::before { display: none !important; }
     [data-testid="stAppViewContainer"] { padding: 0 !important; }
 }
