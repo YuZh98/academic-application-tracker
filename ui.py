@@ -884,6 +884,80 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
     color: var(--aat-vermilion);
 }
 
+/* ── Editorial watermark — ghosted issue mark behind the hero ──── */
+/* References-devour-themselves move: a monumental italic-serif issue
+   numeral occupies the hero zone at very low opacity, deliberately
+   too big for the frame so the cropping reads as intentional. The
+   number is the same volume Roman numeral used in the folio footer —
+   it ties the masthead and the sign-off into one closed loop. */
+.aat-hero::after {
+    content: "№";
+    position: absolute;
+    right: -2vw;
+    bottom: -4vw;
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(12rem, 28vw, 22rem);
+    color: var(--aat-vermilion);
+    opacity: 0.08;
+    line-height: 0.85;
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: -0.06em;
+}
+
+/* ── Bordered container body — italic serif pull-quote treatment ─ */
+/* The Recommender Alerts page renders each pending recommender as
+   st.container(border=True) wrapping a single st.markdown block. v3
+   styled the container chrome; v4 pushes the typographic treatment
+   *inside* the container so the alert body reads as an editorial
+   call-out, not a bullet list. */
+[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] li {
+    font-family: var(--aat-font-serif) !important;
+    font-size: 1.02rem !important;
+    line-height: 1.55 !important;
+    color: var(--aat-ink) !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] strong {
+    font-family: var(--aat-font-sans) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.005em;
+}
+[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] ul {
+    border-left: 1px solid var(--aat-rule);
+    padding-left: 1.1rem;
+    margin-left: 0.2rem;
+}
+
+/* ── Dataframe deeper editorial styling ───────────────────────── */
+/* Glide DataGrid's table internals are React-canvas, but the outer
+   chrome is HTML — push the wrapper to match the editorial system
+   and lean on tabular-nums for any numeric columns. */
+[data-testid="stDataFrame"] {
+    box-shadow: 4px 4px 0 var(--aat-ink) !important;
+    border-radius: 0 !important;
+}
+[data-testid="stDataFrame"] thead tr th,
+[data-testid="stDataFrame"] tbody tr td {
+    font-feature-settings: "tnum" 1, "lnum" 1 !important;
+    border-right: 1px solid var(--aat-rule-soft) !important;
+}
+[data-testid="stDataFrame"] tbody tr td:first-child {
+    border-left: none;
+}
+
+/* ── Caption — editorial credit line ──────────────────────────── */
+[data-testid="stCaptionContainer"] p,
+[data-testid="stCaption"] {
+    font-family: var(--aat-font-mono) !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.18em !important;
+    color: var(--aat-ink-muted) !important;
+}
+
 /* ── KPI numerals — tabular figures, vermilion accent on lead ─── */
 [data-testid="stMetricValue"] > div {
     font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
