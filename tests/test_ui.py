@@ -253,6 +253,154 @@ class TestSidebarShortcutsBlock:
             )
 
 
+# ── Editorial-brutalist additions (v0.14.0) ──────────────────────────────────
+
+
+class TestHeroGreeting:
+    """Editorial hero: time-of-day serif italic greeting + mono date
+    stamp. Bands chosen so a 7am check-in reads "morning", a 2pm
+    check-in reads "afternoon", an 8pm check-in reads "evening", and a
+    2am check-in (insomniac PhD students happen) still reads "evening"
+    rather than the technically-correct-but-unfriendly "morning"."""
+
+    def test_morning_greeting(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(now=datetime(2026, 5, 20, 8, 0))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Good morning" in payload
+
+    def test_afternoon_greeting(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(now=datetime(2026, 5, 20, 14, 0))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Good afternoon" in payload
+
+    def test_evening_greeting(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(now=datetime(2026, 5, 20, 20, 0))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Good evening" in payload
+
+    def test_pre_dawn_reads_as_evening(self) -> None:
+        # 2am should still read "evening" — the band-edge is at 5am.
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(now=datetime(2026, 5, 20, 2, 0))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "Good evening" in payload
+
+    def test_stamp_carries_weekday_and_date(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(now=datetime(2026, 5, 20, 9, 0))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "WEDNESDAY" in payload  # 2026-05-20 is a Wednesday
+            assert "MAY" in payload
+            assert "2026" in payload
+
+    def test_name_prefix_when_supplied(self) -> None:
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(name="Yu", now=datetime(2026, 5, 20, 9, 0))
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "YU" in payload
+
+    def test_hero_html_escapes_payload(self) -> None:
+        # Defence in depth — `name` is interpolated into HTML.
+        from datetime import datetime
+
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting(
+                name="<script>alert(1)</script>",
+                now=datetime(2026, 5, 20, 9, 0),
+            )
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "<script>" not in payload
+            assert "&lt;" in payload
+
+
+class TestNumberedSection:
+    def test_emits_two_digit_number(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.numbered_section(1, "Deadlines")
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "01" in payload, "Number must be zero-padded to 2 digits"
+            assert "Deadlines" in payload
+
+    def test_double_digit_number(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.numbered_section(12, "Far Section")
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "12" in payload
+
+    def test_html_escapes_payload(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.numbered_section(1, "<script>x</script>")
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "<script>" not in payload
+            assert "&lt;" in payload
+
+
+class TestAccentBarShape:
+    """The editorial-brutalist accent bar replaces the prior gradient
+    with three solid colour blocks (vermilion, cobalt, citron). Pin
+    the shape so a future re-styling doesn't quietly drop the Bauhaus
+    look without an explicit decision."""
+
+    def test_emits_three_colour_blocks(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.accent_bar()
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "aat-accent-block-1" in payload
+            assert "aat-accent-block-2" in payload
+            assert "aat-accent-block-3" in payload
+
+
+class TestEditorialTokens:
+    """Pin the editorial palette tokens in the global stylesheet. A
+    regression that quietly dropped the vermilion / cobalt / citron
+    accents would silently fall back to default browser styling."""
+
+    def test_palette_tokens_present(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            css = mock_md.call_args.args[0]
+            for token in (
+                "--aat-vermilion",
+                "--aat-cobalt",
+                "--aat-citron",
+                "--aat-paper",
+                "--aat-ink",
+            ):
+                assert token in css, f"Missing editorial token: {token}"
+
+    def test_hero_orb_keyframes_present(self) -> None:
+        # The slow-rotating conic-gradient orb is the signature motion
+        # of the editorial hero. Pin its keyframes so a CSS refactor
+        # that strips animations breaks loudly.
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            css = mock_md.call_args.args[0]
+            assert "@keyframes aat-orb-spin" in css
+            assert "conic-gradient" in css
+
+    def test_serif_stack_present(self) -> None:
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.inject_global_styles()
+            css = mock_md.call_args.args[0]
+            assert "--aat-font-serif" in css
+            assert "--aat-font-mono" in css
+
+
 # ── accent_bar / section_header (smoke) ───────────────────────────────────────
 
 

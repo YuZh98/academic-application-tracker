@@ -69,11 +69,19 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 
 
 # ── Top bar ───────────────────────────────────────────────────────────────────
-st.title("Academic Application Tracker")
-st.caption(
-    "Your complete academic job search — deadlines, applications, and letters, all in one place."
-)
+# Editorial dashboard masthead: time-of-day serif greeting + Bauhaus
+# accent bar + page-name h1 + mono tagline. The literal page-name
+# `st.title` is kept (rather than replaced by the hero) so the AppTest
+# `at.title` contract pinned by tests/test_app_page.py::TestT1AppShell
+# stays valid — the hero is the visual lead, the h1 is the legal page
+# name underneath it.
+ui.hero_greeting()
 ui.accent_bar()
+st.title("Academic Application Tracker")
+st.markdown(
+    "<p class='aat-tagline'>Deadlines · Applications · Letters · All on one page.</p>",
+    unsafe_allow_html=True,
+)
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
 # Counting model (decided 2026-05-07):
