@@ -280,6 +280,22 @@ def folio_footer(*, now: datetime | None = None) -> None:
     )
 
 
+def lacuna_note() -> None:
+    """Margiela-blank-label move: an explicit *absence* in place of the
+    per-page editorial glyph. Renders a small italic-serif printer's
+    note "(without mark)" in the title gutter so the missing glyph is
+    a designed gesture, not an oversight.
+
+    Specifically intended for ONE page in the system (Applications) so
+    the absence breaks the otherwise-legible per-page glyph rule —
+    addresses the "completeness is the enemy of haunting" critique.
+    """
+    st.markdown(
+        "<div class='aat-page-mark-wrap'><span class='aat-lacuna'>(without mark)</span></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def page_mark(glyph: str) -> None:
     """Render a singular oversized editorial mark in the page-title
     gutter. Each page picks its own glyph (§, ※, ¶, ⁂, № …) so the
@@ -960,6 +976,25 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
 }
 .aat-hero-greeting::first-letter {
     color: var(--aat-vermilion);
+}
+
+/* ── Lacuna note — Margiela blank-label move ────────────────────── */
+/* Sits in the same gutter as .aat-page-mark but reads tiny + italic
+   instead of monumental. The absence-of-glyph IS the glyph on one
+   page in the system. */
+.aat-lacuna {
+    position: absolute;
+    top: -1.6rem;
+    right: -1vw;
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 0.95rem;
+    color: var(--aat-vermilion);
+    opacity: 0.55;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    user-select: none;
 }
 
 /* ── Per-page editorial watermark glyph (§ ※ ¶ ⁂ …) ────────── */
