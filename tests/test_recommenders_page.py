@@ -278,6 +278,35 @@ class TestPendingAlertsPanel:
             f"Expected 'Dr. Jones' in a card body; got {bodies}"
         )
 
+    def test_card_html_escapes_user_supplied_fields(self, db):
+        """Defence-in-depth: the alert card uses ``unsafe_allow_html=True``,
+        so every DB-derived value rendered into the card body must be
+        HTML-escaped before interpolation. A recommender whose name,
+        relationship, institute, or position contains ``<`` / ``>``
+        must surface as escaped entities, not as raw tags that
+        Streamlit would mount into the canvas."""
+        self._seed_pending(
+            recommender_name="Dr <script>alert(1)</script>",
+            relationship="Advisor <img src=x>",
+            institute="MIT <b>",
+            position_name="CSAIL <i>Postdoc</i>",
+        )
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        for body in bodies:
+            assert "<script>" not in body, (
+                f"Recommender name interpolated raw — XSS regression. Body: {body!r}"
+            )
+            assert "<img" not in body, (
+                f"Relationship interpolated raw — XSS regression. Body: {body!r}"
+            )
+            assert "<b>" not in body and "<i>" not in body, (
+                f"Institute / position interpolated raw — XSS regression. Body: {body!r}"
+            )
+        assert any("&lt;script&gt;" in body for body in bodies), (
+            f"Expected escaped recommender name (`&lt;script&gt;`) in some card. Got: {bodies}"
+        )
+
     def test_relationship_shown_when_present(self, db):
         """A non-NULL relationship must appear in the card body."""
         self._seed_pending(relationship="Committee Member")

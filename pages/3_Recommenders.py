@@ -1,5 +1,6 @@
 # pages/3_Recommenders.py
 # Recommenders page — letter tracking, pending alerts, and reminder helpers.
+import html
 import math
 from datetime import date
 from typing import Any, cast
@@ -204,7 +205,7 @@ else:
     for _idx, (_name, _group) in enumerate(_pending_recs.groupby("recommender_name", sort=False)):
         with st.container(border=True):
             _rel: Any = _group.iloc[0]["relationship"]
-            _rel_str = f" ({_rel})" if _rel and not pd.isna(_rel) else ""
+            _rel_str = f" ({html.escape(str(_rel))})" if _rel and not pd.isna(_rel) else ""
 
             _bullets: list[str] = []
             _per_row_days: list[int] = []
@@ -217,11 +218,11 @@ else:
                 _per_row_days.append(_days_ago)
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
-                _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
+                _bullets.append(f"- {html.escape(_label)} (asked {_days_ago}d ago, due {_due})")
 
             _body = (
                 f"<span class='aat-warn-mark'>{config.WARN_GLYPH}</span> "
-                f"**{_name}**{_rel_str}\n" + "\n".join(_bullets)
+                f"**{html.escape(str(_name))}**{_rel_str}\n" + "\n".join(_bullets)
             )
             st.markdown(_body, unsafe_allow_html=True)
 
