@@ -450,15 +450,20 @@ class TestEditorialTokens:
             ):
                 assert token in css, f"Missing editorial token: {token}"
 
-    def test_hero_orb_keyframes_present(self) -> None:
-        # The slow-rotating conic-gradient orb is the signature motion
-        # of the editorial hero. Pin its keyframes so a CSS refactor
-        # that strips animations breaks loudly.
+    def test_hero_has_no_gradient_orb(self) -> None:
+        # v8: the conic-gradient orb behind the hero greeting imported a
+        # softer lifestyle-app vocabulary at odds with the editorial
+        # frame. Pinned removed so a future refactor cannot reintroduce
+        # the orb under the same class name.
         with patch.object(ui.st, "markdown") as mock_md:
             ui.inject_global_styles()
             css = mock_md.call_args.args[0]
-            assert "@keyframes aat-orb-spin" in css
-            assert "conic-gradient" in css
+            assert "aat-hero-orb" not in css
+            assert "@keyframes aat-orb-spin" not in css
+        with patch.object(ui.st, "markdown") as mock_md:
+            ui.hero_greeting()
+            payload = " ".join(c.args[0] for c in mock_md.call_args_list)
+            assert "aat-hero-orb" not in payload
 
     def test_serif_stack_present(self) -> None:
         with patch.object(ui.st, "markdown") as mock_md:
