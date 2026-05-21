@@ -818,10 +818,19 @@ select:focus-visible,
     border: 1px solid var(--aat-rule) !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    min-height: 40px !important;
+    min-height: 36px !important;
     font-family: var(--aat-font-mono) !important;
-    font-size: 0.82rem !important;
+    font-size: 0.78rem !important;
     color: var(--aat-ink) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+}
+/* Selected-value text inside the BaseWeb select — caps + tracked. */
+[data-testid="stSelectbox"] div[data-baseweb="select"] [data-baseweb="select-value"],
+[data-testid="stSelectbox"] div[data-baseweb="select"] [role="combobox"] {
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    font-family: var(--aat-font-mono) !important;
 }
 [data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover,
 [data-testid="stMultiSelect"] div[data-baseweb="select"] > div:hover {
@@ -949,19 +958,26 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
 }
 
 /* ── Per-page editorial watermark glyph (§ ※ ¶ ⁂ …) ────────── */
-/* Each page picks a singular typographic mark — issue, section,
-   reference, paragraph, asterism — so the gesture stays "an
-   intrusion" rather than a repeated decoration. Position is anchored
-   to the right gutter of the page-title block via a wrapper. */
-.aat-page-mark-wrap {
+/* Each page picks a singular typographic mark; the Applications page
+   deliberately omits its glyph (silent Margiela lacuna). For the
+   absence to read as "withheld" rather than "missing", every other
+   page's glyph must land at the *same* coordinate so the empty slot
+   on Applications is a recognisable vacancy, not just whitespace.
+   We pin the mark to the top-right of the main content column via
+   the stMain positioning context (the wrapper carries no positioning
+   so the absolutely-positioned mark resolves against stMain).        */
+section[data-testid="stMain"] {
     position: relative;
+}
+.aat-page-mark-wrap {
+    position: static;
     pointer-events: none;
     height: 0;
 }
 .aat-page-mark {
     position: absolute;
-    top: -2.5rem;
-    right: -1vw;
+    top: 7.5rem;
+    right: 2rem;
     font-family: var(--aat-font-serif);
     font-style: italic;
     font-weight: 400;
