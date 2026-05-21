@@ -1414,7 +1414,7 @@ class TestT6ComposeButton:
         themselves (groupby on recommender_name).
     """
 
-    LABEL = "📧 Compose Reminder Email"
+    LABEL = "Compose Reminder Email"
 
     def test_no_buttons_on_empty_db(self, db):
         """Empty DB → no alert cards → no compose buttons. The page

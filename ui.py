@@ -220,6 +220,66 @@ def hero_greeting(*, name: str | None = None, now: datetime | None = None) -> No
     )
 
 
+def folio_footer(*, now: datetime | None = None) -> None:
+    """Editorial folio footer at the bottom of every page.
+
+    Three-part mark, magazine masthead-foot:
+        VOL. XIV   ·   <italic-serif issue stamp>   ·   ZHENG · MMXXVI
+                                                        — fin —
+
+    The Roman numeral volume + lowercase serif issue mark + the
+    final "— fin —" together set this apart from every other
+    Streamlit surface; it is the deliberate "couldn't-have-been-
+    generated" gesture the aesthetic reviewers asked for.
+    """
+    n = now or datetime.now()
+
+    def _roman(n_int: int) -> str:
+        """Tiny inline Roman numeral converter; only used here so we
+        don't pull a dependency. Handles year-fragment range (e.g.
+        the 0.14.0 string → 14 → 'XIV')."""
+        vals = [
+            (1000, "M"),
+            (900, "CM"),
+            (500, "D"),
+            (400, "CD"),
+            (100, "C"),
+            (90, "XC"),
+            (50, "L"),
+            (40, "XL"),
+            (10, "X"),
+            (9, "IX"),
+            (5, "V"),
+            (4, "IV"),
+            (1, "I"),
+        ]
+        out = ""
+        for v, sym in vals:
+            while n_int >= v:
+                out += sym
+                n_int -= v
+        return out or "0"
+
+    # Volume number tracks the app's minor version (0.14.0 → 14 → XIV).
+    try:
+        minor = int(config.APP_VERSION.removesuffix("-dev").split(".")[1])
+    except (ValueError, IndexError):  # pragma: no cover — config drift
+        minor = 0
+    vol_roman = _roman(minor)
+    year_roman = _roman(n.year)
+    issue_label = n.strftime("№ %m / %Y")
+
+    st.markdown(
+        "<div class='aat-folio-footer'>"
+        f"  <span>Vol. <span class='aat-folio-roman'>{vol_roman}</span></span>"
+        f"  <span class='aat-folio-roman'>{issue_label}</span>"
+        f"  <span>Zheng · {year_roman}</span>"
+        "  <span class='aat-folio-end'>— fin —</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def colophon(section: str, *, now: datetime | None = None) -> None:
     """Magazine-style masthead strip at the very top of every page.
 
@@ -683,6 +743,150 @@ select:focus-visible,
     outline: 2px solid var(--aat-vermilion) !important;
     outline-offset: 3px !important;
     border-radius: 0 !important;
+}
+
+/* ── BaseWeb selectbox / multiselect — deep editorial attack ───── */
+/* Streamlit wraps native <select> in BaseWeb's component; the chrome
+   we want is owned by [data-baseweb="select"] *inside* stSelectbox. */
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
+    background: var(--aat-paper-soft) !important;
+    border: 1px solid var(--aat-rule) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    min-height: 40px !important;
+    font-family: var(--aat-font-mono) !important;
+    font-size: 0.82rem !important;
+    color: var(--aat-ink) !important;
+}
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] > div:hover {
+    border-color: var(--aat-vermilion) !important;
+}
+/* Hide BaseWeb's default chevron, paint our editorial one. */
+[data-testid="stSelectbox"] div[data-baseweb="select"] svg,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] svg {
+    display: none !important;
+}
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div::after,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] > div::after {
+    content: "▼";
+    font-family: var(--aat-font-mono);
+    font-size: 0.6rem;
+    color: var(--aat-vermilion);
+    margin-left: auto;
+    padding-right: 0.7rem;
+    align-self: center;
+    letter-spacing: 0;
+}
+/* Dropdown popover — paper bg, ink type, no radius. */
+div[data-baseweb="popover"] [role="listbox"],
+div[data-baseweb="popover"] ul[role="listbox"] {
+    background: var(--aat-paper) !important;
+    border: 1px solid var(--aat-rule) !important;
+    border-radius: 0 !important;
+    box-shadow: 4px 4px 0 var(--aat-ink) !important;
+    font-family: var(--aat-font-mono) !important;
+    font-size: 0.82rem !important;
+}
+div[data-baseweb="popover"] [role="option"] {
+    color: var(--aat-ink) !important;
+    border-radius: 0 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+div[data-baseweb="popover"] [role="option"]:hover,
+div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
+    background: var(--aat-vermilion) !important;
+    color: var(--aat-paper) !important;
+}
+
+/* ── Link buttons (st.link_button) — match primary button language ─ */
+[data-testid="stLinkButton"] a {
+    background: var(--aat-paper-soft) !important;
+    color: var(--aat-ink) !important;
+    border: 1px solid var(--aat-ink) !important;
+    border-radius: var(--aat-radius-sm) !important;
+    font-family: var(--aat-font-mono) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    font-size: 0.74rem !important;
+    font-weight: 600 !important;
+    padding: 0.55rem 1rem !important;
+    box-shadow: none !important;
+    transition: transform var(--aat-dur) var(--aat-ease),
+                background var(--aat-dur) var(--aat-ease),
+                color var(--aat-dur) var(--aat-ease);
+}
+[data-testid="stLinkButton"] a:hover {
+    background: var(--aat-ink) !important;
+    color: var(--aat-paper) !important;
+    transform: translateX(2px);
+}
+
+/* ── st.info / st.warning / st.error — pull-quote treatment ────── */
+[data-testid="stAlert"] {
+    background: var(--aat-paper-soft) !important;
+    border: 1px solid var(--aat-rule) !important;
+    border-left: 4px solid var(--aat-vermilion) !important;
+    border-radius: 0 !important;
+    font-family: var(--aat-font-serif) !important;
+    font-style: italic !important;
+    font-size: 1rem !important;
+    color: var(--aat-ink) !important;
+    padding: 1rem 1.2rem !important;
+    line-height: 1.5 !important;
+}
+[data-testid="stAlert"] svg {
+    color: var(--aat-vermilion) !important;
+    fill: var(--aat-vermilion) !important;
+}
+
+/* ── Folio footer (editorial issue mark at every page bottom) ──── */
+.aat-folio-footer {
+    margin-top: 3rem;
+    padding: 1.2rem 0 0.5rem;
+    border-top: 1px solid var(--aat-rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    font-family: var(--aat-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.6rem;
+    color: var(--aat-ink-faint);
+}
+.aat-folio-footer .aat-folio-roman {
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--aat-vermilion);
+    letter-spacing: 0.04em;
+    text-transform: none;
+    font-weight: 400;
+}
+.aat-folio-footer .aat-folio-end {
+    color: var(--aat-ink-muted);
+    font-family: var(--aat-font-serif);
+    font-style: italic;
+    text-transform: none;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+}
+
+/* ── Hero scale-up + editorial dropped-letter on heroes ───────── */
+.aat-hero-greeting {
+    font-size: clamp(3.5rem, 11vw, 8rem) !important;
+}
+.aat-hero-greeting::first-letter {
+    color: var(--aat-vermilion);
+}
+
+/* ── KPI numerals — tabular figures, vermilion accent on lead ─── */
+[data-testid="stMetricValue"] > div {
+    font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
 }
 
 /* ── Editorial warn mark (replaces emoji ⚠️) ───────────────────── */

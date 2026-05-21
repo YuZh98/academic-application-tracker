@@ -630,3 +630,5 @@ if "selected_position_id" in st.session_state:
     else:
         st.session_state.pop("selected_position_id", None)
         st.session_state.pop("_edit_form_sid", None)
+
+ui.folio_footer()

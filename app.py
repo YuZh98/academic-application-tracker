@@ -450,3 +450,5 @@ else:
                 f"**{_name}**{_rel_str}\n" + "\n".join(_bullets)
             )
             st.markdown(_body, unsafe_allow_html=True)
+
+ui.folio_footer()
