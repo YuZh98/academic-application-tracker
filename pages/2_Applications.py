@@ -646,3 +646,5 @@ if "applications_selected_position_id" in st.session_state:
                 st.rerun()
             except Exception as e:
                 st.error(f"Could not add interview: {e}")
+
+ui.folio_footer()

@@ -88,3 +88,5 @@ for _filename, _path in database.get_export_paths():
         st.caption("Application submission status, responses, and interview records.")
     elif _filename == "RECOMMENDERS.md":
         st.caption("Recommendation letter requests, confirmations, and submission dates.")
+
+ui.folio_footer()

@@ -231,7 +231,7 @@ else:
                 n_positions=len(_group),
             )
             st.link_button(
-                "📧 Compose Reminder Email",
+                "Compose Reminder Email",
                 url=_mailto_url,
                 key=f"recs_compose_{_idx}",
             )
@@ -659,3 +659,5 @@ if "recs_selected_id" in st.session_state:
     else:
         st.session_state.pop("recs_selected_id", None)
         st.session_state.pop("_recs_edit_form_sid", None)
+
+ui.folio_footer()
