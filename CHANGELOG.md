@@ -17,86 +17,66 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
-### Added (editorial-brutalist refresh)
-- Pivot the v0.14.0 visual identity from Apple-tech minimalism to
-  **editorial brutalism** — warm-cream paper background, italic-serif
-  display headlines, mono uppercase labels, Bauhaus accent blocks
-  (vermilion + cobalt + citron), hairline rules instead of soft cards.
-  Reference points: Wallpaper\*, 032c, Vignelli MTA, Wim Crouwel.
-- Add `ui.hero_greeting()` — dashboard masthead rendering a
-  time-of-day italic-serif greeting (Good morning. / afternoon. /
-  evening.) with a mono uppercase date stamp underneath.
-- Add `ui.numbered_section(n, title)` — editorial section mark in
-  the `01 — TITLE` pattern (zero-padded italic serif numeral +
-  vermilion separator + uppercase mono title).
-- Add `ui.colophon(section)` and `ui.folio_footer()` — magazine
-  masthead strip across the top of every page and a roman-numeral
-  folio footer (`Vol. XIV · № 05 / 2026 · ZHENG · MMXXVI · — fin —`)
-  along the bottom, so every page carries the same editorial signature.
-- Add `ui.page_mark(glyph)` — per-page singular typographic mark
-  rendered as an oversized faint vermilion italic in the top-right
-  gutter of each page: `№` on Dashboard, `§` on Opportunities,
-  `※` on Recommenders, `⁂` on Export. The Applications page
-  deliberately omits its mark (Margiela blank-label silent
-  absence) so the empty slot reads as withholding rather than
-  decoration.
-- Hide Streamlit's element toolbar over data grids and force the
-  canvas background to paper so the data tables sit visually inside
-  the editorial frame rather than floating above it.
-- Restyle selectbox value cells to mono caps + tracked
-  letter-spacing so filter controls stop reading as stock BaseWeb.
-- Add nine `tests/test_ui.py` classes pinning the editorial
-  contract: hero band-edges by hour (morning / afternoon / evening
-  including the 2am edge), name-prefix injection guard, numbered
-  section format, Bauhaus three-block accent bar, palette tokens
-  (`--aat-vermilion`, `--aat-cobalt`, `--aat-citron`,
-  `--aat-paper`, `--aat-ink`), the hero gradient orb's deliberate
-  absence (so a future refactor cannot silently reintroduce it),
-  the serif / mono / sans font stacks, the per-page-mark glyph
-  contract (each non-Applications page calls `ui.page_mark` with a
-  glyph drawn from the issue / section / asterism / reference
-  vocabulary; Applications calls it zero times), and the
-  Dashboard-specific ordering rule that `ui.page_mark` runs before
-  `ui.hero_greeting` so the glyph lands at the same flow position
-  as on every other page.
-
 ### Added
-- Introduce `ui.py` — shared design-system module exposing
-  `inject_global_styles()`, `status_pill()`, `urgency_pill()`,
-  `accent_bar()`, `section_header()`, `sidebar_about_block()`, and
+- New visual identity across every page — an editorial-brutalist
+  shell with a warm-cream paper background, italic-serif display
+  headlines, uppercase mono labels, and a Bauhaus accent palette
+  (vermilion, cobalt, citron). Hairline rules replace boxed cards;
+  shadows are gone.
+- Dashboard masthead — a time-of-day italic-serif greeting (`Good
+  morning.` / `Good afternoon.` / `Good evening.`) above a mono
+  uppercase date stamp.
+- Magazine masthead strip across the top of every page, plus a
+  roman-numeral folio footer at the bottom (`Vol. XIV · № 05 / 2026 ·
+  — fin —`), so the editorial signature carries page to page.
+- Per-page typographic marks in the top-right gutter — `№` on
+  Dashboard, `§` on Opportunities, `※` on Recommenders, `⁂` on
+  Export. Applications deliberately omits its mark so the empty
+  slot reads as restraint rather than decoration.
+- New `ui.py` module — the single home for the design system.
+  Exposes `inject_global_styles()`, `accent_bar()`,
+  `section_header()`, `numbered_section()`, `hero_greeting()`,
+  `colophon()`, `folio_footer()`, `page_mark()`, `status_pill()`,
+  `urgency_pill()`, `sidebar_about_block()`, and
   `sidebar_shortcuts_block()`. Tokens (colour, radius, motion,
   typography) live as CSS custom properties on `:root` with a
-  `prefers-color-scheme: dark` block flipping the warm-cream / ink
-  pair for
-  OS-level dark-mode honouring.
-- Add `tests/test_ui.py` pinning pill output, urgency bands, dark-mode
-  block presence, `unsafe_allow_html` kwarg, and AST greps that every
-  Streamlit entrypoint calls `ui.inject_global_styles()`,
-  `ui.sidebar_about_block()`, and `ui.sidebar_shortcuts_block()`.
-- Add `config.APP_VERSION` — single source of truth for the
-  user-visible version string, pinned to ``pyproject.toml`` via
-  `tests/test_config.py::test_app_version_matches_pyproject`.
-- Add brand `accent_bar()` + page tagline below every page title.
-- Add `About · v…` expander in the sidebar with version + repo link;
-  rendered on every page so the design-system shell is consistent.
-- Add `Shortcuts` expander in the sidebar listing the Streamlit
-  keyboard affordances (industry-product polish).
-- Add `@media print` block that hides sidebar + toolbar so the
-  dashboard prints cleanly.
-- Add visible-only focus ring on every interactive element
-  (`:focus-visible`) for keyboard accessibility.
+  `prefers-color-scheme: dark` block so OS-level appearance is
+  honoured.
+- `About · vX.Y.Z` expander in the sidebar with the running
+  version and repo link, plus a `Shortcuts` expander listing the
+  Streamlit keyboard affordances. Both render on every page.
+- `config.APP_VERSION` — single source of truth for the
+  user-visible version string, pinned to `pyproject.toml`.
+- `@media print` block that hides the sidebar + toolbar so the
+  dashboard prints cleanly, and a visible-only focus ring
+  (`:focus-visible`) on every interactive element for keyboard
+  accessibility.
+- New `tests/test_ui.py` suite (twenty-six tests) pinning the
+  visual contract — pill output, urgency bands, dark-mode token
+  flips, hero band-edges by hour, palette tokens, the per-page
+  glyph contract, and an AST grep proving every Streamlit
+  entrypoint wires the shared design system.
 
 ### Changed
 - Move the design-system stylesheet out of `app.py` (where it only
-  affected the dashboard) into `ui.py`; all four pages now render
-  with the same Apple-tech-flavoured shell — typography, KPI cards,
-  buttons, dataframes, sidebar nav, dividers.
-- Add hover lift + soft-shadow motion (170 ms cubic-bezier) on KPI
-  cards and primary buttons.
-- Update `DESIGN.md` to v1.6: new §8.6 *Design System*, file-tree
-  entry for `ui.py`, mermaid architecture flow now includes the new
-  module, layer rules table lists it explicitly.
-- Update `GUIDELINES.md §2` import contract to cover `ui.py`.
+  styled the dashboard) into `ui.py`; all four pages now render
+  with the same editorial shell — typography, KPI cards, buttons,
+  dataframes, sidebar navigation, dividers.
+- Restyle selectbox value cells to uppercase mono with tracked
+  letter-spacing so filter controls match the editorial register.
+- Hide Streamlit's element toolbar over data grids and force the
+  canvas background to paper, so tables sit inside the editorial
+  frame rather than floating above it.
+- Replace the dashboard's emoji warning glyph with a U+25B2 black
+  up-pointing triangle (`config.WARN_GLYPH`) so the alert headers
+  stay monochrome and render identically across platforms.
+- Update `DESIGN.md` to v1.6 — new §8.6 *Design System* describing
+  the editorial-brutalist charter and the full public API of
+  `ui.py`; file tree, architecture flow, and layer-rule table all
+  list the new module.
+- Update `GUIDELINES.md §2` to record the page bootstrap order
+  (`st.set_page_config` → `database.init_db()` →
+  `ui.inject_global_styles()`).
 
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
