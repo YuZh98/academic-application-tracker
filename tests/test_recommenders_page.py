@@ -152,7 +152,9 @@ class TestPendingAlertsPanel:
     # copy updates.
     EMPTY_COPY = config.EMPTY_PENDING_RECOMMENDERS
     BORDER_SOURCE = "st.container(border=True)"
-    WARN_GLYPH = "⚠️"
+    # Sourced from config so swapping the editorial warn mark (⚠️ → ▲
+    # in v0.14.0) doesn't require a test edit.
+    WARN_GLYPH = config.WARN_GLYPH
 
     @classmethod
     def _alert_markdowns(cls, at: AppTest) -> list[str]:
@@ -167,7 +169,7 @@ class TestPendingAlertsPanel:
         days_ago: int = 14,
         position_name: str = "BioStats Postdoc",
         institute: str = "Stanford",
-        recommender_name: str = "Dr. Smith",
+        recommender_name: str | None = "Dr. Smith",
         relationship: str | None = "PhD Advisor",
         deadline_offset: int | None = 10,
     ) -> None:
@@ -274,6 +276,56 @@ class TestPendingAlertsPanel:
         bodies = self._alert_markdowns(at)
         assert any("Dr. Jones" in b for b in bodies), (
             f"Expected 'Dr. Jones' in a card body; got {bodies}"
+        )
+
+    def test_card_html_escapes_user_supplied_fields(self, db):
+        """Defence-in-depth: the alert card uses ``unsafe_allow_html=True``,
+        so every DB-derived value rendered into the card body must be
+        HTML-escaped before interpolation. A recommender whose name,
+        relationship, institute, or position contains ``<`` / ``>``
+        must surface as escaped entities, not as raw tags that
+        Streamlit would mount into the canvas."""
+        self._seed_pending(
+            recommender_name="Dr <script>alert(1)</script>",
+            relationship="Advisor <img src=x>",
+            institute="MIT <b>",
+            position_name="CSAIL <i>Postdoc</i>",
+        )
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        for body in bodies:
+            assert "<script>" not in body, (
+                f"Recommender name interpolated raw — XSS regression. Body: {body!r}"
+            )
+            assert "<img" not in body, (
+                f"Relationship interpolated raw — XSS regression. Body: {body!r}"
+            )
+            assert "<b>" not in body and "<i>" not in body, (
+                f"Institute / position interpolated raw — XSS regression. Body: {body!r}"
+            )
+        assert any("&lt;script&gt;" in body for body in bodies), (
+            f"Expected escaped recommender name (`&lt;script&gt;`) in some card. Got: {bodies}"
+        )
+
+    def test_card_renders_pending_row_with_null_recommender_name(self, db):
+        """A pending recommender row with a NULL ``recommender_name``
+        must still surface as a card — pandas' default
+        ``groupby(dropna=True)`` silently drops the row, hiding the
+        owed letter from the user even though the position and
+        asked_date are recorded. The page uses
+        ``config.RECOMMENDER_NAME_FALLBACK`` as a portable display
+        sentinel so the user can locate + fix the row."""
+        self._seed_pending(
+            recommender_name=None,
+            position_name="HiddenPos",
+            institute="HiddenInst",
+        )
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any("HiddenPos" in body for body in bodies), (
+            f"Pending row with NULL recommender_name was dropped from the "
+            f"alert panel. groupby() default dropna=True is the suspected "
+            f"cause. Card bodies: {bodies}"
         )
 
     def test_relationship_shown_when_present(self, db):
@@ -1399,7 +1451,9 @@ class TestT6ComposeButton:
     locked-copy ``mailto:`` URL.
 
     Locked contract (DESIGN §8.4 + AGENTS §T6-A):
-      - Label: ``📧 Compose Reminder Email`` verbatim.
+      - Label: ``Compose Reminder Email`` verbatim (no emoji prefix —
+        v0.14.0 dropped the ``📧`` glyph so the button sits inside the
+        editorial type register; see DESIGN §editorial-typography).
       - URL scheme: ``mailto:`` with empty path (no ``to:`` field — the
         recommenders schema doesn't store emails today).
       - Subject: ``Following up: letters for {N} <APPLICATION_LABEL>s``
@@ -1412,7 +1466,7 @@ class TestT6ComposeButton:
         themselves (groupby on recommender_name).
     """
 
-    LABEL = "📧 Compose Reminder Email"
+    LABEL = "Compose Reminder Email"
 
     def test_no_buttons_on_empty_db(self, db):
         """Empty DB → no alert cards → no compose buttons. The page

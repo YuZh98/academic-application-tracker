@@ -1,5 +1,6 @@
 # pages/3_Recommenders.py
 # Recommenders page — letter tracking, pending alerts, and reminder helpers.
+import html
 import math
 from datetime import date
 from typing import Any, cast
@@ -10,6 +11,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 from config import EM_DASH
 
 st.set_page_config(
@@ -19,8 +21,18 @@ st.set_page_config(
 )
 
 database.init_db()
+ui.inject_global_styles()
+ui.sidebar_about_block()
+ui.sidebar_shortcuts_block()
 
+ui.colophon("Recommenders")
+ui.page_mark("※")
 st.title("Recommenders")
+ui.accent_bar()
+st.markdown(
+    "<p class='aat-tagline'>Track who's been asked, who's responded, and who needs a nudge.</p>",
+    unsafe_allow_html=True,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -190,10 +202,19 @@ if _pending_recs.empty:
 else:
     _today = date.today()
 
+    # ``fillna`` BEFORE groupby: pandas' default ``dropna=True`` would
+    # silently drop pending rows whose ``recommender_name`` is NULL
+    # (TEXT column at database.py:138 is nullable). Surface them under
+    # an explicit fallback so the user can locate + fix the row.
+    _pending_recs = _pending_recs.assign(
+        recommender_name=_pending_recs["recommender_name"].fillna(
+            config.RECOMMENDER_NAME_FALLBACK
+        )
+    )
     for _idx, (_name, _group) in enumerate(_pending_recs.groupby("recommender_name", sort=False)):
         with st.container(border=True):
             _rel: Any = _group.iloc[0]["relationship"]
-            _rel_str = f" ({_rel})" if _rel and not pd.isna(_rel) else ""
+            _rel_str = f" ({html.escape(str(_rel))})" if _rel and not pd.isna(_rel) else ""
 
             _bullets: list[str] = []
             _per_row_days: list[int] = []
@@ -206,10 +227,13 @@ else:
                 _per_row_days.append(_days_ago)
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
-                _bullets.append(f"- {_label} (asked {_days_ago}d ago, due {_due})")
+                _bullets.append(f"- {html.escape(_label)} (asked {_days_ago}d ago, due {_due})")
 
-            _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
-            st.markdown(_body)
+            _body = (
+                f"<span class='aat-warn-mark'>{config.WARN_GLYPH}</span> "
+                f"**{html.escape(str(_name))}**{_rel_str}\n" + "\n".join(_bullets)
+            )
+            st.markdown(_body, unsafe_allow_html=True)
 
             # ──  Compose reminder email ────────────────────────────
 
@@ -218,7 +242,7 @@ else:
                 n_positions=len(_group),
             )
             st.link_button(
-                "📧 Compose Reminder Email",
+                "Compose Reminder Email",
                 url=_mailto_url,
                 key=f"recs_compose_{_idx}",
             )
@@ -646,3 +670,5 @@ if "recs_selected_id" in st.session_state:
     else:
         st.session_state.pop("recs_selected_id", None)
         st.session_state.pop("_recs_edit_form_sid", None)
+
+ui.folio_footer()

@@ -10,6 +10,22 @@
 #   - No functions, no I/O, no side effects — constants only.
 #   - All other modules import from here; never hardcode values in page files.
 
+# ── App identity ─────────────────────────────────────────────────────────────
+# User-visible version string surfaced by the sidebar About expander on every
+# page (ui.sidebar_about_block). Kept here so config.py remains the single
+# source of truth for vocabulary; drift against pyproject.toml is pinned by
+# tests/test_config.py::test_app_version_matches_pyproject.
+APP_VERSION: str = "0.14.0-dev"
+
+# Editorial warning glyph — U+25B2 black up-pointing triangle. Replaces
+# the emoji ⚠️ which broke the typographic register of the editorial
+# refresh. Bauhaus shape, monochrome, renders identically across
+# platforms (no emoji fallback), pairs with the vermilion accent.
+# Surfaces in dashboard + Recommenders page alert headers; CSS wraps
+# it in a .aat-warn-mark span so the colour stays uniform.
+WARN_GLYPH: str = "▲"
+
+
 # ── Profile identity ─────────────────────────────────────────────────────────
 # Database filename — rename the file on disk when changing this.
 DB_FILENAME: str = "postdoc.db"
@@ -71,6 +87,15 @@ STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 
 # Terminal statuses — positions in these states are done and excluded from actionable views (upcoming deadlines, materials readiness, etc.).
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
+
+# Statuses for which the application deadline is still actionable —
+# the user has NOT yet submitted, so a looming deadline is real news.
+# Once a position moves to [APPLIED] / [INTERVIEW] / [OFFER] the
+# deadline is moot (the submission already happened), and surfacing
+# it on the dashboard Upcoming panel only creates false anxiety.
+# Single source of truth for the dashboard deadline filter; pinned by
+# tests/test_database.py::TestGetUpcomingDeadlines.
+DEADLINE_ACTIONABLE_STATUSES: list[str] = [STATUS_SAVED]
 
 # Statuses the user can manually pick in the Opportunities edit-panel
 # Status selectbox. [INTERVIEW] and [OFFER] are auto-promoted by the
@@ -325,6 +350,13 @@ EMPTY_NO_POSITIONS: str = "No positions yet — use Quick Add above to get start
 EMPTY_FILTERED_APPLICATIONS: str = "No applications match the current filter."
 EMPTY_PENDING_RECOMMENDERS: str = "No pending recommenders."
 EMPTY_PENDING_RECOMMENDER_FOLLOWUPS: str = "No pending recommender follow-ups."
+
+# Display sentinel for a pending recommender row whose ``recommender_name``
+# column is NULL. Surfaces the owed letter (position + asked_date are
+# recorded) so the user can locate and fix the unrecorded name; without
+# this fallback pandas' default ``groupby(dropna=True)`` would silently
+# drop the row from the dashboard alert list.
+RECOMMENDER_NAME_FALLBACK: str = "(unrecorded recommender)"
 
 
 # ── Urgency banding ──────────────────────────────────────────────────────────

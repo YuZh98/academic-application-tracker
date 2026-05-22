@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.5 | **Last updated:** 2026-05-06 | **Status:** authoritative
+**Version:** 1.8 | **Last updated:** 2026-05-22 | **Status:** authoritative
 
 ---
 
@@ -49,16 +49,20 @@ flowchart BT
     config[config.py<br/><small>constants + pure functions</small>]
     database[database.py<br/><small>SQL only</small>]
     exports[exports.py<br/><small>markdown writers</small>]
+    ui[ui.py<br/><small>design system</small>]
     pages[pages/*.py<br/><small>display layer</small>]
     app[app.py<br/><small>Dashboard</small>]
 
     database -->|imports| config
     exports -->|imports| config
     exports -->|imports| database
+    ui -->|imports| config
     app -->|imports| config
     app -->|imports| database
+    app -->|imports| ui
     pages -->|imports| config
     pages -->|imports| database
+    pages -->|imports| ui
 
     database -.->|deferred import<br/>inside writers| exports
 
@@ -67,7 +71,7 @@ flowchart BT
     classDef ui fill:#f3e5f5,stroke:#4a148c
     class config leaf
     class database,exports data
-    class app,pages ui
+    class app,pages,ui ui
 ```
 
 The dotted edge from `database` to `exports` is the deferred-import escape hatch that breaks the otherwise-circular dependency. Solid edges represent module-top imports.
@@ -76,9 +80,10 @@ The dotted edge from `database` to `exports` is the deferred-import escape hatch
 
 | Layer | May import | May NOT import |
 |-------|-----------|----------------|
-| Page files | `database`, `config` | `exports` (directly), each other |
+| Page files | `database`, `config`, `ui` | `exports` (directly), each other |
 | `database.py` | `config`, `sqlite3`, `pandas` | `streamlit`, `exports` (top-level — deferred import only) |
 | `exports.py` | `database`, `config` | `streamlit` |
+| `ui.py` | `config`, `streamlit` | `database`, `exports`, page modules |
 | `config.py` | stdlib only | anything from this project |
 
 ---
@@ -94,7 +99,7 @@ The dotted edge from `database` to `exports` is the deferred-import escape hatch
 | Data frames | pandas | 2.2 | Bridges SQLite rows ↔ Streamlit display widgets |
 | Database | SQLite via `sqlite3` | stdlib | No server; single file; standard SQL; gitignored |
 
-Pinned versions in `requirements.txt`; the `Required ≥` column is the minimum known-working version and floor for any dependency upgrade policy.
+`requirements.txt` pins exact versions; the `Required ≥` column is the floor for any upgrade.
 
 ### 3.1 Runtime assumptions
 
@@ -109,11 +114,13 @@ app.py                    Dashboard home page
 config.py                 Single source of truth for constants and vocabulary
 database.py               All SQLite I/O; no Streamlit imports
 exports.py                Markdown generators; called by database.py writers
+ui.py                     Shared design-system stylesheet + pill/header helpers
 pages/
-  1_Opportunities.py      Position CRUD
+  1_Opportunities.py      Position CRUD + bulk actions
   2_Applications.py       Progress tracking + interviews
   3_Recommenders.py       Letter tracking + reminder helpers
   4_Export.py             Manual export + file download
+  5_Settings.py           Tunable thresholds + append-only status vocabulary
 exports/                  Auto-generated markdown backups (gitignored)
 postdoc.db                SQLite database (gitignored)
 tests/                    pytest suite
@@ -196,7 +203,7 @@ CHANGELOG.md              Release history
 
 ### 5.2 Import-time invariants
 
-`config.py` runs these assertions at module import. A violation aborts app startup with a clear traceback — catching drift before any page renders:
+`config.py` runs these assertions at module import. A violation aborts app startup with a clear traceback — catching drift before any page renders. Numbers are stable identifiers referenced by `test_invariant_<N>_*` in `tests/test_config.py`; #1 is retired and the slot is intentionally left empty:
 
 2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has a UI label
@@ -219,7 +226,7 @@ CHANGELOG.md              Release history
 | Add a new pipeline status | Append to `STATUS_VALUES` + add alias; add entries to `STATUS_COLORS`, `STATUS_LABELS`, `FUNNEL_BUCKETS`; if terminal, append to `TERMINAL_STATUSES`. |
 | Rename a pipeline status | Edit all references + write one-shot `UPDATE` migration in CHANGELOG. |
 | Change a dashboard threshold | Edit `DEADLINE_*` or `RECOMMENDER_ALERT_DAYS`. Invariants catch inverted thresholds. |
-| Switch the tracker profile | See §12 and [`roadmap.md`](roadmap.md). |
+| Switch the tracker profile | See §12 and `roadmap`. |
 
 ---
 
@@ -342,11 +349,11 @@ CREATE INDEX IF NOT EXISTS idx_interviews_application ON interviews(application_
 | Split or normalize columns | `ALTER TABLE ADD COLUMN` + `UPDATE` to copy data; leave old col NULL until rebuild |
 | Remove a column | SQLite 3.35+: `ALTER TABLE <t> DROP COLUMN <c>` when no constraints reference it. Otherwise requires table rebuild. |
 
-**Migration discipline:** every schema or vocabulary change lands with a `Migration:` note in `CHANGELOG.md` under the release that introduces it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between releases never has to guess which migration to run.
+**Migration discipline:** every schema or vocabulary change lands with a `Migration:` note in `CHANGELOG` under the release that introduces it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between releases never has to guess which migration to run.
 
 ### 6.4 Schema design decisions
 
-See [§10 Key Architectural Decisions](#10-key-architectural-decisions): D2, D3, D8, D9, D10, D11, D16, D18, D19, D20, D21, D22, D23, D25.
+Rationale for the schema choices lives in §10.
 
 ---
 
@@ -407,7 +414,7 @@ See [§10 Key Architectural Decisions](#10-key-architectural-decisions): D2, D3,
 
 ### 8.1 `app.py` — Dashboard (Home)
 
-Answer "What do I do today?" in one glance. Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dashboard).
+Answer "What do I do today?" in one glance. Layout wireframe: `docs/ui/wireframes §dashboard`.
 
 **Panel specifications:**
 
@@ -416,7 +423,7 @@ Answer "What do I do today?" in one glance. Layout wireframe: [`docs/ui/wirefram
 | KPI grid | `count_by_status()` | Four metrics: Tracked (Saved+Applied), Applied, Interview, Next Interview (earliest future date + institute). |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, y-axis reversed so earliest pipeline stage on top; bar color from `FUNNEL_BUCKETS[i][2]`. A disclosure toggle reveals/hides terminal-stage buckets (config-driven labels, bidirectional). | Bucket labels = `FUNNEL_BUCKETS[i][0]` |
 | Materials Readiness | `compute_materials_readiness()` | Two stacked progress bars (ready / missing); CTA button to Opportunities page. |
-| Upcoming | `database.get_upcoming(days=selected_window)` merges deadlines + interviews; `st.dataframe` with six cols: Date, Days left, Label, Kind, Status, Urgency. Window controlled by `st.selectbox` over `UPCOMING_WINDOW_OPTIONS`. | 🔴 ≤ `DEADLINE_URGENT_DAYS`; 🟡 ≤ `DEADLINE_ALERT_DAYS`. |
+| Upcoming | `database.get_upcoming(days=selected_window)` merges deadlines + interviews; `st.dataframe` with six cols: Date, Days left, Label, Kind, Status, Urgency. Deadline rows are restricted to `DEADLINE_ACTIONABLE_STATUSES` ([SAVED]) so an already-submitted position never resurfaces as a looming deadline. Window controlled by `st.selectbox` over `UPCOMING_WINDOW_OPTIONS`. | 🔴 ≤ `DEADLINE_URGENT_DAYS`; 🟡 ≤ `DEADLINE_ALERT_DAYS`. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` | Grouped by recommender name; one card per person listing all owed positions. |
 
 
@@ -428,7 +435,7 @@ Answer "What do I do today?" in one glance. Layout wireframe: [`docs/ui/wirefram
 
 ### 8.2 `pages/1_Opportunities.py` — Positions
 
-Capture and manage all positions. Layout wireframe: [`docs/ui/wireframes.md#opportunities`](docs/ui/wireframes.md#opportunities).
+Capture and manage all positions. Layout wireframe: `docs/ui/wireframes §opportunities`.
 
 **Behaviour:**
 
@@ -448,7 +455,7 @@ Capture and manage all positions. Layout wireframe: [`docs/ui/wireframes.md#oppo
 
 ### 8.3 `pages/2_Applications.py` — Progress
 
-Track every position from submission to outcome, including full interview sequence. Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#applications).
+Track every position from submission to outcome, including full interview sequence. Layout wireframe: `docs/ui/wireframes §applications`.
 
 **Behaviour:**
 - **Status filter selectbox:** options = `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`; default = `"Active"` (excludes `STATUS_FILTER_ACTIVE_EXCLUDED`). Uses `format_func=STATUS_LABELS.get(v, v)`.
@@ -460,7 +467,7 @@ Track every position from submission to outcome, including full interview sequen
 
 ### 8.4 `pages/3_Recommenders.py` — Recommenders
 
-Track every letter across every position; surface who needs a reminder. Layout wireframe: [`docs/ui/wireframes.md#recommenders`](docs/ui/wireframes.md#recommenders).
+Track every letter across every position; surface who needs a reminder. Layout wireframe: `docs/ui/wireframes §recommenders`.
 
 **Behaviour:**
 - **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); page groups by `recommender_name` so one recommender owing N letters appears as single card listing all N positions.
@@ -472,7 +479,55 @@ Track every letter across every position; surface who needs a reminder. Layout w
 
 ### 8.5 `pages/4_Export.py` — Export
 
-Manual export trigger and per-file download. Layout wireframe: [`docs/ui/wireframes.md#export`](docs/ui/wireframes.md#export).
+Manual export trigger and per-file download. Layout wireframe: `docs/ui/wireframes §export`.
+
+---
+
+### 8.6 `pages/5_Settings.py` — Settings
+
+Tunable thresholds + append-only vocabulary editor. Two stacked forms:
+
+- **Alert thresholds** — `DEADLINE_ALERT_DAYS`, `RECOMMENDER_ALERT_DAYS`, `UPCOMING_WINDOW_DAYS` as bounded `st.number_input` widgets. Saved values land in `settings_overrides.json` next to the SQLite DB; `database.load_settings()` overlays them on top of the `config.py` defaults so the import-time invariants stay authoritative.
+- **Status vocabulary (append-only)** — text-input + Append button. Sentinels must be bracketed (`[GHOSTED]`). Removal of a status currently held by any position is blocked at the boundary in `database.update_status_vocabulary`.
+
+Persistence layer: `database.load_settings`, `database.save_settings`, `database.update_status_vocabulary`.
+
+---
+
+### 8.7 Design System (`ui.py`)
+
+Shared presentation layer. All visual identity lives here so every
+page renders with the same shell.
+
+**Aesthetic charter (editorial-brutalist):**
+
+- Three typographic voices — italic-serif display (`'New York', ui-serif, Georgia`), uppercase mono labels (`ui-monospace, 'SF Mono', Menlo`), system sans body. Display tightened to `-0.02em`; mono tracked to `+0.12em`.
+- Palette — warm-cream paper (`--aat-paper #F4EDE0`) over ink (`--aat-ink #0A0A0A`), with vermilion (`--aat-vermilion #E63946`), cobalt (`--aat-cobalt #2541B2`), and citron (`--aat-citron #F4D35E`) as the editorial accents; sage and oxblood reserved for success / danger signalling.
+- Tokens flip under `@media (prefers-color-scheme: dark)` so OS appearance is honoured (cream↔ink invert; vermilion / citron hold; cobalt brightens).
+- Geometry — sharp. `0px` radius on sections, `2px` on inputs, `999px` on pills only. Hairlines (`1px solid var(--aat-rule)`) replace boxed cards. No drop shadows; depth comes from typographic mass and negative space.
+- Motion — slow, deliberate. Hover / focus on `cubic-bezier(0.2, 0, 0, 1)`; the hero conic gradient rotates one full turn every 120s.
+
+**Public API:**
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `inject_global_styles()` | None | Emits the full stylesheet via `st.markdown(..., unsafe_allow_html=True)` and installs a capture-phase `keydown` shield on the parent document so `Cmd`/`Ctrl` chords (copy, paste, reload, …) never trigger Streamlit's bare-letter dev hotkeys. Call once per page after `st.set_page_config` (and after `database.init_db()`). |
+| `accent_bar()` | None | Vermilion + cobalt + citron Bauhaus block trio, butted edge-to-edge under page titles. |
+| `section_header(text, *, eyebrow=None)` | None | Uppercase mono eyebrow + tight italic-serif H2 title. |
+| `numbered_section(n, title)` | None | Editorial `01 — TITLE` mark — zero-padded italic-serif numeral, vermilion separator, uppercase mono title. |
+| `hero_greeting(*, name=None, now=None)` | None | Dashboard masthead — time-of-day italic-serif greeting + uppercase mono date stamp. |
+| `colophon(section, *, now=None)` | None | Magazine masthead strip rendered at the top of every page. |
+| `folio_footer(*, now=None)` | None | Roman-numeral folio at the bottom of every page (`Vol. XIV · № 05 / 2026 · — fin —`). |
+| `page_mark(glyph)` | None | Oversized faint vermilion italic mark in the top-right gutter; one glyph per page (Dashboard `№`, Opportunities `§`, Recommenders `※`, Export `⁂`). Applications deliberately omits this mark. |
+| `status_pill(raw_status)` | HTML string | Ticket-stub pill rendering `STATUS_LABELS[raw]`. Unknown values fall back to a neutral class; label content is HTML-escaped. |
+| `urgency_pill(days_left, *, urgent_d, alert_d)` | HTML string | Banded pill (urgent ≤ `DEADLINE_URGENT_DAYS`, alert ≤ `DEADLINE_ALERT_DAYS`, calm beyond). Negative inputs stay urgent. |
+| `sidebar_about_block(version=None)` | None | Sidebar expander exposing version + repo link. `version` defaults to `config.APP_VERSION`. |
+| `sidebar_shortcuts_block()` | None | Sidebar expander listing the Streamlit keyboard affordances. |
+
+**Architectural constraint:** `ui.py` imports `config` + `streamlit`
+only; it never touches `database` or `exports`. Every page calls
+`ui.inject_global_styles()`, `ui.sidebar_about_block()`, and
+`ui.sidebar_shortcuts_block()`.
 
 ---
 
@@ -564,7 +619,7 @@ Cancel preserves current edit context (selected row + tab state) so user returns
 | D12 | Cross-table cascade lives in `database.py` writers | Atomic, testable, pages stay display-only | Page-level detect-and-prompt — leaks business logic into UI; loses atomicity |
 | D13 | No 🔄 Refresh button on dashboard top bar | Streamlit reruns on any interaction; single-user local app rarely has cross-tab writes | Manual refresh button — cognitive noise for common case |
 | D14 | `st.set_page_config(layout="wide", ...)` on every page | Data-heavy views need horizontal room | Default centered layout — ~750px cramps every page |
-| D15 | `TRACKER_PROFILE` validated at import time against `VALID_PROFILES` — **reversed in Phase 7 CL2.** Constants removed (no-ops since v1.1); profile expansion deferred to v2 (§12.1). | Was: cheap forward-compat hook for v2 profile variants | Hardcode `"postdoc"` — no v2 extension point |
+| D15 | Hardcode the `"postdoc"` profile; no `TRACKER_PROFILE` indirection | Reduce v1 surface area; profile expansion deferred to §12 | Import-time profile validation — unused extension hook |
 | D16 | Bracketed status storage values + bracket-stripped UI labels | Visual enum sentinel in logs/DB; `STATUS_LABELS` delivers clean UI | Raw labels in storage — harder to grep; conflicts w/ freetext "Saved" elsewhere |
 | D17 | Archived = `[REJECTED]` + `[DECLINED]` on dashboard funnel only; `[CLOSED]` stays own bar | Rejection + declined-offer = both outcomes after engagement; CLOSED = pre-engagement withdrawal — a genuinely different state | Group all three terminals — loses semantic distinction |
 | D18 | `interviews` sub-table instead of flat `interview1_date`/`interview2_date` cols | Real apps have 3+ interviews (phone → committee → chalk talk → dean); flat cap = arbitrary cliff | Flat cols — capped data model at unrealistic limit |
@@ -580,7 +635,7 @@ Cancel preserves current edit context (selected row + tab state) so user returns
 
 ## 11. Extension Guide
 
-See [`docs/dev-notes/extending.md`](docs/dev-notes/extending.md) for step-by-step recipes (add requirement document, add or rename pipeline status, switch tracker profile, etc.).
+See `dev-notes extending` for step-by-step recipes (add requirement document, add or rename pipeline status, switch tracker profile, etc.).
 
 ---
 
@@ -595,4 +650,4 @@ The tracker is designed so reskinning to a different job context (software engin
 - **Interactive funnel** — click a bar to navigate to Opportunities with that status pre-filtered
 - **Cloud backup** — periodic upload of `postdoc.db` + `exports/` to S3 / iCloud / Dropbox
 
-See [`roadmap.md`](roadmap.md) for full design sketches, implementation notes, and prioritized backlog.
+See `roadmap` for full design sketches, implementation notes, and prioritized backlog.

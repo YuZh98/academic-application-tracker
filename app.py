@@ -1,6 +1,7 @@
 # Streamlit entry point — dashboard home page.
 #
 
+import html
 from datetime import date
 from typing import Any
 
@@ -10,6 +11,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 
 st.set_page_config(
     page_title="Academic Application Tracker",
@@ -18,107 +20,15 @@ st.set_page_config(
 )
 
 database.init_db()
-
-# ── Visual polish (CSS injection) ─────────────────────────────────────────────
-st.markdown(
-    """
-<style>
-/* ── Typography ─────────────────────────────────────────────────── */
-/* Set font on root elements only — no child wildcard (*). The system font
-   cascades naturally to text nodes. Avoiding * + !important on children
-   preserves Streamlit's Material Symbols Rounded font on icon elements
-   (sidebar collapse arrows, etc.) which use ligature rendering. */
-html, body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text',
-                 'Segoe UI Variable', 'Segoe UI', Helvetica, Arial, sans-serif !important;
-}
-
-/* ── KPI metric cards — elevated card style ───────────────────── */
-[data-testid="stMetric"] {
-    background: #ffffff;
-    border: 1px solid #eef2f7;
-    border-radius: 14px;
-    padding: 1.1rem 1.4rem 0.9rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 6px 20px rgba(0,0,0,0.04);
-}
-[data-testid="stMetricLabel"] p {
-    font-size: 0.70rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.09em !important;
-    color: #94a3b8 !important;
-    font-weight: 700 !important;
-}
-[data-testid="stMetricValue"] > div {
-    font-size: 2rem !important;
-    font-weight: 800 !important;
-    color: #0f172a !important;
-    line-height: 1.2 !important;
-    overflow-wrap: break-word !important;
-    word-break: break-word !important;
-}
-
-/* ── Hero container — soft indigo gradient ────────────────────── */
-[data-testid="stVerticalBlockBorderWrapper"] > div > div {
-    border-radius: 14px !important;
-    background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%) !important;
-    border-color: #d9e4ff !important;
-}
-
-/* ── Section subheaders ──────────────────────────────────────── */
-[data-testid="stHeadingWithActionElements"] h3 {
-    font-weight: 700 !important;
-    color: #1e293b !important;
-    letter-spacing: -0.01em !important;
-}
-
-/* ── Info / empty-state messages ─────────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 10px;
-    border-left-width: 3px;
-}
-
-/* ── Dataframe / table outer container ────────────────────────── */
-[data-testid="stDataFrame"] {
-    border-radius: 12px;
-    border: 1px solid #eef2f7 !important;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-}
-
-/* ── Primary buttons ─────────────────────────────────────────── */
-[data-testid="stBaseButton-primary"] {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.01em !important;
-}
-
-/* ── Sidebar navigation pills ───────────────────────────────── */
-section[data-testid="stSidebarNav"] a {
-    border-radius: 8px;
-    padding: 0.35rem 0.7rem;
-    margin-bottom: 2px;
-    transition: background 0.15s, color 0.15s;
-    font-weight: 500;
-}
-section[data-testid="stSidebarNav"] a:hover {
-    background: rgba(79, 107, 239, 0.08);
-    color: #4F6BEF;
-}
-section[data-testid="stSidebarNav"] a[aria-current="page"] {
-    background: rgba(79, 107, 239, 0.10);
-    color: #4F6BEF;
-    font-weight: 600;
-}
-
-/* ── Dividers ──────────────────────────────────────────────── */
-hr {
-    border-color: #f0f3f8 !important;
-    margin: 0.5rem 0 !important;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# R1b — overlay any persisted settings on top of config defaults and
+# expose the effective thresholds in session_state so downstream
+# panels (Upcoming + urgency banding) read one consistent value.
+_settings = database.load_settings()
+st.session_state["effective_deadline_alert_days"] = _settings["DEADLINE_ALERT_DAYS"]
+st.session_state["effective_recommender_alert_days"] = _settings["RECOMMENDER_ALERT_DAYS"]
+ui.inject_global_styles()
+ui.sidebar_about_block()
+ui.sidebar_shortcuts_block()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -166,14 +76,24 @@ def _next_interview_display(upcoming: pd.DataFrame) -> str:
 
 
 # ── Top bar ───────────────────────────────────────────────────────────────────
+# Editorial dashboard masthead: time-of-day serif greeting + Bauhaus
+# accent bar + page-name h1 + mono tagline. The literal page-name
+# `st.title` is kept (rather than replaced by the hero) so the AppTest
+# `at.title` contract pinned by tests/test_app_page.py::TestT1AppShell
+# stays valid — the hero is the visual lead, the h1 is the legal page
+# name underneath it.
+ui.colophon("Dashboard")
+# v10: page_mark renders BEFORE the hero so the № lands at the same
+# flow position across all pages (immediately under the colophon).
+# Without this unification, Dashboard's mark sits 80vh down the page
+# while other pages' marks sit at the top, and the silent absence on
+# Applications cannot register against a moving anchor.
+ui.page_mark("№")
+ui.hero_greeting()
+ui.accent_bar()
 st.title("Academic Application Tracker")
-st.caption(
-    "Your complete academic job search — deadlines, applications, and letters, all in one place."
-)
-# Gradient accent line — brand identity mark below the title.
 st.markdown(
-    "<div style='height:3px;background:linear-gradient(90deg,#4F6BEF 0%,"
-    "#8B5CF6 50%,#10B981 100%);border-radius:2px;margin-bottom:0.25rem;'></div>",
+    "<p class='aat-tagline'>Deadlines · Applications · Letters · All on one page.</p>",
     unsafe_allow_html=True,
 )
 
@@ -421,17 +341,32 @@ with _right_col:
 
 st.divider()
 _header_col, _control_col = st.columns([3, 1])
+# R1b — Upcoming-panel default reads the effective threshold (config
+# overlay + Settings override) so a Settings save re-bands the panel
+# without a process restart. Falls back to the config default if the
+# override-load did not set a value.
+_effective_window_default = int(
+    st.session_state.get("effective_deadline_alert_days", config.DEADLINE_ALERT_DAYS)
+)
+if _effective_window_default not in config.UPCOMING_WINDOW_OPTIONS:
+    # The Settings page allows arbitrary ints in [1, 365]; the segmented
+    # control only has discrete options. Snap to the nearest option that
+    # is ≤ the effective value, falling back to the smallest option.
+    _candidates = [o for o in config.UPCOMING_WINDOW_OPTIONS if o <= _effective_window_default]
+    _effective_window_default = (
+        max(_candidates) if _candidates else min(config.UPCOMING_WINDOW_OPTIONS)
+    )
 with _control_col:
     selected_window = (
         st.segmented_control(
             "Window",
             options=config.UPCOMING_WINDOW_OPTIONS,
-            default=config.DEADLINE_ALERT_DAYS,
+            default=_effective_window_default,
             key="upcoming_window",
             format_func=lambda x: f"{x}d",
             label_visibility="collapsed",
         )
-        or config.DEADLINE_ALERT_DAYS
+        or _effective_window_default
     )
 with _header_col:
     st.subheader(f"Upcoming (next {selected_window} days)")
@@ -524,10 +459,19 @@ else:
         d = date.fromisoformat(deadline_iso)
         return f"{d.strftime('%b')} {d.day}"
 
+    # ``fillna`` BEFORE groupby: pandas' default ``dropna=True`` would
+    # silently drop pending rows whose ``recommender_name`` is NULL
+    # (TEXT column at database.py:138 is nullable). Surface them under
+    # an explicit fallback so the user can locate + fix the row.
+    _pending_recs = _pending_recs.assign(
+        recommender_name=_pending_recs["recommender_name"].fillna(
+            config.RECOMMENDER_NAME_FALLBACK
+        )
+    )
     for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
         with st.container(border=True):
             _rel = str(_group.iloc[0]["relationship"] or "")
-            _rel_str = f" ({_rel})" if _rel else ""
+            _rel_str = f" ({html.escape(_rel)})" if _rel else ""
             _bullets = []
             for _, _row in _group.iterrows():
                 _inst: Any = _row["institute"]
@@ -537,6 +481,11 @@ else:
                 _days_ago = (_today - date.fromisoformat(_asked_iso)).days
                 _due_raw: Any = _row["deadline_date"]
                 _due = _format_due(_due_raw)
-                _bullets.append(f"- {_label} (asked {_days_ago} days ago, due {_due})")
-            _body = f"⚠️ **{_name}**{_rel_str}\n" + "\n".join(_bullets)
-            st.markdown(_body)
+                _bullets.append(f"- {html.escape(_label)} (asked {_days_ago} days ago, due {_due})")
+            _body = (
+                f"<span class='aat-warn-mark'>{config.WARN_GLYPH}</span> "
+                f"**{html.escape(str(_name))}**{_rel_str}\n" + "\n".join(_bullets)
+            )
+            st.markdown(_body, unsafe_allow_html=True)
+
+ui.folio_footer()
