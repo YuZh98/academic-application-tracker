@@ -18,131 +18,31 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
-- New visual identity across every page — an editorial-brutalist
-  shell with a warm-cream paper background, italic-serif display
-  headlines, uppercase mono labels, and a Bauhaus accent palette
-  (vermilion, cobalt, citron). Hairline rules replace boxed cards;
-  shadows are gone.
-- Dashboard masthead — a time-of-day italic-serif greeting (`Good
-  morning.` / `Good afternoon.` / `Good evening.`) above a mono
-  uppercase date stamp.
-- Magazine masthead strip across the top of every page, plus a
-  roman-numeral folio footer at the bottom (`Vol. XIV · № 05 / 2026 ·
-  — fin —`), so the editorial signature carries page to page.
-- Per-page typographic marks in the top-right gutter — `№` on
-  Dashboard, `§` on Opportunities, `※` on Recommenders, `⁂` on
-  Export. Applications deliberately omits its mark so the empty
-  slot reads as restraint rather than decoration.
-- New `ui.py` module — the single home for the design system.
-  Exposes `inject_global_styles()`, `accent_bar()`,
-  `section_header()`, `numbered_section()`, `hero_greeting()`,
-  `colophon()`, `folio_footer()`, `page_mark()`, `status_pill()`,
-  `urgency_pill()`, `sidebar_about_block()`, and
-  `sidebar_shortcuts_block()`. Tokens (colour, radius, motion,
-  typography) live as CSS custom properties on `:root` with a
-  `prefers-color-scheme: dark` block so OS-level appearance is
-  honoured.
-- `About · vX.Y.Z` expander in the sidebar with the running
-  version and repo link, plus a `Shortcuts` expander listing the
-  Streamlit keyboard affordances. Both render on every page.
-- `config.APP_VERSION` — single source of truth for the
-  user-visible version string, pinned to `pyproject.toml`.
-- `@media print` block that hides the sidebar + toolbar so the
-  dashboard prints cleanly, and a visible-only focus ring
-  (`:focus-visible`) on every interactive element for keyboard
-  accessibility.
-- New `tests/test_ui.py` suite (twenty-six tests) pinning the
-  visual contract — pill output, urgency bands, dark-mode token
-  flips, hero band-edges by hour, palette tokens, the per-page
-  glyph contract, and an AST grep proving every Streamlit
-  entrypoint wires the shared design system.
+- Apply an editorial-brutalist visual identity across every page — warm-cream paper background, italic-serif display headlines, uppercase mono labels, vermilion/cobalt/citron accents, hairline rules in place of boxed cards (`c74c1b8`)
+- Add a time-of-day italic-serif greeting + mono uppercase date stamp above the dashboard KPIs (`c74c1b8`)
+- Add a magazine masthead strip at the top of every page (`c83dcec`) and a roman-numeral folio footer at the bottom (`39d859c`)
+- Add per-page typographic gutter marks — `№` Dashboard, `§` Opportunities, `※` Recommenders, `⁂` Export, blank on Applications (`ca8f857`, `2dab9ef`)
+- Add `ui.py` — shared design-system module exposing `inject_global_styles`, `accent_bar`, `section_header`, `numbered_section`, `hero_greeting`, `colophon`, `folio_footer`, `page_mark`, `status_pill`, `urgency_pill`, `sidebar_about_block`, `sidebar_shortcuts_block` with `prefers-color-scheme: dark` token set (`5ddd575`)
+- Add `About · vX.Y.Z` and `Shortcuts` sidebar expanders on every page (`a77fc5b`)
+- Add `config.APP_VERSION` as the single source of truth for the user-visible version, pinned to `pyproject.toml` (`a77fc5b`)
+- Add `@media print` rules that hide the sidebar/toolbar and a `:focus-visible` ring on every interactive element (`c74c1b8`)
+- Add `tests/test_ui.py` pinning the visual contract — pill output, urgency bands, dark-mode token flips, hero band-edges by hour, palette tokens, per-page glyph contract, and the AST grep that every page wires the shared design system (`c1d0539`)
 
 ### Changed
-- Move the design-system stylesheet out of `app.py` (where it only
-  styled the dashboard) into `ui.py`; all four pages now render
-  with the same editorial shell — typography, KPI cards, buttons,
-  dataframes, sidebar navigation, dividers.
-- Restyle selectbox value cells to uppercase mono with tracked
-  letter-spacing so filter controls match the editorial register.
-- Hide Streamlit's element toolbar over data grids and force the
-  canvas background to paper, so tables sit inside the editorial
-  frame rather than floating above it.
-- Replace the dashboard's emoji warning glyph with a U+25B2 black
-  up-pointing triangle (`config.WARN_GLYPH`) so the alert headers
-  stay monochrome and render identically across platforms.
-- Update `DESIGN.md` to v1.6 — new §8.6 *Design System* describing
-  the editorial-brutalist charter and the full public API of
-  `ui.py`; file tree, architecture flow, and layer-rule table all
-  list the new module.
-- Update `GUIDELINES.md §2` to record the page bootstrap order
-  (`st.set_page_config` → `database.init_db()` →
-  `ui.inject_global_styles()`).
+- Move the design-system stylesheet from `app.py` to `ui.py` so all four pages render with the same shell (`6f400a7`)
+- Restyle selectbox value cells to uppercase mono with tracked letter-spacing (`0884ac2`)
+- Hide the Streamlit element toolbar over data grids and force the canvas background to paper (`0759333`)
+- Replace the dashboard's emoji warning glyph with `config.WARN_GLYPH` (U+25B2 ▲) (`c83dcec`)
+- Update `DESIGN.md` to v1.6 — new §8.6 *Design System* + file-tree / layer-rule entries for `ui.py` (`42a5a79`)
+- Update `GUIDELINES.md §2` to record the page bootstrap order (`st.set_page_config` → `database.init_db()` → `ui.inject_global_styles()`) (`631a1c5`)
 
 ### Fixed
-- HTML-escape every database-derived value rendered into the
-  Recommender-Alerts card (recommender name, relationship,
-  institute, position) before it reaches a `unsafe_allow_html=True`
-  surface, so a stored value containing `<` or `>` is shown as
-  literal text rather than mounted into the canvas. Pinned by two
-  new tests under `TestT5RecommenderAlerts` and
-  `TestPendingAlertsPanel`.
-- Stop letting `Cmd+C` (and other `Cmd`/`Ctrl` chords) open
-  Streamlit's "Clear function caches?" dialog when copying a
-  selection on the page. Streamlit binds bare-letter developer
-  hotkeys (`C` clears the caches, `R` reruns, …) at the document
-  level, and on macOS the `Cmd` modifier still delivers the
-  bare-letter `keydown` to Streamlit's listener — so copying text
-  out of the app surfaced the cache-clear confirmation instead of
-  the system copy. `ui.inject_global_styles` now installs a
-  capture-phase `keydown` shield on the parent document that halts
-  propagation for every modifier chord; the browser's default
-  behaviour (copy, paste, reload, …) runs normally and the
-  Streamlit listener never fires. The shield is installed via a
-  zero-height `streamlit.components.v1.html` iframe whose host slot
-  is hidden by a stylesheet rule, so the install leaves no layout
-  artefact. Pinned by `TestHotkeyShield` (eight assertions across
-  payload + install + style-block).
-- Stop surfacing already-submitted positions as looming application
-  deadlines in the dashboard Upcoming panel. Once a position moves
-  past `[SAVED]` the submission has happened, so a future
-  `deadline_date` is no longer actionable — the row used to appear
-  anyway and read like an unmet to-do, creating false anxiety. The
-  deadline half of `database.get_upcoming_deadlines` is now
-  restricted to `config.DEADLINE_ACTIONABLE_STATUSES` ([SAVED]
-  today); interview rows continue to surface across every stage,
-  since their own scheduled date is the actionable signal. Pinned
-  by four new tests under `TestGetUpcomingDeadlines` and
-  `TestGetUpcoming`.
-- Render the dashboard masthead and the per-page colophon on
-  Windows. The day-of-month was built with the POSIX-only
-  `strftime("%-d")` directive, which raises `ValueError` on Windows
-  (the Windows C runtime spells the same thing `%#d`). Because
-  `colophon()` runs near the top of every page, a Windows user could
-  not load any page. The day field is now built from `n.day` so the
-  stamp renders identically on every OS. Pinned by
-  `TestUiStrftimePortability` which scans `ui.py` for any
-  POSIX-only directive.
-- Surface pending recommender letters whose `recommender_name` is
-  `NULL` in the dashboard alert panel and the Recommenders page
-  alert panel. Pandas' default `groupby(dropna=True)` was silently
-  dropping these rows, so an owed letter recorded without a name
-  was invisible — the user could not even discover the missing-name
-  row to fix it. Both panels now `fillna` the column with the new
-  `config.RECOMMENDER_NAME_FALLBACK` sentinel before grouping, so
-  the position bullets surface under an explicit placeholder.
-  Pinned by `test_card_renders_pending_row_with_null_recommender_name`
-  on both pages.
-- Narrow the `Cmd`/`Ctrl` hotkey shield so it no longer blocks
-  widget keybindings on named keys. The previous shield called
-  `stopPropagation()` for every modifier chord, which also stopped
-  descendant widgets (BaseWeb selectbox `Cmd+ArrowLeft` to jump to
-  the first option, contenteditable `Cmd+Enter` to submit, etc.)
-  from receiving the event. The shield now restricts the stop to
-  single-character keys (`event.key.length === 1`) — only the keys
-  Streamlit's bare-letter dev hotkeys could possibly bind. Named
-  keys (Arrow\*, Tab, Enter, Escape, F-keys, …) pass through to
-  the focused widget. Pinned by
-  `test_payload_only_targets_single_character_keys`.
+- HTML-escape DB-derived values in Recommender-Alerts cards before they reach the `unsafe_allow_html=True` surface (`c0c1ef3`)
+- Stop `Cmd+C` / `Ctrl+C` from opening Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
+- Drop already-submitted positions from the dashboard Upcoming-deadline rows (`2921bf7`)
+- Render `ui.colophon` and `ui.hero_greeting` on Windows by replacing the POSIX-only `%-d` strftime directive with a portable day field (`da87634`)
+- Surface pending recommender letters whose `recommender_name` is NULL on both alert panels (`da87634`)
+- Narrow the Cmd/Ctrl hotkey shield to single-character keys so widget Arrow/Tab/Enter keybindings pass through (`da87634`)
 
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
