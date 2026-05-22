@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -478,7 +478,9 @@ def build_pdf(chart_paths: dict[str, Path]) -> Path:
         textColor=colors.HexColor(INK),
         spaceAfter=10,
     )
-    H2 = ParagraphStyle(
+    # H2 style retained for downstream forks of this script; currently
+    # unused by the rendered report.
+    _H2_unused = ParagraphStyle(  # noqa: F841
         "H2",
         parent=styles["Heading2"],
         fontName="Times-Bold",
