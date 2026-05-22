@@ -41,6 +41,7 @@ manual steps to run against a pre-existing database.
 - Replace the dashboard's emoji warning glyph with `config.WARN_GLYPH` (U+25B2 ▲) (`c83dcec`)
 - Update `DESIGN.md` to v1.6 — new §8.6 *Design System* + file-tree / layer-rule entries for `ui.py` (`42a5a79`)
 - Update `GUIDELINES.md §2` to record the page bootstrap order (`st.set_page_config` → `database.init_db()` → `ui.inject_global_styles()`) (`631a1c5`)
+- Tighten the v0.14.0 README screenshot crops — strip the Streamlit top chrome (the "Deploy" bar) and trim trailing cream/white margins so each PNG frames its page content; add `scripts/crop_screenshots.py` as an idempotent re-crop helper
 
 ### Fixed
 - Add symmetric reverse R2 cascade to `delete_interview` — when the last interview row on a position is deleted, retract `[INTERVIEW]→[APPLIED]`, mirroring the forward cascade in `add_interview` (#103)
