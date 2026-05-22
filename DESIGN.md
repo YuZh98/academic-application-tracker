@@ -422,7 +422,7 @@ Answer "What do I do today?" in one glance. Layout wireframe: [`docs/ui/wirefram
 | KPI grid | `count_by_status()` | Four metrics: Tracked (Saved+Applied), Applied, Interview, Next Interview (earliest future date + institute). |
 | Funnel | `count_by_status()` summed into `FUNNEL_BUCKETS`; Plotly horizontal `go.Bar`, y-axis reversed so earliest pipeline stage on top; bar color from `FUNNEL_BUCKETS[i][2]`. A disclosure toggle reveals/hides terminal-stage buckets (config-driven labels, bidirectional). | Bucket labels = `FUNNEL_BUCKETS[i][0]` |
 | Materials Readiness | `compute_materials_readiness()` | Two stacked progress bars (ready / missing); CTA button to Opportunities page. |
-| Upcoming | `database.get_upcoming(days=selected_window)` merges deadlines + interviews; `st.dataframe` with six cols: Date, Days left, Label, Kind, Status, Urgency. Window controlled by `st.selectbox` over `UPCOMING_WINDOW_OPTIONS`. | 🔴 ≤ `DEADLINE_URGENT_DAYS`; 🟡 ≤ `DEADLINE_ALERT_DAYS`. |
+| Upcoming | `database.get_upcoming(days=selected_window)` merges deadlines + interviews; `st.dataframe` with six cols: Date, Days left, Label, Kind, Status, Urgency. Deadline rows are restricted to `DEADLINE_ACTIONABLE_STATUSES` ([SAVED]) so an already-submitted position never resurfaces as a looming deadline. Window controlled by `st.selectbox` over `UPCOMING_WINDOW_OPTIONS`. | 🔴 ≤ `DEADLINE_URGENT_DAYS`; 🟡 ≤ `DEADLINE_ALERT_DAYS`. |
 | Recommender Alerts | `get_pending_recommenders(RECOMMENDER_ALERT_DAYS)` | Grouped by recommender name; one card per person listing all owed positions. |
 
 
