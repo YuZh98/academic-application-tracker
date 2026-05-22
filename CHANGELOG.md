@@ -113,6 +113,36 @@ manual steps to run against a pre-existing database.
   since their own scheduled date is the actionable signal. Pinned
   by four new tests under `TestGetUpcomingDeadlines` and
   `TestGetUpcoming`.
+- Render the dashboard masthead and the per-page colophon on
+  Windows. The day-of-month was built with the POSIX-only
+  `strftime("%-d")` directive, which raises `ValueError` on Windows
+  (the Windows C runtime spells the same thing `%#d`). Because
+  `colophon()` runs near the top of every page, a Windows user could
+  not load any page. The day field is now built from `n.day` so the
+  stamp renders identically on every OS. Pinned by
+  `TestUiStrftimePortability` which scans `ui.py` for any
+  POSIX-only directive.
+- Surface pending recommender letters whose `recommender_name` is
+  `NULL` in the dashboard alert panel and the Recommenders page
+  alert panel. Pandas' default `groupby(dropna=True)` was silently
+  dropping these rows, so an owed letter recorded without a name
+  was invisible — the user could not even discover the missing-name
+  row to fix it. Both panels now `fillna` the column with the new
+  `config.RECOMMENDER_NAME_FALLBACK` sentinel before grouping, so
+  the position bullets surface under an explicit placeholder.
+  Pinned by `test_card_renders_pending_row_with_null_recommender_name`
+  on both pages.
+- Narrow the `Cmd`/`Ctrl` hotkey shield so it no longer blocks
+  widget keybindings on named keys. The previous shield called
+  `stopPropagation()` for every modifier chord, which also stopped
+  descendant widgets (BaseWeb selectbox `Cmd+ArrowLeft` to jump to
+  the first option, contenteditable `Cmd+Enter` to submit, etc.)
+  from receiving the event. The shield now restricts the stop to
+  single-character keys (`event.key.length === 1`) — only the keys
+  Streamlit's bare-letter dev hotkeys could possibly bind. Named
+  keys (Arrow\*, Tab, Enter, Escape, F-keys, …) pass through to
+  the focused widget. Pinned by
+  `test_payload_only_targets_single_character_keys`.
 
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 

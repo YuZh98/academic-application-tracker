@@ -228,6 +228,24 @@ class TestHotkeyShield:
         )
         assert "display: none" in ui._STYLE_BLOCK
 
+    def test_payload_only_targets_single_character_keys(self) -> None:
+        """The capture-phase listener runs at the document level — a
+        blanket ``stopPropagation()`` on every Meta/Ctrl chord would
+        block widget keybindings on named keys (e.g. BaseWeb selectbox
+        Cmd+ArrowLeft to jump to the first option, contenteditable
+        Cmd+Enter to submit). Restrict the stop to single-character
+        keys (length 1) so only the keys Streamlit's bare-letter dev
+        hotkeys could possibly bind (letters, digits, ``/``) are
+        intercepted; named keys (ArrowLeft/Right/Up/Down, Tab, Enter,
+        Escape, F-keys, etc.) pass through to the descendant widget."""
+        normalised = "".join(ui._HOTKEY_SHIELD_JS.split())
+        assert "event.key.length" in normalised or ".key.length" in normalised, (
+            "Shield must gate stopPropagation on event.key.length so "
+            "named keys (Arrow*, Tab, Enter, Escape, F-keys, …) reach "
+            "the descendant widget. Currently the chord-shield blocks "
+            "EVERY Meta/Ctrl chord, breaking widget keybindings."
+        )
+
     def test_install_uses_zero_height_iframe(self) -> None:
         """The shield install is a side effect, not a content slot — the
         iframe must be zero-height so it cannot push the page layout
@@ -748,3 +766,33 @@ class TestUIImports:
                 f"ui.py must not import {mod!r} — layer violation. "
                 f"Display code receives data from pages, not directly from the data layer."
             )
+
+
+# ── Cross-platform strftime portability ────────────────────────────────────────
+
+
+class TestUiStrftimePortability:
+    """The ``%-d`` / ``%-m`` / ``%-H`` family of strftime directives strip
+    the leading zero on glibc/macOS but raise ``ValueError`` on Windows
+    (Windows wants ``%#d``). Since hero_greeting + colophon run on
+    EVERY page, a single POSIX-only token blocks the whole app on
+    Windows. Pin the rule at module level so neither side of the divide
+    can regress."""
+
+    _POSIX_ONLY = re.compile(r"%-[dmHIMSj]")
+
+    def _scan(self, py_path: Path) -> list[tuple[int, str]]:
+        hits: list[tuple[int, str]] = []
+        for i, line in enumerate(py_path.read_text().splitlines(), start=1):
+            for m in self._POSIX_ONLY.finditer(line):
+                hits.append((i, m.group(0)))
+        return hits
+
+    def test_ui_py_avoids_posix_only_strftime_tokens(self) -> None:
+        hits = self._scan(REPO_ROOT / "ui.py")
+        assert hits == [], (
+            "ui.py contains POSIX-only strftime directives that raise "
+            "ValueError on Windows (Windows uses '%#d', '%#H' …). "
+            f"Found: {hits}. Build the day-of-month with `str(n.day)` "
+            "or `n.day` instead of `n.strftime('%-d')`."
+        )

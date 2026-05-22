@@ -438,6 +438,15 @@ else:
         d = date.fromisoformat(deadline_iso)
         return f"{d.strftime('%b')} {d.day}"
 
+    # ``fillna`` BEFORE groupby: pandas' default ``dropna=True`` would
+    # silently drop pending rows whose ``recommender_name`` is NULL
+    # (TEXT column at database.py:138 is nullable). Surface them under
+    # an explicit fallback so the user can locate + fix the row.
+    _pending_recs = _pending_recs.assign(
+        recommender_name=_pending_recs["recommender_name"].fillna(
+            config.RECOMMENDER_NAME_FALLBACK
+        )
+    )
     for _name, _group in _pending_recs.groupby("recommender_name", sort=False):
         with st.container(border=True):
             _rel = str(_group.iloc[0]["relationship"] or "")

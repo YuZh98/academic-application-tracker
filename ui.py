@@ -207,7 +207,10 @@ def hero_greeting(*, name: str | None = None, now: datetime | None = None) -> No
     if name:
         stamp_parts.append(html.escape(name.upper()))
     stamp_parts.append(n.strftime("%A").upper())
-    stamp_parts.append(n.strftime("%B %-d, %Y").upper())
+    # POSIX-only strftime "minus-d" directive raises ValueError on
+    # Windows; build the day-of-month from ``n.day`` so the stamp
+    # renders on every OS.
+    stamp_parts.append(f"{n.strftime('%B')} {n.day}, {n.year}".upper())
     stamp = " · ".join(stamp_parts)
 
     st.markdown(
@@ -314,7 +317,8 @@ def colophon(section: str, *, now: datetime | None = None) -> None:
     n = now or datetime.now()
     safe_section = html.escape(section.upper())
     issue = n.strftime("ISSUE %Y · %B").upper()
-    stamp = n.strftime("%A · %B %-d").upper()
+    # POSIX-only "minus-d" directive — build day portably (see hero_greeting).
+    stamp = f"{n.strftime('%A · %B')} {n.day}".upper()
     st.markdown(
         "<div class='aat-colophon'>"
         "  <strong>Academic Application Tracker</strong>"
@@ -1228,11 +1232,20 @@ section[data-testid="stMain"] [data-testid="stMarkdown"] p strong {
 # ``keydown``, so ``Cmd+C`` to copy a selection lands on Streamlit's
 # listener first and pops the "Clear function caches?" dialog instead of
 # copying. Install a capture-phase listener on the parent document that
-# halts propagation for every ``Meta``/``Ctrl`` chord — Streamlit's own
-# listener never fires, the browser's default chord behaviour (copy,
-# paste, reload, …) runs normally. The sentinel string
-# ``aatHotkeyShield`` is matched by a CSS rule in ``_STYLE_BLOCK`` that
-# hides the host iframe so the install leaves no visible artefact.
+# halts propagation for the chord events Streamlit's bare-letter
+# handlers could possibly bind — Streamlit's own listener never fires,
+# the browser's default chord behaviour (copy, paste, reload, …) runs
+# normally.
+#
+# The ``event.key.length === 1`` gate restricts the stop to
+# single-character keys (letters, digits, ``/``, etc.); named keys
+# (``ArrowLeft``/``ArrowRight``/``Tab``/``Enter``/``Escape``/``F1``…)
+# pass through, so descendant widget keybindings (e.g. BaseWeb
+# selectbox Cmd+Arrow navigation) survive.
+#
+# The sentinel string ``aatHotkeyShield`` is matched by a CSS rule in
+# ``_STYLE_BLOCK`` that hides the host iframe so the install leaves no
+# visible artefact.
 _HOTKEY_SHIELD_JS: str = """
 <script id="aatHotkeyShield">
 (function () {
@@ -1243,7 +1256,7 @@ _HOTKEY_SHIELD_JS: str = """
         doc.addEventListener(
             'keydown',
             function (event) {
-                if (event.metaKey || event.ctrlKey) {
+                if ((event.metaKey || event.ctrlKey) && event.key && event.key.length === 1) {
                     event.stopPropagation();
                 }
             },
