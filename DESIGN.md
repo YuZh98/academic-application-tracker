@@ -499,7 +499,7 @@ lives here so the four pages render with the same shell.
 
 | Function | Returns | Purpose |
 |---|---|---|
-| `inject_global_styles()` | None | Emits the full stylesheet via `st.markdown(..., unsafe_allow_html=True)`. Call once per page after `st.set_page_config` (and after `database.init_db()`). |
+| `inject_global_styles()` | None | Emits the full stylesheet via `st.markdown(..., unsafe_allow_html=True)` and installs a capture-phase `keydown` shield on the parent document so `Cmd`/`Ctrl` chords (copy, paste, reload, …) never trigger Streamlit's bare-letter dev hotkeys. Call once per page after `st.set_page_config` (and after `database.init_db()`). |
 | `accent_bar()` | None | Vermilion + cobalt + citron Bauhaus block trio, butted edge-to-edge under page titles. |
 | `section_header(text, *, eyebrow=None)` | None | Uppercase mono eyebrow + tight italic-serif H2 title. |
 | `numbered_section(n, title)` | None | Editorial `01 — TITLE` mark — zero-padded italic-serif numeral, vermilion separator, uppercase mono title. |
