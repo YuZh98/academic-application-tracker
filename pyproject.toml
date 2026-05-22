@@ -91,6 +91,10 @@ exclude = [
     "exports",
     "build",
     "dist",
+    # scripts/ holds developer-only utilities (e.g. build_ux_report.py)
+    # whose dependencies are not pinned in requirements.txt; excluding
+    # them keeps the CI type-check fence focused on the runtime surface.
+    "scripts",
 ]
 
 [tool.coverage.run]
