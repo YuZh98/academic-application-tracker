@@ -17,6 +17,40 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added
+- Wire the 11 previously-orphan `positions` columns (`location`, `source`, `portal_url`, `mentor`, `point_of_contact`, `stipend`, `full_time`, `deadline_note`, `reference_code`, `keywords`, `description`) into the UI — three short-string columns promoted to Quick-Add, the rest reachable from the Edit-panel Overview tab (#103)
+- Bulk-action expander on the Opportunities page — multi-select rows then promote `[SAVED]→[APPLIED]` or set a requirement value across the selection in one transaction (#103)
+- `pages/5_Settings.py` — in-app threshold tuning (`DEADLINE_ALERT_DAYS`, `RECOMMENDER_ALERT_DAYS`, `UPCOMING_WINDOW_DAYS`) and append-only `STATUS_VALUES` editor, persisted to a JSON overlay next to the DB so `config.py` import-time invariants stay authoritative for defaults (#103)
+- `database.bulk_promote_to_applied`, `database.bulk_set_requirement`, `database.load_settings`, `database.save_settings`, `database.update_status_vocabulary` — public functions powering the Opportunities bulk-action surface and the Settings page (#103)
+- UX field-study report + improvement plan + BDD scenarios under `docs/ux-research/` — three-persona simulation against the v0.14.0 codebase plus the prioritised roadmap that drove this release (#103)
+- Apply an editorial-brutalist visual identity across every page — warm-cream paper background, italic-serif display headlines, uppercase mono labels, vermilion/cobalt/citron accents, hairline rules in place of boxed cards (`c74c1b8`)
+- Add a time-of-day italic-serif greeting + mono uppercase date stamp above the dashboard KPIs (`c74c1b8`)
+- Add a magazine masthead strip at the top of every page (`c83dcec`) and a roman-numeral folio footer at the bottom (`39d859c`)
+- Add per-page typographic gutter marks — `№` Dashboard, `§` Opportunities, `※` Recommenders, `⁂` Export, blank on Applications (`ca8f857`, `2dab9ef`)
+- Add `ui.py` — shared design-system module exposing `inject_global_styles`, `accent_bar`, `section_header`, `numbered_section`, `hero_greeting`, `colophon`, `folio_footer`, `page_mark`, `status_pill`, `urgency_pill`, `sidebar_about_block`, `sidebar_shortcuts_block` with `prefers-color-scheme: dark` token set (`5ddd575`)
+- Add `About · vX.Y.Z` and `Shortcuts` sidebar expanders on every page (`a77fc5b`)
+- Add `config.APP_VERSION` as the single source of truth for the user-visible version, pinned to `pyproject.toml` (`a77fc5b`)
+- Add `@media print` rules that hide the sidebar/toolbar and a `:focus-visible` ring on every interactive element (`c74c1b8`)
+- Add `tests/test_ui.py` pinning the visual contract — pill output, urgency bands, dark-mode token flips, hero band-edges by hour, palette tokens, per-page glyph contract, and the AST grep that every page wires the shared design system (`c1d0539`)
+
+### Changed
+- Read the dashboard Upcoming-panel window default from the persisted threshold overlay (snap-to-nearest-option when the override falls outside `UPCOMING_WINDOW_OPTIONS`) (#103)
+- Move the design-system stylesheet from `app.py` to `ui.py` so all four pages render with the same shell (`6f400a7`)
+- Restyle selectbox value cells to uppercase mono with tracked letter-spacing (`0884ac2`)
+- Hide the Streamlit element toolbar over data grids and force the canvas background to paper (`0759333`)
+- Replace the dashboard's emoji warning glyph with `config.WARN_GLYPH` (U+25B2 ▲) (`c83dcec`)
+- Update `DESIGN.md` to v1.6 — new §8.6 *Design System* + file-tree / layer-rule entries for `ui.py` (`42a5a79`)
+- Update `GUIDELINES.md §2` to record the page bootstrap order (`st.set_page_config` → `database.init_db()` → `ui.inject_global_styles()`) (`631a1c5`)
+
+### Fixed
+- Add symmetric reverse R2 cascade to `delete_interview` — when the last interview row on a position is deleted, retract `[INTERVIEW]→[APPLIED]`, mirroring the forward cascade in `add_interview` (#103)
+- HTML-escape DB-derived values in Recommender-Alerts cards before they reach the `unsafe_allow_html=True` surface (`c0c1ef3`)
+- Stop `Cmd+C` / `Ctrl+C` from opening Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
+- Drop already-submitted positions from the dashboard Upcoming-deadline rows (`2921bf7`)
+- Render `ui.colophon` and `ui.hero_greeting` on Windows by replacing the POSIX-only `%-d` strftime directive with a portable day field (`da87634`)
+- Surface pending recommender letters whose `recommender_name` is NULL on both alert panels (`da87634`)
+- Narrow the Cmd/Ctrl hotkey shield to single-character keys so widget Arrow/Tab/Enter keybindings pass through (`da87634`)
+
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
 ### Added

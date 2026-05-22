@@ -6,6 +6,7 @@ from datetime import datetime
 import streamlit as st
 
 import database
+import ui
 
 st.set_page_config(
     page_title="Export — Academic Application Tracker",
@@ -15,8 +16,18 @@ st.set_page_config(
 
 
 database.init_db()
+ui.inject_global_styles()
+ui.sidebar_about_block()
+ui.sidebar_shortcuts_block()
 
+ui.colophon("Export")
+ui.page_mark("⁂")
 st.title("Export & Download")
+ui.accent_bar()
+st.markdown(
+    "<p class='aat-tagline'>Plain-text markdown backups of your entire job-search state.</p>",
+    unsafe_allow_html=True,
+)
 
 st.markdown(
     "Markdown files are auto-exported after every data change and saved to the "
@@ -78,3 +89,5 @@ for _filename, _path in database.get_export_paths():
         st.caption("Application submission status, responses, and interview records.")
     elif _filename == "RECOMMENDERS.md":
         st.caption("Recommendation letter requests, confirmations, and submission dates.")
+
+ui.folio_footer()

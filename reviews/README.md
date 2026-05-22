@@ -2,7 +2,7 @@
 
 Pre-merge review docs, one per tier (with occasional one-off bug-fix and
 DESIGN review docs). Maintained per `GUIDELINES §10` (review structure)
-and `GUIDELINES §14.7` (this index, naming convention).
+and `GUIDELINES §14.6` (this index, naming convention).
 
 **Naming.** Tier reviews follow `phase-<N>-tier<M>-review.md` (lowercase
 `tier`); date-stamped one-offs follow `<topic>-YYYY-MM-DD-review.md`.

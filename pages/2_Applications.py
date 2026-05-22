@@ -10,6 +10,7 @@ import streamlit as st
 
 import config
 import database
+import ui
 from config import EM_DASH
 
 st.set_page_config(
@@ -20,8 +21,23 @@ st.set_page_config(
 
 
 database.init_db()
+ui.inject_global_styles()
+ui.sidebar_about_block()
+ui.sidebar_shortcuts_block()
 
+ui.colophon("Applications")
+# Margiela blank-label: Applications page deliberately omits its
+# per-page editorial glyph. The other four pages carry one (№ § ※ ⁂);
+# this empty gutter is the missing beat that makes the system feel
+# curated rather than tidy. Do NOT re-add a page_mark here — the
+# absence IS the gesture, and labeling it (v7) defangs it.
 st.title("Applications")
+ui.accent_bar()
+st.markdown(
+    "<p class='aat-tagline'>Submission, response, interviews, and outcomes — "
+    "one position at a time.</p>",
+    unsafe_allow_html=True,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -635,3 +651,5 @@ if "applications_selected_position_id" in st.session_state:
                 st.rerun()
             except Exception as e:
                 st.error(f"Could not add interview: {e}")
+
+ui.folio_footer()

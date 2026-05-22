@@ -4,7 +4,7 @@ A local Streamlit dashboard that answers one question every morning: **"What do 
 
 Track dozens of postdoc, PhD, faculty, and fellowship applications in parallel — deadlines, recommendation letters, materials checklists, interview rounds — without a single missed follow-up.
 
-![Dashboard](docs/ui/screenshots/v0.11.0/dashboard-1280.png)
+![Dashboard](docs/ui/screenshots/v0.14.0/dashboard.png)
 
 [![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -51,19 +51,24 @@ Your data lives in a `postdoc.db` file that appears in the project folder after 
 KPI grid (Tracked / Applied / Interview / Next Interview), application funnel, materials readiness panel, upcoming deadlines, and recommender alerts — one screen, one daily answer.
 
 ### Opportunities
-Quick-add a position in under 30 seconds. Full edit panel with four tabs (Overview / Requirements / Materials / Notes). Filter by status, priority, field, or full-text search. Urgency-banded deadline column.
+Quick-add a position in under 30 seconds — nine fields including location, source, and portal URL. Full edit panel with four tabs (Overview / Requirements / Materials / Notes) covering every schema column. Filter by status, priority, field, or full-text search. Urgency-banded deadline column. **Bulk actions** expander: multi-select rows and flip status or set a requirement value across all of them in one batch.
 
-![Opportunities](docs/ui/screenshots/v0.11.0/opportunities-1280.png)
+![Opportunities](docs/ui/screenshots/v0.14.0/opportunities.png)
 
 ### Applications
-Per-position card: applied date, confirmation, response, result, outcome. Inline multi-round interview log. Pipeline cascades automatically: saved → applied → interview → offer.
+Per-position card: applied date, confirmation, response, result, outcome. Inline multi-round interview log. Pipeline cascades automatically: saved → applied → interview → offer, with symmetric retraction when the last interview row is deleted.
 
-![Applications](docs/ui/screenshots/v0.11.0/applications-1280.png)
+![Applications](docs/ui/screenshots/v0.14.0/applications.png)
 
 ### Recommenders
 Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) matrix with inline edit. Flags anyone asked more than 7 days ago who hasn't confirmed.
 
-![Recommenders](docs/ui/screenshots/v0.11.0/recommenders-1280.png)
+![Recommenders](docs/ui/screenshots/v0.14.0/recommenders.png)
+
+### Settings
+Tune alert thresholds (deadline window, recommender follow-up cadence, upcoming-panel default) and append new pipeline statuses without editing config files. Bounds-checked at save; removal of a status currently in use is blocked at the boundary.
+
+![Settings](docs/ui/screenshots/v0.14.0/settings.png)
 
 ### Export
 Every database write auto-regenerates plaintext markdown files (`OPPORTUNITIES.md`, `PROGRESS.md`, `RECOMMENDERS.md`) in the `exports/` folder — always a fresh, portable backup of your entire job-search state. Manual regenerate + per-file download also available.
@@ -72,7 +77,7 @@ Every database write auto-regenerates plaintext markdown files (`OPPORTUNITIES.m
 
 ## Built to last
 
-800+ tests · 97% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
+1000+ tests · 97% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
 
 <details>
 <summary><strong>Engineering deep-dive</strong></summary>
@@ -134,10 +139,11 @@ config.py              Constants — statuses, thresholds, vocabularies
 database.py            SQL reads/writes; calls exports.write_all() on every write
 exports.py             Markdown generators (OPPORTUNITIES / PROGRESS / RECOMMENDERS)
 pages/
-  1_Opportunities.py   Position CRUD
+  1_Opportunities.py   Position CRUD + bulk actions
   2_Applications.py    Application + interview tracking
   3_Recommenders.py    Recommender tracker + reminder helpers
   4_Export.py          Manual export trigger + per-file download buttons
+  5_Settings.py        Tunable thresholds + append-only status vocabulary
 tests/                 Full test suite (AppTest + unit + cohesion)
 docs/
   adr/                 Architecture decision records
