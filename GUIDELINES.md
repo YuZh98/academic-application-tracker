@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.4 | **Last updated:** 2026-05-03 | **Status:** authoritative
+**Version:** v1.5 | **Last updated:** 2026-05-21 | **Status:** authoritative
 
 ---
 
@@ -47,26 +47,24 @@ app.py        ← may import from {database, config, ui}
 pages/*.py    ← may import from {database, config, ui}; never imports exports directly
 ```
 
-The "may import" wording on the display tier means the set of allowed
-imports — a page only imports what it needs. `pages/4_Export.py` does
-not currently import `config` because it uses no config constants; this
-is permitted and not a layer violation. Adding `import config` to that
-file when it grows a need for one is also fine.
+The "may import" wording means the set of allowed imports — a page
+imports only what it needs; omitting an allowed import is not a
+layer violation.
 
-`exports.write_all()` is called **inside** `database.py` write functions — page
-files never call it directly. The `database ↔ exports` cycle is broken by
-importing `exports` lazily inside each write function (not at module top).
+`exports.write_all()` is called **inside** `database.py` write
+functions — page files never call it directly. The `database ↔
+exports` cycle is broken by importing `exports` lazily inside each
+write function (not at module top).
 
 ### One responsibility per file
 - `database.py` — SQL only. No display logic, no `st.*` calls.
 - `exports.py` — File writing only. No business logic.
 - `config.py` — Constants and pure functions. No I/O, no side effects.
 - `ui.py` — Design-system stylesheet + pill/header helpers. No SQL, no
-  file I/O, no business logic; pinned by `tests/test_ui.py`.
+  file I/O, no business logic.
 - Page files — Display only. No raw SQL. No file I/O. Every page calls
   `st.set_page_config` first, then `database.init_db()`, then
-  `ui.inject_global_styles()` (pinned by
-  `tests/test_ui.py::TestPagesInjectStyles`).
+  `ui.inject_global_styles()`.
 
 ---
 
@@ -195,12 +193,10 @@ if row["status"] == "[SAVED]": ...
 ```
 - When adding a new document type (e.g., "Portfolio"), add it to `REQUIREMENT_DOCS`
   in `config.py` only. The form, schema migration, and export pick it up.
-- **Grep rule (pre-merge check; also enforced by CI + pre-commit):**
+- **Grep rule (pre-commit + CI enforced):**
   `rg --type py -n '\[SAVED\]|\[APPLIED\]|\[INTERVIEW\]' app.py pages/ | rg -v '^[^:]+:[0-9]+:\s*#'` must return zero lines.
-  The `rg -v` filter excludes lines whose content begins with `#`, so
-  explanatory comments (e.g. [pages/1_Opportunities.py:395](pages/1_Opportunities.py)) don't trip the rule.
-  Wired into [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and the
-  `status-literal-grep` hook in [`.pre-commit-config.yaml`](.pre-commit-config.yaml).
+  The `rg -v` filter excludes commented lines so explanatory comments
+  do not trip the rule.
 
 ---
 
@@ -415,10 +411,9 @@ Every tier ends with a pre-merge review doc at
 
 **Status column values**: `Fixed inline` · `Deferred` · `Backlog` ·
 `Kept by design` · `Carry-over`. Use `Carry-over` for pre-existing items
-the current change does not regress (e.g. an inherited inconsistency
-that previous reviews logged but didn't fix). `Kept by design`
-observations belong in the Q&A section, not in the Findings table —
-they are not defects.
+the current change does not regress. `Kept by design` observations
+belong in the Q&A section, not in the Findings table — they are not
+defects.
 
 ---
 
@@ -438,12 +433,12 @@ they are not defects.
 
 **TDD cadence:** `test:` (red) → `feat:` (green) → `chore:` (tracker rollup).
 
-**Version tags:** `v0.x.0` for each phase shipped. Project shipped as `v0.10.0` (public-launch release); no `v1.0.0` planned (see `roadmap.md`).
+**Version tags:** `v0.x.y`; no `v1.0.0` planned (see `roadmap`).
 
 **What never goes in git:** `postdoc.db` · `.venv/` · `.env` · `__pycache__/` · local AI session config files · generated artifacts.
 
 **Pre-commit checklist** (CI re-runs the first four on every push and PR
-via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+via `.github/workflows/ci.yml`):
 
 - [ ] `ruff check .` clean
 - [ ] `pyright .` clean (`[tool.pyright]` config in `pyproject.toml`)
@@ -455,10 +450,9 @@ via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 - [ ] `git diff --staged` shows only intended changes
 - [ ] `postdoc.db` is not staged
 
-**`ruff format` is configured but NOT enforced** in CI or pre-commit —
-deliberate deferral (see `pyproject.toml` `[tool.ruff.format]` comment).
-E501 (line-too-long) is also intentionally ignored. Adding either to the gate
-requires a dedicated reformat PR — don't enable mid-stream.
+**`ruff format` is NOT enforced** in CI or pre-commit (see
+`pyproject.toml` `[tool.ruff.format]`). E501 (line-too-long) is also
+intentionally ignored.
 
 **Local automation:** install dev deps once per clone, then pre-commit
 runs `ruff --fix` and the status-literal grep on every `git commit`:
@@ -468,7 +462,7 @@ pip install -r requirements-dev.txt
 pre-commit install
 ```
 
-For branching, commit-granularity, undo levels, and tagging mechanics in depth, see [`docs/dev-notes/git-workflow-depth.md`](docs/dev-notes/git-workflow-depth.md).
+For branching, commit-granularity, undo levels, and tagging mechanics in depth, see `dev-notes git-workflow-depth`.
 
 ---
 
@@ -485,10 +479,9 @@ For branching, commit-granularity, undo levels, and tagging mechanics in depth, 
 | Modifying `exports/` files by hand | They are generated; edits will be overwritten |
 | `use_container_width=True` | Deprecated → use `width="stretch"` |
 | `r[col] or ""` for DB text pre-seed | NaN is truthy — use `_safe_str(v)` |
-| Tagging new milestones as `v1-phase-N` | Use `v0.x.y` scheme instead (see §11) |
-| `if v is None` / `if not v` / `v or ""` on a DataFrame cell | NaN-from-NULL is truthy; use `pd.isna(v)` (gotcha #13) |
-| `numpy.True_ is True` / identity check on a SQLite INTEGER column | pandas returns `numpy.bool_`; normalise with `bool(...)` first (gotcha #8) |
-| Save / Delete handler without `_skip_table_reset = True` before `st.rerun()` | Selection collapses on next render (gotcha #11) |
+| `if v is None` / `if not v` / `v or ""` on a DataFrame cell | NaN-from-NULL is truthy; use `pd.isna(v)` (dev-notes gotcha #13) |
+| `numpy.True_ is True` / identity check on a SQLite INTEGER column | pandas returns `numpy.bool_`; normalise with `bool(...)` first (dev-notes gotcha #8) |
+| Save / Delete handler without `_skip_table_reset = True` before `st.rerun()` | Selection collapses on next render (dev-notes gotcha #11) |
 
 ---
 
@@ -540,9 +533,9 @@ title. Required fields by doc class:
 | Spec / guideline (`DESIGN`, `GUIDELINES`) | **Version:** · **Last updated:** · **Status:** (the doc's own status taxonomy) |
 | Dev-note (`docs/dev-notes/*`) | Title only; cross-refs in body |
 | Review (`reviews/*`) | **Branch:** · **Scope:** · **Stats:** (optional) · **Verdict:** |
-| ADR (`docs/adr/ADR-*.md`) | **Status:** · **Date:** · **Deciders:** (per `docs/adr/README.md` template) |
+| ADR (`docs/adr/ADR-*.md`) | **Status:** · **Date:** · **Deciders:** (per `docs/adr/README` template) |
 
-Tracker docs (`roadmap.md`, `CHANGELOG.md`) are not authoring-class; their conventions live in §14.4.
+Tracker docs (`roadmap`, `CHANGELOG`) are not authoring-class; `CHANGELOG` conventions live in §14.4.
 
 ### 14.2 Cross-reference canonical form
 
@@ -572,12 +565,8 @@ commit messages and review docs; the changelog is an index into them.
 #### Structure
 - File `CHANGELOG.md` at repo root. `[Unreleased]` at the top
   accumulates new entries. On each release tag, rotate `[Unreleased]`
-  to `## [vX.Y.Z] - YYYY-MM-DD` (ISO 8601) in the same commit.
-  Use [`scripts/release.sh`](scripts/release.sh) to do the slice:
-  `scripts/release.sh vX.Y.Z "Topical title"` validates inputs,
-  refuses if `[Unreleased]` is empty or the version already exists,
-  and prints the follow-up `git commit` + `git tag` + `git push`
-  commands.
+  to `## [vX.Y.Z] - YYYY-MM-DD` (ISO 8601) in the same commit. Use
+  `scripts/release.sh vX.Y.Z "Topical title"` to perform the rotation.
 - Versions ordered latest-first; every version header is clickable
   via bottom-of-file link references (e.g.
   `[v0.5.0]: https://github.com/.../releases/tag/v0.5.0` and
@@ -586,10 +575,9 @@ commit messages and review docs; the changelog is an index into them.
   `### Added` · `### Changed` · `### Fixed` · `### Removed` ·
   `### Deprecated` · `### Security`. Headings are plain — `### Changed`,
   never `### Changed — <topic>`.
-  **Deprecated section names** previously used in the project: `### Chores`
-  (use `### Changed`), `### Process` (drop entirely — process narrative does
-  not belong in CHANGELOG). New entries must use only the six headings above.
-  Pre-existing tagged versions are not retroactively edited.
+- **Forbidden section names:** `### Chores` (use `### Changed`),
+  `### Process` (drop entirely — process narrative does not belong
+  in CHANGELOG).
 
 #### What counts as an entry
 - An entry records a notable change — one a future reader needs to
@@ -615,16 +603,16 @@ the SQL or manual steps. One block per version.
 - Forensic detail — rationale, alternatives considered, file:line refs,
   test counts. Those live in the commit message body or the review doc.
 
-### 14.6 Wireframe scope
+### 14.5 Wireframe scope
 
-`docs/ui/wireframes.md` is "intent-only — not pixel-exact" for visual
+`docs/ui/wireframes` is "intent-only — not pixel-exact" for visual
 layout (column widths, exact emoji choice, ASCII alignment).
 
 It is NOT intent-only for **column order**, **panel ordering**, or
 **panel presence**. Structural divergence from `DESIGN` is a 🟠
 finding (drift), not 🟡 (polish).
 
-### 14.7 Reviews folder index
+### 14.6 Reviews folder index
 
 `reviews/` carries a `README.md` index — one row per review, columns
 `(date, scope, branch, verdict, link)`. Reverse-chronological;
@@ -633,19 +621,19 @@ prepend on each new review.
 Naming: `phase-<N>-tier<M>-review.md` (lowercase `tier`); date-stamped
 one-offs use `<topic>-YYYY-MM-DD-review.md`.
 
-### 14.8 What lives where
+### 14.7 What lives where
 
 Pick the home for decision-class content in this order:
 
 | Content | Home | Why |
 |---|---|---|
-| Cross-cutting architectural decisions | `docs/adr/` | Forward-only ADR ledger per `docs/adr/README.md` |
-| Tier-local implementation choices | `reviews/phase-*.md` Q&A | Bound to the change that introduced them |
-| Streamlit / library quirks | `docs/dev-notes/streamlit-state-gotchas.md` | Per-quirk Symptom / Cause / Workaround |
-| Config-extension procedural recipes | `docs/dev-notes/extending.md` | "How": step-by-step walkthrough |
+| Cross-cutting architectural decisions | `docs/adr/` | Forward-only ADR ledger per `docs/adr/README` |
+| Tier-local implementation choices | `reviews/phase-*` Q&A | Bound to the change that introduced them |
+| Streamlit / library quirks | `dev-notes streamlit-state-gotchas` | Per-quirk Symptom / Cause / Workaround |
+| Config-extension procedural recipes | `dev-notes extending` | "How": step-by-step walkthrough |
 | Config-extension architectural index | `DESIGN §5.3` | "What changes where": one row per goal |
-| User-facing release narrative | `CHANGELOG.md` | Keep-a-Changelog formatted |
-| Phase planning | `roadmap.md` | Phases + ship criteria + post-v1 backlog |
+| User-facing release narrative | `CHANGELOG` | Keep-a-Changelog formatted |
+| Phase planning | `roadmap` | Phases + ship criteria + post-v1 backlog |
 
 Content placed in a lower-priority home when a higher one applies is
 a 🟠 drift finding.
