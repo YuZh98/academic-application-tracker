@@ -20,6 +20,12 @@ st.set_page_config(
 )
 
 database.init_db()
+# R1b — overlay any persisted settings on top of config defaults and
+# expose the effective thresholds in session_state so downstream
+# panels (Upcoming + urgency banding) read one consistent value.
+_settings = database.load_settings()
+st.session_state["effective_deadline_alert_days"] = _settings["DEADLINE_ALERT_DAYS"]
+st.session_state["effective_recommender_alert_days"] = _settings["RECOMMENDER_ALERT_DAYS"]
 ui.inject_global_styles()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
@@ -335,17 +341,32 @@ with _right_col:
 
 st.divider()
 _header_col, _control_col = st.columns([3, 1])
+# R1b — Upcoming-panel default reads the effective threshold (config
+# overlay + Settings override) so a Settings save re-bands the panel
+# without a process restart. Falls back to the config default if the
+# override-load did not set a value.
+_effective_window_default = int(
+    st.session_state.get("effective_deadline_alert_days", config.DEADLINE_ALERT_DAYS)
+)
+if _effective_window_default not in config.UPCOMING_WINDOW_OPTIONS:
+    # The Settings page allows arbitrary ints in [1, 365]; the segmented
+    # control only has discrete options. Snap to the nearest option that
+    # is ≤ the effective value, falling back to the smallest option.
+    _candidates = [o for o in config.UPCOMING_WINDOW_OPTIONS if o <= _effective_window_default]
+    _effective_window_default = (
+        max(_candidates) if _candidates else min(config.UPCOMING_WINDOW_OPTIONS)
+    )
 with _control_col:
     selected_window = (
         st.segmented_control(
             "Window",
             options=config.UPCOMING_WINDOW_OPTIONS,
-            default=config.DEADLINE_ALERT_DAYS,
+            default=_effective_window_default,
             key="upcoming_window",
             format_func=lambda x: f"{x}d",
             label_visibility="collapsed",
         )
-        or config.DEADLINE_ALERT_DAYS
+        or _effective_window_default
     )
 with _header_col:
     st.subheader(f"Upcoming (next {selected_window} days)")

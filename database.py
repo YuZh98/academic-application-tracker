@@ -7,6 +7,7 @@
 #   - exports.write_all() is called inside write functions via deferred import
 #     to avoid the circular dependency: database → exports → database.
 
+import json
 import logging
 import sqlite3
 from contextlib import contextmanager
@@ -705,9 +706,34 @@ def update_interview(interview_id: int, fields: dict[str, Any]) -> None:
 
 
 def delete_interview(interview_id: int) -> None:
-    """Delete a single interview row. Calls exports.write_all()."""
+    """Delete a single interview row. Calls exports.write_all().
+
+    Symmetric R2 reverse cascade (v0.14.0 B1): if the deleted row was
+    the last interview on its application AND the position is
+    currently in [INTERVIEW], retract status to [APPLIED]. Mirrors
+    the forward cascade in ``add_interview`` — narrow precondition
+    on current status guards against retracting [OFFER] etc."""
     with _connect() as conn:
+        cur = conn.execute(
+            "SELECT application_id FROM interviews WHERE id = ?",
+            (interview_id,),
+        )
+        row = cur.fetchone()
+        application_id = row["application_id"] if row else None
+
         conn.execute("DELETE FROM interviews WHERE id = ?", (interview_id,))
+
+        if application_id is not None:
+            remaining = conn.execute(
+                "SELECT COUNT(*) AS n FROM interviews WHERE application_id = ?",
+                (application_id,),
+            ).fetchone()["n"]
+            if remaining == 0:
+                conn.execute(
+                    "UPDATE positions SET status = ? "
+                    "WHERE id = ? AND status = ?",
+                    (config.STATUS_APPLIED, application_id, config.STATUS_INTERVIEW),
+                )
 
     import exports as _exports  # deferred: avoids circular import
 
@@ -1203,3 +1229,207 @@ def get_applications_table() -> pd.DataFrame:
     """
     with _connect() as conn:
         return pd.read_sql_query(sql, conn)
+
+
+# ── v0.16.0 R1a: bulk operations ───────────────────────────────────────────────
+
+
+def bulk_promote_to_applied(
+    position_ids: list[int], *, applied_date: str
+) -> int:
+    """Promote each [SAVED] position in `position_ids` to [APPLIED] in
+    one transaction; mirrors the R1 cascade in ``upsert_application``
+    but operates over many rows. Sets ``applications.applied_date``
+    via INSERT ... ON CONFLICT and flips ``positions.status``.
+
+    Returns the count of rows whose status actually changed. Rows not
+    in [SAVED] (e.g. already [APPLIED] or [INTERVIEW]) are left
+    untouched — same narrow precondition as the single-row R1 path.
+
+    Calls exports.write_all() once at the end so the markdown export
+    sees the batched final state, not N intermediate snapshots."""
+    if not position_ids:
+        return 0
+
+    placeholders = ", ".join("?" * len(position_ids))
+    with _connect() as conn:
+        # Filter to real position ids — silently no-op on bogus inputs
+        # (matches the documented DB-failure-case contract that bulk
+        # operations tolerate a stale cached selection without raising).
+        existing_rows = conn.execute(
+            f"SELECT id FROM positions WHERE id IN ({placeholders})",
+            tuple(position_ids),
+        ).fetchall()
+        real_ids = [r["id"] for r in existing_rows]
+        if not real_ids:
+            changed = 0
+        else:
+            for pid in real_ids:
+                conn.execute(
+                    "INSERT INTO applications (position_id, applied_date) "
+                    "VALUES (?, ?) "
+                    "ON CONFLICT(position_id) DO UPDATE SET applied_date = ?",
+                    (pid, applied_date, applied_date),
+                )
+            real_placeholders = ", ".join("?" * len(real_ids))
+            cur = conn.execute(
+                f"UPDATE positions SET status = ? "
+                f"WHERE id IN ({real_placeholders}) AND status = ?",
+                (config.STATUS_APPLIED, *real_ids, config.STATUS_SAVED),
+            )
+            changed = cur.rowcount or 0
+
+    import exports as _exports  # deferred: avoids circular import
+
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
+        )
+    return changed
+
+
+def bulk_set_requirement(
+    position_ids: list[int], *, requirement: str, value: str
+) -> int:
+    """Set ``positions.<requirement> = value`` for every id in
+    `position_ids` in one transaction. `requirement` must be a known
+    ``req_*`` column from ``config.REQUIREMENT_DOCS`` — validated
+    against the allowlist before the f-string column substitution to
+    prevent SQL injection through the requirement name. (Column-name
+    f-string from a config allowlist is the documented exception
+    pattern in GUIDELINES §5.)"""
+    if not position_ids:
+        return 0
+
+    allowed_req_cols = {
+        req_col for req_col, _done_col, _label in config.REQUIREMENT_DOCS
+    }
+    if requirement not in allowed_req_cols:
+        raise ValueError(
+            f"Unknown requirement column: {requirement!r}. "
+            f"Allowed: {sorted(allowed_req_cols)!r}"
+        )
+
+    placeholders = ", ".join("?" * len(position_ids))
+    with _connect() as conn:
+        cur = conn.execute(
+            f"UPDATE positions SET {requirement} = ? "
+            f"WHERE id IN ({placeholders})",
+            (value, *position_ids),
+        )
+        changed = cur.rowcount or 0
+
+    import exports as _exports  # deferred: avoids circular import
+
+    try:
+        _exports.write_all()
+    except Exception:
+        logger.exception(
+            "exports.write_all() failed; DB write succeeded — markdown regeneration is best-effort"
+        )
+    return changed
+
+
+# ── v0.16.0 R1b: settings persistence ──────────────────────────────────────────
+#
+# Tunable thresholds + append-only vocabulary live in a JSON override
+# file next to the DB. ``config.py`` constants stay the authoritative
+# defaults; ``load_settings()`` overlays the override file on top.
+# ``save_settings()`` validates each value at the boundary so the import-
+# time invariant (S5) cannot drift even if the file is hand-edited.
+
+SETTINGS_FILENAME = "settings_overrides.json"
+
+
+def _settings_path() -> Path:
+    return DB_PATH.parent / SETTINGS_FILENAME
+
+
+_SETTINGS_BOUNDS: dict[str, tuple[int, int]] = {
+    "DEADLINE_ALERT_DAYS": (1, 365),
+    "RECOMMENDER_ALERT_DAYS": (1, 90),
+    "UPCOMING_WINDOW_DAYS": (1, 90),
+}
+
+
+def load_settings() -> dict[str, Any]:
+    """Return the persisted settings overlay merged on top of the
+    ``config.py`` defaults. Always returns the live effective values
+    — callers do not need to fall back to ``config.*`` themselves."""
+    overlay: dict[str, Any] = {}
+    path = _settings_path()
+    if path.exists():
+        try:
+            overlay = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.exception(
+                "settings overlay unreadable; falling back to config.py defaults"
+            )
+            overlay = {}
+
+    base: dict[str, Any] = {
+        "DEADLINE_ALERT_DAYS": getattr(config, "DEADLINE_ALERT_DAYS", 30),
+        "RECOMMENDER_ALERT_DAYS": getattr(config, "RECOMMENDER_ALERT_DAYS", 7),
+        "UPCOMING_WINDOW_DAYS": getattr(config, "UPCOMING_WINDOW_DAYS", 30),
+        "STATUS_VALUES": list(config.STATUS_VALUES),
+    }
+    base.update(overlay)
+    return base
+
+
+def save_settings(updates: dict[str, Any]) -> None:
+    """Validate + persist settings updates. Atomic — if any value
+    fails validation, no write happens (boundary-validate pattern).
+    Threshold fields must be ints in their declared bounds."""
+    if not updates:
+        return
+
+    for key, value in updates.items():
+        if key in _SETTINGS_BOUNDS:
+            lo, hi = _SETTINGS_BOUNDS[key]
+            if not isinstance(value, int) or value < lo or value > hi:
+                raise ValueError(
+                    f"{key} must be an integer in [{lo}, {hi}]; got {value!r}"
+                )
+
+    current: dict[str, Any] = {}
+    path = _settings_path()
+    if path.exists():
+        try:
+            current = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            current = {}
+    current.update(updates)
+    path.write_text(json.dumps(current, indent=2), encoding="utf-8")
+
+
+def update_status_vocabulary(
+    *, append: list[str] | None = None, remove: list[str] | None = None
+) -> None:
+    """Append-only vocabulary mutation. Removing a status that any
+    position currently holds is blocked at the boundary."""
+    settings = load_settings()
+    statuses: list[str] = list(settings.get("STATUS_VALUES", config.STATUS_VALUES))
+
+    if remove:
+        placeholders = ", ".join("?" * len(remove))
+        with _connect() as conn:
+            in_use = conn.execute(
+                f"SELECT DISTINCT status FROM positions WHERE status IN ({placeholders})",
+                tuple(remove),
+            ).fetchall()
+        if in_use:
+            blockers = sorted({r["status"] for r in in_use})
+            raise ValueError(
+                f"Cannot remove statuses that positions currently hold: {blockers}"
+            )
+        statuses = [s for s in statuses if s not in remove]
+
+    if append:
+        for s in append:
+            if s not in statuses:
+                statuses.append(s)
+
+    save_settings({"STATUS_VALUES": statuses})

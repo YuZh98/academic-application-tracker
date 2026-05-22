@@ -1844,9 +1844,17 @@ class TestNotesTabWidgets:
         # than the count, so a future tier-add lands as a one-line
         # extension rather than a magic-number tweak.
         text_area_keys = {ta.key for ta in at.text_area}
-        assert text_area_keys == {NOTES_KEY, "edit_work_auth_note"}, (
-            f"Expected text_areas keyed {NOTES_KEY!r} (Notes tab) and "
-            f"'edit_work_auth_note' (Overview tab); got {text_area_keys!r}"
+        # R0b extended the Overview tab with edit_keywords + edit_description
+        # text_areas — covered by UX_BDD_Scenarios §v0.15.0 R0b.
+        assert text_area_keys == {
+            NOTES_KEY,
+            "edit_work_auth_note",
+            "edit_keywords",
+            "edit_description",
+        }, (
+            f"Expected text_areas keyed {NOTES_KEY!r} (Notes), "
+            "'edit_work_auth_note', 'edit_keywords', 'edit_description' "
+            f"(Overview); got {text_area_keys!r}"
         )
 
     def test_text_area_preseeded_from_db(self, db):

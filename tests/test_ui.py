@@ -526,7 +526,7 @@ class TestPagesCallColophon:
             )
 
 
-_PAGE_MARK_GLYPHS = {"№", "§", "※", "⁂"}
+_PAGE_MARK_GLYPHS = {"№", "§", "※", "⁂", "¶"}
 
 
 def _page_mark_glyphs(py_path: Path) -> list[str]:
