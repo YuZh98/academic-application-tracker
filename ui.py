@@ -26,6 +26,7 @@ import html
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import config
 
@@ -363,6 +364,20 @@ def sidebar_shortcuts_block() -> None:
 
 _STYLE_BLOCK = """
 <style>
+/* ── Hotkey-shield iframe ──────────────────────────────────────── */
+/* The shield runs inside a zero-height components.v1.html iframe
+   whose <script> tag carries the id `aatHotkeyShield`. Streamlit
+   still wraps that iframe in an `stIFrame` slot that takes a row
+   of layout space; collapse the slot so the install leaves no
+   visible artefact on any page. */
+div[data-testid="stIFrame"]:has(iframe[srcdoc*="aatHotkeyShield"]),
+[data-testid="stCustomComponentV1"]:has(iframe[srcdoc*="aatHotkeyShield"]) {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
 /* ── Design tokens ─────────────────────────────────────────────── */
 :root {
     /* Editorial palette — Bauhaus + newsroom */
@@ -1207,11 +1222,56 @@ section[data-testid="stMain"] [data-testid="stMarkdown"] p strong {
 """
 
 
+# Streamlit binds bare-letter developer hotkeys ('c' clears the function
+# caches, 'r' reruns the script, '/' opens the menu, etc.) at the document
+# level. On macOS the ``Cmd`` modifier still delivers the bare-letter
+# ``keydown``, so ``Cmd+C`` to copy a selection lands on Streamlit's
+# listener first and pops the "Clear function caches?" dialog instead of
+# copying. Install a capture-phase listener on the parent document that
+# halts propagation for every ``Meta``/``Ctrl`` chord — Streamlit's own
+# listener never fires, the browser's default chord behaviour (copy,
+# paste, reload, …) runs normally. The sentinel string
+# ``aatHotkeyShield`` is matched by a CSS rule in ``_STYLE_BLOCK`` that
+# hides the host iframe so the install leaves no visible artefact.
+_HOTKEY_SHIELD_JS: str = """
+<script id="aatHotkeyShield">
+(function () {
+    try {
+        var doc = window.parent && window.parent.document;
+        if (!doc || doc.__aatHotkeyShieldInstalled) { return; }
+        doc.__aatHotkeyShieldInstalled = true;
+        doc.addEventListener(
+            'keydown',
+            function (event) {
+                if (event.metaKey || event.ctrlKey) {
+                    event.stopPropagation();
+                }
+            },
+            true
+        );
+    } catch (_) {
+        /* cross-origin or otherwise unreachable — fail silently */
+    }
+})();
+</script>
+"""
+
+
+def _install_hotkey_shield() -> None:
+    """Suppress Streamlit's bare-letter dev hotkeys whenever the user
+    holds ``Cmd`` / ``Ctrl`` so ``Cmd+C`` copies the current selection
+    instead of clearing the function caches. See ``_HOTKEY_SHIELD_JS``
+    for the rationale and DESIGN §8.6 for the contract."""
+    components.html(_HOTKEY_SHIELD_JS, height=0, width=0)
+
+
 def inject_global_styles() -> None:
-    """Inject the editorial-brutalist stylesheet.
+    """Inject the editorial-brutalist stylesheet and the hotkey shield.
 
     Must be called once per Streamlit page, right after
     ``st.set_page_config(...)``. Streamlit re-renders the whole page on
-    every rerun, so re-injecting is free.
+    every rerun, so re-injecting is free; the shield install is
+    idempotent (see the JS sentinel guard).
     """
     st.markdown(_STYLE_BLOCK, unsafe_allow_html=True)
+    _install_hotkey_shield()

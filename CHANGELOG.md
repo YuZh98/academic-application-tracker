@@ -86,6 +86,22 @@ manual steps to run against a pre-existing database.
   literal text rather than mounted into the canvas. Pinned by two
   new tests under `TestT5RecommenderAlerts` and
   `TestPendingAlertsPanel`.
+- Stop letting `Cmd+C` (and other `Cmd`/`Ctrl` chords) open
+  Streamlit's "Clear function caches?" dialog when copying a
+  selection on the page. Streamlit binds bare-letter developer
+  hotkeys (`C` clears the caches, `R` reruns, …) at the document
+  level, and on macOS the `Cmd` modifier still delivers the
+  bare-letter `keydown` to Streamlit's listener — so copying text
+  out of the app surfaced the cache-clear confirmation instead of
+  the system copy. `ui.inject_global_styles` now installs a
+  capture-phase `keydown` shield on the parent document that halts
+  propagation for every modifier chord; the browser's default
+  behaviour (copy, paste, reload, …) runs normally and the
+  Streamlit listener never fires. The shield is installed via a
+  zero-height `streamlit.components.v1.html` iframe whose host slot
+  is hidden by a stylesheet rule, so the install leaves no layout
+  artefact. Pinned by `TestHotkeyShield` (eight assertions across
+  payload + install + style-block).
 - Stop surfacing already-submitted positions as looming application
   deadlines in the dashboard Upcoming panel. Once a position moves
   past `[SAVED]` the submission has happened, so a future

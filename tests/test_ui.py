@@ -151,6 +151,95 @@ class TestInjectGlobalStyles:
             kwargs = mock_md.call_args.kwargs
             assert kwargs.get("unsafe_allow_html") is True
 
+    def test_also_installs_hotkey_shield(self) -> None:
+        """``inject_global_styles`` is the single bootstrap call every
+        page makes; folding the hotkey shield in here guarantees the
+        Cmd+C protection lands on every page without a second AST
+        contract for callers."""
+        with (
+            patch.object(ui.st, "markdown"),
+            patch.object(ui.components, "html") as mock_components_html,
+        ):
+            ui.inject_global_styles()
+            assert mock_components_html.called, (
+                "inject_global_styles must install the hotkey shield via "
+                "streamlit.components.v1.html so Cmd+C does not trigger "
+                "Streamlit's clear-cache dialog."
+            )
+
+
+# ── Hotkey shield (Cmd+C copy regression) ─────────────────────────────────────
+
+
+class TestHotkeyShield:
+    """Pin the contract for the hotkey shield that stops Streamlit's
+    bare-letter dev hotkeys from firing on Cmd/Ctrl chords. The actual
+    behaviour lives in JS injected via a zero-height components iframe;
+    these tests pin the payload shape so a regression in the JS or the
+    iframe-hiding CSS would surface as a unit-test failure rather than
+    as a user-visible "Clear function caches?" dialog on Cmd+C."""
+
+    def test_payload_targets_meta_and_ctrl_chords(self) -> None:
+        assert "metaKey" in ui._HOTKEY_SHIELD_JS, (
+            "Shield must check event.metaKey so macOS Cmd chords are caught."
+        )
+        assert "ctrlKey" in ui._HOTKEY_SHIELD_JS, (
+            "Shield must check event.ctrlKey so Windows / Linux Ctrl chords are caught."
+        )
+
+    def test_payload_calls_stop_propagation(self) -> None:
+        assert "stopPropagation" in ui._HOTKEY_SHIELD_JS, (
+            "Shield must call event.stopPropagation() so Streamlit's "
+            "document-level keydown listener never sees the chord."
+        )
+
+    def test_payload_uses_capture_phase(self) -> None:
+        """The shield must register the listener in the capture phase
+        (third arg ``true`` to ``addEventListener``) so it runs before
+        Streamlit's own handler."""
+        assert "true" in ui._HOTKEY_SHIELD_JS and "addEventListener" in ui._HOTKEY_SHIELD_JS
+        # Crude but specific: the literal addEventListener-keydown-true
+        # ordering, ignoring whitespace, must be present.
+        normalised = "".join(ui._HOTKEY_SHIELD_JS.split())
+        assert "'keydown'" in normalised
+        assert "true" in normalised.split("'keydown'", 1)[1], (
+            "addEventListener must pass capture=true so the shield runs "
+            "before Streamlit's bubble-phase listener."
+        )
+
+    def test_payload_is_idempotent(self) -> None:
+        """Streamlit reruns the page on every interaction; the shield
+        installer must not stack listeners. Idempotency is enforced by
+        a sentinel flag on the parent document."""
+        assert "__aatHotkeyShieldInstalled" in ui._HOTKEY_SHIELD_JS, (
+            "Shield must guard against double-install across reruns."
+        )
+
+    def test_payload_carries_sentinel_for_css_hide(self) -> None:
+        """The stylesheet hides the shield's host iframe by matching
+        ``srcdoc*='aatHotkeyShield'``. The JS payload must carry that
+        sentinel so the CSS selector resolves."""
+        assert "aatHotkeyShield" in ui._HOTKEY_SHIELD_JS
+
+    def test_stylesheet_hides_shield_iframe(self) -> None:
+        assert "aatHotkeyShield" in ui._STYLE_BLOCK, (
+            "Stylesheet must include the iframe-hiding rule keyed on the "
+            "shield sentinel so the install leaves no layout artefact."
+        )
+        assert "display: none" in ui._STYLE_BLOCK
+
+    def test_install_uses_zero_height_iframe(self) -> None:
+        """The shield install is a side effect, not a content slot — the
+        iframe must be zero-height so it cannot push the page layout
+        even if the CSS hide rule ever fails to match."""
+        with patch.object(ui.components, "html") as mock_components_html:
+            ui._install_hotkey_shield()
+            assert mock_components_html.called
+            kwargs = mock_components_html.call_args.kwargs
+            assert kwargs.get("height") == 0, (
+                f"Shield iframe must be height=0; got {kwargs.get('height')!r}"
+            )
+
 
 # ── Page injection presence (static AST check) ────────────────────────────────
 
