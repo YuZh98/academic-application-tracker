@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.6 | **Last updated:** 2026-05-20 | **Status:** authoritative
+**Version:** 1.7 | **Last updated:** 2026-05-21 | **Status:** authoritative
 
 ---
 
@@ -99,7 +99,7 @@ The dotted edge from `database` to `exports` is the deferred-import escape hatch
 | Data frames | pandas | 2.2 | Bridges SQLite rows ↔ Streamlit display widgets |
 | Database | SQLite via `sqlite3` | stdlib | No server; single file; standard SQL; gitignored |
 
-Pinned versions in `requirements.txt`; the `Required ≥` column is the minimum known-working version and floor for any dependency upgrade policy.
+`requirements.txt` pins exact versions; the `Required ≥` column is the floor for any upgrade.
 
 ### 3.1 Runtime assumptions
 
@@ -202,7 +202,7 @@ CHANGELOG.md              Release history
 
 ### 5.2 Import-time invariants
 
-`config.py` runs these assertions at module import. A violation aborts app startup with a clear traceback — catching drift before any page renders:
+`config.py` runs these assertions at module import. A violation aborts app startup with a clear traceback — catching drift before any page renders. Numbers are stable identifiers referenced by `test_invariant_<N>_*` in `tests/test_config.py`; #1 is retired and the slot is intentionally left empty:
 
 2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has a UI label
@@ -225,7 +225,7 @@ CHANGELOG.md              Release history
 | Add a new pipeline status | Append to `STATUS_VALUES` + add alias; add entries to `STATUS_COLORS`, `STATUS_LABELS`, `FUNNEL_BUCKETS`; if terminal, append to `TERMINAL_STATUSES`. |
 | Rename a pipeline status | Edit all references + write one-shot `UPDATE` migration in CHANGELOG. |
 | Change a dashboard threshold | Edit `DEADLINE_*` or `RECOMMENDER_ALERT_DAYS`. Invariants catch inverted thresholds. |
-| Switch the tracker profile | See §12 and [`roadmap.md`](roadmap.md). |
+| Switch the tracker profile | See §12 and `roadmap`. |
 
 ---
 
@@ -348,11 +348,11 @@ CREATE INDEX IF NOT EXISTS idx_interviews_application ON interviews(application_
 | Split or normalize columns | `ALTER TABLE ADD COLUMN` + `UPDATE` to copy data; leave old col NULL until rebuild |
 | Remove a column | SQLite 3.35+: `ALTER TABLE <t> DROP COLUMN <c>` when no constraints reference it. Otherwise requires table rebuild. |
 
-**Migration discipline:** every schema or vocabulary change lands with a `Migration:` note in `CHANGELOG.md` under the release that introduces it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between releases never has to guess which migration to run.
+**Migration discipline:** every schema or vocabulary change lands with a `Migration:` note in `CHANGELOG` under the release that introduces it, giving the exact `UPDATE` or rebuild SQL. A user upgrading between releases never has to guess which migration to run.
 
 ### 6.4 Schema design decisions
 
-See [§10 Key Architectural Decisions](#10-key-architectural-decisions): D2, D3, D8, D9, D10, D11, D16, D18, D19, D20, D21, D22, D23, D25.
+Rationale for the schema choices lives in §10.
 
 ---
 
@@ -413,7 +413,7 @@ See [§10 Key Architectural Decisions](#10-key-architectural-decisions): D2, D3,
 
 ### 8.1 `app.py` — Dashboard (Home)
 
-Answer "What do I do today?" in one glance. Layout wireframe: [`docs/ui/wireframes.md#dashboard`](docs/ui/wireframes.md#dashboard).
+Answer "What do I do today?" in one glance. Layout wireframe: `docs/ui/wireframes §dashboard`.
 
 **Panel specifications:**
 
@@ -434,7 +434,7 @@ Answer "What do I do today?" in one glance. Layout wireframe: [`docs/ui/wirefram
 
 ### 8.2 `pages/1_Opportunities.py` — Positions
 
-Capture and manage all positions. Layout wireframe: [`docs/ui/wireframes.md#opportunities`](docs/ui/wireframes.md#opportunities).
+Capture and manage all positions. Layout wireframe: `docs/ui/wireframes §opportunities`.
 
 **Behaviour:**
 
@@ -454,7 +454,7 @@ Capture and manage all positions. Layout wireframe: [`docs/ui/wireframes.md#oppo
 
 ### 8.3 `pages/2_Applications.py` — Progress
 
-Track every position from submission to outcome, including full interview sequence. Layout wireframe: [`docs/ui/wireframes.md#applications`](docs/ui/wireframes.md#applications).
+Track every position from submission to outcome, including full interview sequence. Layout wireframe: `docs/ui/wireframes §applications`.
 
 **Behaviour:**
 - **Status filter selectbox:** options = `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`; default = `"Active"` (excludes `STATUS_FILTER_ACTIVE_EXCLUDED`). Uses `format_func=STATUS_LABELS.get(v, v)`.
@@ -466,7 +466,7 @@ Track every position from submission to outcome, including full interview sequen
 
 ### 8.4 `pages/3_Recommenders.py` — Recommenders
 
-Track every letter across every position; surface who needs a reminder. Layout wireframe: [`docs/ui/wireframes.md#recommenders`](docs/ui/wireframes.md#recommenders).
+Track every letter across every position; surface who needs a reminder. Layout wireframe: `docs/ui/wireframes §recommenders`.
 
 **Behaviour:**
 - **Alert panel grouping:** `get_pending_recommenders()` returns one row per (recommender × position); page groups by `recommender_name` so one recommender owing N letters appears as single card listing all N positions.
@@ -478,14 +478,14 @@ Track every letter across every position; surface who needs a reminder. Layout w
 
 ### 8.5 `pages/4_Export.py` — Export
 
-Manual export trigger and per-file download. Layout wireframe: [`docs/ui/wireframes.md#export`](docs/ui/wireframes.md#export).
+Manual export trigger and per-file download. Layout wireframe: `docs/ui/wireframes §export`.
 
 ---
 
 ### 8.6 Design System (`ui.py`)
 
-Shared presentation layer, introduced in v0.14.0. All visual identity
-lives here so the four pages render with the same shell.
+Shared presentation layer. All visual identity lives here so every
+page renders with the same shell.
 
 **Aesthetic charter (editorial-brutalist):**
 
@@ -515,9 +515,7 @@ lives here so the four pages render with the same shell.
 **Architectural constraint:** `ui.py` imports `config` + `streamlit`
 only; it never touches `database` or `exports`. Every page calls
 `ui.inject_global_styles()`, `ui.sidebar_about_block()`, and
-`ui.sidebar_shortcuts_block()`; the contract is pinned by
-`tests/test_ui.py` (AST grep over `app.py` + every file under
-`pages/`).
+`ui.sidebar_shortcuts_block()`.
 
 ---
 
@@ -609,7 +607,7 @@ Cancel preserves current edit context (selected row + tab state) so user returns
 | D12 | Cross-table cascade lives in `database.py` writers | Atomic, testable, pages stay display-only | Page-level detect-and-prompt — leaks business logic into UI; loses atomicity |
 | D13 | No 🔄 Refresh button on dashboard top bar | Streamlit reruns on any interaction; single-user local app rarely has cross-tab writes | Manual refresh button — cognitive noise for common case |
 | D14 | `st.set_page_config(layout="wide", ...)` on every page | Data-heavy views need horizontal room | Default centered layout — ~750px cramps every page |
-| D15 | `TRACKER_PROFILE` validated at import time against `VALID_PROFILES` — **reversed in Phase 7 CL2.** Constants removed (no-ops since v1.1); profile expansion deferred to v2 (§12.1). | Was: cheap forward-compat hook for v2 profile variants | Hardcode `"postdoc"` — no v2 extension point |
+| D15 | Hardcode the `"postdoc"` profile; no `TRACKER_PROFILE` indirection | Reduce v1 surface area; profile expansion deferred to §12 | Import-time profile validation — unused extension hook |
 | D16 | Bracketed status storage values + bracket-stripped UI labels | Visual enum sentinel in logs/DB; `STATUS_LABELS` delivers clean UI | Raw labels in storage — harder to grep; conflicts w/ freetext "Saved" elsewhere |
 | D17 | Archived = `[REJECTED]` + `[DECLINED]` on dashboard funnel only; `[CLOSED]` stays own bar | Rejection + declined-offer = both outcomes after engagement; CLOSED = pre-engagement withdrawal — a genuinely different state | Group all three terminals — loses semantic distinction |
 | D18 | `interviews` sub-table instead of flat `interview1_date`/`interview2_date` cols | Real apps have 3+ interviews (phone → committee → chalk talk → dean); flat cap = arbitrary cliff | Flat cols — capped data model at unrealistic limit |
@@ -625,7 +623,7 @@ Cancel preserves current edit context (selected row + tab state) so user returns
 
 ## 11. Extension Guide
 
-See [`docs/dev-notes/extending.md`](docs/dev-notes/extending.md) for step-by-step recipes (add requirement document, add or rename pipeline status, switch tracker profile, etc.).
+See `dev-notes extending` for step-by-step recipes (add requirement document, add or rename pipeline status, switch tracker profile, etc.).
 
 ---
 
@@ -640,4 +638,4 @@ The tracker is designed so reskinning to a different job context (software engin
 - **Interactive funnel** — click a bar to navigate to Opportunities with that status pre-filtered
 - **Cloud backup** — periodic upload of `postdoc.db` + `exports/` to S3 / iCloud / Dropbox
 
-See [`roadmap.md`](roadmap.md) for full design sketches, implementation notes, and prioritized backlog.
+See `roadmap` for full design sketches, implementation notes, and prioritized backlog.
