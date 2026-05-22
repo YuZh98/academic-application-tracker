@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.7 | **Last updated:** 2026-05-21 | **Status:** authoritative
+**Version:** 1.8 | **Last updated:** 2026-05-22 | **Status:** authoritative
 
 ---
 
@@ -116,10 +116,11 @@ database.py               All SQLite I/O; no Streamlit imports
 exports.py                Markdown generators; called by database.py writers
 ui.py                     Shared design-system stylesheet + pill/header helpers
 pages/
-  1_Opportunities.py      Position CRUD
+  1_Opportunities.py      Position CRUD + bulk actions
   2_Applications.py       Progress tracking + interviews
   3_Recommenders.py       Letter tracking + reminder helpers
   4_Export.py             Manual export + file download
+  5_Settings.py           Tunable thresholds + append-only status vocabulary
 exports/                  Auto-generated markdown backups (gitignored)
 postdoc.db                SQLite database (gitignored)
 tests/                    pytest suite
@@ -482,7 +483,18 @@ Manual export trigger and per-file download. Layout wireframe: `docs/ui/wirefram
 
 ---
 
-### 8.6 Design System (`ui.py`)
+### 8.6 `pages/5_Settings.py` — Settings
+
+Tunable thresholds + append-only vocabulary editor. Two stacked forms:
+
+- **Alert thresholds** — `DEADLINE_ALERT_DAYS`, `RECOMMENDER_ALERT_DAYS`, `UPCOMING_WINDOW_DAYS` as bounded `st.number_input` widgets. Saved values land in `settings_overrides.json` next to the SQLite DB; `database.load_settings()` overlays them on top of the `config.py` defaults so the import-time invariants stay authoritative.
+- **Status vocabulary (append-only)** — text-input + Append button. Sentinels must be bracketed (`[GHOSTED]`). Removal of a status currently held by any position is blocked at the boundary in `database.update_status_vocabulary`.
+
+Persistence layer: `database.load_settings`, `database.save_settings`, `database.update_status_vocabulary`.
+
+---
+
+### 8.7 Design System (`ui.py`)
 
 Shared presentation layer. All visual identity lives here so every
 page renders with the same shell.

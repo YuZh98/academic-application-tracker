@@ -18,6 +18,11 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Added
+- Wire the 11 previously-orphan `positions` columns (`location`, `source`, `portal_url`, `mentor`, `point_of_contact`, `stipend`, `full_time`, `deadline_note`, `reference_code`, `keywords`, `description`) into the UI — three short-string columns promoted to Quick-Add, the rest reachable from the Edit-panel Overview tab (#103)
+- Bulk-action expander on the Opportunities page — multi-select rows then promote `[SAVED]→[APPLIED]` or set a requirement value across the selection in one transaction (#103)
+- `pages/5_Settings.py` — in-app threshold tuning (`DEADLINE_ALERT_DAYS`, `RECOMMENDER_ALERT_DAYS`, `UPCOMING_WINDOW_DAYS`) and append-only `STATUS_VALUES` editor, persisted to a JSON overlay next to the DB so `config.py` import-time invariants stay authoritative for defaults (#103)
+- `database.bulk_promote_to_applied`, `database.bulk_set_requirement`, `database.load_settings`, `database.save_settings`, `database.update_status_vocabulary` — public functions powering the Opportunities bulk-action surface and the Settings page (#103)
+- UX field-study report + improvement plan + BDD scenarios under `docs/ux-research/` — three-persona simulation against the v0.14.0 codebase plus the prioritised roadmap that drove this release (#103)
 - Apply an editorial-brutalist visual identity across every page — warm-cream paper background, italic-serif display headlines, uppercase mono labels, vermilion/cobalt/citron accents, hairline rules in place of boxed cards (`c74c1b8`)
 - Add a time-of-day italic-serif greeting + mono uppercase date stamp above the dashboard KPIs (`c74c1b8`)
 - Add a magazine masthead strip at the top of every page (`c83dcec`) and a roman-numeral folio footer at the bottom (`39d859c`)
@@ -29,6 +34,7 @@ manual steps to run against a pre-existing database.
 - Add `tests/test_ui.py` pinning the visual contract — pill output, urgency bands, dark-mode token flips, hero band-edges by hour, palette tokens, per-page glyph contract, and the AST grep that every page wires the shared design system (`c1d0539`)
 
 ### Changed
+- Read the dashboard Upcoming-panel window default from the persisted threshold overlay (snap-to-nearest-option when the override falls outside `UPCOMING_WINDOW_OPTIONS`) (#103)
 - Move the design-system stylesheet from `app.py` to `ui.py` so all four pages render with the same shell (`6f400a7`)
 - Restyle selectbox value cells to uppercase mono with tracked letter-spacing (`0884ac2`)
 - Hide the Streamlit element toolbar over data grids and force the canvas background to paper (`0759333`)
@@ -37,6 +43,7 @@ manual steps to run against a pre-existing database.
 - Update `GUIDELINES.md §2` to record the page bootstrap order (`st.set_page_config` → `database.init_db()` → `ui.inject_global_styles()`) (`631a1c5`)
 
 ### Fixed
+- Add symmetric reverse R2 cascade to `delete_interview` — when the last interview row on a position is deleted, retract `[INTERVIEW]→[APPLIED]`, mirroring the forward cascade in `add_interview` (#103)
 - HTML-escape DB-derived values in Recommender-Alerts cards before they reach the `unsafe_allow_html=True` surface (`c0c1ef3`)
 - Stop `Cmd+C` / `Ctrl+C` from opening Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
 - Drop already-submitted positions from the dashboard Upcoming-deadline rows (`2921bf7`)
