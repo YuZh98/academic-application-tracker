@@ -23,6 +23,29 @@ ui.inject_global_styles()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
 
+# R1a — bulk-action dispatcher. A bulk-control UI (added below the
+# table) enqueues an action by setting opps_bulk_pending_action +
+# opps_bulk_selected_ids; this dispatcher runs the action, clears
+# the pending sentinel, and sets _skip_table_reset so the row
+# selection survives the post-action rerun (dev-notes gotcha #11).
+_bulk_action = st.session_state.pop("opps_bulk_pending_action", None)
+if _bulk_action:
+    _bulk_ids = sorted(st.session_state.get("opps_bulk_selected_ids", set()))
+    if _bulk_ids:
+        try:
+            if _bulk_action == "promote_to_applied":
+                database.bulk_promote_to_applied(
+                    _bulk_ids, applied_date=datetime.date.today().isoformat()
+                )
+            elif _bulk_action.startswith("set_requirement:"):
+                _, req_col, req_val = _bulk_action.split(":", 2)
+                database.bulk_set_requirement(
+                    _bulk_ids, requirement=req_col, value=req_val
+                )
+        except Exception as exc:
+            st.error(f"Bulk action failed: {exc}")
+    st.session_state["_skip_table_reset"] = True
+
 
 def _safe_str(v: Any) -> str:
     """Coerce a DataFrame cell to a widget-safe ``str``.
@@ -156,6 +179,19 @@ with st.expander("Quick Add", expanded=False):
             field = st.text_input("Field", key=f"qa_field_{qa_nonce}")
             link = st.text_input("Link", key=f"qa_link_{qa_nonce}", placeholder="https://…")
 
+        # R0b — three short-string columns promoted to Quick-Add. The
+        # rest of the 10 previously-orphan schema columns reach Edit
+        # only (S6 6-field discipline + buffer = ≤ 9 inputs cap).
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            location = st.text_input("Location", key=f"qa_location_{qa_nonce}")
+        with col5:
+            source = st.text_input("Source", key=f"qa_source_{qa_nonce}")
+        with col6:
+            portal_url = st.text_input(
+                "Portal URL", key=f"qa_portal_url_{qa_nonce}", placeholder="https://…"
+            )
+
         submitted = st.form_submit_button("+ Add Position", key=f"qa_submit_{qa_nonce}")
 
 
@@ -164,6 +200,9 @@ if submitted:
     institute = institute.strip()
     field = field.strip()
     link = link.strip()
+    location = location.strip()
+    source = source.strip()
+    portal_url = portal_url.strip()
 
     if not position_name:
         st.error("Position Name is required.")
@@ -174,6 +213,9 @@ if submitted:
             "field": field,
             "priority": priority,
             "link": link,
+            "location": location,
+            "source": source,
+            "portal_url": portal_url,
         }
         if deadline_date is not None:
             fields["deadline_date"] = deadline_date.isoformat()
@@ -254,6 +296,63 @@ elif df_filtered.empty:
 else:
     _n = len(df_filtered)
     st.caption(f"{_n} " + ("position" if _n == 1 else "positions") + " shown.")
+
+    # R1a — bulk-action control surface. Selecting positions here
+    # enqueues opps_bulk_pending_action + opps_bulk_selected_ids,
+    # which the dispatcher at the top of this page consumes on the
+    # next script run. Lives in an expander so it does not steal
+    # vertical space from the table by default.
+    with st.expander("Bulk actions", expanded=False):
+        _opt_labels: dict[int, str] = {
+            int(cast(Any, row["id"])): f"{row['position_name']} ({row.get('institute') or '—'})"
+            for _, row in df_filtered.iterrows()
+        }
+        _bulk_ids_selected: list[int] = st.multiselect(
+            "Apply action to positions",
+            options=list(_opt_labels.keys()),
+            format_func=lambda pid: _opt_labels.get(pid, str(pid)),
+            key="opps_bulk_multiselect",
+            help="Pick rows to apply a bulk action; choose an action below.",
+        )
+        _col_promote, _col_req, _col_val = st.columns([2, 2, 2])
+        with _col_promote:
+            if st.button(
+                "Mark applied",
+                key="opps_bulk_mark_applied",
+                help="Sets applied_date=today and fires the R1 cascade for every selected row.",
+            ):
+                if _bulk_ids_selected:
+                    st.session_state["opps_bulk_selected_ids"] = set(_bulk_ids_selected)
+                    st.session_state["opps_bulk_pending_action"] = "promote_to_applied"
+                    st.rerun()
+                else:
+                    st.warning("Select at least one position first.")
+        with _col_req:
+            _req_options = [req_col for req_col, _d, _l in config.REQUIREMENT_DOCS]
+            _req_choice = st.selectbox(
+                "Requirement",
+                options=_req_options,
+                key="opps_bulk_req_choice",
+            )
+        with _col_val:
+            _req_value = st.selectbox(
+                "Value",
+                options=config.REQUIREMENT_VALUES,
+                key="opps_bulk_req_value",
+            )
+        if st.button(
+            "Set requirement",
+            key="opps_bulk_set_requirement",
+            help="Sets the chosen requirement field to the chosen value for every selected row.",
+        ):
+            if _bulk_ids_selected:
+                st.session_state["opps_bulk_selected_ids"] = set(_bulk_ids_selected)
+                st.session_state["opps_bulk_pending_action"] = (
+                    f"set_requirement:{_req_choice}:{_req_value}"
+                )
+                st.rerun()
+            else:
+                st.warning("Select at least one position first.")
 
     df_display = df_filtered.copy()
     df_display["deadline_urgency"] = df_display["deadline_date"].apply(_deadline_urgency)
@@ -405,6 +504,26 @@ if "selected_position_id" in st.session_state:
             ),
             "edit_notes": _safe_str(r["notes"]),
             "edit_num_rec_letters": safe_num_rec_letters,
+            # R0b — previously-orphan columns now wired into the Edit
+            # panel. Quick-Add holds three short-string promotions
+            # (location, source, portal_url); the rest live here.
+            "edit_location": _safe_str(r["location"]) if "location" in r.index else "",
+            "edit_source": _safe_str(r["source"]) if "source" in r.index else "",
+            "edit_portal_url": _safe_str(r["portal_url"]) if "portal_url" in r.index else "",
+            "edit_mentor": _safe_str(r["mentor"]) if "mentor" in r.index else "",
+            "edit_point_of_contact": (
+                _safe_str(r["point_of_contact"]) if "point_of_contact" in r.index else ""
+            ),
+            "edit_stipend": _safe_str(r["stipend"]) if "stipend" in r.index else "",
+            "edit_full_time": _safe_str(r["full_time"]) if "full_time" in r.index else "",
+            "edit_deadline_note": (
+                _safe_str(r["deadline_note"]) if "deadline_note" in r.index else ""
+            ),
+            "edit_reference_code": (
+                _safe_str(r["reference_code"]) if "reference_code" in r.index else ""
+            ),
+            "edit_keywords": _safe_str(r["keywords"]) if "keywords" in r.index else "",
+            "edit_description": _safe_str(r["description"]) if "description" in r.index else "",
         }
         for req_col, done_col, _label in config.REQUIREMENT_DOCS:
             v = r[req_col] if req_col in r.index else None
@@ -448,6 +567,18 @@ if "selected_position_id" in st.session_state:
                     help="Does this posting explicitly accept your work authorization / visa status?",
                 )
                 st.text_area("Work Authorization Notes", key="edit_work_auth_note")
+                # R0b — wired-in previously-orphan columns.
+                st.text_input("Location", key="edit_location")
+                st.text_input("Source", key="edit_source")
+                st.text_input("Portal URL", key="edit_portal_url")
+                st.text_input("Mentor", key="edit_mentor")
+                st.text_input("Point of Contact", key="edit_point_of_contact")
+                st.text_input("Stipend", key="edit_stipend")
+                st.text_input("Full Time", key="edit_full_time")
+                st.text_input("Deadline Note", key="edit_deadline_note")
+                st.text_input("Reference Code", key="edit_reference_code")
+                st.text_area("Keywords", key="edit_keywords")
+                st.text_area("Description", key="edit_description")
                 overview_submitted = st.form_submit_button(
                     "Save Changes",
                     key="edit_overview_submit",
@@ -473,6 +604,17 @@ if "selected_position_id" in st.session_state:
                         "link": st.session_state.get("edit_link", ""),
                         "work_auth": st.session_state["edit_work_auth"],
                         "work_auth_note": st.session_state.get("edit_work_auth_note", ""),
+                        "location": st.session_state.get("edit_location", ""),
+                        "source": st.session_state.get("edit_source", ""),
+                        "portal_url": st.session_state.get("edit_portal_url", ""),
+                        "mentor": st.session_state.get("edit_mentor", ""),
+                        "point_of_contact": st.session_state.get("edit_point_of_contact", ""),
+                        "stipend": st.session_state.get("edit_stipend", ""),
+                        "full_time": st.session_state.get("edit_full_time", ""),
+                        "deadline_note": st.session_state.get("edit_deadline_note", ""),
+                        "reference_code": st.session_state.get("edit_reference_code", ""),
+                        "keywords": st.session_state.get("edit_keywords", ""),
+                        "description": st.session_state.get("edit_description", ""),
                     }
                     try:
                         database.update_position(sid, payload)

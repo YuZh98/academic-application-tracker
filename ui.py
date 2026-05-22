@@ -1274,7 +1274,7 @@ def _install_hotkey_shield() -> None:
     """Suppress Streamlit's bare-letter dev hotkeys whenever the user
     holds ``Cmd`` / ``Ctrl`` so ``Cmd+C`` copies the current selection
     instead of clearing the function caches. See ``_HOTKEY_SHIELD_JS``
-    for the rationale and DESIGN §8.6 for the contract."""
+    for the rationale and DESIGN §8.7 for the contract."""
     components.html(_HOTKEY_SHIELD_JS, height=0, width=0)
 
 
