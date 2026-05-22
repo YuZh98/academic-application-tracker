@@ -8,6 +8,7 @@
 # against a fresh temp SQLite DB. Never touches postdoc.db.
 
 from datetime import date, timedelta
+from typing import Any
 
 from streamlit.testing.v1 import AppTest
 
@@ -2555,7 +2556,8 @@ class TestT5RecommenderAlerts:
         days_ago: int = 14,
         position_name: str = "BioStats Postdoc",
         institute: str = "Stanford",
-        recommender_name: str = "Dr. Smith",
+        recommender_name: str | None = "Dr. Smith",
+        relationship: str | None = None,
         deadline_offset: int | None = 10,
     ) -> int:
         """Seed one pending recommender (asked >= RECOMMENDER_ALERT_DAYS
@@ -2573,13 +2575,13 @@ class TestT5RecommenderAlerts:
                 }
             )
         )
-        return database.add_recommender(
-            pos_id,
-            {
-                "recommender_name": recommender_name,
-                "asked_date": (date.today() - timedelta(days=days_ago)).isoformat(),
-            },
-        )
+        rec_fields: dict[str, Any] = {
+            "recommender_name": recommender_name,
+            "asked_date": (date.today() - timedelta(days=days_ago)).isoformat(),
+        }
+        if relationship is not None:
+            rec_fields["relationship"] = relationship
+        return database.add_recommender(pos_id, rec_fields)
 
     # ── Group A: subheader stability + layout ─────────────────────────────
 
@@ -2719,11 +2721,13 @@ class TestT5RecommenderAlerts:
     def test_card_html_escapes_user_supplied_fields(self, db):
         """Defence-in-depth: the alert card uses ``unsafe_allow_html=True``,
         so every DB-derived value rendered into the card body must be
-        HTML-escaped before interpolation. A recommender whose name or
-        institute contains ``<`` / ``>`` must surface as escaped entities,
-        not as raw tags that Streamlit would mount into the canvas."""
+        HTML-escaped before interpolation. A recommender whose name,
+        institute, position, OR relationship contains ``<`` / ``>``
+        must surface as escaped entities, not as raw tags that
+        Streamlit would mount into the canvas."""
         self._seed_pending(
             recommender_name="Dr <script>alert(1)</script>",
+            relationship="Lab PI <img src=x onerror=alert(2)>",
             institute="Stanford <b>",
             position_name="Bio <i>Postdoc</i>",
         )
@@ -2736,8 +2740,34 @@ class TestT5RecommenderAlerts:
             assert "<b>" not in body and "<i>" not in body, (
                 f"Institute / position interpolated raw — XSS regression. Body: {body!r}"
             )
+            assert "<img" not in body, (
+                f"Relationship interpolated raw — XSS regression. Body: {body!r}"
+            )
         assert any("&lt;script&gt;" in body for body in bodies), (
             f"Expected escaped recommender name (`&lt;script&gt;`) in some card. Got: {bodies}"
+        )
+        assert any("&lt;img" in body for body in bodies), (
+            f"Expected escaped relationship (`&lt;img`) in some card. Got: {bodies}"
+        )
+
+    def test_card_renders_pending_row_with_null_recommender_name(self, db):
+        """A pending recommender row with a NULL ``recommender_name``
+        must still surface as a card — pandas' default
+        ``groupby(dropna=True)`` silently drops the row, hiding the
+        owed letter from the user even though the position and
+        asked-date are recorded. Use a portable fallback label so the
+        user can still locate the row to fix the missing name."""
+        self._seed_pending(
+            recommender_name=None,
+            position_name="HiddenPos",
+            institute="HiddenInst",
+        )
+        at = _run_page()
+        bodies = self._alert_markdowns(at)
+        assert any("HiddenPos" in body for body in bodies), (
+            f"Pending row with NULL recommender_name was dropped from the "
+            f"alert list. groupby() default dropna=True is the suspected "
+            f"cause. Card bodies: {bodies}"
         )
 
     def test_card_bullet_includes_institute_and_position_name(self, db):

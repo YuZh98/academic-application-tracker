@@ -351,6 +351,13 @@ EMPTY_FILTERED_APPLICATIONS: str = "No applications match the current filter."
 EMPTY_PENDING_RECOMMENDERS: str = "No pending recommenders."
 EMPTY_PENDING_RECOMMENDER_FOLLOWUPS: str = "No pending recommender follow-ups."
 
+# Display sentinel for a pending recommender row whose ``recommender_name``
+# column is NULL. Surfaces the owed letter (position + asked_date are
+# recorded) so the user can locate and fix the unrecorded name; without
+# this fallback pandas' default ``groupby(dropna=True)`` would silently
+# drop the row from the dashboard alert list.
+RECOMMENDER_NAME_FALLBACK: str = "(unrecorded recommender)"
+
 
 # ── Urgency banding ──────────────────────────────────────────────────────────
 def urgency_glyph(days_away: int | None) -> str:
