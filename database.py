@@ -917,12 +917,19 @@ def count_by_status() -> dict[str, int]:
 
 
 def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFrame:
-    """Return open positions with deadline_date within the next `days` days,
-    ordered by deadline_date ASC. Excludes config.TERMINAL_STATUSES."""
+    """Return open positions with deadline_date within the next ``days`` days,
+    ordered by deadline_date ASC.
+
+    Restricted to ``config.DEADLINE_ACTIONABLE_STATUSES`` ([SAVED] only):
+    once a position has moved past SAVED the user has already submitted,
+    so a future deadline is no longer actionable and surfacing it on the
+    dashboard Upcoming panel only creates false anxiety. Terminal
+    statuses ([CLOSED] / [REJECTED] / [DECLINED]) are excluded by the
+    same filter."""
     today = date.today().isoformat()
     cutoff = (date.today() + timedelta(days=days)).isoformat()
-    terminal = tuple(config.TERMINAL_STATUSES)
-    not_in = ", ".join("?" * len(terminal))
+    actionable = tuple(config.DEADLINE_ACTIONABLE_STATUSES)
+    placeholders = ", ".join("?" * len(actionable))
 
     with _connect() as conn:
         df = pd.read_sql_query(
@@ -931,10 +938,10 @@ def get_upcoming_deadlines(days: int = config.DEADLINE_ALERT_DAYS) -> pd.DataFra
                WHERE deadline_date IS NOT NULL
                  AND deadline_date >= ?
                  AND deadline_date <= ?
-                 AND status NOT IN ({not_in})
+                 AND status IN ({placeholders})
                ORDER BY deadline_date ASC""",
             conn,
-            params=[today, cutoff, *terminal],
+            params=[today, cutoff, *actionable],
         )
     return df
 

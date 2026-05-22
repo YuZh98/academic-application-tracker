@@ -1732,6 +1732,42 @@ class TestGetUpcomingDeadlines:
         df = database.get_upcoming_deadlines(30)
         assert len(df) == 0
 
+    @pytest.mark.parametrize("post_submit_status", ["[APPLIED]", "[INTERVIEW]", "[OFFER]"])
+    def test_excludes_post_submission_statuses(self, db, post_submit_status):
+        """Regression — once a position has moved past ``[SAVED]`` the
+        application has been submitted, so its deadline is no longer
+        actionable and must not surface on the dashboard Upcoming panel.
+        Showing it again only creates false anxiety. Pinned per
+        config.DEADLINE_ACTIONABLE_STATUSES."""
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
+        database.update_position(pos_id, {"status": post_submit_status})
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 0, (
+            f"Position in {post_submit_status} must NOT appear in upcoming "
+            f"deadlines — the user has already applied. Got: {df.to_dict('records')}"
+        )
+
+    def test_includes_saved_status(self, db):
+        """Positive companion to the post-submission exclusion: a
+        ``[SAVED]`` position with a near-future deadline IS the actionable
+        case the panel exists for."""
+        database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
+        df = database.get_upcoming_deadlines(30)
+        assert len(df) == 1
+        assert df.iloc[0]["status"] == config.STATUS_SAVED
+
     def test_ordered_by_deadline_asc(self, db):
         database.add_position(
             make_position(
@@ -3823,6 +3859,30 @@ class TestGetUpcoming:
         database.update_position(pos_id, {"status": config.STATUS_REJECTED})
         df = database.get_upcoming()
         assert len(df) == 0
+
+    @pytest.mark.parametrize(
+        "post_submit_status",
+        [config.STATUS_APPLIED, config.STATUS_INTERVIEW, config.STATUS_OFFER],
+    )
+    def test_post_submission_status_excludes_deadline_row(self, db, post_submit_status):
+        """Regression — once a position has been submitted, its
+        application deadline is no longer actionable; the deadline half
+        of the upcoming feed must drop the row. Pinned per
+        config.DEADLINE_ACTIONABLE_STATUSES so a future widening of
+        that constant lands its own coverage."""
+        pos_id = database.add_position(
+            make_position(
+                {
+                    "deadline_date": (date.today() + timedelta(days=5)).isoformat(),
+                }
+            )
+        )
+        database.update_position(pos_id, {"status": post_submit_status})
+        df = database.get_upcoming()
+        assert df[df["kind"] == self.DEADLINE_KIND].empty, (
+            f"Position in {post_submit_status} must NOT contribute a "
+            f"'Deadline for application' row. Got: {df.to_dict('records')}"
+        )
 
     def test_status_column_carries_raw_bracketed_sentinel(self, db):
         """T4-A is the storage layer; STATUS_LABELS mapping is T4-B's

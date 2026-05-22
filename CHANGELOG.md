@@ -86,6 +86,17 @@ manual steps to run against a pre-existing database.
   literal text rather than mounted into the canvas. Pinned by two
   new tests under `TestT5RecommenderAlerts` and
   `TestPendingAlertsPanel`.
+- Stop surfacing already-submitted positions as looming application
+  deadlines in the dashboard Upcoming panel. Once a position moves
+  past `[SAVED]` the submission has happened, so a future
+  `deadline_date` is no longer actionable — the row used to appear
+  anyway and read like an unmet to-do, creating false anxiety. The
+  deadline half of `database.get_upcoming_deadlines` is now
+  restricted to `config.DEADLINE_ACTIONABLE_STATUSES` ([SAVED]
+  today); interview rows continue to surface across every stage,
+  since their own scheduled date is the actionable signal. Pinned
+  by four new tests under `TestGetUpcomingDeadlines` and
+  `TestGetUpcoming`.
 
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 

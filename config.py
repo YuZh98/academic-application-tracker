@@ -88,6 +88,15 @@ STATUS_DECLINED: str = STATUS_VALUES[6]  # "[DECLINED]"
 # Terminal statuses — positions in these states are done and excluded from actionable views (upcoming deadlines, materials readiness, etc.).
 TERMINAL_STATUSES: list[str] = ["[CLOSED]", "[REJECTED]", "[DECLINED]"]
 
+# Statuses for which the application deadline is still actionable —
+# the user has NOT yet submitted, so a looming deadline is real news.
+# Once a position moves to [APPLIED] / [INTERVIEW] / [OFFER] the
+# deadline is moot (the submission already happened), and surfacing
+# it on the dashboard Upcoming panel only creates false anxiety.
+# Single source of truth for the dashboard deadline filter; pinned by
+# tests/test_database.py::TestGetUpcomingDeadlines.
+DEADLINE_ACTIONABLE_STATUSES: list[str] = [STATUS_SAVED]
+
 # Statuses the user can manually pick in the Opportunities edit-panel
 # Status selectbox. [INTERVIEW] and [OFFER] are auto-promoted by the
 # pipeline cascade (R2 fires on add_interview, R3 on a recorded Offer
