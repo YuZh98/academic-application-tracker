@@ -18,14 +18,7 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Fixed
-- Re-capture the seven v0.14.0 README screenshots against a fabricated demo
-  database so no real position name, institute, recommender name, or
-  application date appears in any committed PNG; drop the hardcoded surname
-  from the editorial folio footer so a fresh clone ships without a personal
-  mark baked in. Adds `scripts/seed_demo_db.py`, an `AAT_DB_PATH` env
-  override on `database.DB_PATH`, and a new `config.FOOTER_AUTHOR_MARK`
-  (empty default) so future re-captures use the same fictional dataset
-  without touching `postdoc.db`.
+- Scrub real PII from the v0.14.0 README screenshots — re-capture all seven against a fabricated demo dataset and drop the hardcoded surname from the editorial folio footer so a fresh clone ships with no personal mark baked in (`bc5107e`)
 
 ### Added
 - Wire the 11 previously-orphan `positions` columns (`location`, `source`, `portal_url`, `mentor`, `point_of_contact`, `stipend`, `full_time`, `deadline_note`, `reference_code`, `keywords`, `description`) into the UI — three short-string columns promoted to Quick-Add, the rest reachable from the Edit-panel Overview tab (#103)
