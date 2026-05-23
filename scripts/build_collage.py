@@ -10,9 +10,8 @@ Refresh ritual:
 2. `playwright install chromium`          (separate step — fetches the bundled browser binary)
 3. Re-capture the four `.collage-src/` source PNGs (sidebar-hidden, light + dark mode)
 4. `python3 scripts/build_collage.py`     (this script)
-5. `sha256sum docs/ui/screenshots/v0.14.0/collage.png | cut -d' ' -f1 > scripts/collage_hash.txt`
 
-Steps 1, 2, 4, 5 are reproducible from the repo; step 3's capture recipe lives
+Steps 1, 2, 4 are reproducible from the repo; step 3's capture recipe lives
 in the maintainer's session memory (Streamlit on port 8519 + chrome-devtools
 viewport emulation + per-page scroll offsets).
 
