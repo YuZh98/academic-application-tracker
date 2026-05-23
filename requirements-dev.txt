@@ -7,8 +7,4 @@ pytest-cov==7.1.0
 ruff==0.15.14
 pre-commit==4.6.0
 pyright==1.1.409
-# Renderer for scripts/build_collage.py. Each playwright version bundles a
-# specific Chromium revision; pinning playwright pins the renderer that
-# produces the marketing collage. Bumping requires a golden-hash refresh
-# (see tests/test_collage_determinism.py).
 playwright==1.60.0

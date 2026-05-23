@@ -4,14 +4,17 @@ Uses Playwright + the pinned-Chromium revision shipped with the playwright
 version in requirements-dev.txt. Determinism guards: disable LCD subpixel
 text, force prefers-reduced-motion, no font hinting.
 
-Prerequisites — see `docs/dev-notes/marketing-collage.md` for the end-to-end
-refresh ritual. In short:
+Refresh ritual:
 
 1. `pip install -r requirements-dev.txt`  (pins playwright)
 2. `playwright install chromium`          (separate step — fetches the bundled browser binary)
-3. Re-shoot the four `.collage-src/` PNGs via the Pass-2 capture recipe
+3. Re-capture the four `.collage-src/` source PNGs (sidebar-hidden, light + dark mode)
 4. `python3 scripts/build_collage.py`     (this script)
 5. `sha256sum docs/ui/screenshots/v0.14.0/collage.png | cut -d' ' -f1 > scripts/collage_hash.txt`
+
+Steps 1, 2, 4, 5 are reproducible from the repo; step 3's capture recipe lives
+in the maintainer's session memory (Streamlit on port 8519 + chrome-devtools
+viewport emulation + per-page scroll offsets).
 
 Usage:
     python3 scripts/build_collage.py
@@ -48,8 +51,7 @@ def _verify_sources() -> None:
         sys.stderr.write(
             "ERROR: required collage source PNGs missing:\n"
             + "\n".join(f"  {SOURCE_DIR / m}" for m in missing)
-            + "\n\nRe-shoot them via the Pass-2 capture recipe — see\n"
-            + "docs/dev-notes/marketing-collage.md.\n"
+            + "\n\nRe-capture the four collage sources before re-running.\n"
         )
         sys.exit(2)
 

@@ -7,8 +7,8 @@ same commit; a mismatch means someone updated one without the other.
 
 For an actual re-render determinism check (across Playwright bumps /
 Chromium revs), run `scripts/build_collage.py` locally and confirm the
-fresh hash equals the committed hash — see
-`docs/dev-notes/marketing-collage.md` for the refresh ritual.
+fresh hash equals the committed hash; the script's docstring documents
+the refresh ritual.
 """
 
 from __future__ import annotations
@@ -48,5 +48,5 @@ def test_collage_hash_matches_committed_value() -> None:
         f"collage.png / collage_hash.txt out of sync — one was updated without the other.\n"
         f"  expected: {expected_hash}\n"
         f"  actual:   {actual_hash}\n"
-        f"Refresh both together — see docs/dev-notes/marketing-collage.md."
+        f"Refresh both together — see scripts/build_collage.py for the ritual."
     )

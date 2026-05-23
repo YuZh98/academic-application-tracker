@@ -18,9 +18,14 @@ manual steps to run against a pre-existing database.
 ## [Unreleased]
 
 ### Fixed
-- Scrub real PII from the v0.14.0 README screenshots — re-capture all seven against a fabricated demo dataset and drop the hardcoded surname from the editorial folio footer so a fresh clone ships with no personal mark baked in (`bc5107e`)
-- Re-shoot the v0.14.0 README screenshots at 2× DPI in a 1024×2400 portrait viewport with the Streamlit toolbar hidden and the sidebar widened to 280 px — text now scans cleanly in the README and the captures read as a magazine page rather than a wide desktop dashboard
-- Re-shoot the v0.14.0 README screenshots again, this time with a 200 px data-driven sidebar (down from 280 px) so the main-content area renders ~80 px wider and the dashboard's KPI grid and upcoming-deadlines table escape their prior label truncation
+- Refresh the v0.14.0 README screenshots — captured at 2× DPI against a fabricated demo dataset (no real PII), with the Streamlit toolbar hidden and a 200 px data-driven sidebar (down from the original 280 px) so the KPI grid and upcoming-deadlines table render without label truncation; the Dashboard hero PNG uses a 1440 px viewport to keep "Good afternoon." and "Academic Application Tracker" on single lines
+- Add symmetric reverse R2 cascade to `delete_interview` — when the last interview row on a position is deleted, retract `[INTERVIEW]→[APPLIED]`, mirroring the forward cascade in `add_interview` (#103)
+- HTML-escape DB-derived values in Recommender-Alerts cards before they reach the `unsafe_allow_html=True` surface (`c0c1ef3`)
+- Stop `Cmd+C` / `Ctrl+C` from opening Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
+- Drop already-submitted positions from the dashboard Upcoming-deadline rows (`2921bf7`)
+- Render `ui.colophon` and `ui.hero_greeting` on Windows by replacing the POSIX-only `%-d` strftime directive with a portable day field (`da87634`)
+- Surface pending recommender letters whose `recommender_name` is NULL on both alert panels (`da87634`)
+- Narrow the Cmd/Ctrl hotkey shield to single-character keys so widget Arrow/Tab/Enter keybindings pass through (`da87634`)
 
 ### Removed
 - Drop the 10 `docs/ui/screenshots/v0.14.0-editorial*/` design-iteration directories — they were intermediate captures from the v0.14.0 redesign work, not referenced from README or any other doc
@@ -51,15 +56,6 @@ manual steps to run against a pre-existing database.
 - Update `DESIGN.md` to v1.6 — new §8.6 *Design System* + file-tree / layer-rule entries for `ui.py` (`42a5a79`)
 - Update `GUIDELINES.md §2` to record the page bootstrap order (`st.set_page_config` → `database.init_db()` → `ui.inject_global_styles()`) (`631a1c5`)
 - Tighten the v0.14.0 README screenshot crops — strip the Streamlit top chrome (the "Deploy" bar) and trim trailing cream/white margins so each PNG frames its page content; add `scripts/crop_screenshots.py` as an idempotent re-crop helper
-
-### Fixed
-- Add symmetric reverse R2 cascade to `delete_interview` — when the last interview row on a position is deleted, retract `[INTERVIEW]→[APPLIED]`, mirroring the forward cascade in `add_interview` (#103)
-- HTML-escape DB-derived values in Recommender-Alerts cards before they reach the `unsafe_allow_html=True` surface (`c0c1ef3`)
-- Stop `Cmd+C` / `Ctrl+C` from opening Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
-- Drop already-submitted positions from the dashboard Upcoming-deadline rows (`2921bf7`)
-- Render `ui.colophon` and `ui.hero_greeting` on Windows by replacing the POSIX-only `%-d` strftime directive with a portable day field (`da87634`)
-- Surface pending recommender letters whose `recommender_name` is NULL on both alert panels (`da87634`)
-- Narrow the Cmd/Ctrl hotkey shield to single-character keys so widget Arrow/Tab/Enter keybindings pass through (`da87634`)
 
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
