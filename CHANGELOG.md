@@ -17,6 +17,9 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Fixed
+- Scrub real PII from the v0.14.0 README screenshots — re-capture all seven against a fabricated demo dataset and drop the hardcoded surname from the editorial folio footer so a fresh clone ships with no personal mark baked in (`bc5107e`)
+
 ### Added
 - Wire the 11 previously-orphan `positions` columns (`location`, `source`, `portal_url`, `mentor`, `point_of_contact`, `stipend`, `full_time`, `deadline_note`, `reference_code`, `keywords`, `description`) into the UI — three short-string columns promoted to Quick-Add, the rest reachable from the Edit-panel Overview tab (#103)
 - Bulk-action expander on the Opportunities page — multi-select rows then promote `[SAVED]→[APPLIED]` or set a requirement value across the selection in one transaction (#103)
