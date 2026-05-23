@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AAT v0.14.0 — Marketing Collage</title>
+  <style>
+    /* Determinism guards: disable text smoothing variance + animations.
+       The body element exists only as the canvas; no UI lives at this layer. */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 2880px; height: 1620px; overflow: hidden;
+                 -webkit-font-smoothing: none; font-smooth: never;
+                 image-rendering: -webkit-optimize-contrast; }
+
+    /* Background: navy (#0d1426) left half + cream (#f5ecd6) right half, split at 72deg.
+       Seam runs across the entire BG; cards float above it on z-index:1. */
+    .stage {
+      position: relative; width: 2880px; height: 1620px; overflow: hidden;
+      background: linear-gradient(72deg,
+        #0d1426 0%, #0d1426 49.6%,
+        #f5ecd6 50.4%, #f5ecd6 100%);
+    }
+    /* Paper-crease decoration — 1-px bright highlight + 2-px shadow underside */
+    .stage::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        linear-gradient(72deg, transparent calc(50% - 1px),
+                        rgba(255,255,255,0.5) 50%,
+                        transparent calc(50% + 1px)),
+        linear-gradient(72deg, transparent calc(50% + 1px),
+                        rgba(0,0,0,0.22) calc(50% + 2px),
+                        transparent calc(50% + 5px));
+    }
+
+    .stack { position: relative; width: 100%; height: 100%; perspective: 5400px; z-index: 1; }
+
+    .tile {
+      position: absolute;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow:
+        0 3px 0 rgba(255,255,255,0.12) inset,                /* top edge highlight */
+        0 96px 168px rgba(0,0,0,0.42),                       /* ambient */
+        0  42px  72px rgba(0,0,0,0.32),                      /* direct */
+        0  12px  24px rgba(0,0,0,0.35);                      /* contact */
+    }
+    .tile.light { border: 3px solid rgba(110,90,55,0.35); }
+    .tile.dark  { border: 3px solid rgba(160,180,220,0.25); }
+
+    .tile img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+
+    /* Tile positions are computed against 2880x1620 canvas, percentages from the
+       v5 mockup. Per-tile rotateY + rotateZ jitter breaks the "stamped template" look. */
+    .c1 { top: 4.1%;  left:  5%; width: 64%; height: 51.9%;
+          transform: rotateX(20deg) rotateY(-19deg) rotateZ(1deg); }
+    .c2 { top: 18.5%; left: 58%; width: 32%; height: 29.6%;
+          transform: rotateX(20deg) rotateY(-16deg) rotateZ(2.5deg) translateZ(150px); }
+    .c3 { top: 53.7%; left:  4%; width: 42%; height: 31.5%;
+          transform: rotateX(20deg) rotateY(-20deg) rotateZ(1.5deg) translateZ(270px); }
+    .c4 { top: 59.3%; left: 50%; width: 42%; height: 31.5%;
+          transform: rotateX(20deg) rotateY(-17deg) rotateZ(3deg) translateZ(390px); }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="stack">
+      <div class="tile light c1"><img src="../docs/ui/screenshots/v0.14.0/.collage-src/dashboard.png" alt="Dashboard"></div>
+      <div class="tile dark  c2"><img src="../docs/ui/screenshots/v0.14.0/.collage-src/opportunities.png" alt="Opportunities"></div>
+      <div class="tile light c3"><img src="../docs/ui/screenshots/v0.14.0/.collage-src/applications.png" alt="Applications"></div>
+      <div class="tile dark  c4"><img src="../docs/ui/screenshots/v0.14.0/.collage-src/recommenders.png" alt="Recommenders"></div>
+    </div>
+  </div>
+</body>
+</html>
