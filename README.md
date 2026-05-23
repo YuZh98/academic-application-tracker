@@ -1,6 +1,6 @@
 # Academic Application Tracker
 
-[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A local Streamlit dashboard that answers one question every morning: **"What do I do today?"**
 
@@ -64,7 +64,7 @@ Per-position card: applied date, confirmation, response, result, outcome. Inline
 ![Applications](docs/ui/screenshots/v0.14.0/applications.png)
 
 ### Recommenders
-Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) matrix with inline edit. Flags anyone asked more than 7 days ago who hasn't confirmed.
+Pending-alert cards with mailto and LLM-prompt helpers to draft a follow-up. Full (position × recommender) matrix with inline edit. Flags anyone asked more than 7 days ago by default who hasn't confirmed — tunable on the Settings page.
 
 ![Recommenders](docs/ui/screenshots/v0.14.0/recommenders.png)
 
@@ -80,7 +80,7 @@ Every database write auto-regenerates plaintext markdown files (`OPPORTUNITIES.m
 
 ## Built to last
 
-1000+ tests · 97% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
+1000+ tests · 95% coverage · strict four-layer architecture · CI on every PR · spec-first development. This is a production-grade tool, not a weekend script.
 
 <details>
 <summary><strong>Engineering deep-dive</strong></summary>
@@ -147,10 +147,15 @@ pages/
   3_Recommenders.py    Recommender tracker + reminder helpers
   4_Export.py          Manual export trigger + per-file download buttons
   5_Settings.py        Tunable thresholds + append-only status vocabulary
+scripts/
+  seed_demo_db.py      Throwaway demo dataset for screenshots + manual QA
+  crop_screenshots.py  Idempotent crop helper for the README captures
+  build_collage.py     Headless-Chromium renderer for the marketing collage
+  collage.html         CSS3D template loaded by build_collage.py
 tests/                 Full test suite (AppTest + unit + cohesion)
 docs/
   adr/                 Architecture decision records
-  dev-notes/           Streamlit gotchas, dev setup, git workflow notes
+  dev-notes/           Dev setup, extending guide, self-host guide, Streamlit gotchas, git workflow notes
   ui/                  Wireframes + screenshots
 DESIGN.md              Authoritative spec
 GUIDELINES.md          Coding conventions
