@@ -55,3 +55,13 @@ docs/superpowers/
 CLAUDE.md
 PHASE_*_GUIDELINES.md
 *.original.md
+
+# Brainstorming companion artifacts (mockups, session state)
+.superpowers/
+
+# Chrome DevTools MCP runtime cache (browser profile, cookies, etc.)
+.playwright-mcp/
+
+# Collage source captures — intermediate PNGs that feed scripts/build_collage.py.
+# Only the composed docs/ui/screenshots/v0.14.0/collage.png is committed.
+docs/ui/screenshots/v0.14.0/.collage-src/
