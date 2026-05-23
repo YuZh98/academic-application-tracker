@@ -20,6 +20,10 @@ manual steps to run against a pre-existing database.
 ### Fixed
 - Scrub real PII from the v0.14.0 README screenshots — re-capture all seven against a fabricated demo dataset and drop the hardcoded surname from the editorial folio footer so a fresh clone ships with no personal mark baked in (`bc5107e`)
 - Re-shoot the v0.14.0 README screenshots at 2× DPI in a 1024×2400 portrait viewport with the Streamlit toolbar hidden and the sidebar widened to 280 px — text now scans cleanly in the README and the captures read as a magazine page rather than a wide desktop dashboard
+- Re-shoot the v0.14.0 README screenshots again, this time with a 200 px data-driven sidebar (down from 280 px) so the main-content area renders ~80 px wider and the dashboard's KPI grid and upcoming-deadlines table escape their prior label truncation
+
+### Added
+- `docs/ui/screenshots/v0.14.0/collage.png` — a 2880×1620 isometric marketing composite of the four primary pages, rendered from `scripts/collage.html` via pinned-Chromium Playwright (`playwright==1.60.0`). Light-mode Dashboard + Applications sit on the navy half of a paper-crease canvas; dark-mode Opportunities + Recommenders sit on the cream half. A SHA256 golden-hash test at `tests/test_collage_determinism.py` guards re-render determinism
 
 ### Removed
 - Drop the 10 `docs/ui/screenshots/v0.14.0-editorial*/` design-iteration directories — they were intermediate captures from the v0.14.0 redesign work, not referenced from README or any other doc
