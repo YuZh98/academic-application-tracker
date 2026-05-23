@@ -225,13 +225,13 @@ def hero_greeting(*, name: str | None = None, now: datetime | None = None) -> No
 def folio_footer(*, now: datetime | None = None) -> None:
     """Editorial folio footer at the bottom of every page.
 
-    Three-part mark, magazine masthead-foot:
-        VOL. XIV   ·   <italic-serif issue stamp>   ·   ZHENG · MMXXVI
-                                                        — fin —
+    Magazine masthead-foot with an optional author-mark slot:
+        VOL. XIV   ·   <italic-serif issue stamp>   [·  <mark> · MMXXVI]   — fin —
 
-    The Roman numeral volume + lowercase serif issue mark + the
-    closing "— fin —" form the deliberate signature mark that sets
-    every page apart from the default Streamlit chrome.
+    The author-mark slot is driven by ``config.FOOTER_AUTHOR_MARK``; it
+    is omitted entirely when that string is empty so a fresh clone ships
+    with no personal stamp baked in (privacy-by-default). The flex
+    layout still balances with the three remaining slots.
     """
     n = now or datetime.now()
 
@@ -270,11 +270,15 @@ def folio_footer(*, now: datetime | None = None) -> None:
     year_roman = _roman(n.year)
     issue_label = n.strftime("№ %m / %Y")
 
+    author_mark = config.FOOTER_AUTHOR_MARK.strip()
+    author_span = (
+        f"  <span>{author_mark} · {year_roman}</span>" if author_mark else ""
+    )
     st.markdown(
         "<div class='aat-folio-footer'>"
         f"  <span>Vol. <span class='aat-folio-roman'>{vol_roman}</span></span>"
         f"  <span class='aat-folio-roman'>{issue_label}</span>"
-        f"  <span>Zheng · {year_roman}</span>"
+        f"{author_span}"
         "  <span class='aat-folio-end'>— fin —</span>"
         "</div>",
         unsafe_allow_html=True,
