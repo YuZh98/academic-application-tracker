@@ -1,13 +1,14 @@
-"""Golden-image hash check for the marketing collage.
+"""Byte-integrity check for the marketing collage.
 
-The collage is rendered by scripts/build_collage.py from a pinned Chromium
-revision. A SHA256 hash of the rendered PNG lives in scripts/collage_hash.txt.
-This test verifies that the file currently committed at
-docs/ui/screenshots/v0.14.0/collage.png matches that hash byte-for-byte.
+This test does NOT re-render the collage — it only verifies that the
+committed `docs/ui/screenshots/v0.14.0/collage.png` matches the SHA256
+committed at `scripts/collage_hash.txt`. The pair must always land in the
+same commit; a mismatch means someone updated one without the other.
 
-If the hash drifts (e.g. someone bumped playwright without regenerating),
-this test fails loudly. Refresh path: re-run scripts/build_collage.py and
-manually update scripts/collage_hash.txt in a documented commit.
+For an actual re-render determinism check (across Playwright bumps /
+Chromium revs), run `scripts/build_collage.py` locally and confirm the
+fresh hash equals the committed hash — see
+`docs/dev-notes/marketing-collage.md` for the refresh ritual.
 """
 
 from __future__ import annotations
@@ -44,9 +45,8 @@ def test_collage_hash_matches_committed_value() -> None:
     actual_hash = hashlib.sha256(COLLAGE_PATH.read_bytes()).hexdigest()
 
     assert actual_hash == expected_hash, (
-        f"collage.png hash drift detected.\n"
+        f"collage.png / collage_hash.txt out of sync — one was updated without the other.\n"
         f"  expected: {expected_hash}\n"
         f"  actual:   {actual_hash}\n"
-        f"If this drift is intentional (e.g. playwright bumped), regenerate "
-        f"the hash via:  sha256sum {COLLAGE_PATH} | cut -d' ' -f1 > {HASH_PATH}"
+        f"Refresh both together — see docs/dev-notes/marketing-collage.md."
     )

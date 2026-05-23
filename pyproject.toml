@@ -68,9 +68,10 @@ indent-style = "space"
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
 # Point pyright at the local .venv so third-party imports (e.g. playwright
-# used by scripts/build_collage.py) resolve cleanly in both CI and IDE
-# sessions. Without this, pyright falls back to the system Python and
-# emits spurious reportMissingImports against installed dev deps.
+# used by scripts/build_collage.py) resolve in editor / IDE sessions.
+# CI's pyright run already excludes scripts/ (see `exclude` below), so the
+# effect is editor-only — without this setting, IDEs emit spurious
+# reportMissingImports against installed dev deps.
 venvPath = "."
 venv = ".venv"
 # Scope to project source + tests. Top-level files like requirements.txt,

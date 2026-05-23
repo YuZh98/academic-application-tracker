@@ -4,9 +4,14 @@ Uses Playwright + the pinned-Chromium revision shipped with the playwright
 version in requirements-dev.txt. Determinism guards: disable LCD subpixel
 text, force prefers-reduced-motion, no font hinting.
 
-Prerequisite: the four .collage-src PNGs must already exist (run Pass 2 of
-the capture pipeline first). This script does not invoke Streamlit; it only
-composites.
+Prerequisites — see `docs/dev-notes/marketing-collage.md` for the end-to-end
+refresh ritual. In short:
+
+1. `pip install -r requirements-dev.txt`  (pins playwright)
+2. `playwright install chromium`          (separate step — fetches the bundled browser binary)
+3. Re-shoot the four `.collage-src/` PNGs via the Pass-2 capture recipe
+4. `python3 scripts/build_collage.py`     (this script)
+5. `sha256sum docs/ui/screenshots/v0.14.0/collage.png | cut -d' ' -f1 > scripts/collage_hash.txt`
 
 Usage:
     python3 scripts/build_collage.py
@@ -43,15 +48,29 @@ def _verify_sources() -> None:
         sys.stderr.write(
             "ERROR: required collage source PNGs missing:\n"
             + "\n".join(f"  {SOURCE_DIR / m}" for m in missing)
-            + "\n\nRun Pass 2 of the capture pipeline to regenerate them.\n"
+            + "\n\nRe-shoot them via the Pass-2 capture recipe — see\n"
+            + "docs/dev-notes/marketing-collage.md.\n"
         )
         sys.exit(2)
+
+
+def _launch_chromium(p):  # type: ignore[no-untyped-def]
+    try:
+        return p.chromium.launch(args=CHROMIUM_FLAGS)
+    except Exception as exc:
+        sys.stderr.write(
+            f"ERROR: Chromium launch failed: {exc}\n\n"
+            "Hint: the pinned Chromium binary is downloaded by a separate\n"
+            "command after `pip install`. Run:\n"
+            "    playwright install chromium\n"
+        )
+        sys.exit(3)
 
 
 def render_collage() -> Path:
     _verify_sources()
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=CHROMIUM_FLAGS)
+        browser = _launch_chromium(p)
         context = browser.new_context(
             viewport={"width": CANVAS_WIDTH, "height": CANVAS_HEIGHT},
             device_scale_factor=1,
