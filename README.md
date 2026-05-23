@@ -4,6 +4,8 @@ A local Streamlit dashboard that answers one question every morning: **"What do 
 
 Track dozens of postdoc, PhD, faculty, and fellowship applications in parallel — deadlines, recommendation letters, materials checklists, interview rounds — without a single missed follow-up.
 
+![Academic Application Tracker — isometric composite of the four primary pages on a paper-crease backdrop, with light-mode tiles on the dark half and dark-mode tiles on the bright half](docs/ui/screenshots/v0.14.0/collage.png)
+
 ![Dashboard](docs/ui/screenshots/v0.14.0/dashboard.png)
 
 [![CI](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/YuZh98/academic-application-tracker/actions/workflows/ci.yml) [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue)](pyproject.toml) [![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](pyproject.toml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

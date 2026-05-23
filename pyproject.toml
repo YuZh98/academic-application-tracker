@@ -67,6 +67,13 @@ indent-style = "space"
 # config must stay clean for every subsequent PR (CI gate).
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
+# Point pyright at the local .venv so third-party imports (e.g. playwright
+# used by scripts/build_collage.py) resolve in editor / IDE sessions.
+# CI's pyright run already excludes scripts/ (see `exclude` below), so the
+# effect is editor-only — without this setting, IDEs emit spurious
+# reportMissingImports against installed dev deps.
+venvPath = "."
+venv = ".venv"
 # Scope to project source + tests. Top-level files like requirements.txt,
 # pyproject.toml itself, and CI configs aren't Python so don't need
 # explicit include — pyright's default file discovery handles them, but

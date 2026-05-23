@@ -17,47 +17,37 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
-### Fixed
-- Scrub real PII from the v0.14.0 README screenshots — re-capture all seven against a fabricated demo dataset and drop the hardcoded surname from the editorial folio footer so a fresh clone ships with no personal mark baked in (`bc5107e`)
-- Re-shoot the v0.14.0 README screenshots at 2× DPI in a 1024×2400 portrait viewport with the Streamlit toolbar hidden and the sidebar widened to 280 px — text now scans cleanly in the README and the captures read as a magazine page rather than a wide desktop dashboard
-
-### Removed
-- Drop the 10 `docs/ui/screenshots/v0.14.0-editorial*/` design-iteration directories — they were intermediate captures from the v0.14.0 redesign work, not referenced from README or any other doc
-
 ### Added
-- Wire the 11 previously-orphan `positions` columns (`location`, `source`, `portal_url`, `mentor`, `point_of_contact`, `stipend`, `full_time`, `deadline_note`, `reference_code`, `keywords`, `description`) into the UI — three short-string columns promoted to Quick-Add, the rest reachable from the Edit-panel Overview tab (#103)
-- Bulk-action expander on the Opportunities page — multi-select rows then promote `[SAVED]→[APPLIED]` or set a requirement value across the selection in one transaction (#103)
-- `pages/5_Settings.py` — in-app threshold tuning (`DEADLINE_ALERT_DAYS`, `RECOMMENDER_ALERT_DAYS`, `UPCOMING_WINDOW_DAYS`) and append-only `STATUS_VALUES` editor, persisted to a JSON overlay next to the DB so `config.py` import-time invariants stay authoritative for defaults (#103)
-- `database.bulk_promote_to_applied`, `database.bulk_set_requirement`, `database.load_settings`, `database.save_settings`, `database.update_status_vocabulary` — public functions powering the Opportunities bulk-action surface and the Settings page (#103)
-- UX field-study report + improvement plan + BDD scenarios under `docs/ux-research/` — three-persona simulation against the v0.14.0 codebase plus the prioritised roadmap that drove this release (#103)
-- Apply an editorial-brutalist visual identity across every page — warm-cream paper background, italic-serif display headlines, uppercase mono labels, vermilion/cobalt/citron accents, hairline rules in place of boxed cards (`c74c1b8`)
-- Add a time-of-day italic-serif greeting + mono uppercase date stamp above the dashboard KPIs (`c74c1b8`)
-- Add a magazine masthead strip at the top of every page (`c83dcec`) and a roman-numeral folio footer at the bottom (`39d859c`)
-- Add per-page typographic gutter marks — `№` Dashboard, `§` Opportunities, `※` Recommenders, `⁂` Export, blank on Applications (`ca8f857`, `2dab9ef`)
-- Add `ui.py` — shared design-system module exposing `inject_global_styles`, `accent_bar`, `section_header`, `numbered_section`, `hero_greeting`, `colophon`, `folio_footer`, `page_mark`, `status_pill`, `urgency_pill`, `sidebar_about_block`, `sidebar_shortcuts_block` with `prefers-color-scheme: dark` token set (`5ddd575`)
-- Add `About · vX.Y.Z` and `Shortcuts` sidebar expanders on every page (`a77fc5b`)
-- Add `config.APP_VERSION` as the single source of truth for the user-visible version, pinned to `pyproject.toml` (`a77fc5b`)
-- Add `@media print` rules that hide the sidebar/toolbar and a `:focus-visible` ring on every interactive element (`c74c1b8`)
-- Add `tests/test_ui.py` pinning the visual contract — pill output, urgency bands, dark-mode token flips, hero band-edges by hour, palette tokens, per-page glyph contract, and the AST grep that every page wires the shared design system (`c1d0539`)
+- Settings page — tune deadline, recommender-follow-up, and upcoming-window thresholds and manage the application-status vocabulary without leaving the app (#103)
+- Bulk-action panel on the Opportunities page — multi-select rows, then promote saved → applied or set a requirement value across the selection in one go (#103)
+- Edit-panel coverage for 11 previously-orphan position fields (location, source, portal URL, mentor, point of contact, stipend, full-time flag, deadline note, reference code, keywords, description); the three short-string fields also appear in Quick Add (#103)
+- Editorial-brutalist visual identity across every page — warm-cream paper background, italic-serif display headlines, uppercase mono labels, vermilion / cobalt / citron accents, hairline rules in place of boxed cards (`c74c1b8`)
+- Time-of-day italic-serif greeting + date stamp above the dashboard KPIs (`c74c1b8`)
+- Magazine masthead at the top of every page (`c83dcec`) and a roman-numeral folio footer at the bottom (`39d859c`)
+- Per-page typographic gutter marks — № Dashboard, § Opportunities, ※ Recommenders, ⁂ Export (`ca8f857`, `2dab9ef`)
+- "About" and "Shortcuts" sidebar expanders on every page (`a77fc5b`)
+- Print-friendly layout — sidebar and toolbar drop out when printing; focus rings stay (`c74c1b8`)
+- `docs/ui/screenshots/v0.14.0/collage.png` — marketing composite of the four primary pages on a paper-crease canvas, with light-mode tiles on the dark half and dark-mode tiles on the bright half
 
 ### Changed
-- Read the dashboard Upcoming-panel window default from the persisted threshold overlay (snap-to-nearest-option when the override falls outside `UPCOMING_WINDOW_OPTIONS`) (#103)
-- Move the design-system stylesheet from `app.py` to `ui.py` so all four pages render with the same shell (`6f400a7`)
-- Restyle selectbox value cells to uppercase mono with tracked letter-spacing (`0884ac2`)
-- Hide the Streamlit element toolbar over data grids and force the canvas background to paper (`0759333`)
-- Replace the dashboard's emoji warning glyph with `config.WARN_GLYPH` (U+25B2 ▲) (`c83dcec`)
-- Update `DESIGN.md` to v1.6 — new §8.6 *Design System* + file-tree / layer-rule entries for `ui.py` (`42a5a79`)
-- Update `GUIDELINES.md §2` to record the page bootstrap order (`st.set_page_config` → `database.init_db()` → `ui.inject_global_styles()`) (`631a1c5`)
-- Tighten the v0.14.0 README screenshot crops — strip the Streamlit top chrome (the "Deploy" bar) and trim trailing cream/white margins so each PNG frames its page content; add `scripts/crop_screenshots.py` as an idempotent re-crop helper
+- Dashboard Upcoming window now honors the Settings override (snaps to the nearest preset if the saved value falls outside the standard options) (#103)
+- Selectbox values render in uppercase mono with tracked letter-spacing (`0884ac2`)
+- Data-grid toolbar hidden; grids share the paper background (`0759333`)
+- Dashboard warning indicator is ▲ (U+25B2) instead of an emoji (`c83dcec`)
+- v0.14.0 README screenshots cropped to drop the Streamlit "Deploy" chrome bar; `scripts/crop_screenshots.py` re-crops idempotently
 
 ### Fixed
-- Add symmetric reverse R2 cascade to `delete_interview` — when the last interview row on a position is deleted, retract `[INTERVIEW]→[APPLIED]`, mirroring the forward cascade in `add_interview` (#103)
-- HTML-escape DB-derived values in Recommender-Alerts cards before they reach the `unsafe_allow_html=True` surface (`c0c1ef3`)
-- Stop `Cmd+C` / `Ctrl+C` from opening Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
-- Drop already-submitted positions from the dashboard Upcoming-deadline rows (`2921bf7`)
-- Render `ui.colophon` and `ui.hero_greeting` on Windows by replacing the POSIX-only `%-d` strftime directive with a portable day field (`da87634`)
-- Surface pending recommender letters whose `recommender_name` is NULL on both alert panels (`da87634`)
-- Narrow the Cmd/Ctrl hotkey shield to single-character keys so widget Arrow/Tab/Enter keybindings pass through (`da87634`)
+- v0.14.0 README screenshots refreshed against a fabricated demo dataset (no real PII), with labels no longer truncating
+- Deleting the last interview on a position now retracts that position from Interview back to Applied, mirroring the forward cascade (#103)
+- Recommender names and position titles containing HTML special characters render safely in alert cards (`c0c1ef3`)
+- Cmd/Ctrl+C no longer opens Streamlit's "Clear function caches?" dialog when copying a selection (`cc5199a`)
+- Dashboard Upcoming rows hide positions you've already submitted (`2921bf7`)
+- Dashboard greeting and footer render correctly on Windows (`da87634`)
+- Recommender-alert panels surface pending letters even when no recommender name is assigned (`da87634`)
+- Arrow / Tab / Enter keys work inside text fields again — the Cmd/Ctrl shortcut shield only intercepts single-character keys now (`da87634`)
+
+### Removed
+- 10 `docs/ui/screenshots/v0.14.0-editorial*/` design-iteration directories — intermediate captures from the v0.14.0 redesign work, never referenced from any doc
 
 ## [v0.13.0] — 2026-05-12 — Self-host setup guide
 
