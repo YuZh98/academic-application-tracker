@@ -20,17 +20,41 @@ PAD = 16
 CONTENT_GRAY_MAX = 220.0
 ROW_DARK_MIN = 30
 COL_DARK_MIN = 1
-CHROME_PROBE_ROWS = 200
+# Probe deep enough to cover the Streamlit chrome strip at any reasonable
+# devicePixelRatio (the strip is ~50 CSS px so 400 native rows is safe for
+# DPR up to 4×; was 200 at 1× DPR which let a sliver leak through at 2×).
+CHROME_PROBE_ROWS = 400
 CHROME_CREAM_CUTOFF = 242.0
+# Fallback when the detector finds no white→cream transition in the probe
+# window. Streamlit always renders a top chrome strip in headless mode, so
+# we trim a safe minimum from every capture and let the body-content scan
+# tighten the rest.
+CHROME_FALLBACK_ROWS = 160
 DEFAULT_DIR = Path("docs/ui/screenshots/v0.14.0")
 
 
 def find_chrome_bottom(arr: np.ndarray) -> int:
-    """First row where the page transitions from Streamlit chrome (white-ish)
-    into the cream app body. Returns 0 if no chrome detected."""
-    row_mean = arr[:CHROME_PROBE_ROWS].mean(axis=(1, 2))
+    """First row where the page transitions from the Streamlit chrome
+    (white-ish "Deploy" badge strip) into the cream app body.
+
+    Detects against the rightmost 200 columns only — the chrome strip's
+    pure-white badge area — because averaging across the full row pulls
+    the mean down with cream sidebar pixels and silently disables chrome
+    trimming. At 2× DPR the full-row mean fell below the cream cutoff on
+    the very first chrome row, so the old logic returned 0 and let the
+    "Deploy" sliver leak into the final crop.
+
+    Falls through to ``CHROME_FALLBACK_ROWS`` when no transition is found
+    in the probe window: Streamlit always renders a top chrome strip in
+    headless mode, so an empty detection is itself a signal that the
+    detector missed (not that there's no chrome).
+    """
+    right_cols = arr[:CHROME_PROBE_ROWS, -200:]
+    row_mean = right_cols.mean(axis=(1, 2))
     below = np.where(row_mean < CHROME_CREAM_CUTOFF)[0]
-    return int(below[0]) if below.size else 0
+    if below.size:
+        return int(below[0])
+    return CHROME_FALLBACK_ROWS
 
 
 def crop_one(path: Path) -> tuple[tuple[int, int], tuple[int, int]]:
