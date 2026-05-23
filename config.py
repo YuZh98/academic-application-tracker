@@ -33,6 +33,14 @@ DB_FILENAME: str = "postdoc.db"
 # Label used in recommender follow-up email subjects.
 APPLICATION_LABEL: str = "academic application"
 
+# Optional surname-style mark rendered in the editorial folio footer
+# (right-hand slot, alongside the Roman-numeral year). Empty by default
+# so a fresh clone ships without any personal mark — set it to a short
+# string ("Zheng", "Lab", an initial) to brand the masthead. The footer
+# drops the slot entirely when this is empty so the flex layout still
+# balances Vol / Issue / — fin —.
+FOOTER_AUTHOR_MARK: str = ""
+
 # ── Universal placeholder glyph ───────────────────────────────────────────────
 # Em-dash (U+2014) used to render NULL / NaN / empty TEXT cells across every
 # user-facing surface (page tables, dashboard KPIs, exports markdown).

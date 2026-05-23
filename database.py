@@ -9,6 +9,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -21,7 +22,19 @@ import config
 
 logger = logging.getLogger(__name__)
 
-DB_PATH: Path = Path(__file__).parent / config.DB_FILENAME
+
+def _resolve_db_path() -> Path:
+    # ``AAT_DB_PATH`` overrides the default (``postdoc.db`` alongside this
+    # file) so screenshot capture, demo seeds, and ad-hoc isolated runs
+    # can target a throwaway database without touching the user's real
+    # job-search data.
+    override = os.environ.get("AAT_DB_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(__file__).parent / config.DB_FILENAME
+
+
+DB_PATH: Path = _resolve_db_path()
 
 
 # ── Connection ────────────────────────────────────────────────────────────────
