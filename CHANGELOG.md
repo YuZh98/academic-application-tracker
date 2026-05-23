@@ -19,6 +19,7 @@ manual steps to run against a pre-existing database.
 
 ### Fixed
 - Scrub real PII from the v0.14.0 README screenshots — re-capture all seven against a fabricated demo dataset and drop the hardcoded surname from the editorial folio footer so a fresh clone ships with no personal mark baked in (`bc5107e`)
+- Re-shoot the v0.14.0 README screenshots at 2× DPI in a 1024×2400 portrait viewport with the Streamlit toolbar hidden and the sidebar widened to 280 px — text now scans cleanly in the README and the captures read as a magazine page rather than a wide desktop dashboard
 
 ### Removed
 - Drop the 10 `docs/ui/screenshots/v0.14.0-editorial*/` design-iteration directories — they were intermediate captures from the v0.14.0 redesign work, not referenced from README or any other doc
