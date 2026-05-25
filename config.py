@@ -15,7 +15,7 @@
 # page (ui.sidebar_about_block). Kept here so config.py remains the single
 # source of truth for vocabulary; drift against pyproject.toml is pinned by
 # tests/test_config.py::test_app_version_matches_pyproject.
-APP_VERSION: str = "0.14.0-dev"
+APP_VERSION: str = "0.14.0"
 
 # Editorial warning glyph — U+25B2 black up-pointing triangle. Replaces
 # the emoji ⚠️ which broke the typographic register of the editorial
