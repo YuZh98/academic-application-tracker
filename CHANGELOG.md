@@ -17,6 +17,8 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+## [v0.14.0] — 2026-05-25 — Editorial-brutalist UI redesign
+
 ### Added
 - Settings page — tune deadline, recommender-follow-up, and upcoming-window thresholds and manage the application-status vocabulary without leaving the app (#103)
 - Bulk-action panel on the Opportunities page — multi-select rows, then promote saved → applied or set a requirement value across the selection in one go (#103)
