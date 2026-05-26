@@ -1408,7 +1408,23 @@ _SETTINGS_BOUNDS: dict[str, tuple[int, int]] = {
 def load_settings() -> dict[str, Any]:
     """Return the persisted settings overlay merged on top of the
     ``config.py`` defaults. Always returns the live effective values
-    — callers do not need to fall back to ``config.*`` themselves."""
+    — callers do not need to fall back to ``config.*`` themselves.
+
+    Demo-mode short-circuit (``config.IS_DEMO`` True): returns pure
+    config defaults without reading the overlay file. Keeps the demo
+    session fully isolated from any ``AAT_DB_PATH`` precedence that
+    would otherwise drive ``_settings_path()`` via ``DB_PATH.parent``.
+    Defense-in-depth so the precedence rule documented in DESIGN §2.3
+    holds at every level of the stack."""
+    base: dict[str, Any] = {
+        "DEADLINE_ALERT_DAYS": getattr(config, "DEADLINE_ALERT_DAYS", 30),
+        "RECOMMENDER_ALERT_DAYS": getattr(config, "RECOMMENDER_ALERT_DAYS", 7),
+        "UPCOMING_WINDOW_DAYS": getattr(config, "UPCOMING_WINDOW_DAYS", 30),
+        "STATUS_VALUES": list(config.STATUS_VALUES),
+    }
+    if config.IS_DEMO:
+        return base
+
     overlay: dict[str, Any] = {}
     path = _settings_path()
     if path.exists():
@@ -1420,12 +1436,6 @@ def load_settings() -> dict[str, Any]:
             )
             overlay = {}
 
-    base: dict[str, Any] = {
-        "DEADLINE_ALERT_DAYS": getattr(config, "DEADLINE_ALERT_DAYS", 30),
-        "RECOMMENDER_ALERT_DAYS": getattr(config, "RECOMMENDER_ALERT_DAYS", 7),
-        "UPCOMING_WINDOW_DAYS": getattr(config, "UPCOMING_WINDOW_DAYS", 30),
-        "STATUS_VALUES": list(config.STATUS_VALUES),
-    }
     base.update(overlay)
     return base
 

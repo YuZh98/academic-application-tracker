@@ -44,6 +44,16 @@ DEMO_SELF_HOST_URL: str = (
     "/blob/main/docs/dev-notes/self-host-setup.md"
 )
 
+# ── Accent palette ───────────────────────────────────────────────────────────
+# Editorial-brutalist accent tokens shared between the CSS `:root` block in
+# ui.py (the canonical CSS variables, e.g. `--aat-vermilion`) and Python sites
+# that need the same literal (status pill backgrounds, urgency badges, the
+# demo banner's CSS-var fallback). One Python literal per accent here keeps
+# the Python sites from drifting; the CSS `:root` block intentionally
+# duplicates the value so a CSS-only audit can read it without hopping to
+# config.py.
+ACCENT_VERMILION: str = "#E63946"
+
 # Editorial warning glyph — U+25B2 black up-pointing triangle. Replaces
 # the emoji ⚠️ which broke the typographic register of the editorial
 # refresh. Bauhaus shape, monochrome, renders identically across

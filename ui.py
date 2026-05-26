@@ -40,7 +40,7 @@ import config
 _PILL_PALETTE: dict[str, str] = {
     # status label slug → editorial-brutalist accent (light mode)
     "saved": "#2541B2",  # cobalt — pre-application stillness
-    "applied": "#E63946",  # vermilion — action committed
+    "applied": config.ACCENT_VERMILION,  # action committed
     "interview": "#F4D35E",  # citron — signal moment
     "offer": "#588157",  # sage — success
     "closed": "#5A5752",  # ink-muted — quiet exit
@@ -110,7 +110,7 @@ def urgency_pill(
 
     if days_left <= urgent_d:
         klass = "aat-pill aat-pill-urgent aat-urgent"
-        colour = "#E63946"
+        colour = config.ACCENT_VERMILION
         label = f"T-{days_left}D" if days_left >= 0 else f"+{abs(days_left)}D OVERDUE"
     elif days_left <= alert_d:
         klass = "aat-pill aat-pill-warn aat-warn"
@@ -1313,7 +1313,7 @@ def demo_banner() -> None:
     st.markdown(
         f"""
         <div style="
-            border-left: 4px solid var(--aat-vermilion, #E63946);
+            border-left: 4px solid var(--aat-vermilion, {config.ACCENT_VERMILION});
             padding: 0.75rem 1rem;
             margin: 0 0 1.5rem 0;
             background: rgba(230, 57, 70, 0.06);
@@ -1323,7 +1323,7 @@ def demo_banner() -> None:
             text-transform: uppercase;
             letter-spacing: 0.12em;
             font-weight: 700;
-            color: var(--aat-vermilion, #E63946);
+            color: var(--aat-vermilion, {config.ACCENT_VERMILION});
             margin-bottom: 0.25rem;
           ">{config.DEMO_BANNER_HEADLINE}</div>
           <div style="font-style: italic; line-height: 1.5;">
