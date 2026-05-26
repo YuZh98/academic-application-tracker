@@ -97,3 +97,19 @@ def test_exports_dir_stays_empty_in_demo(demo_env, tmp_path, monkeypatch):
         f"EXPORTS_DIR not empty after demo session: "
         f"{list(exports_dir.rglob('*')) if exports_dir.exists() else []}"
     )
+
+
+def test_export_page_short_circuits_in_demo(demo_env):
+    """The Export page must short-circuit to an info card before any
+    database.regenerate_exports() or get_export_paths() call when
+    IS_DEMO is True. AppTest catches the st.stop() and records the
+    info element so we can pin both the short-circuit AND the
+    info-card presence in one shot."""
+    at = AppTest.from_file("pages/4_Export.py", default_timeout=15)
+    at.run()
+    # No exception bubbled up.
+    assert not at.exception, f"Export page raised in demo mode: {at.exception}"
+    # The info card mentions the self-host link.
+    info_text = " ".join(i.value for i in at.info)
+    assert "demo" in info_text.lower()
+    assert config.DEMO_SELF_HOST_URL in info_text or "self-host" in info_text.lower()
