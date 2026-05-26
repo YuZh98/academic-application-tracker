@@ -4837,3 +4837,86 @@ class TestConnectionProvider:
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='positions'"
             )
             assert cur.fetchone() is not None
+
+
+# ── load_settings in demo mode ────────────────────────────────────────────────
+
+
+class TestLoadSettingsDemoShortCircuit:
+    """In demo mode, load_settings() must NOT read any settings overlay
+    file from disk — the demo session is fully isolated from
+    AAT_DB_PATH precedence (which would otherwise drive _settings_path()
+    via DB_PATH.parent). Returns pure config defaults instead.
+
+    Defense-in-depth so the warning copy in db_session.bind()
+    ('AAT_DEMO=1 takes precedence over AAT_DB_PATH') holds at every
+    level of the stack, not just _connect()."""
+
+    def test_load_settings_returns_pure_defaults_in_demo(self, tmp_path, monkeypatch):
+        # Plant a deliberately-wrong overlay file at the path
+        # load_settings() would otherwise read from. Demo mode must
+        # ignore it.
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "demo.db")
+        overlay_path = tmp_path / "settings_overrides.json"
+        overlay_path.write_text(
+            '{"DEADLINE_ALERT_DAYS": 999, "RECOMMENDER_ALERT_DAYS": 999}',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(config, "IS_DEMO", True)
+
+        settings = database.load_settings()
+
+        assert settings["DEADLINE_ALERT_DAYS"] == getattr(
+            config, "DEADLINE_ALERT_DAYS", 30
+        )
+        assert settings["RECOMMENDER_ALERT_DAYS"] == getattr(
+            config, "RECOMMENDER_ALERT_DAYS", 7
+        )
+
+    def test_load_settings_reads_overlay_when_not_demo(self, tmp_path, monkeypatch):
+        # Regression guard — the local-dev path still reads the overlay.
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "postdoc.db")
+        overlay_path = tmp_path / "settings_overrides.json"
+        overlay_path.write_text(
+            '{"DEADLINE_ALERT_DAYS": 14}',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(config, "IS_DEMO", False)
+
+        settings = database.load_settings()
+        assert settings["DEADLINE_ALERT_DAYS"] == 14
+
+
+class TestSaveSettingsDemoShortCircuit:
+    """In demo mode, save_settings() must NOT write the overlay file.
+    Symmetric with the load_settings() short-circuit — the prior
+    review surfaced an asymmetry where reads were gated but writes
+    still hit disk. A demo visitor's Settings-form save now no-ops
+    instead of silently writing a file that the next load ignores."""
+
+    def test_save_settings_does_not_write_in_demo(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "demo.db")
+        overlay_path = tmp_path / "settings_overrides.json"
+        assert not overlay_path.exists()
+        monkeypatch.setattr(config, "IS_DEMO", True)
+
+        database.save_settings({"DEADLINE_ALERT_DAYS": 14})
+
+        assert not overlay_path.exists(), (
+            "save_settings() must be a no-op in demo mode; overlay file "
+            "must not appear on disk."
+        )
+
+    def test_save_settings_writes_when_not_demo(self, tmp_path, monkeypatch):
+        # Regression guard — local dev still persists overrides.
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "postdoc.db")
+        monkeypatch.setattr(config, "IS_DEMO", False)
+
+        database.save_settings({"DEADLINE_ALERT_DAYS": 14})
+
+        overlay_path = tmp_path / "settings_overrides.json"
+        assert overlay_path.exists()
+        import json as _json
+
+        body = _json.loads(overlay_path.read_text(encoding="utf-8"))
+        assert body["DEADLINE_ALERT_DAYS"] == 14

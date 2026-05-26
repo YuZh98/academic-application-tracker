@@ -9,21 +9,31 @@ Outputs:
 
 from __future__ import annotations
 
+import sys
 from datetime import date
 from pathlib import Path
 
 import matplotlib
 import numpy as np
 
+# Ensure the repo root is importable so `import config` works regardless of
+# the invocation directory (CLI users typically run from repo root, but the
+# script is also called from CI in other cwds).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+import config  # noqa: E402
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.platypus import (
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
+from reportlab.lib import colors  # noqa: E402
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY  # noqa: E402
+from reportlab.lib.pagesizes import LETTER  # noqa: E402
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # noqa: E402
+from reportlab.lib.units import inch  # noqa: E402
+from reportlab.platypus import (  # noqa: E402
     Image,
     PageBreak,
     Paragraph,
@@ -45,7 +55,7 @@ PDF_PATH = OUT_DIR / "UX_Field_Study_Report_2026-05-22.pdf"
 
 PAPER = "#F4EDE0"
 INK = "#0A0A0A"
-VERMILION = "#E63946"
+VERMILION = config.ACCENT_VERMILION
 COBALT = "#2541B2"
 CITRON = "#F4D35E"
 RULE = "#5A5752"
