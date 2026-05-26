@@ -1,37 +1,33 @@
-"""Seed a throwaway SQLite database with fabricated demo data for screenshots.
+"""Seed a throwaway SQLite database with fabricated demo data.
 
-Usage
------
-    source .venv/bin/activate
-    AAT_DB_PATH=$PWD/demo.db python3 scripts/seed_demo_db.py
-    AAT_DB_PATH=$PWD/demo.db streamlit run app.py
+Two entry points:
 
-The script wipes whatever lives at ``AAT_DB_PATH`` (or ``demo.db`` in the
-repo root if the env var is unset), reinitializes the schema, and fills
-it with five fictional positions plus a small recommender roster — enough
-to populate every panel on Dashboard, Opportunities, Applications, and
-Recommenders without using a single real datum.
+- ``seed(conn)``: library entry used by ``db_session.py`` during demo
+  bootstrap. Populates an already-open connection. Asserts the DB is
+  empty before inserting.
 
-All institute names are well-known public universities; every recommender
-name is fabricated. ``demo.db`` is gitignored so it never reaches origin.
+- ``main()``: CLI entry used for screenshot generation. Resolves a
+  file path via ``AAT_DB_PATH`` (default: ``./demo.db``), wipes +
+  initializes + seeds against the file.
+
+The module body has zero side effects — no path manipulation, no env
+mutation, no module-level reloads. ``db_session.py`` imports this
+module at load time and must not pay any of those costs.
 """
 
 from __future__ import annotations
 
-import os
 import sqlite3
 import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+# Path-only setup so the module can be imported from anywhere (CLI from
+# repo root, library import from db_session). NOT an env mutation — see
+# the module docstring and tests/test_seed_demo_db.py::TestModuleImport.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-
-# AAT_DB_PATH must be set BEFORE importing database so its module-level
-# DB_PATH resolution picks up the override on the first import.
-if "AAT_DB_PATH" not in os.environ:
-    os.environ["AAT_DB_PATH"] = str((_REPO_ROOT / "demo.db").resolve())
 
 import config  # noqa: E402
 import database  # noqa: E402
@@ -41,26 +37,33 @@ def iso(days_offset: int) -> str:
     return (date.today() + timedelta(days=days_offset)).isoformat()
 
 
-def wipe(path: Path) -> None:
-    if not path.exists():
-        return
-    with sqlite3.connect(path) as conn:
-        conn.execute("PRAGMA foreign_keys = ON")
-        for table in ("recommenders", "interviews", "applications", "positions"):
-            try:
-                conn.execute(f"DELETE FROM {table}")
-            except sqlite3.OperationalError:
-                # Schema not yet present — init_db() will create it.
-                pass
-        conn.commit()
+def seed(conn: sqlite3.Connection) -> None:
+    """Populate the demo dataset.
+
+    The ``conn`` argument is a lifetime witness — the caller must hold a
+    reference to keep an in-memory DB alive. Every write inside this
+    function routes through ``database.add_position`` etc., which use
+    ``database._connect()``, which in demo mode (provider installed)
+    returns the same ``conn`` back. In CLI mode the public API opens
+    its own file connections per call; the passed ``conn`` is unused
+    once the emptiness check returns.
+
+    Raises ``RuntimeError`` if the positions table is not empty.
+    """
+    row = conn.execute("SELECT COUNT(*) AS n FROM positions").fetchone()
+    if row["n"] != 0:
+        raise RuntimeError("seed_demo_db.seed() refused: positions table is not empty")
+    _seed_body()
 
 
-def seed() -> None:
-    db_path = database.DB_PATH
-    print(f"Seeding demo database at {db_path}")
-    wipe(db_path)
-    database.init_db()
+def _seed_body() -> None:
+    """The actual inserts. Extracted so ``seed(conn)`` can guard
+    emptiness before mutating, and ``main()`` can call after its own
+    wipe + init dance.
 
+    Task 6 expands this dataset to 18 positions across 2 cycles
+    covering all 7 statuses; the body here is the v0.13 baseline.
+    """
     # 1. Stanford BioStats — APPLIED, materials all ready, urgent deadline.
     sid = database.add_position(
         {
@@ -213,6 +216,49 @@ def seed() -> None:
         }
     )
 
+
+def wipe(path) -> None:
+    """Delete all rows from the demo DB file. Existing behavior preserved."""
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.exists():
+        return
+    with sqlite3.connect(p) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        for table in ("recommenders", "interviews", "applications", "positions"):
+            try:
+                conn.execute(f"DELETE FROM {table}")
+            except sqlite3.OperationalError:
+                # Schema not yet present — init_db() will create it.
+                pass
+        conn.commit()
+
+
+def main() -> None:
+    """CLI entry — preserves the existing screenshot-generation workflow.
+
+    Resolves AAT_DB_PATH at call time (no module-level mutation),
+    reloads config + database so DB_PATH picks up the override, then
+    wipes + inits + seeds against the resolved file path.
+    """
+    import importlib
+    import os
+
+    if "AAT_DB_PATH" not in os.environ:
+        os.environ["AAT_DB_PATH"] = str((_REPO_ROOT / "demo.db").resolve())
+
+    # Order matters: config first (database reads from config), then
+    # database (so DB_PATH picks up the env override).
+    importlib.reload(config)
+    importlib.reload(database)
+
+    db_path = database.DB_PATH
+    print(f"Seeding demo database at {db_path}")
+    wipe(Path(db_path))
+    database.init_db()
+    _seed_body()
+
     print()
     print("=== Demo DB summary ===")
     print(f"  Status counts:    {database.count_by_status()}")
@@ -225,4 +271,4 @@ def seed() -> None:
 
 
 if __name__ == "__main__":
-    seed()
+    main()
