@@ -48,8 +48,32 @@ def seed(conn: sqlite3.Connection) -> None:
     its own file connections per call; the passed ``conn`` is unused
     once the emptiness check returns.
 
-    Raises ``RuntimeError`` if the positions table is not empty.
+    Raises ``RuntimeError`` if no connection provider is installed, if
+    the passed ``conn`` is not the same object the provider returns, or
+    if the positions table is not empty.
     """
+    # Fail-fast: the emptiness check below uses the passed conn, while
+    # every write inside _seed_body() routes through database._connect()
+    # → database._connection_provider(). If those two connections are
+    # not the same object, the emptiness check would pass on one DB
+    # while writes hit another. Refuse loudly instead of producing
+    # silently-wrong state.
+    if database._connection_provider is None:
+        raise RuntimeError(
+            "seed_demo_db.seed() requires database.set_connection_provider() "
+            "to be installed first; writes route through database._connect() "
+            "and need a provider to reach the same DB as the emptiness check."
+        )
+    provider_conn = database._connection_provider()
+    if conn is not provider_conn:
+        raise RuntimeError(
+            "seed_demo_db.seed(conn): the conn argument must be the same "
+            "object the installed provider returns. Got a different connection "
+            "object — emptiness check would pass on one DB while writes hit "
+            "another. Either pass the provider's connection or restructure "
+            "the caller to install the provider with the same conn."
+        )
+
     row = conn.execute("SELECT COUNT(*) AS n FROM positions").fetchone()
     if row["n"] != 0:
         raise RuntimeError("seed_demo_db.seed() refused: positions table is not empty")
