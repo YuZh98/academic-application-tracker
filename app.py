@@ -21,8 +21,8 @@ st.set_page_config(
 )
 
 # Demo bootstrap: installs per-session in-memory SQLite when AAT_DEMO=1.
-# No-op in local dev (file-based postdoc.db). Must run before any
-# database.* call so the provider is in place.
+# No-op in local dev (file-based postdoc.db). Must run before any DB
+# call so the connection provider is in place.
 db_session.bind()
 
 database.init_db()
