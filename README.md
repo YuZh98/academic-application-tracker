@@ -28,6 +28,10 @@ Anyone juggling academic job applications at scale — postdocs, PhD candidates 
 
 ---
 
+> **Try it now** — [open the live demo](https://academic-application-tracker.streamlit.app). No install, no sign-up. Each session gets its own sandbox data that resets when you close the tab.
+
+---
+
 ## Quick start
 
 ```bash
