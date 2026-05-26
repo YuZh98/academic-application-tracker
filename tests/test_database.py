@@ -4885,3 +4885,38 @@ class TestLoadSettingsDemoShortCircuit:
 
         settings = database.load_settings()
         assert settings["DEADLINE_ALERT_DAYS"] == 14
+
+
+class TestSaveSettingsDemoShortCircuit:
+    """In demo mode, save_settings() must NOT write the overlay file.
+    Symmetric with the load_settings() short-circuit — the prior
+    review surfaced an asymmetry where reads were gated but writes
+    still hit disk. A demo visitor's Settings-form save now no-ops
+    instead of silently writing a file that the next load ignores."""
+
+    def test_save_settings_does_not_write_in_demo(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "demo.db")
+        overlay_path = tmp_path / "settings_overrides.json"
+        assert not overlay_path.exists()
+        monkeypatch.setattr(config, "IS_DEMO", True)
+
+        database.save_settings({"DEADLINE_ALERT_DAYS": 14})
+
+        assert not overlay_path.exists(), (
+            "save_settings() must be a no-op in demo mode; overlay file "
+            "must not appear on disk."
+        )
+
+    def test_save_settings_writes_when_not_demo(self, tmp_path, monkeypatch):
+        # Regression guard — local dev still persists overrides.
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "postdoc.db")
+        monkeypatch.setattr(config, "IS_DEMO", False)
+
+        database.save_settings({"DEADLINE_ALERT_DAYS": 14})
+
+        overlay_path = tmp_path / "settings_overrides.json"
+        assert overlay_path.exists()
+        import json as _json
+
+        body = _json.loads(overlay_path.read_text(encoding="utf-8"))
+        assert body["DEADLINE_ALERT_DAYS"] == 14

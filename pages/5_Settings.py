@@ -33,6 +33,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if config.IS_DEMO:
+    st.info(
+        "Settings changes do not persist in the public demo — every "
+        "session starts fresh from the defaults. Self-host the app to "
+        f"tune thresholds and vocabulary against your real data ([setup "
+        f"guide]({config.DEMO_SELF_HOST_URL}))."
+    )
+
 settings = database.load_settings()
 
 # ── Thresholds ───────────────────────────────────────────────────────────────

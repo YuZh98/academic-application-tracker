@@ -1443,7 +1443,15 @@ def load_settings() -> dict[str, Any]:
 def save_settings(updates: dict[str, Any]) -> None:
     """Validate + persist settings updates. Atomic — if any value
     fails validation, no write happens (boundary-validate pattern).
-    Threshold fields must be ints in their declared bounds."""
+    Threshold fields must be ints in their declared bounds.
+
+    Demo-mode short-circuit (``config.IS_DEMO`` True): silently no-op.
+    Symmetric with the ``load_settings()`` short-circuit so the demo
+    session never touches the on-disk overlay file in either
+    direction. The Settings page renders an info banner so the
+    visitor understands why their edits do not persist."""
+    if config.IS_DEMO:
+        return
     if not updates:
         return
 
