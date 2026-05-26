@@ -28,12 +28,16 @@ APP_VERSION: str = "0.14.0"
 # modules MUST read config.IS_DEMO rather than checking os.environ themselves.
 IS_DEMO: bool = os.environ.get("AAT_DEMO") == "1"
 
-# Demo banner copy. Editorial register; uppercase mono headline + body
+# Demo banner copy. Editorial register: uppercase mono headline + body
 # paragraph + self-host CTA. Rendered by ui.demo_banner() when IS_DEMO.
-DEMO_BANNER_HEADLINE: str = "DEMO MODE"
+# Variant C — declarative + blunt: names the constraint directly,
+# avoids "demo" jargon in the headline, leaves the body open-ended so
+# the rendered "Self-host instructions ↗" link reads as the sentence's
+# end-stop.
+DEMO_BANNER_HEADLINE: str = "DEMO — NOT YOUR DATA"
 DEMO_BANNER_BODY: str = (
-    "Your changes reset when this tab closes. "
-    "Self-host with your own data — see the setup guide."
+    "This is a public sandbox. Edits vanish when you close the tab. "
+    "Self-host the app to keep your real applications —"
 )
 DEMO_SELF_HOST_URL: str = (
     "https://github.com/YuZh98/academic-application-tracker"

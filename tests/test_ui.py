@@ -796,3 +796,51 @@ class TestUiStrftimePortability:
             f"Found: {hits}. Build the day-of-month with `str(n.day)` "
             "or `n.day` instead of `n.strftime('%-d')`."
         )
+
+
+# ── Demo banner + sidebar reset block ─────────────────────────────────────────
+
+
+class TestDemoBanner:
+    """The banner + sidebar reset block render only when IS_DEMO=True.
+    Layer rule preserved: ui.py imports neither database nor db_session;
+    the reset block takes a callback for the actual wipe."""
+
+    def test_demo_banner_noop_when_not_demo(self, monkeypatch):
+        monkeypatch.setattr(config, "IS_DEMO", False)
+        with patch("ui.st.markdown") as mock_md:
+            ui.demo_banner()
+            assert not mock_md.called, "demo_banner must not render when IS_DEMO=False"
+
+    def test_demo_banner_renders_when_demo(self, monkeypatch):
+        monkeypatch.setattr(config, "IS_DEMO", True)
+        with patch("ui.st.markdown") as mock_md:
+            ui.demo_banner()
+            assert mock_md.called, "demo_banner must call st.markdown when IS_DEMO=True"
+            # Inspect the markdown payload: headline + body + URL must be present.
+            html = mock_md.call_args[0][0]
+            assert config.DEMO_BANNER_HEADLINE in html
+            assert config.DEMO_BANNER_BODY.split(".")[0] in html
+            assert config.DEMO_SELF_HOST_URL in html
+
+    def test_sidebar_reset_block_noop_when_not_demo(self, monkeypatch):
+        monkeypatch.setattr(config, "IS_DEMO", False)
+        called = []
+        ui.sidebar_demo_reset_block(lambda: called.append("yes"))
+        assert called == []
+
+    def test_ui_does_not_import_database_or_db_session(self):
+        # AST-level check — preserves the layer rule.
+        source = (REPO_ROOT / "ui.py").read_text()
+        tree = ast.parse(source)
+        forbidden = {"database", "db_session"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert alias.name not in forbidden, (
+                        f"ui.py imports forbidden module: {alias.name}"
+                    )
+            elif isinstance(node, ast.ImportFrom):
+                assert node.module not in forbidden, (
+                    f"ui.py imports forbidden module: {node.module}"
+                )
