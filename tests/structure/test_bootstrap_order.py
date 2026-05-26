@@ -7,7 +7,6 @@ import pathlib
 
 import pytest
 
-
 # All entry points. Order matches the sidebar nav.
 PAGES = [
     "app.py",

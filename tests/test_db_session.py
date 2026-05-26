@@ -83,7 +83,6 @@ class TestBind:
     def test_bind_cleans_up_on_seed_failure(self, fake_st, monkeypatch):
         monkeypatch.setattr(config, "IS_DEMO", True)
         import db_session
-
         from scripts import seed_demo_db
 
         def _raise(_conn):
