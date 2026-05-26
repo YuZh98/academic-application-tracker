@@ -62,6 +62,67 @@ class TestSeedLibraryEntry:
             seed_demo_db.seed(empty_demo_conn)
 
 
+class TestSeedFailFastGuards:
+    """seed(conn) must reject mismatches between the passed conn and the
+    installed connection provider. Without this guard, the emptiness
+    check (which uses the passed conn) can pass against DB A while the
+    actual writes — which route through database._connect() →
+    _connection_provider() — hit DB B. The result is silently-wrong
+    state; these tests pin the loud-failure contract instead."""
+
+    def test_seed_raises_when_no_provider_installed(self):
+        # autouse fixture clears the provider after each test, so by
+        # default no provider is installed. Calling seed() must fail
+        # loudly rather than route writes to the file-based DB_PATH.
+        from scripts import seed_demo_db
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        # Create the positions table so the emptiness check would
+        # otherwise pass — proves the guard fires BEFORE that check.
+        database.init_db()  # writes to DB_PATH; harmless, we only need
+        # the conn itself to have a positions table for the assertion
+        # below. Recreate it directly to keep the test hermetic.
+        conn.execute(
+            "CREATE TABLE positions (id INTEGER PRIMARY KEY, status TEXT)"
+        )
+        try:
+            with pytest.raises(
+                RuntimeError, match="requires database.set_connection_provider"
+            ):
+                seed_demo_db.seed(conn)
+        finally:
+            conn.close()
+
+    def test_seed_raises_on_conn_provider_mismatch(self, monkeypatch):
+        # Provider returns connection A; caller passes connection B.
+        # The emptiness check would pass against B while writes would
+        # hit A. Guard must reject this.
+        from scripts import seed_demo_db
+
+        conn_a = sqlite3.connect(":memory:")
+        conn_a.row_factory = sqlite3.Row
+        conn_a.execute("PRAGMA foreign_keys = ON")
+        conn_b = sqlite3.connect(":memory:")
+        conn_b.row_factory = sqlite3.Row
+        conn_b.execute("PRAGMA foreign_keys = ON")
+
+        database.set_connection_provider(lambda: conn_a)
+        # Initialize positions table on B so the emptiness check would
+        # otherwise pass — the guard must fire first.
+        conn_b.execute(
+            "CREATE TABLE positions (id INTEGER PRIMARY KEY, status TEXT)"
+        )
+
+        try:
+            with pytest.raises(RuntimeError, match="different connection"):
+                seed_demo_db.seed(conn_b)
+        finally:
+            conn_a.close()
+            conn_b.close()
+
+
 class TestSeedDataShape:
     """After seed(), the DB must contain the alert-panel-exercising
     shape documented in spec §4.7 (errata: extended to all 7 statuses,
