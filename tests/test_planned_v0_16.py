@@ -11,6 +11,7 @@
 # R1a's cross-position recommender bulk depends on R0a's join table —
 # its xfail also stays in place until R0a ships.
 
+import importlib
 from datetime import date
 from typing import Any
 
@@ -397,4 +398,94 @@ class TestR1bSettings:
         assert after == before, (
             f"R1b: failed save must not partially mutate state. "
             f"before={before!r} after={after!r}"
+        )
+
+
+# ── Demo mode: Settings save buttons are visually disabled ────────────────────
+
+
+class TestSettingsDemoSaveDisabled:
+    """In demo mode the Settings page's info banner explains that edits
+    do not persist, and ``database.save_settings`` / ``update_status_
+    vocabulary`` already short-circuit. A visitor who misses the banner
+    can still click the Save buttons and (silently) be misled into
+    thinking the save worked.
+
+    Contract: when ``config.IS_DEMO`` is True the threshold + vocabulary
+    submit buttons render in the disabled state. Local-dev (IS_DEMO
+    False) keeps them enabled — the existing
+    ``test_settings_page_ui_drives_persistence_end_to_end`` already
+    pins the enabled path."""
+
+    @pytest.fixture
+    def demo_env(self, monkeypatch):
+        """Set AAT_DEMO=1 and reload config so IS_DEMO sees the env var
+        at import time. Mirrors the pattern in test_demo_integration.py."""
+        monkeypatch.setenv("AAT_DEMO", "1")
+        importlib.reload(config)
+        import db_session
+
+        importlib.reload(db_session)
+        yield
+        monkeypatch.delenv("AAT_DEMO", raising=False)
+        importlib.reload(config)
+
+    def test_threshold_save_button_disabled_in_demo(self, demo_env):
+        """The 'Save thresholds' submit button must render disabled
+        when IS_DEMO=True."""
+        at = AppTest.from_file("pages/5_Settings.py", default_timeout=15)
+        at.run()
+        assert not at.exception, f"Settings page raised in demo mode: {at.exception}"
+
+        btn = at.button(key="settings_thresholds_submit")
+        assert btn is not None, (
+            "Settings page must still render the 'Save thresholds' submit "
+            "button in demo mode — only the disabled state changes."
+        )
+        assert btn.disabled is True, (
+            "Demo-mode UX contract: 'Save thresholds' must render disabled "
+            "when AAT_DEMO=1 so a visitor cannot click and be misled into "
+            f"thinking the edit persisted. Got disabled={btn.disabled!r}."
+        )
+
+    def test_vocab_append_button_disabled_in_demo(self, demo_env):
+        """The 'Append' vocabulary submit button must render disabled
+        when IS_DEMO=True."""
+        at = AppTest.from_file("pages/5_Settings.py", default_timeout=15)
+        at.run()
+        assert not at.exception, f"Settings page raised in demo mode: {at.exception}"
+
+        btn = at.button(key="settings_vocab_submit")
+        assert btn is not None, (
+            "Settings page must still render the vocabulary 'Append' "
+            "submit button in demo mode — only the disabled state changes."
+        )
+        assert btn.disabled is True, (
+            "Demo-mode UX contract: vocabulary 'Append' must render "
+            "disabled when AAT_DEMO=1 so a visitor cannot click and be "
+            f"misled into thinking the edit persisted. Got disabled={btn.disabled!r}."
+        )
+
+    def test_save_buttons_enabled_in_local_dev(self, db):
+        """Sanity-pair: with AAT_DEMO unset (the default in tests via the
+        conftest autouse delenv) both save buttons must render enabled.
+        Guards against a future change disabling them unconditionally."""
+        # ``db`` fixture leaves IS_DEMO at its import-time False.
+        assert config.IS_DEMO is False, (
+            "Test precondition: this test asserts the local-dev enabled "
+            "path; IS_DEMO must be False."
+        )
+        at = AppTest.from_file("pages/5_Settings.py", default_timeout=15)
+        at.run()
+        assert not at.exception, f"Settings page raised in local dev: {at.exception}"
+
+        thresholds_btn = at.button(key="settings_thresholds_submit")
+        vocab_btn = at.button(key="settings_vocab_submit")
+        assert thresholds_btn.disabled is False, (
+            "Local-dev contract: 'Save thresholds' must be enabled when "
+            f"IS_DEMO=False. Got disabled={thresholds_btn.disabled!r}."
+        )
+        assert vocab_btn.disabled is False, (
+            "Local-dev contract: vocabulary 'Append' must be enabled "
+            f"when IS_DEMO=False. Got disabled={vocab_btn.disabled!r}."
         )

@@ -27,6 +27,7 @@ manual steps to run against a pre-existing database.
 ### Changed
 - Gate every `exports.py` markdown writer on `config.IS_DEMO` so the shared `exports/` directory cannot leak typed data across visitor sessions on Streamlit Cloud (#111)
 - `scripts/seed_demo_db.py`: module body now has zero side effects (env mutation moved into `main()`); new `seed(conn)` library entry is what the demo bootstrap calls (#111)
+- Disable the Settings page "Save thresholds" and vocabulary "Append" buttons when `AAT_DEMO=1` so demo visitors cannot click them and assume their edits persisted — complements the existing info banner and `save_settings` short-circuit
 
 ## [v0.14.0] — 2026-05-25 — Editorial-brutalist UI redesign
 

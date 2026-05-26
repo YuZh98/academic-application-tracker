@@ -79,7 +79,11 @@ with st.form("settings_thresholds_form"):
         key="settings_upcoming_window_days",
         help="Default value of the dashboard's deadline-window selectbox.",
     )
-    thresholds_submitted = st.form_submit_button("Save thresholds", key="settings_thresholds_submit")
+    thresholds_submitted = st.form_submit_button(
+        "Save thresholds",
+        key="settings_thresholds_submit",
+        disabled=config.IS_DEMO,
+    )
 
 if thresholds_submitted:
     try:
@@ -114,7 +118,11 @@ with st.form("settings_vocab_form"):
         key="settings_new_status",
         placeholder="[GHOSTED]",
     )
-    vocab_submitted = st.form_submit_button("Append", key="settings_vocab_submit")
+    vocab_submitted = st.form_submit_button(
+        "Append",
+        key="settings_vocab_submit",
+        disabled=config.IS_DEMO,
+    )
 
 if vocab_submitted:
     candidate = (new_status or "").strip()
