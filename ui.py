@@ -1292,3 +1292,78 @@ def inject_global_styles() -> None:
     """
     st.markdown(_STYLE_BLOCK, unsafe_allow_html=True)
     _install_hotkey_shield()
+
+
+# ── Demo deploy affordances ───────────────────────────────────────────────────
+
+
+def demo_banner() -> None:
+    """Render the Demo Mode banner. No-op when ``config.IS_DEMO`` is False.
+
+    Editorial register: vermilion accent bar + mono uppercase headline +
+    italic-serif body + self-host CTA. Renders below
+    ``inject_global_styles()`` so ``var(--aat-vermilion)`` resolves to
+    the existing token (``#E63946``); we still pass the literal as a
+    fallback for the rare case where the banner is rendered before
+    the global style block.
+    """
+    if not config.IS_DEMO:
+        return
+
+    st.markdown(
+        f"""
+        <div style="
+            border-left: 4px solid var(--aat-vermilion, #E63946);
+            padding: 0.75rem 1rem;
+            margin: 0 0 1.5rem 0;
+            background: rgba(230, 57, 70, 0.06);
+            font-family: 'IBM Plex Mono', monospace;
+        ">
+          <div style="
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-weight: 700;
+            color: var(--aat-vermilion, #E63946);
+            margin-bottom: 0.25rem;
+          ">{config.DEMO_BANNER_HEADLINE}</div>
+          <div style="font-style: italic; line-height: 1.5;">
+            {config.DEMO_BANNER_BODY}
+            <a href="{config.DEMO_SELF_HOST_URL}" target="_blank">Self-host instructions ↗</a>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def sidebar_demo_reset_block(on_reset) -> None:
+    """Render the 'Reset demo data' sidebar button. No-op when not in demo.
+
+    Click → confirm dialog → ``on_reset()`` → ``st.rerun()``. The
+    callback indirection preserves the layer rule (``ui.py`` never
+    imports ``database`` or ``db_session`` directly — the page wires
+    in ``db_session.reset`` at render time).
+    """
+    if not config.IS_DEMO:
+        return
+
+    with st.sidebar:
+        st.markdown("---")
+        if st.button("Reset demo data", key="_demo_reset_btn"):
+            _confirm_reset(on_reset)
+
+
+@st.dialog("Reset demo data?")
+def _confirm_reset(on_reset) -> None:
+    """Confirmation dialog. Order matters: ``on_reset()`` MUST run
+    BEFORE ``st.rerun()`` so the next render sees the cleared cache."""
+    st.write(
+        "This will wipe your demo session and re-seed the fictional data. "
+        "Continue?"
+    )
+    col1, col2 = st.columns(2)
+    if col1.button("Yes, reset", key="_demo_reset_confirm"):
+        on_reset()
+        st.rerun()
+    if col2.button("Cancel", key="_demo_reset_cancel"):
+        st.rerun()

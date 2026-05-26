@@ -11,6 +11,7 @@ import streamlit as st
 
 import config
 import database
+import db_session
 import ui
 from config import EM_DASH
 
@@ -20,10 +21,13 @@ st.set_page_config(
     layout="wide",
 )
 
+db_session.bind()
 database.init_db()
 ui.inject_global_styles()
+ui.demo_banner()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
+ui.sidebar_demo_reset_block(db_session.reset)
 
 ui.colophon("Recommenders")
 ui.page_mark("※")

@@ -17,6 +17,17 @@ manual steps to run against a pre-existing database.
 
 ## [Unreleased]
 
+### Added
+- Public Streamlit Cloud demo at `academic-application-tracker.streamlit.app` — per-session in-memory SQLite keeps concurrent visitors fully isolated (no cross-session data leakage) (#111)
+- Demo Mode banner + sidebar "Reset demo data" button rendered on every page when `AAT_DEMO=1` (#111)
+- 18-position multi-cycle seed dataset covering all 7 application statuses (SAVED, APPLIED, INTERVIEW, OFFER, CLOSED, REJECTED, DECLINED) so every alert panel surfaces something on first render (#111)
+- `.streamlit/config.toml` for the Streamlit Community Cloud deploy (#111)
+- "Live demo" badge in the README (#111)
+
+### Changed
+- Gate every `exports.py` markdown writer on `config.IS_DEMO` so the shared `exports/` directory cannot leak typed data across visitor sessions on Streamlit Cloud (#111)
+- `scripts/seed_demo_db.py`: module body now has zero side effects (env mutation moved into `main()`); new `seed(conn)` library entry is what the demo bootstrap calls (#111)
+
 ## [v0.14.0] — 2026-05-25 — Editorial-brutalist UI redesign
 
 ### Added

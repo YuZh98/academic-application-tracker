@@ -4744,3 +4744,96 @@ class TestDoneRecLettersAutoSync:
         assert result == {"ready": 1, "pending": 0}, (
             f"With 2/2 letters submitted, position must be ready; got {result!r}"
         )
+
+
+# ── Connection provider injection ─────────────────────────────────────────────
+
+
+class TestConnectionProvider:
+    """Provider injection lets db_session.py swap the connection model
+    for per-session in-memory SQLite without database.py importing
+    streamlit. Default (no provider) behavior is unchanged.
+
+    Each test calls set_connection_provider(None) at start to avoid
+    relying on the autouse conftest fixture (added in Task 3) — keeps
+    the test independent."""
+
+    def test_set_and_clear_provider(self):
+        database.set_connection_provider(None)
+        assert database._connection_provider is None
+
+        def sentinel() -> sqlite3.Connection:  # pragma: no cover - never called
+            raise AssertionError("sentinel should not be invoked")
+
+        database.set_connection_provider(sentinel)
+        assert database._connection_provider is sentinel
+
+        database.set_connection_provider(None)
+        assert database._connection_provider is None
+
+    def test_connect_uses_provider_when_set(self):
+        database.set_connection_provider(None)
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+
+        database.set_connection_provider(lambda: conn)
+        try:
+            with database._connect() as yielded:
+                assert yielded is conn
+                yielded.execute("CREATE TABLE t (x INTEGER)")
+                yielded.execute("INSERT INTO t VALUES (1)")
+            # After the with-block, the connection must STILL be usable
+            # (no close). Provider owns lifecycle.
+            row = conn.execute("SELECT x FROM t").fetchone()
+            assert row["x"] == 1
+        finally:
+            database.set_connection_provider(None)
+            conn.close()
+
+    def test_connect_commits_on_clean_exit_under_provider(self):
+        database.set_connection_provider(None)
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("CREATE TABLE t (x INTEGER)")
+
+        database.set_connection_provider(lambda: conn)
+        try:
+            with database._connect() as yielded:
+                yielded.execute("INSERT INTO t VALUES (1)")
+            # No explicit commit inside the with — _connect() should commit.
+            row = conn.execute("SELECT x FROM t").fetchone()
+            assert row["x"] == 1
+        finally:
+            database.set_connection_provider(None)
+            conn.close()
+
+    def test_connect_rolls_back_on_exception_under_provider(self):
+        database.set_connection_provider(None)
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("CREATE TABLE t (x INTEGER)")
+        conn.execute("INSERT INTO t VALUES (0)")
+        conn.commit()
+
+        database.set_connection_provider(lambda: conn)
+        try:
+            with pytest.raises(RuntimeError, match="boom"):
+                with database._connect() as yielded:
+                    yielded.execute("INSERT INTO t VALUES (1)")
+                    raise RuntimeError("boom")
+            rows = [r["x"] for r in conn.execute("SELECT x FROM t").fetchall()]
+            assert rows == [0]
+        finally:
+            database.set_connection_provider(None)
+            conn.close()
+
+    def test_connect_falls_back_to_file_when_no_provider(self, db):
+        # `db` fixture (existing) sets DB_PATH to a tmp file and inits
+        # the schema. With provider=None, _connect() must hit the file.
+        database.set_connection_provider(None)
+        with database._connect() as conn:
+            cur = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='positions'"
+            )
+            assert cur.fetchone() is not None

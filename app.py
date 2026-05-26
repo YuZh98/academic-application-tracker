@@ -11,6 +11,7 @@ import streamlit as st
 
 import config
 import database
+import db_session
 import ui
 
 st.set_page_config(
@@ -18,6 +19,11 @@ st.set_page_config(
     page_icon="📋",
     layout="wide",
 )
+
+# Demo bootstrap: installs per-session in-memory SQLite when AAT_DEMO=1.
+# No-op in local dev (file-based postdoc.db). Must run before any DB
+# call so the connection provider is in place.
+db_session.bind()
 
 database.init_db()
 # R1b — overlay any persisted settings on top of config defaults and
@@ -27,8 +33,10 @@ _settings = database.load_settings()
 st.session_state["effective_deadline_alert_days"] = _settings["DEADLINE_ALERT_DAYS"]
 st.session_state["effective_recommender_alert_days"] = _settings["RECOMMENDER_ALERT_DAYS"]
 ui.inject_global_styles()
+ui.demo_banner()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
+ui.sidebar_demo_reset_block(db_session.reset)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -58,3 +58,23 @@ def make_position(overrides: dict | None = None) -> dict:
     if overrides:
         base.update(overrides)
     return base
+
+
+@pytest.fixture(autouse=True)
+def _reset_demo_state(monkeypatch):
+    """Clear demo state before AND after every test.
+
+    - Removes AAT_DEMO and AAT_DB_PATH from the env so tests cannot
+      bleed env values into each other (importlib.reload(config) tests
+      in particular are order-sensitive without this).
+    - Clears database._connection_provider after the test in case a
+      test installed one and forgot to clean up. Provider state is
+      process-global; a forgotten provider would silently affect later
+      tests.
+    """
+    monkeypatch.delenv("AAT_DEMO", raising=False)
+    monkeypatch.delenv("AAT_DB_PATH", raising=False)
+    yield
+    if hasattr(database, "set_connection_provider"):
+        database.set_connection_provider(None)
+        assert getattr(database, "_connection_provider", None) is None

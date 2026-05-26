@@ -844,3 +844,40 @@ def _is_next_minor_or_major(candidate: str, base: str) -> bool:
     next_minor = c_parts[0] == b_parts[0] and c_parts[1] == b_parts[1] + 1 and c_parts[2] == 0
     next_major = c_parts[0] == b_parts[0] + 1 and c_parts[1] == 0 and c_parts[2] == 0
     return next_minor or next_major
+
+
+# ── Demo mode flag ────────────────────────────────────────────────────────────
+
+
+class TestDemoMode:
+    """IS_DEMO must be driven exclusively by the AAT_DEMO env var.
+
+    Other modules read config.IS_DEMO; nothing else should touch the env
+    var directly. These tests pin the default (unset → False), the truthy
+    case (=1 → True), and rejection of any other value.
+    """
+
+    def test_is_demo_default_false(self, monkeypatch):
+        monkeypatch.delenv("AAT_DEMO", raising=False)
+        importlib.reload(config)
+        assert config.IS_DEMO is False
+
+    def test_is_demo_true_when_aat_demo_is_one(self, monkeypatch):
+        monkeypatch.setenv("AAT_DEMO", "1")
+        importlib.reload(config)
+        assert config.IS_DEMO is True
+
+    def test_is_demo_false_for_other_values(self, monkeypatch):
+        for val in ("0", "true", "True", "yes", ""):
+            monkeypatch.setenv("AAT_DEMO", val)
+            importlib.reload(config)
+            assert config.IS_DEMO is False, f"AAT_DEMO={val!r} should not enable demo"
+
+    def test_demo_banner_constants_present(self, monkeypatch):
+        # Constants are present in every mode; their behavior is gated
+        # at the call site in ui.demo_banner().
+        monkeypatch.delenv("AAT_DEMO", raising=False)
+        importlib.reload(config)
+        assert isinstance(config.DEMO_BANNER_HEADLINE, str) and config.DEMO_BANNER_HEADLINE
+        assert isinstance(config.DEMO_BANNER_BODY, str) and config.DEMO_BANNER_BODY
+        assert config.DEMO_SELF_HOST_URL.startswith("https://github.com/")

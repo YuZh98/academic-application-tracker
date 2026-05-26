@@ -139,7 +139,15 @@ def write_all() -> None:
     `EXPORTS_DIR.mkdir` is wrapped separately and short-circuits the
     rest of the function on failure: nothing else can succeed without
     the destination directory.
+
+    Demo-mode short-circuit: when config.IS_DEMO is True, every write
+    is a no-op. The shared EXPORTS_DIR on Streamlit Cloud cannot be
+    safely written from multiple concurrent visitor sessions — writes
+    would race and leak typed data across visitors via the Export
+    page. Demo visitors see an info card pointing at self-host.
     """
+    if config.IS_DEMO:
+        return
     try:
         EXPORTS_DIR.mkdir(exist_ok=True)
     except Exception:
@@ -189,7 +197,15 @@ def write_opportunities() -> None:
     create spurious git diffs on every save.
 
     Deferred ``database`` import inside the function body avoids the
-    ``database → exports → database`` circular import at module load."""
+    ``database → exports → database`` circular import at module load.
+
+    Demo-mode short-circuit (config.IS_DEMO True): no FS write at all.
+    Per-writer gate — write_all() gates separately at the top, but
+    writers are also called directly by tests and (defensively) the
+    deferred-import paths in database writers, so each one carries its
+    own guard."""
+    if config.IS_DEMO:
+        return
     import database  # deferred — see module docstring + DESIGN §7
 
     EXPORTS_DIR.mkdir(exist_ok=True)
@@ -259,7 +275,11 @@ def write_progress() -> None:
     output (DESIGN §7 contract #2).
 
     Deferred ``database`` import inside the function body avoids the
-    ``database → exports → database`` circular import at module load."""
+    ``database → exports → database`` circular import at module load.
+
+    Demo-mode short-circuit (config.IS_DEMO True): no FS write at all."""
+    if config.IS_DEMO:
+        return
     import database  # deferred — see module docstring + DESIGN §7
 
     EXPORTS_DIR.mkdir(exist_ok=True)
@@ -352,7 +372,11 @@ def write_recommenders() -> None:
     (DESIGN §7 contract #2).
 
     Deferred ``database`` import inside the function body avoids the
-    ``database → exports → database`` circular import at module load."""
+    ``database → exports → database`` circular import at module load.
+
+    Demo-mode short-circuit (config.IS_DEMO True): no FS write at all."""
+    if config.IS_DEMO:
+        return
     import database  # deferred — see module docstring + DESIGN §7
 
     EXPORTS_DIR.mkdir(exist_ok=True)
