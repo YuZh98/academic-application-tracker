@@ -14,7 +14,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 import pandas as pd
 
@@ -39,11 +39,49 @@ DB_PATH: Path = _resolve_db_path()
 
 # ── Connection ────────────────────────────────────────────────────────────────
 
+# Optional connection-factory hook. When None (default), _connect() opens a
+# file-based SQLite connection from DB_PATH per call and closes on exit. When
+# set, _connect() yields the provider's connection without closing it (provider
+# owns lifecycle); commit/rollback semantics inside the with-block are
+# preserved. This is the dependency-injection seam that lets db_session.py
+# wire per-session in-memory SQLite for the demo deploy while this module
+# stays free of any UI-framework dependency (DESIGN §2 layer rule).
+_connection_provider: Callable[[], sqlite3.Connection] | None = None
+
+
+def set_connection_provider(
+    provider: Callable[[], sqlite3.Connection] | None,
+) -> None:
+    """Install (or clear) a custom connection factory.
+
+    Pass a callable to opt into provider mode: _connect() will yield the
+    provider's connection without closing it. Pass None to revert to
+    file-based behavior (used by tests + by db_session.reset()).
+    """
+    global _connection_provider
+    _connection_provider = provider
+
 
 @contextmanager
 def _connect() -> Generator[sqlite3.Connection, None, None]:
     """Open a connection with row_factory and foreign keys enabled.
-    Commits on clean exit; rolls back and re-raises on exception."""
+    Commits on clean exit; rolls back and re-raises on exception.
+
+    Provider mode (demo): yields the provider's cached connection without
+    closing it. The provider owns connection lifecycle; this function only
+    manages commit/rollback within the with-block.
+    """
+    if _connection_provider is not None:
+        conn = _connection_provider()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        # No close() — provider owns lifecycle.
+        return
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
