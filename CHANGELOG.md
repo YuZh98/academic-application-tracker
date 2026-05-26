@@ -26,16 +26,16 @@ manual steps to run against a pre-existing database.
 
 ### Changed
 - Gate every `exports.py` markdown writer on `config.IS_DEMO` so the shared `exports/` directory cannot leak typed data across visitor sessions on Streamlit Cloud (#111)
-- `scripts/seed_demo_db.py` — module body now has zero side effects (env mutation moved into `main()`); new `seed(conn)` library entry is what the demo bootstrap calls (#111)
-- Disable the Settings page "Save thresholds" and vocabulary "Append" buttons when `AAT_DEMO=1` so demo visitors cannot click them and assume their edits persisted — complements the existing info banner and `save_settings` short-circuit (#115)
-- `config.ACCENT_VERMILION` — single Python source-of-truth for the editorial-brutalist vermilion accent; three hardcoded `#E63946` literals in `ui.py` + one in `scripts/build_ux_report.py` now reference it (#112)
-- `database.load_settings()` short-circuits to pure config defaults when `config.IS_DEMO=True` — defense-in-depth so the `AAT_DEMO` precedence holds at every level of the stack, not just `_connect()` (#112)
-- `database.save_settings()` no-ops in demo mode — symmetric with the `load_settings()` short-circuit; the Settings page renders an info banner explaining why threshold edits do not persist (#112)
-- `scripts/seed_demo_db.py::seed(conn)` — fail-fast when the connection provider is missing or returns a connection other than the passed `conn`, so writes never silently route to a different DB than the emptiness check (#114)
+- Refactor `scripts/seed_demo_db.py` — remove module-level env mutation; expose `seed(conn)` library entry for the demo bootstrap (#111)
+- Disable the Settings page "Save thresholds" and vocabulary "Append" buttons when `AAT_DEMO=1` so demo visitors cannot click them and assume their edits persisted (#115)
+- Lift the editorial-brutalist vermilion accent to `config.ACCENT_VERMILION` so `ui.py` + `scripts/build_ux_report.py` share one Python source-of-truth (#112)
+- Short-circuit `database.load_settings()` to pure config defaults in demo mode so `AAT_DEMO` precedence holds at every level of the stack (#112)
+- Short-circuit `database.save_settings()` to a no-op in demo mode; the Settings page surfaces an info banner explaining why threshold edits do not persist (#112)
+- Fail-fast in `scripts/seed_demo_db.py::seed(conn)` when no connection provider is installed or the passed `conn` differs from the provider's, so writes can never silently route to the wrong DB (#114)
 
 ### Fixed
-- Form-submit buttons (Quick Add "+ Add Position", Settings "Save thresholds" / "Append") and link buttons now carry the editorial-brutalist treatment in both color schemes — Streamlit 1.57 emits `stBaseButton-secondaryFormSubmit` + `stBaseLinkButton-secondary` test-ids that the prior CSS didn't target, so the buttons fell through to a near-black background that blended into `--aat-paper` under dark mode (#116)
-- Inner `<p>` inside every button + link button inherits the parent's hover color in both light and dark mode — Streamlit's `[data-testid="stMarkdownContainer"] p` rule (specificity 0,1,1) was winning over the prior universal `[data-testid=…] *` rule (0,1,0), pinning the inner text at ink color even when the button's `:hover` flipped its own color to paper (#117)
+- Style form-submit buttons (Quick Add "+ Add Position", Settings "Save thresholds" / "Append") and link buttons (Compose Reminder Email) in both color schemes so they no longer blend into the page background under dark mode (#116)
+- Force the inner `<p>` color inside every button and link button to inherit the parent's hover color so hover no longer leaves text invisible on top of the flipped background (#117)
 
 ## [v0.14.0] — 2026-05-25 — Editorial-brutalist UI redesign
 
