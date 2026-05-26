@@ -710,8 +710,18 @@ h2.aat-section-title {
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
+/* Streamlit 1.57 emits four button test-id variants:
+   stBaseButton-primary, stBaseButton-secondary (st.button),
+   stBaseButton-primaryFormSubmit, stBaseButton-secondaryFormSubmit
+   (st.form_submit_button). All four need explicit editorial styling
+   so they don't fall through to Streamlit base — under
+   prefers-color-scheme: dark the fallback produces a near-black bg
+   that blends into the --aat-paper background, leaving the button
+   visually undiscoverable. */
 [data-testid="stBaseButton-primary"],
-[data-testid="stBaseButton-secondary"] {
+[data-testid="stBaseButton-primaryFormSubmit"],
+[data-testid="stBaseButton-secondary"],
+[data-testid="stBaseButton-secondaryFormSubmit"] {
     border-radius: var(--aat-radius-sm) !important;
     font-family: var(--aat-font-mono) !important;
     text-transform: uppercase !important;
@@ -719,16 +729,45 @@ h2.aat-section-title {
     font-size: 0.75rem !important;
     font-weight: 600 !important;
     transition: transform var(--aat-dur) var(--aat-ease),
-                background var(--aat-dur) var(--aat-ease);
+                background var(--aat-dur) var(--aat-ease),
+                color var(--aat-dur) var(--aat-ease),
+                border-color var(--aat-dur) var(--aat-ease);
 }
-[data-testid="stBaseButton-primary"] {
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-primaryFormSubmit"] {
     background: var(--aat-ink) !important;
     color: var(--aat-paper) !important;
     border: 1px solid var(--aat-ink) !important;
 }
-[data-testid="stBaseButton-primary"]:hover {
+[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stBaseButton-primaryFormSubmit"]:hover {
     background: var(--aat-vermilion) !important;
     border-color: var(--aat-vermilion) !important;
+    color: var(--aat-paper) !important;
+    transform: translateX(2px);
+}
+/* Secondary buttons — inverted: paper bg + ink text + visible
+   ink rule so the button has an explicit boundary against the page
+   in both light and dark mode. Inner markdown <p> needs the explicit
+   color too because Streamlit's stMarkdownContainer rule otherwise
+   wins specificity against the button's inherited color. */
+[data-testid="stBaseButton-secondary"],
+[data-testid="stBaseButton-secondaryFormSubmit"] {
+    background: var(--aat-paper-soft) !important;
+    color: var(--aat-ink) !important;
+    border: 1px solid var(--aat-ink) !important;
+}
+[data-testid="stBaseButton-secondary"] [data-testid="stMarkdownContainer"],
+[data-testid="stBaseButton-secondary"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stBaseButton-secondaryFormSubmit"] [data-testid="stMarkdownContainer"],
+[data-testid="stBaseButton-secondaryFormSubmit"] [data-testid="stMarkdownContainer"] p {
+    color: inherit !important;
+}
+[data-testid="stBaseButton-secondary"]:hover,
+[data-testid="stBaseButton-secondaryFormSubmit"]:hover {
+    background: var(--aat-ink) !important;
+    color: var(--aat-paper) !important;
+    border-color: var(--aat-ink) !important;
     transform: translateX(2px);
 }
 
@@ -824,7 +863,10 @@ a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
-[data-testid="stBaseButton-primary"]:focus-visible {
+[data-testid="stBaseButton-primary"]:focus-visible,
+[data-testid="stBaseButton-primaryFormSubmit"]:focus-visible,
+[data-testid="stBaseButton-secondary"]:focus-visible,
+[data-testid="stBaseButton-secondaryFormSubmit"]:focus-visible {
     outline: 2px solid var(--aat-vermilion) !important;
     outline-offset: 3px !important;
     border-radius: 0 !important;
