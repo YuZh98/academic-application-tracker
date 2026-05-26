@@ -65,3 +65,4 @@ PHASE_*_GUIDELINES.md
 # Collage source captures — intermediate PNGs that feed scripts/build_collage.py.
 # Only the composed docs/ui/screenshots/v0.14.0/collage.png is committed.
 docs/ui/screenshots/v0.14.0/.collage-src/
+uv.lock
