@@ -21,6 +21,33 @@
 # block pops the cache, clears the provider, and closes the connection
 # before re-raising, so the next page render starts the setup over from
 # scratch against a clean state.
+#
+# Concurrency invariants:
+#   The Streamlit Cloud demo serves many visitors from a single Python
+#   process. Two invariants make that safe; both are load-bearing and
+#   easy to break by accident.
+#
+#   1. The ``_provider()`` callable is process-global / singleton.
+#      It is installed exactly once via
+#      ``database.set_connection_provider(_provider)`` inside ``bind()``
+#      and is never replaced or cleared during normal operation. Every
+#      concurrent demo session shares the *same* provider object.
+#
+#   2. Per-session isolation comes from ``st.session_state``, not from
+#      per-session providers. Streamlit gives each session its own
+#      ``st.session_state`` mapping, so when ``_provider()`` executes
+#      in session A's thread it reads session A's cached connection,
+#      and when it executes in session B's thread it reads session B's.
+#      The provider is shared; the connection it returns is not.
+#
+#   Corollary — do NOT clear the provider in ``reset()``. The provider
+#   is shared across every live demo session in the process; clearing
+#   it would break the *next* ``database._connect()`` call in OTHER
+#   concurrent visitors. ``reset()`` only wipes the calling session's
+#   own cache + sentinel. This is intentionally asymmetric with the
+#   teardown path inside ``bind()``'s except block, which only fires
+#   when the provider was just installed for this session and no other
+#   session can yet depend on it.
 
 from __future__ import annotations
 
@@ -96,6 +123,11 @@ def _provider() -> sqlite3.Connection:
     never ran" case takes a different path: the provider was never
     installed, so ``database._connect()`` falls back to file mode
     without ever calling here.
+
+    The per-call read of ``st.session_state`` is what makes this
+    process-global singleton callable safe for concurrent sessions:
+    each invocation resolves the connection in the *calling* session's
+    state, so a shared provider returns per-session connections.
     """
     conn = st.session_state.get(_CONN_KEY)
     if conn is None:
@@ -107,7 +139,20 @@ def _provider() -> sqlite3.Connection:
 
 
 def reset() -> None:
-    """Wipe the cached connection. Next render re-runs ``bind()`` and re-seeds."""
+    """Wipe the cached connection. Next render re-runs ``bind()`` and re-seeds.
+
+    The provider is left installed by design (cross-session safety):
+    it is shared across every live demo session in the process, so
+    clearing it here would break the next ``database._connect()`` call
+    in other concurrent visitors. See the module docstring's
+    "Concurrency invariants" section for the full rationale.
+
+    Only the calling session's own ``_CONN_KEY`` cache and ``_BOUND_KEY``
+    sentinel are popped, so the next render in *this* session runs
+    ``bind()`` again, which re-opens ``:memory:`` and re-seeds. The
+    connection closed below is the calling session's own; closing it
+    does not affect connections held by other sessions.
+    """
     conn = st.session_state.pop(_CONN_KEY, None)
     st.session_state.pop(_BOUND_KEY, None)
     if conn is not None:
