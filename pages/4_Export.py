@@ -5,7 +5,9 @@ from datetime import datetime
 
 import streamlit as st
 
+import config
 import database
+import db_session
 import ui
 
 st.set_page_config(
@@ -15,10 +17,27 @@ st.set_page_config(
 )
 
 
+db_session.bind()
 database.init_db()
 ui.inject_global_styles()
+ui.demo_banner()
 ui.sidebar_about_block()
 ui.sidebar_shortcuts_block()
+ui.sidebar_demo_reset_block(db_session.reset)
+
+# Demo short-circuit: the Export page writes/regenerates files under the
+# shared exports/ directory. In demo mode (per-session in-memory DB on
+# Streamlit Cloud) the exports/ writes are gated off and the regenerated
+# files would be empty anyway — render an info card pointing at
+# self-host and stop before any database.regenerate_exports() /
+# database.get_export_paths() call.
+if config.IS_DEMO:
+    st.info(
+        "The Export page is disabled in the public demo. To download "
+        "your real applications as markdown, self-host the app — see "
+        f"the [setup guide]({config.DEMO_SELF_HOST_URL})."
+    )
+    st.stop()
 
 ui.colophon("Export")
 ui.page_mark("⁂")
