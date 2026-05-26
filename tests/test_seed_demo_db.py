@@ -6,6 +6,7 @@
 import os
 import sqlite3
 import sys
+from datetime import date, timedelta
 
 import pytest
 
@@ -59,3 +60,129 @@ class TestSeedLibraryEntry:
         seed_demo_db.seed(empty_demo_conn)
         with pytest.raises(RuntimeError, match="not empty"):
             seed_demo_db.seed(empty_demo_conn)
+
+
+class TestSeedDataShape:
+    """After seed(), the DB must contain the alert-panel-exercising
+    shape documented in spec §4.7 (errata: extended to all 7 statuses,
+    not the 5 the spec text listed). Each test pins one slice of the
+    contract."""
+
+    # Distribution: 3 SAVED, 4 APPLIED, 3 INTERVIEW, 2 OFFER, 2 CLOSED,
+    # 3 REJECTED, 1 DECLINED = 18.
+    EXPECTED_DISTRIBUTION = {
+        config.STATUS_SAVED: 3,
+        config.STATUS_APPLIED: 4,
+        config.STATUS_INTERVIEW: 3,
+        config.STATUS_OFFER: 2,
+        config.STATUS_CLOSED: 2,
+        config.STATUS_REJECTED: 3,
+        config.STATUS_DECLINED: 1,
+    }
+
+    @pytest.fixture
+    def seeded(self, monkeypatch):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        database.set_connection_provider(lambda: conn)
+        database.init_db()
+        monkeypatch.setattr(config, "IS_DEMO", True)
+        from scripts import seed_demo_db
+
+        seed_demo_db.seed(conn)
+        yield conn
+        conn.close()
+
+    def test_eighteen_positions(self, seeded):
+        n = seeded.execute("SELECT COUNT(*) AS n FROM positions").fetchone()["n"]
+        assert n == 18, f"expected 18 positions, got {n}"
+
+    def test_status_distribution_covers_all_seven(self, seeded):
+        counts = {
+            r["status"]: r["n"]
+            for r in seeded.execute(
+                "SELECT status, COUNT(*) AS n FROM positions GROUP BY status"
+            ).fetchall()
+        }
+        for status, expected in self.EXPECTED_DISTRIBUTION.items():
+            assert counts.get(status, 0) == expected, (
+                f"{status}: expected {expected}, got {counts.get(status, 0)} "
+                f"(full distribution: {counts})"
+            )
+
+    def test_at_least_two_applied_have_applied_date(self, seeded):
+        # R1 trail visible.
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM applications a "
+            "JOIN positions p ON p.id = a.position_id "
+            "WHERE p.status = ? AND a.applied_date IS NOT NULL",
+            (config.STATUS_APPLIED,),
+        ).fetchone()["n"]
+        assert n >= 2
+
+    def test_interview_positions_have_interview_rows(self, seeded):
+        # R2 trail visible — 3 INTERVIEW positions, 5+ interview rows total.
+        total = seeded.execute("SELECT COUNT(*) AS n FROM interviews").fetchone()["n"]
+        assert total >= 5
+        n_with = seeded.execute(
+            "SELECT COUNT(DISTINCT p.id) AS n "
+            "FROM positions p JOIN applications a ON a.position_id = p.id "
+            "JOIN interviews i ON i.application_id = a.position_id "
+            "WHERE p.status = ?",
+            (config.STATUS_INTERVIEW,),
+        ).fetchone()["n"]
+        assert n_with == 3
+
+    def test_offer_with_response_date(self, seeded):
+        # R3 trail visible — at least 1 OFFER with response_date set.
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM applications a "
+            "JOIN positions p ON p.id = a.position_id "
+            "WHERE p.status = ? AND a.response_date IS NOT NULL",
+            (config.STATUS_OFFER,),
+        ).fetchone()["n"]
+        assert n >= 1
+
+    def test_deadline_in_seven_day_window(self, seeded):
+        # Vermilion urgency band.
+        today = date.today().isoformat()
+        cutoff_7 = (date.today() + timedelta(days=7)).isoformat()
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM positions "
+            "WHERE deadline_date BETWEEN ? AND ?",
+            (today, cutoff_7),
+        ).fetchone()["n"]
+        assert n >= 1
+
+    def test_deadline_in_thirty_day_window(self, seeded):
+        # Cobalt urgency band (within 30 days but outside 7).
+        cutoff_8 = (date.today() + timedelta(days=8)).isoformat()
+        cutoff_30 = (date.today() + timedelta(days=30)).isoformat()
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM positions "
+            "WHERE deadline_date BETWEEN ? AND ?",
+            (cutoff_8, cutoff_30),
+        ).fetchone()["n"]
+        assert n >= 2
+
+    def test_null_recommender_present(self, seeded):
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM recommenders WHERE recommender_name IS NULL"
+        ).fetchone()["n"]
+        assert n == 1
+
+    def test_recommender_past_asked_window(self, seeded):
+        # At least one recommender with asked_date older than the alert
+        # threshold AND no submitted_date — triggers the follow-up panel.
+        cutoff = (
+            date.today() - timedelta(days=config.RECOMMENDER_ALERT_DAYS + 1)
+        ).isoformat()
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM recommenders "
+            "WHERE asked_date IS NOT NULL "
+            "AND asked_date <= ? "
+            "AND submitted_date IS NULL",
+            (cutoff,),
+        ).fetchone()["n"]
+        assert n >= 1
