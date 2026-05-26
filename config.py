@@ -8,7 +8,12 @@
 # Rules:
 #   - This file imports NOTHING from this project.
 #   - No functions, no I/O, no side effects — constants only.
+#     (Sole exception: IS_DEMO reads AAT_DEMO at import time. Every other
+#     module reads config.IS_DEMO, never the env var directly — single
+#     source of truth for the public Streamlit Cloud demo trigger.)
 #   - All other modules import from here; never hardcode values in page files.
+
+import os
 
 # ── App identity ─────────────────────────────────────────────────────────────
 # User-visible version string surfaced by the sidebar About expander on every
@@ -16,6 +21,24 @@
 # source of truth for vocabulary; drift against pyproject.toml is pinned by
 # tests/test_config.py::test_app_version_matches_pyproject.
 APP_VERSION: str = "0.14.0"
+
+# ── Demo mode ────────────────────────────────────────────────────────────────
+# Single source of truth for the public Streamlit Cloud demo trigger. Set
+# AAT_DEMO=1 on the Streamlit Cloud dashboard; never set in local dev. Other
+# modules MUST read config.IS_DEMO rather than checking os.environ themselves.
+IS_DEMO: bool = os.environ.get("AAT_DEMO") == "1"
+
+# Demo banner copy. Editorial register; uppercase mono headline + body
+# paragraph + self-host CTA. Rendered by ui.demo_banner() when IS_DEMO.
+DEMO_BANNER_HEADLINE: str = "DEMO MODE"
+DEMO_BANNER_BODY: str = (
+    "Your changes reset when this tab closes. "
+    "Self-host with your own data — see the setup guide."
+)
+DEMO_SELF_HOST_URL: str = (
+    "https://github.com/YuZh98/academic-application-tracker"
+    "/blob/main/docs/dev-notes/self-host-setup.md"
+)
 
 # Editorial warning glyph — U+25B2 black up-pointing triangle. Replaces
 # the emoji ⚠️ which broke the typographic register of the editorial
