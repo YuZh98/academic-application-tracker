@@ -710,14 +710,24 @@ h2.aat-section-title {
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
-/* Streamlit 1.57 emits four button test-id variants:
-   stBaseButton-primary, stBaseButton-secondary (st.button),
-   stBaseButton-primaryFormSubmit, stBaseButton-secondaryFormSubmit
-   (st.form_submit_button). All four need explicit editorial styling
-   so they don't fall through to Streamlit base — under
-   prefers-color-scheme: dark the fallback produces a near-black bg
-   that blends into the --aat-paper background, leaving the button
-   visually undiscoverable. */
+/* Streamlit 1.57 emits six button-shaped test-id variants:
+     stBaseButton-primary           (st.button(type="primary"))
+     stBaseButton-secondary         (st.button())
+     stBaseButton-primaryFormSubmit (st.form_submit_button(type="primary"))
+     stBaseButton-secondaryFormSubmit (st.form_submit_button())
+     stBaseLinkButton-primary       (st.link_button(type="primary"))
+     stBaseLinkButton-secondary     (st.link_button())
+   All six need explicit editorial styling so they don't fall through
+   to Streamlit base — under prefers-color-scheme: dark the fallback
+   produces a near-black bg that blends into the --aat-paper page
+   background, leaving the button visually undiscoverable.
+
+   Inner <p>/<div>/<span> elements (Streamlit wraps the button label
+   in [data-testid="stMarkdownContainer"] > p) carry an explicit
+   higher-specificity color rule of their own that wins against the
+   button's own `color` declaration — both in default AND hover state.
+   We force `color: inherit !important` on every inner element so the
+   text always tracks whatever the button or anchor decides. */
 [data-testid="stBaseButton-primary"],
 [data-testid="stBaseButton-primaryFormSubmit"],
 [data-testid="stBaseButton-secondary"],
@@ -747,21 +757,13 @@ h2.aat-section-title {
     transform: translateX(2px);
 }
 /* Secondary buttons — inverted: paper bg + ink text + visible
-   ink rule so the button has an explicit boundary against the page
-   in both light and dark mode. Inner markdown <p> needs the explicit
-   color too because Streamlit's stMarkdownContainer rule otherwise
-   wins specificity against the button's inherited color. */
+   ink border so the button has an explicit boundary against the page
+   in both light and dark mode. */
 [data-testid="stBaseButton-secondary"],
 [data-testid="stBaseButton-secondaryFormSubmit"] {
     background: var(--aat-paper-soft) !important;
     color: var(--aat-ink) !important;
     border: 1px solid var(--aat-ink) !important;
-}
-[data-testid="stBaseButton-secondary"] [data-testid="stMarkdownContainer"],
-[data-testid="stBaseButton-secondary"] [data-testid="stMarkdownContainer"] p,
-[data-testid="stBaseButton-secondaryFormSubmit"] [data-testid="stMarkdownContainer"],
-[data-testid="stBaseButton-secondaryFormSubmit"] [data-testid="stMarkdownContainer"] p {
-    color: inherit !important;
 }
 [data-testid="stBaseButton-secondary"]:hover,
 [data-testid="stBaseButton-secondaryFormSubmit"]:hover {
@@ -769,6 +771,33 @@ h2.aat-section-title {
     color: var(--aat-paper) !important;
     border-color: var(--aat-ink) !important;
     transform: translateX(2px);
+}
+
+/* Inner-element color inheritance — applied universally to every
+   button + link-button variant, in both default and hover states.
+   We must beat Streamlit's built-in
+     [data-testid="stMarkdownContainer"] p { color: <ink>; }
+   (specificity 0,1,1) which would otherwise pin the <p> inside the
+   button to a fixed color regardless of the <a>/<button> hover state,
+   producing ink-on-ink on hover.
+   Strategy: tag-prefixed selectors targeting both the wrapper <p> and
+   the generic descendant. button[data-testid] = (0,1,1), then [...]
+   stMarkdownContainer = (0,1,1) → (0,2,2) > Streamlit's (0,1,1). */
+button[data-testid="stBaseButton-primary"] *,
+button[data-testid="stBaseButton-primaryFormSubmit"] *,
+button[data-testid="stBaseButton-secondary"] *,
+button[data-testid="stBaseButton-secondaryFormSubmit"] *,
+a[data-testid="stBaseLinkButton-primary"] *,
+a[data-testid="stBaseLinkButton-secondary"] *,
+[data-testid="stLinkButton"] a *,
+button[data-testid="stBaseButton-primary"] [data-testid="stMarkdownContainer"] p,
+button[data-testid="stBaseButton-primaryFormSubmit"] [data-testid="stMarkdownContainer"] p,
+button[data-testid="stBaseButton-secondary"] [data-testid="stMarkdownContainer"] p,
+button[data-testid="stBaseButton-secondaryFormSubmit"] [data-testid="stMarkdownContainer"] p,
+a[data-testid="stBaseLinkButton-primary"] [data-testid="stMarkdownContainer"] p,
+a[data-testid="stBaseLinkButton-secondary"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stLinkButton"] a [data-testid="stMarkdownContainer"] p {
+    color: inherit !important;
 }
 
 /* ── Sidebar — editorial table of contents ─────────────────────── */
@@ -866,7 +895,9 @@ select:focus-visible,
 [data-testid="stBaseButton-primary"]:focus-visible,
 [data-testid="stBaseButton-primaryFormSubmit"]:focus-visible,
 [data-testid="stBaseButton-secondary"]:focus-visible,
-[data-testid="stBaseButton-secondaryFormSubmit"]:focus-visible {
+[data-testid="stBaseButton-secondaryFormSubmit"]:focus-visible,
+[data-testid="stBaseLinkButton-primary"]:focus-visible,
+[data-testid="stBaseLinkButton-secondary"]:focus-visible {
     outline: 2px solid var(--aat-vermilion) !important;
     outline-offset: 3px !important;
     border-radius: 0 !important;
@@ -937,8 +968,16 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
     color: var(--aat-paper) !important;
 }
 
-/* ── Link buttons (st.link_button) — match primary button language ─ */
-[data-testid="stLinkButton"] a {
+/* ── Link buttons (st.link_button) — match secondary button language ─ */
+/* Targets both the legacy wrapper selector ([data-testid="stLinkButton"] a)
+   and the modern stBaseLinkButton-{primary,secondary} test-ids that
+   Streamlit 1.57 emits directly on the <a> element. Without the
+   stBaseLinkButton selectors the link picks up Streamlit base only,
+   and on hover the inner <p> stays at its own inherited ink color
+   while the <a> flips to var(--aat-paper) → ink-on-ink, text vanishes. */
+[data-testid="stLinkButton"] a,
+[data-testid="stBaseLinkButton-primary"],
+[data-testid="stBaseLinkButton-secondary"] {
     background: var(--aat-paper-soft) !important;
     color: var(--aat-ink) !important;
     border: 1px solid var(--aat-ink) !important;
@@ -952,11 +991,15 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
     box-shadow: none !important;
     transition: transform var(--aat-dur) var(--aat-ease),
                 background var(--aat-dur) var(--aat-ease),
-                color var(--aat-dur) var(--aat-ease);
+                color var(--aat-dur) var(--aat-ease),
+                border-color var(--aat-dur) var(--aat-ease);
 }
-[data-testid="stLinkButton"] a:hover {
+[data-testid="stLinkButton"] a:hover,
+[data-testid="stBaseLinkButton-primary"]:hover,
+[data-testid="stBaseLinkButton-secondary"]:hover {
     background: var(--aat-ink) !important;
     color: var(--aat-paper) !important;
+    border-color: var(--aat-ink) !important;
     transform: translateX(2px);
 }
 
