@@ -1174,3 +1174,54 @@ class TestWriteRecommenders:
             f"Reminder cell must be '✓ (no date)'; got cells[8]={cells[8]!r} "
             f"(full row: {rows[0]!r})"
         )
+
+
+# ── Demo privacy gate ─────────────────────────────────────────────────────────
+
+
+class TestDemoPrivacyGate:
+    """When config.IS_DEMO is True, every exports.py public writer must
+    be a no-op. Pinned via behavioral snapshot: directory contents
+    before == after for every writer.
+
+    This is the privacy invariant for the Streamlit Cloud deploy — the
+    shared exports/ directory cannot be safely written to from multiple
+    concurrent sessions; writes would race and leak typed data across
+    visitors via the Export page.
+    """
+
+    @pytest.fixture
+    def demo_mode(self, isolated_exports_dir, monkeypatch):
+        # isolated_exports_dir already redirects EXPORTS_DIR + DB_PATH
+        # into tmp_path. Layer IS_DEMO=True on top.
+        monkeypatch.setattr(config, "IS_DEMO", True)
+        yield
+
+    def _snapshot(self, root):
+        if not root.exists():
+            return set()
+        return {p.relative_to(root) for p in root.rglob("*") if p.is_file()}
+
+    def test_write_all_noop_in_demo(self, demo_mode):
+        before = self._snapshot(exports.EXPORTS_DIR)
+        exports.write_all()
+        after = self._snapshot(exports.EXPORTS_DIR)
+        assert before == after
+
+    def test_write_opportunities_noop_in_demo(self, demo_mode):
+        before = self._snapshot(exports.EXPORTS_DIR)
+        exports.write_opportunities()
+        after = self._snapshot(exports.EXPORTS_DIR)
+        assert before == after
+
+    def test_write_progress_noop_in_demo(self, demo_mode):
+        before = self._snapshot(exports.EXPORTS_DIR)
+        exports.write_progress()
+        after = self._snapshot(exports.EXPORTS_DIR)
+        assert before == after
+
+    def test_write_recommenders_noop_in_demo(self, demo_mode):
+        before = self._snapshot(exports.EXPORTS_DIR)
+        exports.write_recommenders()
+        after = self._snapshot(exports.EXPORTS_DIR)
+        assert before == after
