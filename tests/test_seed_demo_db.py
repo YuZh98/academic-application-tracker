@@ -79,11 +79,9 @@ class TestSeedFailFastGuards:
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        # Create the positions table so the emptiness check would
-        # otherwise pass — proves the guard fires BEFORE that check.
-        database.init_db()  # writes to DB_PATH; harmless, we only need
-        # the conn itself to have a positions table for the assertion
-        # below. Recreate it directly to keep the test hermetic.
+        # Create the positions table directly on the in-memory conn so
+        # the emptiness check would otherwise pass — proves the guard
+        # fires BEFORE that check. Hermetic: does not touch DB_PATH.
         conn.execute(
             "CREATE TABLE positions (id INTEGER PRIMARY KEY, status TEXT)"
         )
