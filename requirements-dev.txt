@@ -4,7 +4,7 @@
 
 pytest==9.0.3
 pytest-cov==7.1.0
-ruff==0.15.14
+ruff==0.15.16
 pre-commit==4.6.0
-pyright==1.1.409
+pyright==1.1.410
 playwright==1.60.0
