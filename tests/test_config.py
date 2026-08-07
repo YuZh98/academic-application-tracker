@@ -269,8 +269,8 @@ def test_all_seven_status_aliases_match_status_values_order():
 # Phase 7 cleanup CL2 dropped the TRACKER_PROFILE / VALID_PROFILES block
 # from config.py (carry-over C2 — never read by any module since v1.1).
 # The four tests that pinned that block (test_valid_profiles_*,
-# test_invariant_1_*) went with it. DESIGN §5.2 invariants 2-12 still
-# apply; only #1 is retired.
+# test_invariant_1_*) went with it. DESIGN §5.2 invariants 2-11 still
+# apply; #1 and #12 are retired (#12 went with STATUS_FILTER_ACTIVE).
 
 
 # ── STATUS_LABELS + invariant #3 (DESIGN §5.1, §5.2 #3) ───────────────────────

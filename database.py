@@ -56,7 +56,8 @@ def set_connection_provider(
 
     Pass a callable to opt into provider mode: _connect() will yield the
     provider's connection without closing it. Pass None to revert to
-    file-based behavior (used by tests + by db_session.reset()).
+    file-based behavior (used by tests; db_session.reset() deliberately
+    leaves the provider installed — see its docstring).
     """
     global _connection_provider
     _connection_provider = provider
@@ -1414,8 +1415,8 @@ def load_settings() -> dict[str, Any]:
     config defaults without reading the overlay file. Keeps the demo
     session fully isolated from any ``AAT_DB_PATH`` precedence that
     would otherwise drive ``_settings_path()`` via ``DB_PATH.parent``.
-    Defense-in-depth so the precedence rule documented in DESIGN §2.3
-    holds at every level of the stack."""
+    Defense-in-depth so the precedence rule documented in DESIGN §7
+    (database.py contract #8) holds at every level of the stack."""
     base: dict[str, Any] = {
         "DEADLINE_ALERT_DAYS": getattr(config, "DEADLINE_ALERT_DAYS", 30),
         "RECOMMENDER_ALERT_DAYS": getattr(config, "RECOMMENDER_ALERT_DAYS", 7),
