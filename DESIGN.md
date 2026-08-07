@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.8 | **Last updated:** 2026-05-22 | **Status:** authoritative
+**Version:** 1.9 | **Last updated:** 2026-08-07 | **Status:** authoritative
 
 ---
 
@@ -35,7 +35,7 @@ A local, single-user web app that:
 
 ### Explicit Non-Goals (v1)
 - No auth
-- No cloud deploy
+- No cloud deploy as a primary target — local is the only supported home for real data. A public demo runs on Streamlit Cloud with per-session throwaway sandboxes (see §7 `db_session.py`); it is a showcase, not a deployment path.
 - No mobile-first layout
 - No email/calendar integration
 - No multi-user
@@ -50,6 +50,7 @@ flowchart BT
     database[database.py<br/><small>SQL only</small>]
     exports[exports.py<br/><small>markdown writers</small>]
     ui[ui.py<br/><small>design system</small>]
+    db_session[db_session.py<br/><small>demo session wiring</small>]
     pages[pages/*.py<br/><small>display layer</small>]
     app[app.py<br/><small>Dashboard</small>]
 
@@ -57,33 +58,42 @@ flowchart BT
     exports -->|imports| config
     exports -->|imports| database
     ui -->|imports| config
+    db_session -->|imports| config
+    db_session -->|imports| database
     app -->|imports| config
     app -->|imports| database
     app -->|imports| ui
+    app -->|imports| db_session
     pages -->|imports| config
     pages -->|imports| database
     pages -->|imports| ui
+    pages -->|imports| db_session
 
     database -.->|deferred import<br/>inside writers| exports
 
     classDef leaf fill:#e1f5fe,stroke:#01579b
     classDef data fill:#fff3e0,stroke:#e65100
     classDef ui fill:#f3e5f5,stroke:#4a148c
+    classDef bridge fill:#e8f5e9,stroke:#1b5e20
     class config leaf
     class database,exports data
     class app,pages,ui ui
+    class db_session bridge
 ```
 
 The dotted edge from `database` to `exports` is the deferred-import escape hatch that breaks the otherwise-circular dependency. Solid edges represent module-top imports.
+
+`db_session.py` is the one deliberate exception to the "nothing imports both `streamlit` and `database`" separation: it is the dependency-injection wiring that puts a per-session demo connection behind `database._connect()` without making `database.py` aware of Streamlit. See §7 for its contract.
 
 ### Layer rules (enforced)
 
 | Layer | May import | May NOT import |
 |-------|-----------|----------------|
-| Page files | `database`, `config`, `ui` | `exports` (directly), each other |
+| Page files | `database`, `config`, `ui`, `db_session` | `exports` (directly), each other |
 | `database.py` | `config`, `sqlite3`, `pandas` | `streamlit`, `exports` (top-level — deferred import only) |
 | `exports.py` | `database`, `config` | `streamlit` |
 | `ui.py` | `config`, `streamlit` | `database`, `exports`, page modules |
+| `db_session.py` | `config`, `database`, `streamlit`, `scripts/seed_demo_db` | `exports`, `ui`, page modules |
 | `config.py` | stdlib only | anything from this project |
 
 ---
@@ -105,6 +115,8 @@ The dotted edge from `database` to `exports` is the deferred-import escape hatch
 
 Single-user, local-only. Expected scale: 10²–10³ positions, 1–10 interviews each, 1–20 recommenders. SQLite handles this without tuning. UTF-8 everywhere. Local machine timezone. One writer at a time (Streamlit process).
 
+The public demo deploy relaxes "one process, one user" — many concurrent visitors share a single Python process, each isolated behind a per-session in-memory database. The concurrency invariants that make this safe live in `db_session.py` (§7).
+
 ---
 
 ## 4. File Structure
@@ -115,12 +127,21 @@ config.py                 Single source of truth for constants and vocabulary
 database.py               All SQLite I/O; no Streamlit imports
 exports.py                Markdown generators; called by database.py writers
 ui.py                     Shared design-system stylesheet + pill/header helpers
+db_session.py             Demo-mode wiring: per-session in-memory SQLite for Streamlit Cloud
 pages/
   1_Opportunities.py      Position CRUD + bulk actions
   2_Applications.py       Progress tracking + interviews
   3_Recommenders.py       Letter tracking + reminder helpers
   4_Export.py             Manual export + file download
   5_Settings.py           Tunable thresholds + append-only status vocabulary
+scripts/
+  seed_demo_db.py         Demo dataset: CLI seeder + seed() library entry for db_session
+  release.sh              CHANGELOG rotation for release tags
+  crop_screenshots.py     Idempotent crop helper for README captures
+  build_collage.py        Headless-Chromium renderer for the marketing collage
+  collage.html            CSS3D template loaded by build_collage.py
+  build_ux_report.py      UX field-study PDF + chart builder
+.streamlit/               Streamlit app configuration
 exports/                  Auto-generated markdown backups (gitignored)
 postdoc.db                SQLite database (gitignored)
 tests/                    pytest suite
@@ -138,9 +159,29 @@ CHANGELOG.md              Release history
 
 ## 5. `config.py` — Specification
 
-`config.py` is the **single source of truth** for vocabularies, constants, and field definitions. Every other module reads from it; no other file hardcodes a status string, priority value, or requirement-document label.
+`config.py` is the **single source of truth** for vocabularies, constants, and field definitions. Every other module reads from it; no other file hardcodes a status string, priority value, or requirement-document label. The sole import-time side effect is `IS_DEMO`, which reads the `AAT_DEMO` env var once at module load — every other module reads `config.IS_DEMO`, never the env var.
 
 ### 5.1 Symbol index
+
+#### App identity & demo mode
+
+| Constant | Type | Role |
+|----------|------|------|
+| `APP_VERSION` | `str` | User-visible version string (sidebar About block). Sync with `pyproject.toml` pinned by `test_app_version_matches_pyproject`. |
+| `IS_DEMO` | `bool` | True iff env `AAT_DEMO=1` (set only on the Streamlit Cloud dashboard). Gates `db_session.bind()`, export short-circuits, Settings save-disable, and the demo banner. |
+| `DEMO_BANNER_HEADLINE` / `DEMO_BANNER_BODY` | `str` | Copy for the demo banner rendered by `ui.demo_banner()` when `IS_DEMO`. |
+| `DEMO_SELF_HOST_URL` | `str` | Self-host instructions link rendered at the end of the demo banner. |
+
+#### Profile identity & glyphs
+
+| Constant | Type | Role |
+|----------|------|------|
+| `DB_FILENAME` | `str` | SQLite filename (`postdoc.db`). Rename the file on disk when changing. |
+| `APPLICATION_LABEL` | `str` | Label used in recommender follow-up email subjects. |
+| `FOOTER_AUTHOR_MARK` | `str` | Optional surname-style mark in the folio footer; empty by default so a fresh clone ships unbranded. |
+| `EM_DASH` | `str` | Universal placeholder glyph for NULL / NaN / empty TEXT cells across every user-facing surface. |
+| `WARN_GLYPH` | `str` | `▲` (U+25B2) — editorial warning mark replacing the legacy ⚠️ emoji on dashboard + Recommenders alert headers. |
+| `ACCENT_VERMILION` | `str` | Python-side literal for the vermilion accent; the CSS `:root` block in `ui.py` intentionally duplicates the value. |
 
 #### Status pipeline
 
@@ -151,8 +192,9 @@ CHANGELOG.md              Release history
 | `TERMINAL_STATUSES` | `list[str]` | Subset (`[CLOSED]`/`[REJECTED]`/`[DECLINED]`) excluded from active queries and guarding R3 against regression. |
 | `STATUS_COLORS` | `dict[str, str]` | Per-status color for badges and tooltips (not funnel bars — see `FUNNEL_BUCKETS`). |
 | `STATUS_LABELS` | `dict[str, str]` | Storage→UI label map; every user-facing status surface must go through this. |
-| `STATUS_FILTER_ACTIVE` | `str` | UI sentinel (`"Active"`) for Applications page default filter; resolves to `STATUS_VALUES - STATUS_FILTER_ACTIVE_EXCLUDED`. |
-| `STATUS_FILTER_ACTIVE_EXCLUDED` | `frozenset[str]` | `{STATUS_SAVED, STATUS_CLOSED}` — statuses excluded by the "Active" filter. |
+| `DEADLINE_ACTIONABLE_STATUSES` | `list[str]` | `[STATUS_SAVED]` — the only statuses whose deadlines surface on the dashboard Upcoming panel; once applied, the deadline is moot. |
+| `MANUAL_STATUS_VALUES` | `list[str]` | Statuses the user can pick by hand in the Opportunities edit-panel Status selectbox. `[INTERVIEW]`/`[OFFER]` excluded — reachable only via the R2/R3 cascades. Filter selectboxes keep using `STATUS_VALUES`. |
+| `FILTER_ALL` | `str` | Universal `"All"` sentinel for filter selectboxes; rendered as `[FILTER_ALL] + <options>`, page narrows only when the selection differs. |
 
 #### Dashboard funnel (presentation layer)
 
@@ -176,6 +218,8 @@ CHANGELOG.md              Release history
 | `RESULT_VALUES` | `list[str]` | Final outcome: Pending / Accepted / Declined / Rejected / Withdrawn. |
 | `RELATIONSHIP_VALUES` | `list[str]` | Recommender→applicant relationship (advisor, committee, collaborator, …). |
 | `INTERVIEW_FORMATS` | `list[str]` | `Phone` / `Video` / `Onsite` / `Other`. |
+| `CONFIRMED_LABELS` | `dict[int \| None, str]` | Maps recommender `confirmed` (1/0/NULL) to display strings; shared by pages and exports. |
+| `REMINDER_TONES` | `tuple[str, ...]` | `gentle` / `urgent` — tones offered by the Recommenders-page LLM-prompts expander. |
 
 #### Requirement documents
 
@@ -184,12 +228,13 @@ CHANGELOG.md              Release history
 | `REQUIREMENT_VALUES` | `list[str]` | `Yes` / `Optional` / `No` — canonical DB values for `req_*` columns. |
 | `REQUIREMENT_LABELS` | `dict[str, str]` | UI labels for the three values; radios use `format_func=REQUIREMENT_LABELS.get`. |
 | `REQUIREMENT_DOCS` | `list[tuple[str, str, str]]` | `(req_column, done_column, display_label)` per doc type. Append one tuple to add a new doc type — `init_db()` auto-adds both columns on next start. |
+| `REC_LETTERS_REQ_COL` / `REC_LETTERS_DONE_COL` / `REC_LETTERS_COUNT_COL` | `str` | Column names for the LOR-specific readiness rule; single source of truth shared by the Materials tab and `database.py`'s rec-letters sync helper (§7). |
 
 #### Forms and UI structure
 
 | Constant | Type | Role |
 |----------|------|------|
-| `QUICK_ADD_FIELDS` | `list[str]` | Col names shown in quick-add form. Ordered: `position_name`, `institute`, `field`, `deadline_date`, `priority`, `link`. Keep ≤ 6 = capture-friction design rule (D6). |
+| `QUICK_ADD_FIELDS` | `list[str]` | The six essential capture fields, ordered: `position_name`, `institute`, `field`, `deadline_date`, `priority`, `link`. The quick-add form renders these plus three fixed enrichment fields (`location`, `source`, `portal_url`) hardcoded on the page; total input cap ≤ 9 per D6. Coverage of the six pinned by `tests/test_opportunities_page.py`. |
 | `EDIT_PANEL_TABS` | `list[str]` | Tab labels for Opportunities edit panel in display order: `Overview`, `Requirements`, `Materials`, `Notes`. |
 
 #### Dashboard thresholds (days)
@@ -201,9 +246,22 @@ CHANGELOG.md              Release history
 | `RECOMMENDER_ALERT_DAYS` | `int` | Days since asked with no submission → surfaces on Recommender Alerts. |
 | `UPCOMING_WINDOW_OPTIONS` | `list[int]` | Selectable widths for Upcoming panel (`[30, 60, 90]`); `DEADLINE_ALERT_DAYS` must be in this list. |
 
+#### Empty-state & fallback copy
+
+| Constant | Type | Role |
+|----------|------|------|
+| `EMPTY_FILTERED_POSITIONS` / `EMPTY_NO_POSITIONS` / `EMPTY_FILTERED_APPLICATIONS` / `EMPTY_PENDING_RECOMMENDERS` / `EMPTY_PENDING_RECOMMENDER_FOLLOWUPS` | `str` | Canonical empty-state copy per surface; pages render these verbatim so tests can pin them. |
+| `RECOMMENDER_NAME_FALLBACK` | `str` | Display sentinel for a pending-recommender row with NULL name — applied via `fillna` before any `groupby("recommender_name")` so pandas' `dropna=True` default cannot silently drop the row. |
+
+#### Pure functions
+
+| Function | Signature | Role |
+|----------|-----------|------|
+| `urgency_glyph` | `(days_away: int \| None) -> str` | Urgency banding: 🔴 ≤ `DEADLINE_URGENT_DAYS`, 🟡 ≤ `DEADLINE_ALERT_DAYS`, `""` beyond, `EM_DASH` for `None`. Negative (past-due) inputs stay urgent. |
+
 ### 5.2 Import-time invariants
 
-`config.py` runs these assertions at module import. A violation aborts app startup with a clear traceback — catching drift before any page renders. Numbers are stable identifiers referenced by `test_invariant_<N>_*` in `tests/test_config.py`; #1 is retired and the slot is intentionally left empty:
+`config.py` runs these assertions at module import. A violation aborts app startup with a clear traceback — catching drift before any page renders. Numbers are stable identifiers referenced by `test_invariant_<N>_*` in `tests/test_config.py`; #1 and #12 are retired and the slots are intentionally left empty (#12 guarded the removed `STATUS_FILTER_ACTIVE_EXCLUDED`):
 
 2. `set(STATUS_VALUES) == set(STATUS_COLORS)` — every status has a color
 3. `set(STATUS_VALUES) == set(STATUS_LABELS)` — every status has a UI label
@@ -215,7 +273,12 @@ CHANGELOG.md              Release history
 9. `RESPONSE_TYPE_OFFER in RESPONSE_TYPES` — R3 trigger must be a real option
 10. `DEADLINE_ALERT_DAYS in UPCOMING_WINDOW_OPTIONS` — default must be in offered list
 11. `set(FUNNEL_TOGGLE_LABELS.keys()) == {True, False}` — both toggle states have labels
-12. `STATUS_FILTER_ACTIVE_EXCLUDED <= set(STATUS_VALUES)` — excluded statuses must exist
+
+Additional import-time guards without stable numbers (pinned by their own tests, not the `test_invariant_<N>` scheme):
+
+- `set(MANUAL_STATUS_VALUES) <= set(STATUS_VALUES)` — manual picker options must be real statuses
+- `STATUS_INTERVIEW not in MANUAL_STATUS_VALUES` and `STATUS_OFFER not in MANUAL_STATUS_VALUES` — cascade-owned statuses are never hand-assignable
+- `set(CONFIRMED_LABELS.keys()) == {1, 0, None}` — every `confirmed` storage value has a display label
 
 ### 5.3 Extension recipes
 
@@ -368,23 +431,33 @@ Rationale for the schema choices lives in §10.
 | Group | Functions |
 |-------|-----------|
 | Schema lifecycle | `init_db` |
+| Connection provider | `set_connection_provider` — installs a callable returning the connection `_connect()` should yield; `None` restores file mode. Demo-only injection point used by `db_session.py`. |
 | Positions | `add_position`, `get_all_positions`, `get_position`, `update_position`, `delete_position` |
-| Applications | `get_application`, `upsert_application`, `is_all_recs_submitted` |
+| Bulk actions | `bulk_promote_to_applied`, `bulk_set_requirement` |
+| Applications | `get_application`, `upsert_application`, `is_all_recs_submitted`, `get_applications_table` |
 | Interviews | `add_interview`, `get_interviews`, `update_interview`, `delete_interview` |
 | Recommenders | `add_recommender`, `get_recommenders`, `get_all_recommenders`, `update_recommender`, `delete_recommender` |
 | Dashboard queries | `count_by_status`, `get_upcoming_deadlines`, `get_upcoming_interviews`, `get_upcoming`, `get_pending_recommenders`, `compute_materials_readiness` |
+| Export helpers | `regenerate_exports`, `get_export_paths` — Export page's manual trigger + download list |
+| Settings | `load_settings`, `save_settings`, `update_status_vocabulary` — persistence behind the Settings page (§8.6) |
 
 **Load-bearing contracts:**
 
 1. **Exports after writes.** Every public write function calls `exports.write_all()` as its last step, inside a try/except that logs errors but does not re-raise. A write that succeeded in the DB always reports success to the caller, even if markdown regeneration failed. The import of `exports` inside each writer is deferred (not at module top) to break the circular import.
 
-2. **Pipeline auto-promotion.** Two writers can promote `positions.status` as a side effect — `upsert_application` and `add_interview`. Both accept kwarg `propagate_status: bool = True`; when False, no pipeline side-effect fires. Promotion rules R1/R2/R3 are documented in §9.3 and run atomically inside the same transaction as the primary write.
+2. **Pipeline auto-promotion.** Two writers can promote `positions.status` as a side effect — `upsert_application` and `add_interview`. Both accept kwarg `propagate_status: bool = True`; when False, no pipeline side-effect fires. Promotion rules R1/R2/R3 are documented in §9.3 and run atomically inside the same transaction as the primary write. `delete_interview` applies the symmetric reverse cascade (§9.3 R2⁻) with no opt-out kwarg.
 
 3. **Idempotent init.** `init_db()` runs on every app start. It creates tables, triggers, and indices with `IF NOT EXISTS`; runs the `REQUIREMENT_DOCS`-driven `ALTER TABLE ADD COLUMN` loop; and re-checks all invariants. Safe to call any number of times.
 
 4. **Sparse-dict returns.** Aggregation queries (`count_by_status`, others) may omit zero-count keys. Callers fill missing keys with 0 before display.
 
 5. **Sort orders are part of the contract.** `get_all_positions` returns rows ordered by `deadline_date ASC NULLS LAST`; `get_upcoming_*` queries return chronological order; `get_all_recommenders` orders by `recommender_name`.
+
+6. **Rec-letters readiness sync.** Every recommender write (add / update / delete) and any `update_position` touching `num_rec_letters` recomputes `positions.done_rec_letters` inside the same transaction, so the stored flag never desyncs from the live recommenders table (the one deliberate carve-out from D3/D23's compute-don't-store rule; `compute_materials_readiness` reads the column directly). Rule: done iff `num_rec_letters` is NULL/≤ 0, or submitted count ≥ `num_rec_letters`. Column names come from `config.REC_LETTERS_*`.
+
+7. **Settings demo short-circuit.** When `config.IS_DEMO` is True, `load_settings` returns pure config defaults without reading the overlay file and `save_settings` performs no write — demo sessions never touch the shared filesystem.
+
+8. **DB path resolution.** `DB_PATH` = env `AAT_DB_PATH` (expanded + resolved) when set, else `config.DB_FILENAME` alongside the module — the override lets screenshot capture, demo seeds, and ad-hoc isolated runs target a throwaway database. Precedence when both demo and override are active: an installed connection provider (demo mode) wins over `AAT_DB_PATH`; `db_session.bind()` logs a warning when it ignores the override.
 
 ### `exports.py`
 
@@ -397,7 +470,24 @@ Rationale for the schema choices lives in §10.
 | `write_progress` | `exports/PROGRESS.md` |
 | `write_recommenders` | `exports/RECOMMENDERS.md` |
 
-**Contracts:** (1) Errors are logged but never propagate — the DB write already succeeded. (2) Output is deterministic and idempotent — same DB state produces byte-identical output.
+**Contracts:** (1) Errors are logged but never propagate — the DB write already succeeded. (2) Output is deterministic and idempotent — same DB state produces byte-identical output. (3) Demo short-circuit: when `config.IS_DEMO` is True, every writer returns without touching the filesystem — the shared demo host cannot be safely written from concurrent visitor sessions.
+
+### `db_session.py`
+
+**Role.** Demo-mode wiring: per-session in-memory SQLite for the Streamlit Cloud deploy. The one sanctioned module importing both `streamlit` and `database` (§2) — dependency-injection glue that puts a per-session connection behind `database._connect()` without making `database.py` Streamlit-aware. Every entry point is a no-op when `config.IS_DEMO` is False.
+
+**Public API:**
+
+| Function | Purpose |
+|----------|---------|
+| `bind()` | One-shot per-session setup, called by every page bootstrap before any `database.*` call. First call per session: opens `:memory:`, caches the connection in `st.session_state`, installs the provider via `database.set_connection_provider`, runs `init_db()` + `scripts.seed_demo_db.seed()`. Idempotent thereafter. |
+| `reset()` | Wipes the calling session's cached connection + sentinel so the next render re-binds and re-seeds. Wired to the sidebar "Reset demo data" button via callback injection (`ui.sidebar_demo_reset_block`). |
+
+**Load-bearing contracts:**
+
+1. **Failure boundary is all-or-nothing per session.** Any exception during setup pops the cache, clears the provider, closes the connection, and re-raises — the next render retries from scratch. No recoverable partial state.
+2. **The provider callable is a process-global singleton; isolation comes from `st.session_state`.** Every concurrent visitor shares the same provider object; each invocation resolves the connection from the *calling* session's state. Corollary: `reset()` must never clear the provider — it is shared across all live sessions, and clearing it would break the next `database._connect()` in other visitors' threads.
+3. **Bootstrap order is test-enforced.** `tests/structure/test_bootstrap_order.py` fails any page whose source references `database.` before calling `db_session.bind()` — a page that misses `bind()` silently falls back to file mode on Cloud, where visitors would share state.
 
 ---
 
@@ -406,6 +496,7 @@ Rationale for the schema choices lives in §10.
 ### 8.0 Cross-page conventions
 
 - **Page config:** Every page calls `st.set_page_config(layout="wide")` as first statement.
+- **Bootstrap order:** `st.set_page_config` → `db_session.bind()` → `database.init_db()` → `ui.inject_global_styles()`. `bind()` must precede any `database.*` call (§7 db_session contract #3; test-enforced).
 - **Widget keys:** Scope prefixes (`qa_`, `edit_`, `filter_`, `_` for internals). Form ids suffixed `_form`.
 - **Status labels:** Pages never render raw `[SAVED]` etc. — always through `STATUS_LABELS[raw]`.
 - **Patterns:** Success → `st.toast`; failure → `st.error` (no traceback); irreversible → `@st.dialog` confirm; navigation → `st.switch_page`.
@@ -441,8 +532,8 @@ Capture and manage all positions. Layout wireframe: `docs/ui/wireframes §opport
 
 | Element | Behaviour |
 |---------|-----------|
-| Quick-add | Fields from `config.QUICK_ADD_FIELDS`; saves with `status = STATUS_VALUES[0]`; auto-creates `applications` row. |
-| Filters | Status selectbox (`format_func=STATUS_LABELS.get`), Priority selectbox, Field text input (literal substring match). |
+| Quick-add | Expander with the six `config.QUICK_ADD_FIELDS` essentials plus three fixed enrichment fields (`location`, `source`, `portal_url`); ≤ 9 inputs total (D6). Saves with `status = STATUS_VALUES[0]`; auto-creates `applications` row; nonce-keyed widgets clear the form on successful save. |
+| Filters | Search text input (case-insensitive substring on `position_name`), Status selectbox (`[FILTER_ALL] + STATUS_VALUES`, `format_func=STATUS_LABELS.get`), Priority selectbox (`[FILTER_ALL] + PRIORITY_VALUES`), Field text input (case-insensitive literal substring match). |
 | Table | `st.dataframe` with single-row selection; sorted by `deadline_date ASC NULLS LAST`; urgency badge on Due column; Link column as `LinkColumn`. |
 | Edit panel | Four tabs (`st.tabs`): Overview (all fields), Requirements (radios per `REQUIREMENT_DOCS`), Materials (checkboxes for required docs), Notes (text_area in form). |
 | Delete | Button in Overview tab; `@st.dialog` confirmation; FK cascade removes all child rows atomically. |
@@ -458,8 +549,8 @@ Capture and manage all positions. Layout wireframe: `docs/ui/wireframes §opport
 Track every position from submission to outcome, including full interview sequence. Layout wireframe: `docs/ui/wireframes §applications`.
 
 **Behaviour:**
-- **Status filter selectbox:** options = `[STATUS_FILTER_ACTIVE, "All", *STATUS_VALUES]`; default = `"Active"` (excludes `STATUS_FILTER_ACTIVE_EXCLUDED`). Uses `format_func=STATUS_LABELS.get(v, v)`.
-- **Read-only table:** seven columns — Position, Institute, Applied, Recs (✓/—), Confirmation (✓ + date or —), Response, Result. Sort from `database.get_applications_table()`.
+- **Status filter selectbox:** options = `[FILTER_ALL, *STATUS_VALUES]`; default = `FILTER_ALL` (no narrowing). Wraps the label getter so the sentinel renders unchanged: `lambda v: STATUS_LABELS.get(v, v)`.
+- **Read-only table:** seven columns — Position, Institute, Applied, Letters (disabled checkbox: all recommendation letters submitted, via `is_all_recs_submitted`), Confirmation (✓ + date or —), Response, Result. Sort from `database.get_applications_table()`.
 - **Interviews** edited as **per-row blocks** under the app detail card. Each block contains: scheduled_date, format, notes, a per-row Save button (inside its own `st.form`), and a per-row Delete button (outside form, routed through `@st.dialog` confirm). Blocks separated by `st.divider()`. Below the last block, an `Add another interview` button appends a new row; `database.add_interview` computes next `sequence` itself. If `add_interview` returns `status_changed=True` (R2 fired), page surfaces a promotion toast.
 - **Pipeline promotions** fire inside `database.upsert_application` and `database.add_interview` — see §9.3. Page does NOT detect transitions; just calls writer and reads returned promotion indicator.
 
@@ -481,6 +572,8 @@ Track every letter across every position; surface who needs a reminder. Layout w
 
 Manual export trigger and per-file download. Layout wireframe: `docs/ui/wireframes §export`.
 
+**Demo mode:** the page is disabled outright — an info card links the self-host guide and `st.stop()` halts the script before any `regenerate_exports` / `get_export_paths` call (the writers are no-ops in demo anyway; regenerated files would be empty).
+
 ---
 
 ### 8.6 `pages/5_Settings.py` — Settings
@@ -491,6 +584,8 @@ Tunable thresholds + append-only vocabulary editor. Two stacked forms:
 - **Status vocabulary (append-only)** — text-input + Append button. Sentinels must be bracketed (`[GHOSTED]`). Removal of a status currently held by any position is blocked at the boundary in `database.update_status_vocabulary`.
 
 Persistence layer: `database.load_settings`, `database.save_settings`, `database.update_status_vocabulary`.
+
+**Demo mode:** both Save/Append buttons render disabled with an info banner explaining that edits do not persist; `load_settings`/`save_settings` short-circuit to config defaults regardless (§7 database contract #7 — defense in depth).
 
 ---
 
@@ -523,11 +618,15 @@ page renders with the same shell.
 | `urgency_pill(days_left, *, urgent_d, alert_d)` | HTML string | Banded pill (urgent ≤ `DEADLINE_URGENT_DAYS`, alert ≤ `DEADLINE_ALERT_DAYS`, calm beyond). Negative inputs stay urgent. |
 | `sidebar_about_block(version=None)` | None | Sidebar expander exposing version + repo link. `version` defaults to `config.APP_VERSION`. |
 | `sidebar_shortcuts_block()` | None | Sidebar expander listing the Streamlit keyboard affordances. |
+| `demo_banner()` | None | Demo-mode banner (`DEMO_BANNER_*` copy + self-host link). No-op when `config.IS_DEMO` is False — safe to call unconditionally on every page. |
+| `sidebar_demo_reset_block(on_reset)` | None | Sidebar "Reset demo data" affordance in demo mode. Takes the reset callback as an argument (pages pass `db_session.reset`) so `ui.py` keeps its no-`database`/no-`db_session` import rule. |
 
 **Architectural constraint:** `ui.py` imports `config` + `streamlit`
-only; it never touches `database` or `exports`. Every page calls
-`ui.inject_global_styles()`, `ui.sidebar_about_block()`, and
-`ui.sidebar_shortcuts_block()`.
+only; it never touches `database`, `db_session`, or `exports` (the demo
+reset callback arrives by injection, never by import). Every page calls
+`ui.inject_global_styles()`, `ui.demo_banner()`,
+`ui.sidebar_about_block()`, `ui.sidebar_shortcuts_block()`, and
+`ui.sidebar_demo_reset_block(db_session.reset)`.
 
 ---
 
@@ -536,7 +635,7 @@ only; it never touches `database` or `exports`. Every page calls
 ### 9.1 Adding a new position (quick-add path)
 
 ```
-User fills 6 fields → st.form_submit_button
+User fills the quick-add form (up to 9 fields) → st.form_submit_button
   → database.add_position(fields)
       → INSERT INTO positions (... status = config.STATUS_VALUES[0] ...)
       → INSERT INTO applications (position_id, default columns)
@@ -551,7 +650,9 @@ User fills 6 fields → st.form_submit_button
 ```
 app.py runs (fresh or on rerun)
   → st.set_page_config(layout="wide", ...)
+  → db_session.bind()    (demo only: installs per-session in-memory DB; local no-op)
   → database.init_db()   (idempotent; ALTER loops run if config grew)
+  → database.load_settings()               → effective thresholds into session_state
   → database.count_by_status()             → KPI math + Funnel (via FUNNEL_BUCKETS)
   → database.compute_materials_readiness() → Readiness panel
   → database.get_upcoming_deadlines()   ┐
@@ -577,7 +678,9 @@ Two writers can promote `positions.status` as side effect — both accept kwarg 
 
 **R3 overrides non-terminal stages but guards against terminals.** A position in a terminal stage is not silently regressed — the user must first move it out of terminal status.
 
-All cascades execute inside the same transaction as the primary write. Each writer returns `{"status_changed": bool, "new_status": str | None}` so callers can surface a toast.
+**R2⁻ — symmetric reverse cascade in `delete_interview`.** When the deleted row was the application's last remaining interview AND the position currently sits at `<STATUS_INTERVIEW>`, the writer runs `UPDATE positions SET status = '<STATUS_APPLIED>' WHERE id = ? AND status = '<STATUS_INTERVIEW>'` in the same transaction. The narrow status guard mirrors R2's idempotency and protects `<STATUS_OFFER>` and terminal stages from regression. Unlike the forward cascades there is no `propagate_status` opt-out and no promotion indicator — `delete_interview` returns `None` and the retraction is silent.
+
+All cascades execute inside the same transaction as the primary write. Each promoting writer returns `{"status_changed": bool, "new_status": str | None}` so callers can surface a toast.
 
 Callers opt out with `propagate_status=False` for edits that should not move the pipeline (e.g. correcting a typo in application notes). The Applications page always calls with the default; the Recommenders and quick-add paths never touch these functions.
 
@@ -610,7 +713,7 @@ Cancel preserves current edit context (selected row + tab state) so user returns
 | D3 | `done_*` cols = `INTEGER 0/1`; readiness computed | Avoids stale summary fields; single source of truth | Stored `materials_ready` — desyncs |
 | D4 | `exports.write_all()` called inside every `database.py` writer | Markdown always current; no manual sync step | On-demand export only — backup lags after every write |
 | D5 | Internal IDs; UI shows `position_name + institute` | Users never see/manage DB IDs | User-managed codes (P001) — error-prone, sync burden |
-| D6 | Quick-add captures minimal essentials (see `config.QUICK_ADD_FIELDS`) | Capture must cost < 30s; enrichment later | Full form on add — positions lost at discovery time |
+| D6 | Quick-add = six essentials (`config.QUICK_ADD_FIELDS`) + three fixed short-string enrichment fields (`location`, `source`, `portal_url`); hard cap ≤ 9 inputs | Capture must cost < 30s; the three promoted fields are cheap at discovery time, everything else enriches later in the edit panel | Full form on add — positions lost at discovery time; strict 6-field form — three fields users reliably have at discovery forced a second visit |
 | D7 | Status via `st.selectbox(STATUS_VALUES, format_func=STATUS_LABELS.get)` | Prevents typo corruption; UI label decoupled from storage | Freetext — undetectable corruption |
 | D8 | `ON DELETE CASCADE` on all child tables | One delete cleans every dependent row atomically | Manual multi-table delete — easy to orphan rows |
 | D9 | Separate `applications` table | Different update cadence and concern from positions | Single wide table — harder to query, harder to reason about |

@@ -145,6 +145,8 @@ app.py                 Dashboard home page
 config.py              Constants — statuses, thresholds, vocabularies
 database.py            SQL reads/writes; calls exports.write_all() on every write
 exports.py             Markdown generators (OPPORTUNITIES / PROGRESS / RECOMMENDERS)
+ui.py                  Design-system stylesheet + shared page furniture
+db_session.py          Demo-mode wiring — per-session in-memory SQLite for the live demo
 pages/
   1_Opportunities.py   Position CRUD + bulk actions
   2_Applications.py    Application + interview tracking
@@ -152,10 +154,12 @@ pages/
   4_Export.py          Manual export trigger + per-file download buttons
   5_Settings.py        Tunable thresholds + append-only status vocabulary
 scripts/
-  seed_demo_db.py      Throwaway demo dataset for screenshots + manual QA
+  seed_demo_db.py      Demo dataset — CLI seeder + seed() library entry for the live demo
   crop_screenshots.py  Idempotent crop helper for the README captures
   build_collage.py     Headless-Chromium renderer for the marketing collage
   collage.html         CSS3D template loaded by build_collage.py
+  build_ux_report.py   UX field-study PDF + chart builder
+  release.sh           CHANGELOG rotation for release tags
 tests/                 Full test suite (AppTest + unit + cohesion)
 docs/
   adr/                 Architecture decision records

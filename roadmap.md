@@ -15,21 +15,22 @@ job tracker without rewriting existing code.
 
 ## Current Status
 
-**Last shipped tag:** `v0.11.0` (screenshot refresh + README rewrite,
-2026-05-06). Updates dashboard screenshots to v0.11.0 across four widths
-(1024–1680 px) and rewrites README with a screenshot-first layout,
-problem-driven pitch, and engineering notes in a collapsible section.
-Suite at 889 collected; pyright fence holds 0/0; coverage 97%.
+**Last shipped tag:** `v0.14.0` (editorial-brutalist UI redesign,
+2026-05-25). The repo is public; a live demo runs at
+[`academic-application-tracker.streamlit.app`](https://academic-application-tracker.streamlit.app)
+with per-session sandbox data. Suite at 1000+ tests; pyright fence
+holds 0/0; coverage ≥ 95% (CI-enforced `fail_under`).
 
 See [`CHANGELOG.md`](CHANGELOG.md) for full version history.
 
-**Next step:** user-driven repo visibility flip — `gh repo edit
---visibility public` whenever the user is ready. Not part of any tag;
-the codebase is stable at `v0.11.0`.
+**Next step:** cut `v0.15.0` — the `[Unreleased]` CHANGELOG section
+already holds the public demo mode (#111), demo-mode Settings/save
+guards (#112, #115), the seed-script refactor (#114), and the
+dark-mode button fixes (#116, #117).
 
 **v1.0.0 explicitly NOT planned.** The pre-1.0 SemVer convention (each
 minor = one phase) maps cleanly to the project's release cadence.
-Stopping at `v0.10.0` keeps the user free to break things post-public
+Staying pre-1.0 keeps the user free to break things post-public
 without committing to a major-version bump promise.
 
 ---
@@ -67,7 +68,7 @@ without committing to a major-version bump promise.
 | 6 | Full exports + Export page | ✅ shipped @ `v0.7.0` |
 | 7 | Polish (urgency colors, search, confirm dialogs, cleanup sub-tier) | ✅ shipped @ `v0.8.0` |
 | v1.0-rc | Schema cleanup + publish-readiness scaffolding | ✅ shipped @ `v0.9.0` |
-| v1.0 | Demo path (Cloud deploy or walkthrough GIF) + T5 responsive + tag + GitHub release | ⏳ in flight |
+| v1.0 | Demo path + T5 responsive + tag | ✅ shipped — screenshots @ `v0.10.0`–`v0.11.0`; live Streamlit Cloud demo landed post-`v0.14.0` (#111) |
 
 Per-tier detail lives in `CHANGELOG.md` version blocks (forensic record from
 when each tier shipped) and in `reviews/<phase>-finish-cohesion-smoke.md`
@@ -109,6 +110,9 @@ ordering, not a commitment.
 | Application timeline chart (cluster around deadlines) | Derived from `applied_date` |
 | Keyboard shortcuts (N = new, / = search) | Streamlit keyboard support limited |
 | Markdown rendering in notes | `st.markdown` alongside `st.text_area` |
+| Calendar integration (`.ics` export for deadlines + interviews) | Derived from `deadline_date` + `scheduled_date`; no new columns |
+| Email notifications for approaching deadlines | Needs a scheduler outside the Streamlit process |
+| Bulk import from CSV / existing spreadsheets | Column-mapping UI + `database.add_position` loop |
 
 ---
 

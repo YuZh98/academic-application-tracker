@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.5 | **Last updated:** 2026-05-21 | **Status:** authoritative
+**Version:** v1.6 | **Last updated:** 2026-08-07 | **Status:** authoritative
 
 ---
 
@@ -24,7 +24,7 @@ source .venv/bin/activate
 |---------|-----------|----------------------|
 | streamlit | 1.50 | 1.57.0 |
 | plotly | 5.22 | 6.7.0 |
-| pandas | 2.2 | 3.0.2 |
+| pandas | 2.2 | 3.0.3 |
 | sqlite3 | stdlib — no install needed | — |
 
 The `Required ≥` column is the floor (APIs used in the current codebase
@@ -42,10 +42,15 @@ what CI actually runs.
 config.py     ← imports nothing from this project
 database.py   ← imports config; never imports streamlit
 exports.py    ← imports database, config; never imports streamlit
-ui.py         ← imports config, streamlit; never imports database or exports
-app.py        ← may import from {database, config, ui}
-pages/*.py    ← may import from {database, config, ui}; never imports exports directly
+ui.py         ← imports config, streamlit; never imports database, db_session, or exports
+db_session.py ← imports config, database, streamlit, scripts/seed_demo_db; never imports exports or ui
+app.py        ← may import from {database, config, ui, db_session}
+pages/*.py    ← may import from {database, config, ui, db_session}; never imports exports directly
 ```
+
+`db_session.py` is the sanctioned exception to "nothing imports both
+`streamlit` and `database`" — it is the demo-mode dependency-injection
+wiring (DESIGN §7). Do not add a second one.
 
 The "may import" wording means the set of allowed imports — a page
 imports only what it needs; omitting an allowed import is not a
@@ -59,12 +64,18 @@ write function (not at module top).
 ### One responsibility per file
 - `database.py` — SQL only. No display logic, no `st.*` calls.
 - `exports.py` — File writing only. No business logic.
-- `config.py` — Constants and pure functions. No I/O, no side effects.
+- `config.py` — Constants and pure functions. No I/O, no side effects
+  (sole exception: `IS_DEMO` reads `AAT_DEMO` once at import).
 - `ui.py` — Design-system stylesheet + pill/header helpers. No SQL, no
   file I/O, no business logic.
+- `db_session.py` — Demo-mode session wiring only. No SQL beyond
+  connection setup, no widgets, no styling — pages own the widgets,
+  `ui.py` owns the visuals.
 - Page files — Display only. No raw SQL. No file I/O. Every page calls
-  `st.set_page_config` first, then `database.init_db()`, then
-  `ui.inject_global_styles()`.
+  `st.set_page_config` first, then `db_session.bind()`, then
+  `database.init_db()`, then `ui.inject_global_styles()`. The
+  bind-before-database order is enforced by
+  `tests/structure/test_bootstrap_order.py`.
 
 ---
 
@@ -496,11 +507,15 @@ DESIGN §8.x for each page's panel/widget contract.
 2. **First Streamlit call**: `st.set_page_config(page_title="Academic Application Tracker", page_icon="📋", layout="wide")`
    — DESIGN §8.0 + D14. Must precede every other `st.*` call; Streamlit
    raises otherwise.
-3. **Schema bootstrap**: `database.init_db()` — idempotent; ensures
+3. **Demo bootstrap**: `db_session.bind()` — must precede any
+   `database.*` call; a page that misses it silently falls back to
+   file-DB mode on Streamlit Cloud (enforced by
+   `tests/structure/test_bootstrap_order.py`).
+4. **Schema bootstrap**: `database.init_db()` — idempotent; ensures
    any pending migration loops run when the page is the first one
    opened in a session.
-4. **Page heading**: `st.title("...")` as the next visible element.
-5. **Page-scoped widget-key prefix**: pick from the table below and
+5. **Page heading**: `st.title("...")` as the next visible element.
+6. **Page-scoped widget-key prefix**: pick from the table below and
    use it consistently for every widget key on the page.
 
    | Page | Prefix |
@@ -512,9 +527,9 @@ DESIGN §8.x for each page's panel/widget contract.
    | Recommenders page | `recs_` |
    | Export page | `export_` |
 
-6. **Form ids**: suffix with `_form` to avoid collision with widget
+7. **Form ids**: suffix with `_form` to avoid collision with widget
    keys inside (§3 + dev-notes gotcha #4).
-7. **Test file**: `tests/test_<page_name>.py`, one class per logical
+8. **Test file**: `tests/test_<page_name>.py`, one class per logical
    unit (`TestApplicationsTable`, etc., per §9).
 
 ---
