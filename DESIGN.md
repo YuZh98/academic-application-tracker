@@ -533,7 +533,7 @@ Capture and manage all positions. Layout wireframe: `docs/ui/wireframes §opport
 | Element | Behaviour |
 |---------|-----------|
 | Quick-add | Expander with the six `config.QUICK_ADD_FIELDS` essentials plus three fixed enrichment fields (`location`, `source`, `portal_url`); ≤ 9 inputs total (D6). Saves with `status = STATUS_VALUES[0]`; auto-creates `applications` row; nonce-keyed widgets clear the form on successful save. |
-| Filters | Search text input (case-insensitive substring on `position_name`), Status selectbox (`[FILTER_ALL] + STATUS_VALUES`, `format_func=STATUS_LABELS.get`), Priority selectbox (`[FILTER_ALL] + PRIORITY_VALUES`), Field text input (literal substring match). |
+| Filters | Search text input (case-insensitive substring on `position_name`), Status selectbox (`[FILTER_ALL] + STATUS_VALUES`, `format_func=STATUS_LABELS.get`), Priority selectbox (`[FILTER_ALL] + PRIORITY_VALUES`), Field text input (case-insensitive literal substring match). |
 | Table | `st.dataframe` with single-row selection; sorted by `deadline_date ASC NULLS LAST`; urgency badge on Due column; Link column as `LinkColumn`. |
 | Edit panel | Four tabs (`st.tabs`): Overview (all fields), Requirements (radios per `REQUIREMENT_DOCS`), Materials (checkboxes for required docs), Notes (text_area in form). |
 | Delete | Button in Overview tab; `@st.dialog` confirmation; FK cascade removes all child rows atomically. |
@@ -550,7 +550,7 @@ Track every position from submission to outcome, including full interview sequen
 
 **Behaviour:**
 - **Status filter selectbox:** options = `[FILTER_ALL, *STATUS_VALUES]`; default = `FILTER_ALL` (no narrowing). Wraps the label getter so the sentinel renders unchanged: `lambda v: STATUS_LABELS.get(v, v)`.
-- **Read-only table:** seven columns — Position, Institute, Applied, Recs (✓/—), Confirmation (✓ + date or —), Response, Result. Sort from `database.get_applications_table()`.
+- **Read-only table:** seven columns — Position, Institute, Applied, Letters (disabled checkbox: all recommendation letters submitted, via `is_all_recs_submitted`), Confirmation (✓ + date or —), Response, Result. Sort from `database.get_applications_table()`.
 - **Interviews** edited as **per-row blocks** under the app detail card. Each block contains: scheduled_date, format, notes, a per-row Save button (inside its own `st.form`), and a per-row Delete button (outside form, routed through `@st.dialog` confirm). Blocks separated by `st.divider()`. Below the last block, an `Add another interview` button appends a new row; `database.add_interview` computes next `sequence` itself. If `add_interview` returns `status_changed=True` (R2 fired), page surfaces a promotion toast.
 - **Pipeline promotions** fire inside `database.upsert_application` and `database.add_interview` — see §9.3. Page does NOT detect transitions; just calls writer and reads returned promotion indicator.
 
@@ -571,6 +571,8 @@ Track every letter across every position; surface who needs a reminder. Layout w
 ### 8.5 `pages/4_Export.py` — Export
 
 Manual export trigger and per-file download. Layout wireframe: `docs/ui/wireframes §export`.
+
+**Demo mode:** the page is disabled outright — an info card links the self-host guide and `st.stop()` halts the script before any `regenerate_exports` / `get_export_paths` call (the writers are no-ops in demo anyway; regenerated files would be empty).
 
 ---
 
