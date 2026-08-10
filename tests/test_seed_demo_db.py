@@ -123,14 +123,13 @@ class TestSeedFailFastGuards:
 
 class TestSeedDataShape:
     """After seed(), the DB must contain the alert-panel-exercising
-    shape documented in spec §4.7 (errata: extended to all 7 statuses,
-    not the 5 the spec text listed). Each test pins one slice of the
-    contract."""
+    shape: all 7 statuses, every priority value, and deadlines in each
+    Upcoming window. Each test pins one slice of the contract."""
 
-    # Distribution: 3 SAVED, 4 APPLIED, 3 INTERVIEW, 2 OFFER, 2 CLOSED,
-    # 3 REJECTED, 1 DECLINED = 18.
+    # Distribution: 4 SAVED, 4 APPLIED, 3 INTERVIEW, 2 OFFER, 2 CLOSED,
+    # 3 REJECTED, 1 DECLINED = 19.
     EXPECTED_DISTRIBUTION = {
-        config.STATUS_SAVED: 3,
+        config.STATUS_SAVED: 4,
         config.STATUS_APPLIED: 4,
         config.STATUS_INTERVIEW: 3,
         config.STATUS_OFFER: 2,
@@ -153,9 +152,29 @@ class TestSeedDataShape:
         yield conn
         conn.close()
 
-    def test_eighteen_positions(self, seeded):
+    def test_nineteen_positions(self, seeded):
         n = seeded.execute("SELECT COUNT(*) AS n FROM positions").fetchone()["n"]
-        assert n == 18, f"expected 18 positions, got {n}"
+        assert n == 19, f"expected 19 positions, got {n}"
+
+    def test_far_deadline_beyond_default_window(self, seeded):
+        # The 60/90-day Upcoming selector must visibly change the list:
+        # at least one SAVED deadline past the default 30-day window.
+        n = seeded.execute(
+            "SELECT COUNT(*) AS n FROM positions "
+            "WHERE status = ? AND deadline_date > date('now', '+30 days')",
+            (config.STATUS_SAVED,),
+        ).fetchone()["n"]
+        assert n >= 1, "no deadline beyond 30 days — 60/90 window selector inert"
+
+    def test_every_priority_value_present(self, seeded):
+        present = {
+            r["priority"]
+            for r in seeded.execute(
+                "SELECT DISTINCT priority FROM positions WHERE priority IS NOT NULL"
+            ).fetchall()
+        }
+        missing = set(config.PRIORITY_VALUES) - present
+        assert not missing, f"priority filter options with no matching row: {missing}"
 
     def test_status_distribution_covers_all_seven(self, seeded):
         counts = {
@@ -291,19 +310,19 @@ class TestSeedCli:
         assert "Seeding demo database" in captured
         assert "Status counts" in captured
 
-        # DB file exists + carries the 18-position dataset.
+        # DB file exists + carries the 19-position dataset.
         assert db_path.exists()
         conn = sqlite3.connect(db_path)
         try:
             n = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
-            assert n == 18
+            assert n == 19
         finally:
             conn.close()
 
     def test_main_on_repeat_invocation_reseeds(self, tmp_path, monkeypatch):
         # main() calls wipe + init + seed every run, so calling it twice
-        # against the same file must produce 18 positions on the second
-        # run (not 36, not a RuntimeError).
+        # against the same file must produce 19 positions on the second
+        # run (not 38, not a RuntimeError).
         from scripts import seed_demo_db
 
         db_path = tmp_path / "demo.db"
@@ -315,6 +334,6 @@ class TestSeedCli:
         conn = sqlite3.connect(db_path)
         try:
             n = conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
-            assert n == 18
+            assert n == 19
         finally:
             conn.close()

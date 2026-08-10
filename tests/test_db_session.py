@@ -69,7 +69,7 @@ class TestBind:
         db_session.bind()
         conn = fake_st["_aat_demo_conn"]
         n = conn.execute("SELECT COUNT(*) AS n FROM positions").fetchone()["n"]
-        assert n == 18
+        assert n == 19
 
     def test_bind_warns_when_aat_db_path_also_set(self, fake_st, monkeypatch, caplog):
         monkeypatch.setattr(config, "IS_DEMO", True)
@@ -158,4 +158,4 @@ class TestReset:
         second_conn = fake_st["_aat_demo_conn"]
         assert second_conn is not first_conn
         n = second_conn.execute("SELECT COUNT(*) AS n FROM positions").fetchone()["n"]
-        assert n == 18
+        assert n == 19

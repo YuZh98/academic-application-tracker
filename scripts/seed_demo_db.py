@@ -43,10 +43,8 @@ def seed(conn: sqlite3.Connection) -> None:
     The ``conn`` argument is a lifetime witness — the caller must hold a
     reference to keep an in-memory DB alive. Every write inside this
     function routes through ``database.add_position`` etc., which use
-    ``database._connect()``, which in demo mode (provider installed)
-    returns the same ``conn`` back. In CLI mode the public API opens
-    its own file connections per call; the passed ``conn`` is unused
-    once the emptiness check returns.
+    ``database._connect()``, which resolves the installed provider and
+    returns the same ``conn`` back.
 
     Raises ``RuntimeError`` if no connection provider is installed, if
     the passed ``conn`` is not the same object the provider returns, or
@@ -81,17 +79,17 @@ def seed(conn: sqlite3.Connection) -> None:
 
 
 def _seed_body() -> None:
-    """Insert the 18-position multi-cycle demo dataset.
+    """Insert the 19-position multi-cycle demo dataset.
 
-    Status mix (covers all 7 statuses, errata-corrected from the
-    spec's 5-status sketch): 3 SAVED, 4 APPLIED, 3 INTERVIEW, 2 OFFER,
-    2 CLOSED, 3 REJECTED, 1 DECLINED = 18.
+    Status mix (covers all 7 statuses): 4 SAVED, 4 APPLIED,
+    3 INTERVIEW, 2 OFFER, 2 CLOSED, 3 REJECTED, 1 DECLINED = 19.
 
     Across two application cycles (2025-26 + 2026-27). Hits every
-    alert panel — looming deadlines (7-day + 30-day), pending
-    recommender letters past the asked-window, the NULL-recommender
-    fallback, the R1/R2/R3 cascade trails (applied → interview →
-    offer).
+    alert panel — looming deadlines (7-day + 30-day), a far deadline
+    visible only in the 60/90-day Upcoming windows, every priority
+    value including Stretch, pending recommender letters past the
+    asked-window, the NULL-recommender fallback, the R1/R2/R3 cascade
+    trails (applied → interview → offer).
 
     All institutes are well-known public/private universities or
     research labs; every recommender name is fabricated.
@@ -138,6 +136,23 @@ def _seed_body() -> None:
             "field": "Statistics",
             "deadline_date": iso(28),
             "priority": "Medium",
+            "status": config.STATUS_SAVED,
+        }
+    )
+
+    # 1 far-out Stretch — deadline beyond the default 30-day window so
+    # the Upcoming panel's 60/90-day selector visibly changes the list,
+    # and the Stretch priority filter matches at least one row.
+    database.add_position(
+        {
+            "position_name": "Postdoc — Machine Learning Theory",
+            "institute": "ETH Zürich",
+            "field": "Machine Learning",
+            "deadline_date": iso(50),
+            "priority": "Stretch",
+            "link": "https://example.org/eth-ml-theory",
+            "location": "Zürich, Switzerland",
+            "source": "Lab website",
             "status": config.STATUS_SAVED,
         }
     )
@@ -423,9 +438,7 @@ def _seed_body() -> None:
 
 
 def wipe(path) -> None:
-    """Delete all rows from the demo DB file. Existing behavior preserved."""
-    from pathlib import Path
-
+    """Delete all rows from the demo DB file."""
     p = Path(path)
     if not p.exists():
         return
@@ -441,38 +454,41 @@ def wipe(path) -> None:
 
 
 def main() -> None:
-    """CLI entry — preserves the existing screenshot-generation workflow.
+    """CLI entry for the screenshot-generation workflow.
 
-    Resolves AAT_DB_PATH at call time (no module-level mutation),
-    reloads config + database so DB_PATH picks up the override, then
-    wipes + inits + seeds against the resolved file path.
+    Resolves the target path (env ``AAT_DB_PATH`` override, else
+    ``demo.db`` at the repo root) and points ``database.DB_PATH`` at it
+    for the duration of the run only — restored on exit so in-process
+    callers (tests) see no lingering global mutation.
     """
-    import importlib
     import os
 
-    if "AAT_DB_PATH" not in os.environ:
-        os.environ["AAT_DB_PATH"] = str((_REPO_ROOT / "demo.db").resolve())
+    env_path = os.environ.get("AAT_DB_PATH")
+    db_path = (
+        Path(env_path).expanduser().resolve()
+        if env_path
+        else (_REPO_ROOT / "demo.db").resolve()
+    )
 
-    # Order matters: config first (database reads from config), then
-    # database (so DB_PATH picks up the env override).
-    importlib.reload(config)
-    importlib.reload(database)
+    prev_db_path = database.DB_PATH
+    database.DB_PATH = db_path
+    try:
+        print(f"Seeding demo database at {db_path}")
+        wipe(db_path)
+        database.init_db()
+        _seed_body()
 
-    db_path = database.DB_PATH
-    print(f"Seeding demo database at {db_path}")
-    wipe(Path(db_path))
-    database.init_db()
-    _seed_body()
-
-    print()
-    print("=== Demo DB summary ===")
-    print(f"  Status counts:    {database.count_by_status()}")
-    print(f"  Pending recs:     {len(database.get_pending_recommenders())} rows")
-    print(f"  Upcoming (30d):   {len(database.get_upcoming(days=30))} rows")
-    print(f"  Materials ready:  {database.compute_materials_readiness()}")
-    print()
-    print("Run the app against this DB with:")
-    print(f"  AAT_DB_PATH={db_path} streamlit run app.py")
+        print()
+        print("=== Demo DB summary ===")
+        print(f"  Status counts:    {database.count_by_status()}")
+        print(f"  Pending recs:     {len(database.get_pending_recommenders())} rows")
+        print(f"  Upcoming (30d):   {len(database.get_upcoming(days=30))} rows")
+        print(f"  Materials ready:  {database.compute_materials_readiness()}")
+        print()
+        print("Run the app against this DB with:")
+        print(f"  AAT_DB_PATH={db_path} streamlit run app.py")
+    finally:
+        database.DB_PATH = prev_db_path
 
 
 if __name__ == "__main__":
