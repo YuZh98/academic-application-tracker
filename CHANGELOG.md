@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v0.15.0] — 2026-08-10 — Public demo mode
+
 ### Added
 - Public demo at [`academic-application-tracker.streamlit.app`](https://academic-application-tracker.streamlit.app) — try the full app without installing; each visitor gets an isolated sandbox that resets on tab close (#111)
 - Demo banner + sidebar "Reset demo data" button on every page when running in demo mode (#111)
