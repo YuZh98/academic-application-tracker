@@ -91,10 +91,15 @@ class TestBind:
         monkeypatch.setattr(seed_demo_db, "seed", _raise)
         with pytest.raises(RuntimeError, match="simulated seed crash"):
             db_session.bind()
-        # All state cleaned up.
+        # Session-local state cleaned up; the process-global provider
+        # stays installed — other live sessions depend on it, and with
+        # the cache popped _provider() fails loudly instead of letting
+        # database._connect() fall back to the shared file DB.
         assert "_aat_demo_conn" not in fake_st
         assert "_aat_demo_bound" not in fake_st
-        assert database._connection_provider is None
+        assert database._connection_provider is db_session._provider
+        with pytest.raises(RuntimeError, match="no cached connection"):
+            db_session._provider()
 
     def test_bind_recoverable_after_failure(self, fake_st, monkeypatch):
         monkeypatch.setattr(config, "IS_DEMO", True)
@@ -120,7 +125,7 @@ class TestProvider:
     def test_provider_raises_when_cache_missing(self, fake_st):
         import db_session
 
-        with pytest.raises(RuntimeError, match="cleared after bind"):
+        with pytest.raises(RuntimeError, match="no cached connection"):
             db_session._provider()
 
     def test_provider_returns_cached_conn(self, fake_st):

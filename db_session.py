@@ -18,9 +18,10 @@
 #     opens a fresh in-memory DB and re-seeds.
 #
 # Failure boundary is all-or-nothing: any exception inside the setup
-# block pops the cache, clears the provider, and closes the connection
-# before re-raising, so the next page render starts the setup over from
-# scratch against a clean state.
+# block pops the cache and closes the connection before re-raising, so
+# the next page render starts the setup over from scratch. The provider
+# stays installed (invariant #1 below) — with the cache popped it fails
+# loudly in _provider() rather than falling back to file mode.
 #
 # Concurrency invariants:
 #   The Streamlit Cloud demo serves many visitors from a single Python
@@ -40,14 +41,12 @@
 #      and when it executes in session B's thread it reads session B's.
 #      The provider is shared; the connection it returns is not.
 #
-#   Corollary — do NOT clear the provider in ``reset()``. The provider
-#   is shared across every live demo session in the process; clearing
-#   it would break the *next* ``database._connect()`` call in OTHER
-#   concurrent visitors. ``reset()`` only wipes the calling session's
-#   own cache + sentinel. This is intentionally asymmetric with the
-#   teardown path inside ``bind()``'s except block, which only fires
-#   when the provider was just installed for this session and no other
-#   session can yet depend on it.
+#   Corollary — no code path clears the provider once installed.
+#   The provider is shared across every live demo session in the
+#   process; clearing it in one session's ``reset()`` or failed
+#   ``bind()`` would silently reroute OTHER concurrent visitors'
+#   ``database._connect()`` calls to the shared file DB. Teardown
+#   paths only touch the calling session's own cache + sentinel.
 
 from __future__ import annotations
 
@@ -75,8 +74,9 @@ def bind() -> None:
     SQLite, no provider installed). In demo mode: opens ``:memory:``,
     caches the connection in ``st.session_state``, installs the
     provider, runs schema + seed. On any setup failure: closes the
-    conn, clears all state, re-raises so the next render retries from
-    scratch.
+    conn, pops the session cache, re-raises so the next render retries
+    from scratch. The provider is left installed — see the module
+    docstring's concurrency corollary.
     """
     if not config.IS_DEMO:
         return
@@ -101,9 +101,10 @@ def bind() -> None:
     except Exception:
         # Roll back so the next render re-attempts a fresh bind. The
         # in-memory DB has no recoverable partial state — "all or
-        # nothing per session" is the failure boundary.
+        # nothing per session" is the failure boundary. The provider
+        # stays installed: it is process-global and other live sessions
+        # depend on it (module docstring corollary).
         st.session_state.pop(_CONN_KEY, None)
-        database.set_connection_provider(None)
         # conn.close() can itself raise on a corrupted :memory: after a
         # mid-DDL failure — suppress so the ORIGINAL setup exception
         # propagates via the bare ``raise`` below.
@@ -117,12 +118,13 @@ def bind() -> None:
 def _provider() -> sqlite3.Connection:
     """Provider callable installed by ``bind()``. Pure read of session_state.
 
-    Raises if ``st.session_state[_CONN_KEY]`` is missing — only reachable
-    if external code popped the cache AFTER ``bind()`` succeeded (e.g.,
-    a buggy widget calling ``st.session_state.clear()``). The "bind()
-    never ran" case takes a different path: the provider was never
-    installed, so ``database._connect()`` falls back to file mode
-    without ever calling here.
+    Raises if ``st.session_state[_CONN_KEY]`` is missing. Two routes
+    reach that state: ``bind()`` failed and popped the cache while
+    leaving the provider installed, or external code cleared session
+    state after ``bind()`` succeeded (e.g., a widget calling
+    ``st.session_state.clear()``). The "``bind()`` never ran at all"
+    case takes a different path — the provider was never installed, so
+    ``database._connect()`` falls back to file mode without calling here.
 
     The per-call read of ``st.session_state`` is what makes this
     process-global singleton callable safe for concurrent sessions:
@@ -132,8 +134,9 @@ def _provider() -> sqlite3.Connection:
     conn = st.session_state.get(_CONN_KEY)
     if conn is None:
         raise RuntimeError(
-            "db_session._provider() found no cached connection. "
-            "Session state was cleared after bind() succeeded."
+            "db_session._provider() found no cached connection for this "
+            "session: bind() did not complete, or session state was "
+            "cleared after it did."
         )
     return conn
 
@@ -141,17 +144,10 @@ def _provider() -> sqlite3.Connection:
 def reset() -> None:
     """Wipe the cached connection. Next render re-runs ``bind()`` and re-seeds.
 
-    The provider is left installed by design (cross-session safety):
-    it is shared across every live demo session in the process, so
-    clearing it here would break the next ``database._connect()`` call
-    in other concurrent visitors. See the module docstring's
-    "Concurrency invariants" section for the full rationale.
-
-    Only the calling session's own ``_CONN_KEY`` cache and ``_BOUND_KEY``
-    sentinel are popped, so the next render in *this* session runs
-    ``bind()`` again, which re-opens ``:memory:`` and re-seeds. The
-    connection closed below is the calling session's own; closing it
-    does not affect connections held by other sessions.
+    The provider stays installed — it is shared across live sessions
+    (module docstring, "Concurrency invariants"). Only the calling
+    session's own cache + sentinel are popped; the connection closed
+    below is the calling session's own.
     """
     conn = st.session_state.pop(_CONN_KEY, None)
     st.session_state.pop(_BOUND_KEY, None)
