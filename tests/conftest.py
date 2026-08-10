@@ -1,10 +1,13 @@
 # tests/conftest.py
 # Shared pytest fixtures for the academic application tracker test suite.
 
+import importlib
+import os
 from datetime import date, timedelta
 
 import pytest
 
+import config
 import database
 
 
@@ -71,10 +74,14 @@ def _reset_demo_state(monkeypatch):
       test installed one and forgot to clean up. Provider state is
       process-global; a forgotten provider would silently affect later
       tests.
+    - Reloads config after the test if IS_DEMO leaked True (a test
+      reloaded config under AAT_DEMO=1 without reloading it back) —
+      otherwise every later exports/database test runs demo-gated.
     """
     monkeypatch.delenv("AAT_DEMO", raising=False)
     monkeypatch.delenv("AAT_DB_PATH", raising=False)
     yield
-    if hasattr(database, "set_connection_provider"):
-        database.set_connection_provider(None)
-        assert getattr(database, "_connection_provider", None) is None
+    database.set_connection_provider(None)
+    os.environ.pop("AAT_DEMO", None)
+    if config.IS_DEMO:
+        importlib.reload(config)
