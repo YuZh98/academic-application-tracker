@@ -5,6 +5,7 @@
 # They guard against silent drift between constants that must stay in sync.
 
 import importlib
+import os
 import sys
 
 import pytest
@@ -865,13 +866,39 @@ class TestDemoMode:
     def test_is_demo_true_when_aat_demo_is_one(self, monkeypatch):
         monkeypatch.setenv("AAT_DEMO", "1")
         importlib.reload(config)
-        assert config.IS_DEMO is True
+        try:
+            assert config.IS_DEMO is True
+        finally:
+            # Restore at the source: a leaked IS_DEMO=True silently
+            # demo-gates every later export writer in the run.
+            monkeypatch.delenv("AAT_DEMO", raising=False)
+            importlib.reload(config)
 
-    def test_is_demo_false_for_other_values(self, monkeypatch):
-        for val in ("0", "true", "True", "yes", ""):
+    def test_is_demo_false_for_recognized_off_values(self, monkeypatch):
+        for val in ("0", ""):
             monkeypatch.setenv("AAT_DEMO", val)
             importlib.reload(config)
             assert config.IS_DEMO is False, f"AAT_DEMO={val!r} should not enable demo"
+
+    def test_is_demo_rejects_unrecognized_values(self):
+        # Unrecognized spellings must abort startup, not silently run
+        # file-DB mode on a public deploy. Checked in a subprocess: an
+        # importlib.reload that raises would leave the config module
+        # half-executed for the rest of the suite.
+        import subprocess
+        from pathlib import Path
+
+        repo_root = Path(config.__file__).resolve().parent
+        for val in ("true", "True", "yes", "on", "2"):
+            proc = subprocess.run(
+                [sys.executable, "-c", "import config"],
+                cwd=repo_root,
+                env={**os.environ, "AAT_DEMO": val},
+                capture_output=True,
+                text=True,
+            )
+            assert proc.returncode != 0, f"AAT_DEMO={val!r} must abort import"
+            assert "AAT_DEMO" in proc.stderr
 
     def test_demo_banner_constants_present(self, monkeypatch):
         # Constants are present in every mode; their behavior is gated
