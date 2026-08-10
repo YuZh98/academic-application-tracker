@@ -56,8 +56,8 @@ def set_connection_provider(
 
     Pass a callable to opt into provider mode: _connect() will yield the
     provider's connection without closing it. Pass None to revert to
-    file-based behavior (used by tests; db_session.reset() deliberately
-    leaves the provider installed — see its docstring).
+    file-based behavior — used by tests only; db_session never clears an
+    installed provider (see its module docstring).
     """
     global _connection_provider
     _connection_provider = provider
@@ -74,7 +74,12 @@ def _connect() -> Generator[sqlite3.Connection, None, None]:
     """
     if _connection_provider is not None:
         conn = _connection_provider()
+        # Enforce the contract on provider connections too — a provider
+        # that forgot either would silently break name-based row access
+        # or ON DELETE CASCADE.
+        conn.row_factory = sqlite3.Row
         try:
+            conn.execute("PRAGMA foreign_keys = ON")
             yield conn
             conn.commit()
         except Exception:
@@ -1446,13 +1451,12 @@ def save_settings(updates: dict[str, Any]) -> None:
     fails validation, no write happens (boundary-validate pattern).
     Threshold fields must be ints in their declared bounds.
 
-    Demo-mode short-circuit (``config.IS_DEMO`` True): silently no-op.
-    Symmetric with the ``load_settings()`` short-circuit so the demo
-    session never touches the on-disk overlay file in either
-    direction. The Settings page renders an info banner so the
-    visitor understands why their edits do not persist."""
-    if config.IS_DEMO:
-        return
+    Demo-mode short-circuit (``config.IS_DEMO`` True): validation
+    still runs, but no write happens. Symmetric with the
+    ``load_settings()`` short-circuit so the demo session never
+    touches the on-disk overlay file in either direction. The
+    Settings page renders an info banner so the visitor understands
+    why their edits do not persist."""
     if not updates:
         return
 
@@ -1463,6 +1467,9 @@ def save_settings(updates: dict[str, Any]) -> None:
                 raise ValueError(
                     f"{key} must be an integer in [{lo}, {hi}]; got {value!r}"
                 )
+
+    if config.IS_DEMO:
+        return
 
     current: dict[str, Any] = {}
     path = _settings_path()

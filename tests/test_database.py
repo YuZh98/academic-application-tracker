@@ -4755,8 +4755,8 @@ class TestConnectionProvider:
     streamlit. Default (no provider) behavior is unchanged.
 
     Each test calls set_connection_provider(None) at start to avoid
-    relying on the autouse conftest fixture (added in Task 3) — keeps
-    the test independent."""
+    relying on the autouse conftest fixture — keeps the test
+    independent."""
 
     def test_set_and_clear_provider(self):
         database.set_connection_provider(None)
@@ -4787,6 +4787,38 @@ class TestConnectionProvider:
             # (no close). Provider owns lifecycle.
             row = conn.execute("SELECT x FROM t").fetchone()
             assert row["x"] == 1
+        finally:
+            database.set_connection_provider(None)
+            conn.close()
+
+    def test_connect_enforces_row_factory_and_fk_on_provider_conn(self):
+        # A provider that forgets row_factory or PRAGMA foreign_keys
+        # must not weaken _connect()'s documented contract.
+        database.set_connection_provider(None)
+        conn = sqlite3.connect(":memory:")  # bare: no row_factory, FK off
+
+        database.set_connection_provider(lambda: conn)
+        try:
+            with database._connect() as yielded:
+                yielded.execute(
+                    "CREATE TABLE parent (id INTEGER PRIMARY KEY)"
+                )
+                yielded.execute(
+                    "CREATE TABLE child (id INTEGER PRIMARY KEY, "
+                    "parent_id INTEGER NOT NULL REFERENCES parent(id) "
+                    "ON DELETE CASCADE)"
+                )
+                yielded.execute("INSERT INTO parent VALUES (1)")
+                yielded.execute("INSERT INTO child VALUES (10, 1)")
+            with database._connect() as yielded:
+                row = yielded.execute("SELECT id FROM parent").fetchone()
+                assert row["id"] == 1  # name access → row_factory enforced
+                yielded.execute("DELETE FROM parent WHERE id = 1")
+            with database._connect() as yielded:
+                n = yielded.execute(
+                    "SELECT COUNT(*) AS n FROM child"
+                ).fetchone()["n"]
+                assert n == 0, "FK cascade must fire on provider conns"
         finally:
             database.set_connection_provider(None)
             conn.close()
@@ -4888,11 +4920,10 @@ class TestLoadSettingsDemoShortCircuit:
 
 
 class TestSaveSettingsDemoShortCircuit:
-    """In demo mode, save_settings() must NOT write the overlay file.
-    Symmetric with the load_settings() short-circuit — the prior
-    review surfaced an asymmetry where reads were gated but writes
-    still hit disk. A demo visitor's Settings-form save now no-ops
-    instead of silently writing a file that the next load ignores."""
+    """In demo mode, save_settings() must NOT write the overlay file —
+    symmetric with the load_settings() short-circuit — but validation
+    still runs, so the boundary-validate guarantee holds in every
+    mode."""
 
     def test_save_settings_does_not_write_in_demo(self, tmp_path, monkeypatch):
         monkeypatch.setattr(database, "DB_PATH", tmp_path / "demo.db")
@@ -4906,6 +4937,14 @@ class TestSaveSettingsDemoShortCircuit:
             "save_settings() must be a no-op in demo mode; overlay file "
             "must not appear on disk."
         )
+
+    def test_save_settings_still_validates_in_demo(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(database, "DB_PATH", tmp_path / "demo.db")
+        monkeypatch.setattr(config, "IS_DEMO", True)
+
+        with pytest.raises(ValueError, match="DEADLINE_ALERT_DAYS"):
+            database.save_settings({"DEADLINE_ALERT_DAYS": 9999})
+        assert not (tmp_path / "settings_overrides.json").exists()
 
     def test_save_settings_writes_when_not_demo(self, tmp_path, monkeypatch):
         # Regression guard — local dev still persists overrides.
