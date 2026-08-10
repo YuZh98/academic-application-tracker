@@ -21,7 +21,7 @@ import os
 # page (ui.sidebar_about_block). Kept here so config.py remains the single
 # source of truth for vocabulary; drift against pyproject.toml is pinned by
 # tests/test_config.py::test_app_version_matches_pyproject.
-APP_VERSION: str = "0.14.0"
+APP_VERSION: str = "0.15.0"
 
 # ── Demo mode ────────────────────────────────────────────────────────────────
 # Single source of truth for the public Streamlit Cloud demo trigger. Set
