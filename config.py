@@ -8,9 +8,10 @@
 # Rules:
 #   - This file imports NOTHING from this project.
 #   - No functions, no I/O, no side effects — constants only.
-#     (Sole exception: IS_DEMO reads AAT_DEMO at import time. Every other
-#     module reads config.IS_DEMO, never the env var directly — single
-#     source of truth for the public Streamlit Cloud demo trigger.)
+#     (Sole exception: IS_DEMO reads AND VALIDATES AAT_DEMO at import
+#     time, aborting on an unrecognized value. Every other module reads
+#     config.IS_DEMO, never the env var directly — single source of
+#     truth for the public Streamlit Cloud demo trigger.)
 #   - All other modules import from here; never hardcode values in page files.
 
 import os
@@ -26,14 +27,20 @@ APP_VERSION: str = "0.14.0"
 # Single source of truth for the public Streamlit Cloud demo trigger. Set
 # AAT_DEMO=1 on the Streamlit Cloud dashboard; never set in local dev. Other
 # modules MUST read config.IS_DEMO rather than checking os.environ themselves.
-IS_DEMO: bool = os.environ.get("AAT_DEMO") == "1"
+# Unrecognized values (e.g. "true", "yes") abort startup: a silently-False
+# IS_DEMO on a public deploy would hand every visitor one shared file DB.
+_AAT_DEMO_RAW: str | None = os.environ.get("AAT_DEMO")
+if _AAT_DEMO_RAW not in (None, "", "0", "1"):
+    raise ValueError(
+        f"AAT_DEMO must be '1' (demo on) or unset/''/'0' (demo off); "
+        f"got {_AAT_DEMO_RAW!r}. Refusing to guess — a misread flag would "
+        f"run the public demo against a shared file database."
+    )
+IS_DEMO: bool = _AAT_DEMO_RAW == "1"
+del _AAT_DEMO_RAW
 
 # Demo banner copy. Editorial register: uppercase mono headline + body
 # paragraph + self-host CTA. Rendered by ui.demo_banner() when IS_DEMO.
-# Variant C — declarative + blunt: names the constraint directly,
-# avoids "demo" jargon in the headline, leaves the body open-ended so
-# the rendered "Self-host instructions ↗" link reads as the sentence's
-# end-stop.
 DEMO_BANNER_HEADLINE: str = "DEMO — NOT YOUR DATA"
 DEMO_BANNER_BODY: str = (
     "This is a public sandbox. Edits vanish when you close the tab. "

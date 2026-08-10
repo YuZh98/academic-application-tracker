@@ -7,6 +7,8 @@ import pathlib
 
 import pytest
 
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
 # All entry points. Order matches the sidebar nav.
 PAGES = [
     "app.py",
@@ -24,7 +26,7 @@ def test_page_calls_db_session_bind_before_database(page):
     page source BEFORE any reference to ``database.`` (excluding the
     import line itself). A page that misses bind() silently falls back
     to file-DB mode on Streamlit Cloud — visitors share state."""
-    src = pathlib.Path(page).read_text()
+    src = (_REPO_ROOT / page).read_text()
     bind_idx = src.find("db_session.bind()")
     assert bind_idx != -1, (
         f"{page}: missing db_session.bind() call — demo bootstrap will "
@@ -58,7 +60,7 @@ def test_page_calls_db_session_bind_before_database(page):
 def test_page_renders_demo_banner(page):
     """Every page must call ui.demo_banner() so the visitor sees the
     banner regardless of which page they land on first."""
-    src = pathlib.Path(page).read_text()
+    src = (_REPO_ROOT / page).read_text()
     assert "ui.demo_banner()" in src, (
         f"{page}: missing ui.demo_banner() — visitor lands here without "
         f"seeing the demo banner."
@@ -68,7 +70,7 @@ def test_page_renders_demo_banner(page):
 @pytest.mark.parametrize("page", PAGES)
 def test_page_renders_sidebar_demo_reset_block(page):
     """Every page must wire the sidebar reset block."""
-    src = pathlib.Path(page).read_text()
+    src = (_REPO_ROOT / page).read_text()
     assert "ui.sidebar_demo_reset_block" in src, (
         f"{page}: missing ui.sidebar_demo_reset_block — sidebar reset "
         f"button missing on this page."

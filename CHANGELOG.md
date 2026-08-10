@@ -10,7 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Public demo at [`academic-application-tracker.streamlit.app`](https://academic-application-tracker.streamlit.app) — try the full app without installing; each visitor gets an isolated sandbox that resets on tab close (#111)
 - Demo banner + sidebar "Reset demo data" button on every page when running in demo mode (#111)
-- 18-position seed dataset covering all 7 statuses so every dashboard panel, filter, and alert fires on first render (#111)
+- 19-position seed dataset covering all 7 statuses, every priority value, and all three Upcoming windows so every dashboard panel, filter, and alert fires on first render (#111)
 - "Live demo" badge in the README (#111)
 
 ### Changed
