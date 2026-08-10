@@ -1,5 +1,5 @@
 # System Design: Academic Application Tracker
-**Version:** 1.9 | **Last updated:** 2026-08-07 | **Status:** authoritative
+**Version:** 1.10 | **Last updated:** 2026-08-10 | **Status:** authoritative
 
 ---
 
@@ -159,7 +159,7 @@ CHANGELOG.md              Release history
 
 ## 5. `config.py` — Specification
 
-`config.py` is the **single source of truth** for vocabularies, constants, and field definitions. Every other module reads from it; no other file hardcodes a status string, priority value, or requirement-document label. The sole import-time side effect is `IS_DEMO`, which reads the `AAT_DEMO` env var once at module load — every other module reads `config.IS_DEMO`, never the env var.
+`config.py` is the **single source of truth** for vocabularies, constants, and field definitions. Every other module reads from it; no other file hardcodes a status string, priority value, or requirement-document label. The sole import-time side effect is `IS_DEMO`, which reads and validates the `AAT_DEMO` env var once at module load, aborting the import on an unrecognized value — every other module reads `config.IS_DEMO`, never the env var.
 
 ### 5.1 Symbol index
 
@@ -168,7 +168,7 @@ CHANGELOG.md              Release history
 | Constant | Type | Role |
 |----------|------|------|
 | `APP_VERSION` | `str` | User-visible version string (sidebar About block). Sync with `pyproject.toml` pinned by `test_app_version_matches_pyproject`. |
-| `IS_DEMO` | `bool` | True iff env `AAT_DEMO=1` (set only on the Streamlit Cloud dashboard). Gates `db_session.bind()`, export short-circuits, Settings save-disable, and the demo banner. |
+| `IS_DEMO` | `bool` | True iff env `AAT_DEMO=1` (set only on the Streamlit Cloud dashboard); unset/`""`/`"0"` → False; any other value aborts startup with `ValueError` — a silently-False flag on a public deploy would hand every visitor one shared file DB. Gates `db_session.bind()`, export short-circuits, Settings save-disable, and the demo banner. |
 | `DEMO_BANNER_HEADLINE` / `DEMO_BANNER_BODY` | `str` | Copy for the demo banner rendered by `ui.demo_banner()` when `IS_DEMO`. |
 | `DEMO_SELF_HOST_URL` | `str` | Self-host instructions link rendered at the end of the demo banner. |
 
@@ -276,6 +276,7 @@ CHANGELOG.md              Release history
 
 Additional import-time guards without stable numbers (pinned by their own tests, not the `test_invariant_<N>` scheme):
 
+- `AAT_DEMO in (unset, "", "0", "1")` — any other value raises `ValueError` at import. A silently-False `IS_DEMO` on the public deploy would hand every visitor one shared file database.
 - `set(MANUAL_STATUS_VALUES) <= set(STATUS_VALUES)` — manual picker options must be real statuses
 - `STATUS_INTERVIEW not in MANUAL_STATUS_VALUES` and `STATUS_OFFER not in MANUAL_STATUS_VALUES` — cascade-owned statuses are never hand-assignable
 - `set(CONFIRMED_LABELS.keys()) == {1, 0, None}` — every `confirmed` storage value has a display label
@@ -485,8 +486,8 @@ Rationale for the schema choices lives in §10.
 
 **Load-bearing contracts:**
 
-1. **Failure boundary is all-or-nothing per session.** Any exception during setup pops the cache, clears the provider, closes the connection, and re-raises — the next render retries from scratch. No recoverable partial state.
-2. **The provider callable is a process-global singleton; isolation comes from `st.session_state`.** Every concurrent visitor shares the same provider object; each invocation resolves the connection from the *calling* session's state. Corollary: `reset()` must never clear the provider — it is shared across all live sessions, and clearing it would break the next `database._connect()` in other visitors' threads.
+1. **Failure boundary is all-or-nothing per session.** Any exception during setup pops the calling session's cache, closes its connection, and re-raises — the next render retries from scratch. No recoverable partial state. The provider is NOT cleared (see contract #2): with the cache popped, a stray `database._connect()` fails loudly in the provider rather than falling back to the shared file DB.
+2. **The provider callable is a process-global singleton; isolation comes from `st.session_state`.** Every concurrent visitor shares the same provider object; each invocation resolves the connection from the *calling* session's state. Corollary: no code path clears the provider once installed — neither `reset()` nor a failed `bind()` — it is shared across all live sessions, and clearing it would silently reroute other visitors' `database._connect()` calls to the shared file DB.
 3. **Bootstrap order is test-enforced.** `tests/structure/test_bootstrap_order.py` fails any page whose source references `database.` before calling `db_session.bind()` — a page that misses `bind()` silently falls back to file mode on Cloud, where visitors would share state.
 
 ---

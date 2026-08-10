@@ -710,7 +710,7 @@ h2.aat-section-title {
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
-/* Streamlit 1.57 emits six button-shaped test-id variants:
+/* Streamlit ≥ 1.57 emits six button-shaped test-id variants:
      stBaseButton-primary           (st.button(type="primary"))
      stBaseButton-secondary         (st.button())
      stBaseButton-primaryFormSubmit (st.form_submit_button(type="primary"))
@@ -971,7 +971,7 @@ div[data-baseweb="popover"] [role="option"][aria-selected="true"] {
 /* ── Link buttons (st.link_button) — match secondary button language ─ */
 /* Targets both the legacy wrapper selector ([data-testid="stLinkButton"] a)
    and the modern stBaseLinkButton-{primary,secondary} test-ids that
-   Streamlit 1.57 emits directly on the <a> element. Without the
+   Streamlit ≥ 1.57 emits directly on the <a> element. Without the
    stBaseLinkButton selectors the link picks up Streamlit base only,
    and on hover the inner <p> stays at its own inherited ink color
    while the <a> flips to var(--aat-paper) → ink-on-ink, text vanishes. */

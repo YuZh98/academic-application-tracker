@@ -2,7 +2,7 @@
 _Read at the start of every coding session. Scannable checklist, not a tutorial.
 For depth on Git and Streamlit state, see `docs/dev-notes/`._
 
-**Version:** v1.6 | **Last updated:** 2026-08-07 | **Status:** authoritative
+**Version:** v1.7 | **Last updated:** 2026-08-10 | **Status:** authoritative
 
 ---
 
@@ -22,9 +22,9 @@ source .venv/bin/activate
 
 | Package | Required ≥ | Tested with (latest tag) |
 |---------|-----------|----------------------|
-| streamlit | 1.50 | 1.57.0 |
-| plotly | 5.22 | 6.7.0 |
-| pandas | 2.2 | 3.0.3 |
+| streamlit | 1.50 | 1.60.0 |
+| plotly | 5.22 | 6.9.0 |
+| pandas | 2.2 | 3.0.5 |
 | sqlite3 | stdlib — no install needed | — |
 
 The `Required ≥` column is the floor (APIs used in the current codebase
@@ -65,7 +65,8 @@ write function (not at module top).
 - `database.py` — SQL only. No display logic, no `st.*` calls.
 - `exports.py` — File writing only. No business logic.
 - `config.py` — Constants and pure functions. No I/O, no side effects
-  (sole exception: `IS_DEMO` reads `AAT_DEMO` once at import).
+  (sole exception: `IS_DEMO` reads and validates `AAT_DEMO` once at
+  import, aborting on an unrecognized value).
 - `ui.py` — Design-system stylesheet + pill/header helpers. No SQL, no
   file I/O, no business logic.
 - `db_session.py` — Demo-mode session wiring only. No SQL beyond
