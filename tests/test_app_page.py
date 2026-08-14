@@ -15,8 +15,9 @@ from streamlit.testing.v1 import AppTest
 import config
 import database
 from tests.conftest import make_position
+from tests.helpers import page_path
 
-PAGE = "app.py"
+PAGE = page_path("app.py")
 
 # DESIGN.md §app.py — Dashboard (Home) locks these four KPI labels as part
 # of the UI contract. Tests assert on labels (not on implementation-detail

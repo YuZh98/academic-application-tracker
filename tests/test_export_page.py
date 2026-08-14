@@ -30,9 +30,9 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import exports
-from tests.helpers import download_button, download_buttons
+from tests.helpers import download_button, download_buttons, page_path
 
-PAGE = "pages/4_Export.py"
+PAGE = page_path("pages/4_Export.py")
 
 # Locked-copy strings — pinning the verbatim text catches any drift from
 # the wireframe contract.

@@ -17,8 +17,9 @@ from streamlit.testing.v1 import AppTest
 
 import config
 import database
+from tests.helpers import page_path
 
-PAGE = "pages/1_Opportunities.py"
+PAGE = page_path("pages/1_Opportunities.py")
 
 # F2: use the explicit key passed to st.form_submit_button() rather than
 # relying on Streamlit's internal auto-generated "FormSubmitter:{form}-{label}"

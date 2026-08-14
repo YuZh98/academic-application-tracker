@@ -20,8 +20,9 @@ from streamlit.testing.v1 import AppTest
 import config
 import database
 from tests.conftest import make_position
+from tests.helpers import page_path
 
-PAGE = "pages/2_Applications.py"
+PAGE = page_path("pages/2_Applications.py")
 
 # Widget-key prefix per GUIDELINES §13 + DESIGN §8.0 — the Applications
 # page uses `apps_` so keys cannot collide with the Opportunities page's

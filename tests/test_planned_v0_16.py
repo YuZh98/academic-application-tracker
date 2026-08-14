@@ -21,6 +21,7 @@ from streamlit.testing.v1 import AppTest
 import config
 import database
 from tests.conftest import make_position
+from tests.helpers import page_path
 
 # Planned symbol catalogue.
 R1A_SYMBOLS = (
@@ -33,7 +34,7 @@ R1A_CROSS_SYMBOLS = R1A_SYMBOLS + (
     "add_global_recommender",
 )
 R1B_SYMBOLS = ("load_settings", "save_settings")
-R1B_PAGE = "pages/5_Settings.py"
+R1B_PAGE = page_path("pages/5_Settings.py")
 
 
 def _require(symbols: tuple[str, ...]) -> None:
@@ -318,7 +319,7 @@ class TestR1bSettings:
             f"DEADLINE_ALERT_DAYS={override}. Got {loaded!r}."
         )
 
-        at = AppTest.from_file("app.py", default_timeout=10).run()
+        at = AppTest.from_file(page_path("app.py"), default_timeout=10).run()
 
         effective = (
             at.session_state["effective_deadline_alert_days"]
@@ -371,7 +372,7 @@ class TestR1bSettings:
         pages/5_Settings.py must expose number inputs + a Save
         button — driving them via AppTest must round-trip through
         save_settings → load_settings."""
-        at = AppTest.from_file("pages/5_Settings.py", default_timeout=10).run()
+        at = AppTest.from_file(page_path("pages/5_Settings.py"), default_timeout=10).run()
         at.number_input(key="settings_deadline_alert_days").set_value(3)
         at.button(key="settings_thresholds_submit").click().run()
 
@@ -433,7 +434,7 @@ class TestSettingsDemoSaveDisabled:
     def test_threshold_save_button_disabled_in_demo(self, demo_env):
         """The 'Save thresholds' submit button must render disabled
         when IS_DEMO=True."""
-        at = AppTest.from_file("pages/5_Settings.py", default_timeout=15)
+        at = AppTest.from_file(page_path("pages/5_Settings.py"), default_timeout=15)
         at.run()
         assert not at.exception, f"Settings page raised in demo mode: {at.exception}"
 
@@ -451,7 +452,7 @@ class TestSettingsDemoSaveDisabled:
     def test_vocab_append_button_disabled_in_demo(self, demo_env):
         """The 'Append' vocabulary submit button must render disabled
         when IS_DEMO=True."""
-        at = AppTest.from_file("pages/5_Settings.py", default_timeout=15)
+        at = AppTest.from_file(page_path("pages/5_Settings.py"), default_timeout=15)
         at.run()
         assert not at.exception, f"Settings page raised in demo mode: {at.exception}"
 
@@ -475,7 +476,7 @@ class TestSettingsDemoSaveDisabled:
             "Test precondition: this test asserts the local-dev enabled "
             "path; IS_DEMO must be False."
         )
-        at = AppTest.from_file("pages/5_Settings.py", default_timeout=15)
+        at = AppTest.from_file(page_path("pages/5_Settings.py"), default_timeout=15)
         at.run()
         assert not at.exception, f"Settings page raised in local dev: {at.exception}"
 
