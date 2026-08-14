@@ -27,9 +27,9 @@ from streamlit.testing.v1 import AppTest
 import config
 import database
 from tests.conftest import make_position
-from tests.helpers import decode_mailto, link_buttons
+from tests.helpers import decode_mailto, link_buttons, page_path
 
-PAGE = "pages/3_Recommenders.py"
+PAGE = page_path("pages/3_Recommenders.py")
 
 # T5 widget keys / sentinels — pinned in DESIGN §8.4. Names follow the
 # project's `recs_` widget-key prefix (GUIDELINES §13).

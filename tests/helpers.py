@@ -13,12 +13,26 @@
 # ongoing tier work) reach for one place.
 #
 # Architecture rule (DESIGN §2): this module imports
-# `streamlit.testing.v1` (AppTest type) and `urllib.parse` only — no
+# `streamlit.testing.v1` (AppTest type) and stdlib only — no
 # project-internal imports. Pure test utility.
 
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from streamlit.testing.v1 import AppTest
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def page_path(relative: str) -> str:
+    """Absolute path to an app entry point, for ``AppTest.from_file()``.
+
+    Streamlit >= 1.61 resolves a relative ``from_file()`` path against the
+    calling test file rather than the working directory, which turns
+    ``"app.py"`` into ``tests/app.py``. Absolute paths are stable across
+    both behaviours and across the directory pytest is invoked from.
+    """
+    return str(_REPO_ROOT / relative)
 
 
 def link_buttons(at: AppTest) -> list:

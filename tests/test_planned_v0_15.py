@@ -28,6 +28,7 @@ from streamlit.testing.v1 import AppTest
 
 import database
 from tests.conftest import make_position
+from tests.helpers import page_path
 
 # Planned-symbol catalogue — every name R0a/R0b will add. The
 # _require() gate raises NotImplementedError before the test body runs
@@ -372,7 +373,7 @@ class TestR0aAssignmentsVisual:
         "Assignments tab defaulting to per-recommender grouping is not "
         "yet shipped. AppTest will not yet find the tab structure."
     )
-    RECOMMENDERS_PAGE = "pages/3_Recommenders.py"
+    RECOMMENDERS_PAGE = page_path("pages/3_Recommenders.py")
 
     @pytest.mark.xfail(strict=False, reason=XFAIL_REASON)
     def test_default_grouping_is_per_recommender_not_per_position(self, db):
@@ -408,7 +409,7 @@ class TestR0bSchemaUiWireup:
     the rest reach Edit only. When R0b ships, the v0.14.0
     ``TestB3SchemaUiPin`` test also flips green and its xfail comes off."""
 
-    OPPORTUNITIES_PAGE = "pages/1_Opportunities.py"
+    OPPORTUNITIES_PAGE = page_path("pages/1_Opportunities.py")
     ROUND_TRIP_LOCATION = "Stanford"
     ROUND_TRIP_SOURCE = "academic-jobs-online"
     ROUND_TRIP_PORTAL = "https://x.edu/apply"

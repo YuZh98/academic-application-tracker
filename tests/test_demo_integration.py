@@ -16,6 +16,7 @@ from streamlit.testing.v1 import AppTest
 
 import config
 import database
+from tests.helpers import page_path
 
 
 @pytest.fixture
@@ -35,12 +36,12 @@ def demo_env(monkeypatch):
 def test_two_sessions_get_distinct_cached_connections(demo_env):
     """Each AppTest instance is its own session — distinct connection
     identities in their respective session_state dicts."""
-    at1 = AppTest.from_file("app.py", default_timeout=15)
+    at1 = AppTest.from_file(page_path("app.py"), default_timeout=15)
     at1.run()
     assert "_aat_demo_conn" in at1.session_state
     conn1 = at1.session_state["_aat_demo_conn"]
 
-    at2 = AppTest.from_file("app.py", default_timeout=15)
+    at2 = AppTest.from_file(page_path("app.py"), default_timeout=15)
     at2.run()
     assert "_aat_demo_conn" in at2.session_state
     conn2 = at2.session_state["_aat_demo_conn"]
@@ -55,7 +56,7 @@ def test_two_sessions_get_distinct_cached_connections(demo_env):
 
 def test_write_in_session_a_invisible_to_session_b(demo_env):
     """Writes in session A's in-memory DB must not surface in session B."""
-    at1 = AppTest.from_file("app.py", default_timeout=15)
+    at1 = AppTest.from_file(page_path("app.py"), default_timeout=15)
     at1.run()
     conn_a = at1.session_state["_aat_demo_conn"]
     conn_a.execute(
@@ -65,7 +66,7 @@ def test_write_in_session_a_invisible_to_session_b(demo_env):
     conn_a.commit()
 
     # Fresh session.
-    at2 = AppTest.from_file("app.py", default_timeout=15)
+    at2 = AppTest.from_file(page_path("app.py"), default_timeout=15)
     at2.run()
     conn_b = at2.session_state["_aat_demo_conn"]
     n = conn_b.execute(
@@ -84,7 +85,7 @@ def test_exports_dir_stays_empty_in_demo(demo_env, tmp_path, monkeypatch):
 
     monkeypatch.setattr(exports, "EXPORTS_DIR", tmp_path / "exports")
 
-    at = AppTest.from_file("app.py", default_timeout=15)
+    at = AppTest.from_file(page_path("app.py"), default_timeout=15)
     at.run()
     assert "_aat_demo_conn" in at.session_state
 
@@ -105,7 +106,7 @@ def test_export_page_short_circuits_in_demo(demo_env):
     IS_DEMO is True. AppTest catches the st.stop() and records the
     info element so we can pin both the short-circuit AND the
     info-card presence in one shot."""
-    at = AppTest.from_file("pages/4_Export.py", default_timeout=15)
+    at = AppTest.from_file(page_path("pages/4_Export.py"), default_timeout=15)
     at.run()
     # No exception bubbled up.
     assert not at.exception, f"Export page raised in demo mode: {at.exception}"
