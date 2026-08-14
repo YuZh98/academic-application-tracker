@@ -5,7 +5,7 @@
 # Direct deps (everything else is a transitive dep required by one of these
 # or their dependents — verified 2026-05-05 via `pip show` reverse-dep
 # audit; zero orphans found):
-#   streamlit==1.60.0  — UI framework (the entire app surface)
+#   streamlit==1.61.1  — UI framework (the entire app surface)
 #   pandas==3.0.5      — data tables (st.dataframe + DB→table reads)
 #   plotly==6.9.0      — Application Funnel chart on the dashboard
 # Dev-only direct deps live in requirements-dev.txt (pytest, ruff,
@@ -18,7 +18,7 @@ certifi==2026.7.22
 charset-normalizer==3.4.9
 click==8.4.2
 gitdb==4.0.12
-GitPython==3.1.58
+GitPython==3.1.59
 idna==3.18
 Jinja2==3.1.6
 jsonschema==4.26.0
@@ -39,7 +39,7 @@ requests==2.34.2
 rpds-py==2026.6.3
 six==1.17.0
 smmap==5.0.3
-streamlit==1.60.0
+streamlit==1.61.1
 tenacity==9.1.4
 toml==0.10.2
 tornado==6.5.8
