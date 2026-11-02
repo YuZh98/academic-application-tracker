@@ -2,9 +2,9 @@
 #   pip install -r requirements.txt -r requirements-dev.txt
 # Pinned to keep CI and local environments byte-identical.
 
-pytest==9.1.1
+pytest==9.2.0
 pytest-cov==7.1.0
-ruff==0.16.1
-pre-commit==4.6.1
-pyright==1.1.411
-playwright==1.62.0
+ruff==0.17.3
+pre-commit==4.7.0
+pyright==1.1.414
+playwright==1.64.1
